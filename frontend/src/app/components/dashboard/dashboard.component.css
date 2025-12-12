@@ -1,0 +1,107 @@
+/* Dashboard Layout */
+.dashboard-container {
+  background: #f5f5f5;
+  min-height: 100vh;
+}
+
+/* Welcome Section */
+.welcome-header {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  border-left: 4px solid #0d6efd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Referral Card */
+.referral-card {
+  background: white;
+  border-left: 4px solid #0d6efd;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.referral-info {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+/* Stat Cards */
+.stat-card {
+  background: white;
+  border: none;
+  border-radius: 8px;
+  border-left: 3px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card h2 {
+  font-size: 2.5rem;
+  font-weight: 600;
+}
+
+.stat-icon {
+  font-size: 2rem;
+  opacity: 0.1;
+  position: absolute;
+  right: 15px;
+  bottom: 15px;
+}
+
+/* Action Cards */
+.action-card {
+  background: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Tips Card */
+.tips-card {
+  background: white;
+  border-left: 4px solid #0d6efd;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tips-card .list-unstyled li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.tips-card .list-unstyled li:last-child {
+  border-bottom: none;
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .welcome-header {
+    padding: 1.5rem;
+  }
+  .stat-card h2 {
+    font-size: 2rem;
+  }
+}

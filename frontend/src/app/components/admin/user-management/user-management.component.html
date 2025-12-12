@@ -1,0 +1,227 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid">
+  <div class="row">
+    <main class="col-12 px-md-4">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="bi bi-people-fill me-2"></i>User Management</h1>
+      </div>
+
+      <!-- Alerts -->
+      <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+        <button type="button" class="btn-close" (click)="success = ''" aria-label="Close"></button>
+      </div>
+
+      <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+        <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+      </div>
+
+      <!-- Filters -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search by name, email, or code" 
+                  [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="roleFilter" (change)="onFilterChange()">
+                <option value="all">All Roles</option>
+                <option value="admin">Admin</option>
+                <option value="agent">Agent</option>
+                <option value="recruit">Recruit</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-outline-primary w-100" (click)="loadUsers()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Table -->
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div *ngIf="loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+
+          <div *ngIf="!loading && filteredUsers.length === 0" class="text-center py-5 text-muted">
+            <i class="bi bi-inbox display-1 d-block mb-3"></i>
+            <p>No users found</p>
+          </div>
+
+          <div *ngIf="!loading && filteredUsers.length > 0" class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Referral Code</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let user of paginatedUsers">
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <div class="user-avatar me-2">
+                        <i class="bi bi-person-circle fs-4 text-secondary"></i>
+                      </div>
+                      <div>
+                        <div class="fw-bold">{{ user.name }}</div>
+                        <small class="text-muted">{{ user.phone }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ user.email }}</td>
+                  <td>
+                    <span class="badge text-capitalize" [ngClass]="getRoleBadgeClass(user.role)">
+                      {{ user.role }}
+                    </span>
+                  </td>
+                  <td>
+                    <code *ngIf="user.referralCode" class="bg-light p-1 rounded">{{ user.referralCode }}</code>
+                    <span *ngIf="!user.referralCode" class="text-muted">-</span>
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="user.isActive ? 'bg-success' : 'bg-danger'">
+                      {{ user.isActive ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+                  <td>
+                    <small>{{ user.createdAt | date: 'shortDate' }}</small>
+                  </td>
+                  <td>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-primary" (click)="openEditModal(user)" title="Edit">
+                        <i class="bi bi-pencil-square"></i>
+                      </button>
+                      <button class="btn" 
+                        [ngClass]="user.isActive ? 'btn-outline-warning' : 'btn-outline-success'"
+                        (click)="toggleUserStatus(user)" 
+                        [title]="user.isActive ? 'Deactivate' : 'Activate'">
+                        <i class="bi" [ngClass]="user.isActive ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                      </button>
+                      <button class="btn btn-outline-danger" (click)="deleteUser(user)" title="Delete">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div *ngIf="!loading && filteredUsers.length > itemsPerPage" class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted">
+              Showing {{ (currentPage - 1) * itemsPerPage + 1 }} to {{ Math.min(currentPage * itemsPerPage, filteredUsers.length) }} of {{ filteredUsers.length }} users
+            </div>
+            <nav>
+              <ul class="pagination mb-0">
+                <li class="page-item" [class.disabled]="currentPage === 1">
+                  <button class="page-link" (click)="prevPage()" [disabled]="currentPage === 1">
+                    <i class="bi bi-chevron-left"></i>
+                  </button>
+                </li>
+                <li class="page-item active">
+                  <span class="page-link">{{ currentPage }} / {{ totalPages }}</span>
+                </li>
+                <li class="page-item" [class.disabled]="currentPage === totalPages">
+                  <button class="page-link" (click)="nextPage()" [disabled]="currentPage === totalPages">
+                    <i class="bi bi-chevron-right"></i>
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'" 
+  tabindex="-1" *ngIf="showEditModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Edit User</h5>
+        <button type="button" class="btn-close btn-close-white" (click)="closeEditModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" [(ngModel)]="editForm.name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" [(ngModel)]="editForm.email" disabled>
+          <small class="text-muted">Email cannot be changed</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Phone</label>
+          <input type="tel" class="form-control" [(ngModel)]="editForm.phone">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Role</label>
+          <select class="form-select" [(ngModel)]="editForm.role">
+            <option value="recruit">Recruit</option>
+            <option value="agent">Agent</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Status</label>
+          <select class="form-select" [(ngModel)]="editForm.isActive">
+            <option [value]="true">Active</option>
+            <option [value]="false">Inactive</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <input type="text" class="form-control" [(ngModel)]="editForm.address">
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">City</label>
+            <input type="text" class="form-control" [(ngModel)]="editForm.city">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">State</label>
+            <input type="text" class="form-control" [(ngModel)]="editForm.state">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeEditModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="saveUser()" [disabled]="loading">
+          <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showEditModal" *ngIf="showEditModal"></div>

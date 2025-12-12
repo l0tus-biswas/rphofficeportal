@@ -1,0 +1,66 @@
+.modal.show {
+  display: block;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1040;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000;
+}
+
+.modal-backdrop.show {
+  opacity: 0.5;
+}
+
+code {
+  background-color: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 90%;
+  color: #d63384;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.card {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.table-hover tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}

@@ -1,0 +1,274 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid">
+  <div class="row">
+    <main class="col-12 px-md-4">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="bi bi-book-fill me-2"></i>Training Materials Management</h1>
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="bi bi-plus-circle me-1"></i>Add New Material
+        </button>
+      </div>
+
+      <!-- Alerts -->
+      <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+        <button type="button" class="btn-close" (click)="success = ''" aria-label="Close"></button>
+      </div>
+
+      <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+        <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+      </div>
+
+      <!-- Filters -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search materials..." 
+                  [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <select class="form-select" [(ngModel)]="typeFilter" (change)="onFilterChange()">
+                <option value="all">All Types</option>
+                <option value="video">Videos</option>
+                <option value="document">Documents</option>
+                <option value="link">Links</option>
+                <option value="article">Articles</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <button class="btn btn-outline-primary w-100" (click)="loadMaterials()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag and Drop Info -->
+      <div *ngIf="!loading && filteredMaterials.length > 0" class="alert alert-info mb-3">
+        <i class="bi bi-grip-vertical me-2"></i>
+        <strong>Drag & Drop:</strong> Click and hold the grip icon on any card to reorder materials. Changes save automatically.
+      </div>
+
+      <!-- Materials Grid -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+
+      <div *ngIf="!loading && filteredMaterials.length === 0" class="text-center py-5 text-muted">
+        <i class="bi bi-inbox display-1 d-block mb-3"></i>
+        <p>No training materials found</p>
+        <button class="btn btn-primary" (click)="openCreateModal()">
+          <i class="bi bi-plus-circle me-1"></i>Create First Material
+        </button>
+      </div>
+
+      <div *ngIf="!loading && filteredMaterials.length > 0" 
+           class="materials-grid" 
+           cdkDropList 
+           (cdkDropListDropped)="drop($event)">
+        <div *ngFor="let material of filteredMaterials" class="material-item" cdkDrag>
+          <div class="card h-100 shadow-sm material-card">
+            <div class="drag-handle-wrapper" cdkDragHandle>
+              <i class="bi bi-grip-vertical drag-handle"></i>
+            </div>
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="material-icon">
+                  <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
+                </div>
+                <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">
+                  {{ material.type }}
+                </span>
+              </div>
+              
+              <h5 class="card-title">{{ material.title }}</h5>
+              <p class="card-text text-muted small">{{ material.description }}</p>
+              
+              <div class="mb-3">
+                <small class="text-muted">
+                  <i class="bi bi-tag me-1"></i>{{ material.category || 'Uncategorized' }}
+                </small>
+                <span *ngIf="material.duration" class="ms-3">
+                  <small class="text-muted">
+                    <i class="bi bi-clock me-1"></i>{{ material.duration }}
+                  </small>
+                </span>
+              </div>
+
+              <div class="mb-3">
+                <a [href]="material.url" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>View Material
+                </a>
+              </div>
+              
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary flex-grow-1" (click)="openEditModal(material)">
+                  <i class="bi bi-pencil-square me-1"></i>Edit
+                </button>
+                <button class="btn btn-sm btn-outline-danger" (click)="deleteMaterial(material)">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+
+              <div class="mt-2">
+                <small class="text-muted">
+                  <i class="bi bi-calendar3 me-1"></i>{{ material.createdAt | date: 'short' }}
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Create Material Modal -->
+<div class="modal fade" [class.show]="showCreateModal" [style.display]="showCreateModal ? 'block' : 'none'" 
+  tabindex="-1" *ngIf="showCreateModal">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add New Training Material</h5>
+        <button type="button" class="btn-close btn-close-white" (click)="closeModals()"></button>
+      </div>
+      <form [formGroup]="trainingForm" (ngSubmit)="createMaterial()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="title"
+              [class.is-invalid]="f['title'].invalid && f['title'].touched">
+            <div *ngIf="f['title'].invalid && f['title'].touched" class="invalid-feedback">
+              Title is required (min 3 characters)
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" formControlName="description"
+              [class.is-invalid]="f['description'].invalid && f['description'].touched"></textarea>
+            <div *ngIf="f['description'].invalid && f['description'].touched" class="invalid-feedback">
+              Description is required
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Type <span class="text-danger">*</span></label>
+              <select class="form-select" formControlName="type">
+                <option value="video">Video</option>
+                <option value="document">Document</option>
+                <option value="link">Link</option>
+                <option value="article">Article</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Category</label>
+              <select class="form-select" formControlName="category">
+                <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">URL <span class="text-danger">*</span></label>
+            <input type="url" class="form-control" formControlName="url" 
+              placeholder="https://..."
+              [class.is-invalid]="f['url'].invalid && f['url'].touched">
+            <div *ngIf="f['url'].invalid && f['url'].touched" class="invalid-feedback">
+              Valid URL is required
+            </div>
+            <small class="text-muted">YouTube link, document URL, or external link</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Duration</label>
+            <input type="text" class="form-control" formControlName="duration" 
+              placeholder="e.g., 15 minutes, 1 hour">
+            <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="loading || trainingForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            <i class="bi bi-plus-circle me-1"></i>Create Material
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Material Modal -->
+<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'" 
+  tabindex="-1" *ngIf="showEditModal">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Training Material</h5>
+        <button type="button" class="btn-close" (click)="closeModals()"></button>
+      </div>
+      <form [formGroup]="trainingForm" (ngSubmit)="updateMaterial()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="title"
+              [class.is-invalid]="f['title'].invalid && f['title'].touched">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Description <span class="text-danger">*</span></label>
+            <textarea class="form-control" rows="3" formControlName="description"></textarea>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Type</label>
+              <select class="form-select" formControlName="type">
+                <option value="video">Video</option>
+                <option value="document">Document</option>
+                <option value="link">Link</option>
+                <option value="article">Article</option>
+              </select>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Category</label>
+              <select class="form-select" formControlName="category">
+                <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">URL</label>
+            <input type="url" class="form-control" formControlName="url">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Duration</label>
+            <input type="text" class="form-control" formControlName="duration">
+            <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">Cancel</button>
+          <button type="submit" class="btn btn-warning" [disabled]="loading || trainingForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            <i class="bi bi-save me-1"></i>Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showCreateModal || showEditModal" *ngIf="showCreateModal || showEditModal"></div>

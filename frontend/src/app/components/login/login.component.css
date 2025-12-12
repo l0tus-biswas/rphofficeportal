@@ -1,0 +1,25 @@
+.vh-100 {
+  min-height: 100vh;
+}
+
+.bg-primary {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+}
+
+.form-control:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
+}
+
+.input-group-text {
+  background-color: #f8f9fa;
+  border-right: none;
+}
+
+.input-group .form-control {
+  border-left: none;
+}
+
+.input-group:focus-within .input-group-text {
+  border-color: #4CAF50;
+}

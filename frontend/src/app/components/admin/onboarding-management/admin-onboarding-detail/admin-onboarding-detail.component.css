@@ -1,0 +1,45 @@
+.admin-onboarding-detail {
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 56px);
+}
+
+.alert-sm {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.card {
+  border: none;
+}
+
+.modal.show {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop.show {
+  opacity: 0.5;
+}
+
+.list-group-item {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.list-group-item:last-child {
+  border-bottom: none;
+}
+
+/* PDF Viewer Modal Styles */
+.modal-xl {
+  max-width: 95vw;
+}
+
+.modal-content iframe {
+  min-height: calc(90vh - 120px);
+}
+
+/* Make file name clickable */
+[style*="cursor: pointer"]:hover .text-primary {
+  color: #0056b3 !important;
+  text-decoration: underline !important;
+}
+

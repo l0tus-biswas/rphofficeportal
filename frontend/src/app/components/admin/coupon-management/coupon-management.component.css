@@ -1,0 +1,159 @@
+/* Table Styling */
+.table-responsive {
+  border-radius: 0.25rem;
+}
+
+.table thead th {
+  font-weight: 600;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Badge Styling */
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+/* Button Groups */
+.btn-group-sm .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Filter Section */
+.input-group-text {
+  background-color: #f8f9fa;
+  border-right: none;
+}
+
+.input-group .form-control {
+  border-left: none;
+}
+
+.input-group .form-control:focus {
+  border-color: #ced4da;
+  box-shadow: none;
+}
+
+/* Pagination */
+.pagination {
+  margin-top: 0;
+}
+
+.page-link {
+  cursor: pointer;
+}
+
+.page-item.disabled .page-link {
+  cursor: not-allowed;
+}
+
+/* Modal Styling */
+.modal-header {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Form Styling */
+.form-label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.invalid-feedback {
+  display: block;
+}
+
+/* Checkbox Styling */
+.form-check {
+  padding-left: 1.5em;
+  margin-bottom: 0.5rem;
+}
+
+.form-check-input {
+  cursor: pointer;
+}
+
+.form-check-label {
+  cursor: pointer;
+}
+
+/* Loading and Empty States */
+.spinner-border {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Text Truncate */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Small Icons in Table */
+.table .bi {
+  font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .table {
+    font-size: 0.875rem;
+  }
+
+  .btn-group-sm .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .modal-dialog {
+    margin: 0.5rem;
+  }
+
+  .modal-body {
+    max-height: 60vh;
+  }
+}
+
+/* Status Badge Colors */
+.bg-success {
+  background-color: #198754 !important;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
+  color: #000 !important;
+}
+
+.bg-secondary {
+  background-color: #6c757d !important;
+}
+
+.bg-info {
+  background-color: #0dcaf0 !important;
+  color: #000 !important;
+}

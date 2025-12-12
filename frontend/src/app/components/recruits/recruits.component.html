@@ -1,0 +1,210 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid">
+  <div class="row">
+    <main class="col-12 px-md-4">
+      <!-- Header -->
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="bi bi-people-fill me-2"></i>My Recruits</h1>
+        <button class="btn btn-outline-primary" (click)="loadRecruits()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+      </div>
+
+      <!-- Error Alert -->
+      <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+        <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="row mb-4">
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card stats-card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <p class="card-text text-muted mb-1">Total Recruits</p>
+                  <h3 class="card-title mb-0">{{ stats.total }}</h3>
+                </div>
+                <i class="bi bi-people-fill stats-icon text-primary"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card stats-card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <p class="card-text text-muted mb-1">Active</p>
+                  <h3 class="card-title mb-0 text-success">{{ stats.active }}</h3>
+                </div>
+                <i class="bi bi-check-circle-fill stats-icon text-success"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card stats-card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <p class="card-text text-muted mb-1">Inactive</p>
+                  <h3 class="card-title mb-0 text-secondary">{{ stats.inactive }}</h3>
+                </div>
+                <i class="bi bi-x-circle-fill stats-icon text-secondary"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+          <div class="card stats-card">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <p class="card-text text-muted mb-1">Showing</p>
+                  <h3 class="card-title mb-0 text-info">{{ recruits.length }}</h3>
+                </div>
+                <i class="bi bi-funnel-fill stats-icon text-info"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search by name, email, or phone..." 
+                  [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+                <option value="all">All Status</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <select class="form-select" [(ngModel)]="sortBy" (change)="onSortChange(sortBy)">
+                <option value="-createdAt">Newest First</option>
+                <option value="createdAt">Oldest First</option>
+                <option value="name">Name (A-Z)</option>
+                <option value="-name">Name (Z-A)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 text-muted">Loading recruits...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!loading && recruits.length === 0" class="text-center py-5">
+        <i class="bi bi-people display-1 text-muted d-block mb-3"></i>
+        <h4 class="text-muted">No Recruits Found</h4>
+        <p class="text-muted">
+          {{ searchTerm || statusFilter !== 'all' ? 'Try adjusting your filters' : 'You haven\'t recruited anyone yet' }}
+        </p>
+      </div>
+
+      <!-- Recruits Grid -->
+      <div *ngIf="!loading && recruits.length > 0" class="row g-3 mb-4">
+        <div *ngFor="let recruit of recruits" class="col-12 col-sm-6 col-lg-4 col-xl-3">
+          <div class="card recruit-card h-100 shadow-sm">
+            <div class="card-body d-flex flex-column">
+              <!-- Header with Status and Role -->
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge rounded-pill" [ngClass]="getStatusBadgeClass(recruit.isActive)">
+                  <i class="bi me-1" [ngClass]="recruit.isActive ? 'bi-check-circle-fill' : 'bi-x-circle-fill'"></i>
+                  {{ getStatusText(recruit.isActive) }}
+                </span>
+                <span class="badge bg-light text-dark border">
+                  <i class="bi bi-briefcase me-1"></i>{{ recruit.role | titlecase }}
+                </span>
+              </div>
+
+              <!-- User Avatar and Name -->
+              <div class="text-center mb-3">
+                <div class="user-avatar-circle mx-auto mb-2">
+                  <i class="bi bi-person-fill"></i>
+                </div>
+                <h5 class="card-title mb-0 fw-semibold">{{ recruit.name }}</h5>
+              </div>
+              
+              <!-- Contact Details -->
+              <div class="recruit-info flex-grow-1">
+                <div class="info-item">
+                  <i class="bi bi-envelope-fill text-primary"></i>
+                  <span class="text-truncate">{{ recruit.email }}</span>
+                </div>
+                <div class="info-item" *ngIf="recruit.phone">
+                  <i class="bi bi-telephone-fill text-success"></i>
+                  <span>{{ recruit.phone }}</span>
+                </div>
+                <div class="info-item" *ngIf="recruit.city || recruit.state">
+                  <i class="bi bi-geo-alt-fill text-danger"></i>
+                  <span class="text-truncate">{{ recruit.city }}{{ recruit.city && recruit.state ? ', ' : '' }}{{ recruit.state }}</span>
+                </div>
+                <div class="info-item">
+                  <i class="bi bi-calendar3 text-info"></i>
+                  <span>{{ recruit.createdAt | date: 'MMM d, y' }}</span>
+                </div>
+              </div>
+
+              <!-- Referral Code -->
+              <div class="mt-3 pt-3 border-top" *ngIf="recruit.referralCode">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                  <small class="text-muted flex-shrink-0">Referral Code:</small>
+                  <div class="d-flex align-items-center gap-2 flex-grow-1">
+                    <code class="bg-light px-2 py-1 rounded flex-grow-1 text-center">{{ recruit.referralCode }}</code>
+                    <button 
+                      class="btn btn-sm btn-outline-primary copy-btn" 
+                      (click)="copyToClipboard(recruit.referralCode)"
+                      [class.copied]="copiedCode === recruit.referralCode"
+                      title="Copy to clipboard">
+                      <i class="bi" [ngClass]="copiedCode === recruit.referralCode ? 'bi-check2' : 'bi-clipboard'"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <nav *ngIf="!loading && totalPages > 1" aria-label="Recruits pagination">
+        <ul class="pagination justify-content-center">
+          <li class="page-item" [class.disabled]="currentPage === 1">
+            <a class="page-link" (click)="onPageChange(currentPage - 1)" aria-label="Previous">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+          <li class="page-item" *ngFor="let page of [].constructor(totalPages); let i = index" 
+              [class.active]="currentPage === i + 1">
+            <a class="page-link" (click)="onPageChange(i + 1)">{{ i + 1 }}</a>
+          </li>
+          <li class="page-item" [class.disabled]="currentPage === totalPages">
+            <a class="page-link" (click)="onPageChange(currentPage + 1)" aria-label="Next">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+    </main>
+  </div>
+</div>

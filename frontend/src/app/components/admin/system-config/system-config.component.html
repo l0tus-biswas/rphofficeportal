@@ -1,0 +1,308 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid mt-4">
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-gear-fill"></i> System Configuration</h2>
+        <div>
+          <button class="btn btn-outline-primary me-2" (click)="syncFromEnv()" [disabled]="syncing">
+            <i class="bi bi-arrow-repeat" [class.spin]="syncing"></i> 
+            {{ syncing ? 'Syncing...' : 'Sync from .env' }}
+          </button>
+          <button class="btn btn-primary" (click)="openAddModal()">
+            <i class="bi bi-plus-circle"></i> Add Configuration
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="row" *ngIf="error || success">
+    <div class="col-md-12">
+      <div class="alert alert-danger alert-dismissible fade show" role="alert" *ngIf="error">
+        <i class="bi bi-exclamation-circle-fill"></i> {{ error }}
+        <button type="button" class="btn-close" (click)="error = ''"></button>
+      </div>
+      <div class="alert alert-success alert-dismissible fade show" role="alert" *ngIf="success">
+        <i class="bi bi-check-circle-fill"></i> {{ success }}
+        <button type="button" class="btn-close" (click)="success = ''"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="row" *ngIf="loading">
+    <div class="col-md-12 text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3">Loading configurations...</p>
+    </div>
+  </div>
+
+  <!-- Configurations by Category -->
+  <div class="row" *ngIf="!loading">
+    <div class="col-md-12" *ngFor="let category of categories">
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <span class="badge" [ngClass]="getCategoryBadgeClass(category)">
+              {{ category.toUpperCase() }}
+            </span>
+            <small class="text-muted ms-2">({{ configs[category].length }} items)</small>
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th style="width: 25%;">Key</th>
+                  <th style="width: 30%;">Value</th>
+                  <th style="width: 25%;">Description</th>
+                  <th style="width: 10%;">Updated</th>
+                  <th style="width: 10%;" class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let config of configs[category]">
+                  <td>
+                    <code>{{ config.key }}</code>
+                    <span class="badge bg-danger ms-2" *ngIf="config.isSecret">
+                      <i class="bi bi-lock-fill"></i> Secret
+                    </span>
+                    <span class="badge bg-secondary ms-2" *ngIf="!config.isEditable">
+                      <i class="bi bi-ban"></i> Read-only
+                    </span>
+                  </td>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      <code class="flex-grow-1">{{ getDisplayValue(config) }}</code>
+                      <button 
+                        class="btn btn-sm btn-outline-secondary ms-2"
+                        (click)="toggleSecretVisibility(config._id)"
+                        *ngIf="config.isSecret"
+                        [title]="isSecretVisible(config._id) ? 'Hide value' : 'Show value'">
+                        <i class="bi" [ngClass]="isSecretVisible(config._id) ? 'bi-eye-slash' : 'bi-eye'"></i>
+                      </button>
+                      <button 
+                        class="btn btn-sm btn-outline-secondary ms-2"
+                        (click)="copyToClipboard(config.actualValue)"
+                        title="Copy to clipboard">
+                        <i class="bi bi-clipboard"></i>
+                      </button>
+                    </div>
+                  </td>
+                  <td>
+                    <small class="text-muted">{{ config.description || 'No description' }}</small>
+                  </td>
+                  <td>
+                    <small>{{ config.updatedAt | date:'short' }}</small>
+                  </td>
+                  <td class="text-end">
+                    <button 
+                      class="btn btn-sm btn-primary me-1"
+                      (click)="openEditModal(config)"
+                      [disabled]="!config.isEditable"
+                      title="Edit">
+                      <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    <button 
+                      class="btn btn-sm btn-danger"
+                      (click)="deleteConfig(config)"
+                      [disabled]="!config.isEditable"
+                      title="Delete">
+                      <i class="bi bi-trash-fill"></i>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div class="col-md-12" *ngIf="categories.length === 0">
+      <div class="card">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-gear-fill" style="font-size: 3rem;" class="text-muted mb-3"></i>
+          <h4>No Configurations Found</h4>
+          <p class="text-muted">Click "Sync from .env" to import existing configurations or "Add Configuration" to create a new one.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-pencil-square"></i> Edit Configuration
+        </h5>
+        <button type="button" class="btn-close" (click)="closeEditModal()"></button>
+      </div>
+      <div class="modal-body" *ngIf="editingConfig">
+        <div class="alert alert-danger" *ngIf="error">
+          <i class="bi bi-exclamation-circle-fill"></i> {{ error }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Key:</strong></label>
+          <input type="text" class="form-control" [value]="editingConfig.key" disabled>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Category:</strong></label>
+          <input type="text" class="form-control" [value]="editingConfig.category" disabled>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Value:</strong> <span class="text-danger">*</span></label>
+          <input 
+            *ngIf="!editingConfig.isSecret"
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="editValue"
+            placeholder="Enter value">
+          <input 
+            *ngIf="editingConfig.isSecret"
+            type="password" 
+            class="form-control" 
+            [(ngModel)]="editValue"
+            placeholder="Enter secret value">
+          <small class="form-text text-muted" *ngIf="editingConfig.isSecret">
+            <i class="bi bi-lock-fill"></i> This is a secret value and will be masked after saving
+          </small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Description:</strong></label>
+          <textarea 
+            class="form-control" 
+            rows="2" 
+            [value]="editingConfig.description"
+            disabled></textarea>
+        </div>
+
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle-fill"></i> 
+          <strong>Warning:</strong> Changes will be saved to both the database and .env file. The application may need to be restarted for some changes to take effect.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeEditModal()">Cancel</button>
+        <button 
+          type="button" 
+          class="btn btn-primary" 
+          (click)="saveConfig()"
+          [disabled]="saving || !editValue">
+          <span *ngIf="saving">
+            <i class="bi bi-arrow-repeat spin"></i> Saving...
+          </span>
+          <span *ngIf="!saving">
+            <i class="bi bi-save-fill"></i> Save Changes
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showEditModal" *ngIf="showEditModal"></div>
+
+<!-- Add Modal -->
+<div class="modal fade" [class.show]="showAddModal" [style.display]="showAddModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-plus-circle"></i> Add Configuration
+        </h5>
+        <button type="button" class="btn-close" (click)="closeAddModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger" *ngIf="error">
+          <i class="bi bi-exclamation-circle-fill"></i> {{ error }}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Key:</strong> <span class="text-danger">*</span></label>
+          <input 
+            type="text" 
+            class="form-control" 
+            [(ngModel)]="newConfig.key"
+            placeholder="e.g., NEW_API_KEY">
+          <small class="form-text text-muted">Use UPPER_SNAKE_CASE for key names</small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Category:</strong> <span class="text-danger">*</span></label>
+          <select class="form-select" [(ngModel)]="newConfig.category">
+            <option value="database">Database</option>
+            <option value="server">Server</option>
+            <option value="email">Email</option>
+            <option value="jwt">JWT</option>
+            <option value="application">Application</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Value:</strong> <span class="text-danger">*</span></label>
+          <input 
+            [type]="newConfig.isSecret ? 'password' : 'text'"
+            class="form-control" 
+            [(ngModel)]="newConfig.value"
+            placeholder="Enter value">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><strong>Description:</strong></label>
+          <textarea 
+            class="form-control" 
+            rows="2" 
+            [(ngModel)]="newConfig.description"
+            placeholder="Brief description of this configuration"></textarea>
+        </div>
+
+        <div class="form-check mb-3">
+          <input 
+            class="form-check-input" 
+            type="checkbox" 
+            [(ngModel)]="newConfig.isSecret"
+            id="isSecret">
+          <label class="form-check-label" for="isSecret">
+            <i class="bi bi-lock-fill"></i> This is a secret value (will be masked in UI)
+          </label>
+        </div>
+
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle-fill"></i> 
+          This configuration will be saved to both the database and .env file.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeAddModal()">Cancel</button>
+        <button 
+          type="button" 
+          class="btn btn-primary" 
+          (click)="addConfig()"
+          [disabled]="saving || !newConfig.key || !newConfig.value">
+          <span *ngIf="saving">
+            <i class="bi bi-arrow-repeat spin"></i> Adding...
+          </span>
+          <span *ngIf="!saving">
+            <i class="bi bi-plus-circle"></i> Add Configuration
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showAddModal" *ngIf="showAddModal"></div>

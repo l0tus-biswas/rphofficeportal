@@ -1,0 +1,358 @@
+<app-navbar></app-navbar>
+
+<div class="dashboard-container">
+  <div class="container-fluid p-4">
+    <div class="fade-in">
+      <!-- Welcome Header -->
+      <div class="welcome-header mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+          <div>
+            <h3 class="mb-2">Welcome, {{ user?.name }}</h3>
+            <p class="mb-0 text-muted">
+              <i class="bi bi-envelope me-1"></i>{{ user?.email }}
+            </p>
+            <p *ngIf="user?.referredBy" class="mb-0 text-muted mt-1">
+              <i class="bi bi-person-check me-1"></i>Referred by: <strong>{{ user?.referredBy?.name }}</strong>
+              <button class="btn btn-sm btn-outline-info ms-2" (click)="showReferrerInfo()" title="View Contact Info">
+                <i class="bi bi-info-circle"></i>
+              </button>
+            </p>
+          </div>
+          <div *ngIf="user?.role" class="mt-2 mt-md-0">
+            <span class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+              {{ user?.role | uppercase }}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Referral Section - For All Users -->
+      <div class="row mb-4" *ngIf="user?.referralCode">
+        <div class="col-12">
+          <div class="card referral-card">
+            <div class="card-body">
+              <h5 class="card-title mb-3">
+                <i class="bi bi-share-fill me-2"></i>Your Referral Link
+              </h5>
+              <p class="text-muted mb-3">
+                Share your unique referral link to grow your network.
+              </p>
+              
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Referral Code</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" [value]="user?.referralCode" readonly>
+                    <button class="btn btn-outline-primary" (click)="copyReferralCode()">
+                      <i class="bi bi-clipboard"></i>
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label fw-bold">Referral URL</label>
+                  <div class="input-group">
+                    <input type="text" class="form-control" [value]="referralLink" readonly>
+                    <button class="btn btn-primary" (click)="copyReferralLink()">
+                      <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="referral-info mt-3">
+                <small class="text-muted">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Share this link to invite others to your network.
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+        
+        <div *ngIf="loading" class="text-center py-5">
+          <div class="spinner-border text-primary"></div>
+        </div>
+
+        <!-- Agent Dashboard -->
+        <div *ngIf="authService.isAgent() && !loading" class="fade-in">
+          <h5 class="mb-3 mt-4">Quick Actions</h5>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-people-fill display-4 text-primary mb-3"></i>
+                  <h5 class="card-title">My Recruits</h5>
+                  <p class="text-muted small mb-3">View and manage your direct recruits</p>
+                  <a routerLink="/recruits" class="btn btn-primary w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Recruits
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-diagram-3-fill display-4 text-success mb-3"></i>
+                  <h5 class="card-title">Downline Tree</h5>
+                  <p class="text-muted small mb-3">Explore your organization structure</p>
+                  <a routerLink="/downline" class="btn btn-success w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Downline
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-book-fill display-4 text-info mb-3"></i>
+                  <h5 class="card-title">Training Materials</h5>
+                  <p class="text-muted small mb-3">Access learning resources and guides</p>
+                  <a routerLink="/training" class="btn btn-info w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Access Training
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div *ngIf="authService.isAdmin() && !loading" class="fade-in">
+          <h5 class="mb-3">System Overview</h5>
+          <div class="row mb-4 g-3">
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-people-fill me-1"></i>Total Users
+                  </h6>
+                  <h2 class="mb-0 text-primary">{{ stats.totalUsers || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-people-fill"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-shield-fill-check me-1"></i>Total Admins
+                  </h6>
+                  <h2 class="mb-0 text-danger">{{ stats.totalAdmins || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-shield-fill-check"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-briefcase-fill me-1"></i>Total Agents
+                  </h6>
+                  <h2 class="mb-0 text-info">{{ stats.totalAgents || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-briefcase-fill"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-check-circle-fill me-1"></i>Active Users
+                  </h6>
+                  <h2 class="mb-0 text-success">{{ stats.activeUsers || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-x-circle-fill me-1"></i>Inactive Users
+                  </h6>
+                  <h2 class="mb-0 text-secondary">{{ stats.inactiveUsers || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-x-circle-fill"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card">
+                <div class="card-body">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-calendar-check-fill me-1"></i>New This Month
+                  </h6>
+                  <h2 class="mb-0 text-warning">{{ stats.recentUsers || 0 }}</h2>
+                  <span class="stat-icon">
+                    <i class="bi bi-calendar-check-fill"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h5 class="mb-3 mt-4">Admin Controls</h5>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-person-lines-fill display-4 text-danger mb-3"></i>
+                  <h5 class="card-title">User Management</h5>
+                  <p class="text-muted small mb-3">Create, edit, and manage all users</p>
+                  <a routerLink="/admin/users" class="btn btn-danger w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Manage Users
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-diagram-3-fill display-4 text-primary mb-3"></i>
+                  <h5 class="card-title">Full Hierarchy</h5>
+                  <p class="text-muted small mb-3">View complete organization tree</p>
+                  <a routerLink="/admin/hierarchy" class="btn btn-primary w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Hierarchy
+                  </a>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="card action-card">
+                <div class="card-body text-center">
+                  <i class="bi bi-journals-fill display-4 text-success mb-3"></i>
+                  <h5 class="card-title">Training Management</h5>
+                  <p class="text-muted small mb-3">Create and organize training content</p>
+                  <a routerLink="/admin/training" class="btn btn-success w-100">
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Manage Training
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recruit Dashboard -->
+        <div *ngIf="!authService.isAgent() && !authService.isAdmin() && !loading" class="fade-in">
+          <div class="row mb-4 g-3">
+            <div class="col-md-6">
+              <div class="card action-card">
+                <div class="card-body text-center py-4">
+                  <i class="bi bi-person-check display-4 text-primary mb-3"></i>
+                  <h4 class="mb-3">Welcome to RHP Office!</h4>
+                  <p class="text-muted mb-4">Get started by exploring training materials and updating your profile.</p>
+                  <div class="d-grid gap-2">
+                    <a routerLink="/training" class="btn btn-primary">
+                      <i class="bi bi-book me-2"></i>View Training
+                    </a>
+                    <a routerLink="/profile" class="btn btn-outline-primary">
+                      <i class="bi bi-person me-2"></i>Update Profile
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card tips-card">
+                <div class="card-body">
+                  <h5 class="card-title mb-3">
+                    <i class="bi bi-lightbulb me-2 text-warning"></i>Quick Tips
+                  </h5>
+                  <ul class="list-unstyled mb-0">
+                    <li>
+                      <i class="bi bi-check-circle text-success me-2"></i>
+                      Complete your profile information
+                    </li>
+                    <li>
+                      <i class="bi bi-check-circle text-success me-2"></i>
+                      Share your referral link
+                    </li>
+                    <li>
+                      <i class="bi bi-check-circle text-success me-2"></i>
+                      Access training materials
+                    </li>
+                    <li>
+                      <i class="bi bi-check-circle text-success me-2"></i>
+                      Contact your upline for support
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Referrer Contact Info Modal -->
+  <div class="modal fade" [class.show]="showReferrerModal" [style.display]="showReferrerModal ? 'block' : 'none'" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-person-circle me-2"></i>Referrer Contact Information
+          </h5>
+          <button type="button" class="btn-close" (click)="closeReferrerInfo()"></button>
+        </div>
+        <div class="modal-body">
+          <div *ngIf="user?.referredBy">
+            <div class="mb-3">
+              <label class="form-label text-muted small mb-1">Name</label>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-person-fill text-primary me-2"></i>
+                <strong>{{ user?.referredBy?.name }}</strong>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label text-muted small mb-1">Email</label>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-envelope-fill text-primary me-2"></i>
+                <a [href]="'mailto:' + user?.referredBy?.email">{{ user?.referredBy?.email }}</a>
+              </div>
+            </div>
+            <div *ngIf="user?.referredBy?.phone" class="mb-3">
+              <label class="form-label text-muted small mb-1">Phone</label>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-telephone-fill text-primary me-2"></i>
+                <a [href]="'tel:' + user?.referredBy?.phone">{{ user?.referredBy?.phone }}</a>
+              </div>
+            </div>
+            <div *ngIf="user?.referredBy?.referralCode" class="mb-3">
+              <label class="form-label text-muted small mb-1">Referral Code</label>
+              <div class="d-flex align-items-center">
+                <i class="bi bi-tag-fill text-primary me-2"></i>
+                <code>{{ user?.referredBy?.referralCode }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeReferrerInfo()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop fade" [class.show]="showReferrerModal" *ngIf="showReferrerModal"></div>
+

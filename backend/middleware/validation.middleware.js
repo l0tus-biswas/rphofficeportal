@@ -1,0 +1,135 @@
+const Joi = require('joi');
+
+exports.validateRequest = (schema) => {
+  return (req, res, next) => {
+    const { error } = schema.validate(req.body, { abortEarly: false });
+    
+    if (error) {
+      const errors = error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message
+      }));
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors
+      });
+    }
+    
+    next();
+  };
+};
+
+// Common validation schemas
+exports.schemas = {
+  login: Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().required()
+  }),
+  
+  applyForm: Joi.object({
+    name: Joi.string().trim().min(2).max(100).required(),
+    email: Joi.string().email().required(),
+    phone: Joi.string().trim().min(10).max(15).required(),
+    address: Joi.string().trim().max(200).optional(),
+    city: Joi.string().trim().max(50).optional(),
+    state: Joi.string().trim().max(50).optional(),
+    zipCode: Joi.string().trim().max(10).optional(),
+    metadata: Joi.object().optional()
+  }),
+  
+  updateProfile: Joi.object({
+    name: Joi.string().trim().min(2).max(100).optional(),
+    phone: Joi.string().trim().min(10).max(15).optional(),
+    address: Joi.string().trim().max(200).optional(),
+    city: Joi.string().trim().max(50).optional(),
+    state: Joi.string().trim().max(50).optional(),
+    zipCode: Joi.string().trim().max(10).optional(),
+    dateOfBirth: Joi.date().optional()
+  }),
+  
+  changePassword: Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: Joi.string().min(6).required()
+  }),
+  
+  forgotPassword: Joi.object({
+    email: Joi.string().email().required()
+  }),
+  
+  resetPassword: Joi.object({
+    password: Joi.string().min(6).required()
+  }),
+  
+  createUser: Joi.object({
+    name: Joi.string().trim().min(2).max(100).required(),
+    email: Joi.string().email().required(),
+    phone: Joi.string().trim().min(10).max(15).required(),
+    role: Joi.string().valid('admin', 'agent').required(),
+    password: Joi.string().min(6).optional()
+  }),
+  
+  updateUser: Joi.object({
+    name: Joi.string().trim().min(2).max(100).optional(),
+    phone: Joi.string().trim().min(10).max(15).optional(),
+    role: Joi.string().valid('admin', 'agent').optional(),
+    isActive: Joi.boolean().optional()
+  }),
+  
+  trainingMaterial: Joi.object({
+    title: Joi.string().trim().min(2).max(200).required(),
+    description: Joi.string().trim().max(1000).optional(),
+    type: Joi.string().valid('link', 'youtube', 'document', 'video', 'other').required(),
+    url: Joi.string().uri().required(),
+    category: Joi.string().trim().max(50).optional(),
+    tags: Joi.array().items(Joi.string()).optional(),
+    duration: Joi.string().trim().max(50).optional().allow(''),
+    accessLevel: Joi.string().valid('all', 'agent', 'recruit').optional(),
+    thumbnail: Joi.string().uri().optional(),
+    order: Joi.number().integer().min(0).optional()
+  }),
+  
+  updateTrainingMaterial: Joi.object({
+    title: Joi.string().trim().min(2).max(200).optional(),
+    description: Joi.string().trim().max(1000).optional(),
+    type: Joi.string().valid('link', 'youtube', 'document', 'video', 'other').optional(),
+    url: Joi.string().uri().optional(),
+    category: Joi.string().trim().max(50).optional(),
+    tags: Joi.array().items(Joi.string()).optional(),
+    duration: Joi.string().trim().max(50).optional().allow(''),
+    accessLevel: Joi.string().valid('all', 'agent').optional(),
+    thumbnail: Joi.string().uri().optional(),
+    order: Joi.number().integer().min(0).optional()
+  }),
+
+  coupon: Joi.object({
+    code: Joi.string().trim().min(3).max(20).uppercase().required(),
+    description: Joi.string().trim().min(5).max(500).required(),
+    discountType: Joi.string().valid('percentage', 'fixed').required(),
+    discountValue: Joi.number().min(0).required(),
+    minPurchaseAmount: Joi.number().min(0).optional().default(0),
+    maxDiscountAmount: Joi.number().min(0).optional(),
+    validFrom: Joi.date().required(),
+    validUntil: Joi.date().greater(Joi.ref('validFrom')).required(),
+    usageLimit: Joi.number().min(0).optional().allow(null),
+    userUsageLimit: Joi.number().min(1).optional().default(1),
+    applicableRoles: Joi.array().items(Joi.string().valid('admin', 'agent')).optional(),
+    isActive: Joi.boolean().optional().default(true)
+  }),
+
+  updateCoupon: Joi.object({
+    code: Joi.string().trim().min(3).max(20).uppercase().optional(),
+    description: Joi.string().trim().min(5).max(500).optional(),
+    discountType: Joi.string().valid('percentage', 'fixed').optional(),
+    discountValue: Joi.number().min(0).optional(),
+    minPurchaseAmount: Joi.number().min(0).optional(),
+    maxDiscountAmount: Joi.number().min(0).optional(),
+    validFrom: Joi.date().optional(),
+    validUntil: Joi.date().optional(),
+    usageLimit: Joi.number().min(0).optional().allow(null),
+    userUsageLimit: Joi.number().min(1).optional(),
+    applicableRoles: Joi.array().items(Joi.string().valid('admin', 'agent')).optional(),
+    isActive: Joi.boolean().optional()
+  })
+};

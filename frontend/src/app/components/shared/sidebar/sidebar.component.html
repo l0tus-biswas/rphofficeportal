@@ -1,0 +1,90 @@
+<div class="sidebar p-3">
+  <ul class="nav flex-column">
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/dashboard" routerLinkActive="active">
+        <i class="bi bi-speedometer2 me-2"></i>Dashboard
+      </a>
+    </li>
+    
+    <li class="nav-item" *ngIf="authService.isAgent()">
+      <a class="nav-link" routerLink="/recruits" routerLinkActive="active">
+        <i class="bi bi-people me-2"></i>My Recruits
+      </a>
+    </li>
+    
+    <li class="nav-item" *ngIf="authService.isAgent()">
+      <a class="nav-link" routerLink="/downline" routerLinkActive="active">
+        <i class="bi bi-diagram-3 me-2"></i>Downline Tree
+      </a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/onboarding" routerLinkActive="active">
+        <i class="bi bi-file-earmark-check me-2"></i>My Onboarding
+      </a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/training" routerLinkActive="active">
+        <i class="bi bi-book me-2"></i>Training Materials
+      </a>
+    </li>
+    
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/profile" routerLinkActive="active">
+        <i class="bi bi-person me-2"></i>My Profile
+      </a>
+    </li>
+    
+    <div *ngIf="authService.isAdmin()">
+      <hr>
+      <h6 class="px-3 text-muted">ADMIN</h6>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/dashboard" routerLinkActive="active">
+          <i class="bi bi-speedometer2 me-2"></i>Dashboard
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/users" routerLinkActive="active">
+          <i class="bi bi-people-fill me-2"></i>User Management
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/hierarchy" routerLinkActive="active">
+          <i class="bi bi-diagram-3-fill me-2"></i>Full Hierarchy
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/onboarding" routerLinkActive="active">
+          <i class="bi bi-clipboard-check me-2"></i>Onboarding Review
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/training" routerLinkActive="active">
+          <i class="bi bi-file-earmark-text me-2"></i>Training Management
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/coupons" routerLinkActive="active">
+          <i class="bi bi-ticket-perforated-fill me-2"></i>Coupon Management
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <hr class="my-2">
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/config" routerLinkActive="active">
+          <i class="bi bi-gear-fill me-2"></i>System Configuration
+        </a>
+      </li>
+    </div>
+  </ul>
+</div>

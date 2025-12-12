@@ -1,0 +1,751 @@
+{
+  "info": {
+    "name": "RHP Office API",
+    "description": "Complete API collection for RHP Office Recruiting Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('token', jsonData.token);",
+                  "    pm.test('Login successful', function() {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "        pm.expect(jsonData.token).to.exist;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@rhpoffice.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"newPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password/:resetToken",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "reset-password", ":resetToken"],
+              "variable": [{"key": "resetToken", "value": "your-reset-token"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public",
+      "item": [
+        {
+          "name": "Get Apply Page Info",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/public/apply?ref=AGT12345",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "apply"],
+              "query": [{"key": "ref", "value": "AGT12345"}]
+            }
+          }
+        },
+        {
+          "name": "Submit Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Application submitted', function() {",
+                  "    pm.response.to.have.status(201);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"phone\": \"1234567890\",\n  \"address\": \"123 Main St\",\n  \"city\": \"New York\",\n  \"state\": \"NY\",\n  \"zipCode\": \"10001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/public/apply?ref=AGT12345",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "apply"],
+              "query": [{"key": "ref", "value": "AGT12345"}]
+            }
+          }
+        },
+        {
+          "name": "Verify Referral Code",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/public/verify-referral/:code",
+              "host": ["{{baseUrl}}"],
+              "path": ["public", "verify-referral", ":code"],
+              "variable": [{"key": "code", "value": "AGT12345"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/agent/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"phone\": \"9876543210\",\n  \"address\": \"456 Oak Ave\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agent/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"oldPassword\",\n  \"newPassword\": \"newPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agent/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "change-password"]
+            }
+          }
+        },
+        {
+          "name": "Get Recruits",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/agent/recruits?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "recruits"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Downline",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/agent/downline",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "downline"]
+            }
+          }
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/agent/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Referral Link",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/agent/referral-link",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent", "referral-link"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get Hierarchy",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/hierarchy",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "hierarchy"]
+            }
+          }
+        },
+        {
+          "name": "Get Users",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?page=1&limit=20&role=agent&isActive=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "20"},
+                {"key": "role", "value": "agent", "disabled": true},
+                {"key": "isActive", "value": "true", "disabled": true}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:userId",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", ":userId"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Agent\",\n  \"email\": \"newagent@example.com\",\n  \"phone\": \"1234567890\",\n  \"role\": \"agent\",\n  \"password\": \"tempPassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:userId",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", ":userId"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Activate User",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:userId/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", ":userId", "activate"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "PUT",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:userId/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", ":userId", "deactivate"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/:userId",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users", ":userId"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Stats",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "audit-logs"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "50"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Training",
+      "item": [
+        {
+          "name": "Get Training Materials",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/training/materials?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "materials"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Material By ID",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/training/materials/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "materials", ":id"],
+              "variable": [{"key": "id", "value": "material-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Get Categories",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/training/categories",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Create Training Material (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Getting Started Guide\",\n  \"description\": \"Complete guide for new recruits\",\n  \"type\": \"document\",\n  \"url\": \"https://example.com/guide.pdf\",\n  \"category\": \"onboarding\",\n  \"tags\": [\"beginner\", \"essential\"],\n  \"accessLevel\": \"all\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/training/materials",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "materials"]
+            }
+          }
+        },
+        {
+          "name": "Update Training Material (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/training/materials/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "materials", ":id"],
+              "variable": [{"key": "id", "value": "material-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Delete Training Material (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/training/materials/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["training", "materials", ":id"],
+              "variable": [{"key": "id", "value": "material-id-here"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Onboarding",
+      "item": [
+        {
+          "name": "Agent - Get My Onboarding",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/my",
+              "host": ["{{baseUrl}}"],
+              "path": ["onboarding", "my"]
+            }
+          }
+        },
+        {
+          "name": "Agent - Upload My Documents",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "w4",
+                  "type": "file",
+                  "src": [],
+                  "description": "W4 Tax Form (PDF)"
+                },
+                {
+                  "key": "driverLicense",
+                  "type": "file",
+                  "src": [],
+                  "description": "Driver License (PDF)"
+                },
+                {
+                  "key": "ssn",
+                  "type": "file",
+                  "src": [],
+                  "description": "Social Security Card (PDF)"
+                },
+                {
+                  "key": "directDeposit",
+                  "type": "file",
+                  "src": [],
+                  "description": "Direct Deposit Form (PDF)"
+                },
+                {
+                  "key": "voidCheck",
+                  "type": "file",
+                  "src": [],
+                  "description": "Void Check (PDF)"
+                },
+                {
+                  "key": "i9",
+                  "type": "file",
+                  "src": [],
+                  "description": "I9 Form (PDF)"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["onboarding", "upload"]
+            }
+          }
+        },
+        {
+          "name": "Agent - Download My Document",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/onboarding/document/:stepKey",
+              "host": ["{{baseUrl}}"],
+              "path": ["onboarding", "document", ":stepKey"],
+              "variable": [{"key": "stepKey", "value": "w4", "description": "One of: w4, driverLicense, ssn, directDeposit, voidCheck, i9"}]
+            }
+          }
+        },
+        {
+          "name": "Admin - List All Onboardings",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/onboarding",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "onboarding"]
+            }
+          }
+        },
+        {
+          "name": "Admin - Get User Onboarding",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/onboarding/:userId",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "onboarding", ":userId"],
+              "variable": [{"key": "userId", "value": "user-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Admin - Download User Document",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/onboarding/:userId/document/:stepKey",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "onboarding", ":userId", "document", ":stepKey"],
+              "variable": [
+                {"key": "userId", "value": "user-id-here"},
+                {"key": "stepKey", "value": "w4", "description": "One of: w4, driverLicense, ssn, directDeposit, voidCheck, i9"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin - Review Document",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"comments\": \"Document verified and approved\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/onboarding/:userId/:stepKey/review",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "onboarding", ":userId", ":stepKey", "review"],
+              "variable": [
+                {"key": "userId", "value": "user-id-here"},
+                {"key": "stepKey", "value": "w4", "description": "One of: w4, driverLicense, ssn, directDeposit, voidCheck, i9"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "System Configuration",
+      "item": [
+        {
+          "name": "Admin - Get All Configurations",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/config?category=jwt",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "config"],
+              "query": [
+                {"key": "category", "value": "jwt", "disabled": true, "description": "Filter by category: database, server, email, jwt, application, other"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin - Create/Update Configuration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"JWT_SECRET\",\n  \"value\": \"your-secret-key-here\",\n  \"category\": \"jwt\",\n  \"isSecret\": true,\n  \"isEditable\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/config",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "config"]
+            }
+          }
+        },
+        {
+          "name": "Admin - Bulk Update Configurations",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"configs\": [\n    {\n      \"_id\": \"config-id-1\",\n      \"value\": \"new-value-1\"\n    },\n    {\n      \"_id\": \"config-id-2\",\n      \"value\": \"new-value-2\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/config/bulk",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "config", "bulk"]
+            }
+          }
+        },
+        {
+          "name": "Admin - Delete Configuration",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/config/:id",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "config", ":id"],
+              "variable": [{"key": "id", "value": "config-id-here"}]
+            }
+          }
+        },
+        {
+          "name": "Admin - Sync from .env File",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": {
+              "raw": "{{baseUrl}}/admin/config/sync-from-env",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "config", "sync-from-env"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

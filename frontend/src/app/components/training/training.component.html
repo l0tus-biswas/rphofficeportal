@@ -1,0 +1,120 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid">
+  <div class="row">
+    <main class="col-12 px-md-4">
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="bi bi-book-fill me-2"></i>Training Materials</h1>
+      </div>
+
+      <!-- Alert Messages -->
+      <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+        <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+      </div>
+
+      <!-- Filters -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search materials..." 
+                  [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="selectedCategory" (change)="onFilterChange()">
+                <option *ngFor="let cat of categories" [value]="cat">
+                  {{ cat === 'all' ? 'All Categories' : cat }}
+                </option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="selectedType" (change)="onFilterChange()">
+                <option value="all">All Types</option>
+                <option value="video">Videos</option>
+                <option value="youtube">YouTube</option>
+                <option value="document">Documents</option>
+                <option value="link">Links</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-1">
+              <button class="btn btn-outline-primary w-100" (click)="loadMaterials()" title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3 text-muted">Loading training materials...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!loading && filteredMaterials.length === 0" class="text-center py-5">
+        <i class="bi bi-inbox display-1 text-muted d-block mb-3"></i>
+        <h4 class="text-muted">No Training Materials Found</h4>
+        <p class="text-muted">{{ searchTerm || selectedCategory !== 'all' || selectedType !== 'all' ? 'Try adjusting your filters' : 'No materials available yet' }}</p>
+      </div>
+
+      <!-- Materials Grid -->
+      <div *ngIf="!loading && filteredMaterials.length > 0" class="materials-grid">
+        <div *ngFor="let material of filteredMaterials" class="material-card-wrapper">
+          <div class="card h-100 shadow-sm material-card">
+            <div class="card-body">
+              <!-- Type Badge & Icon -->
+              <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="material-icon">
+                  <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
+                </div>
+                <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">
+                  {{ material.type }}
+                </span>
+              </div>
+              
+              <!-- Title & Description -->
+              <h5 class="card-title mb-2">{{ material.title }}</h5>
+              <p class="card-text text-muted small mb-3">{{ material.description }}</p>
+              
+              <!-- Metadata -->
+              <div class="mb-3">
+                <small class="text-muted d-block">
+                  <i class="bi bi-tag me-1"></i>{{ material.category || 'Uncategorized' }}
+                </small>
+                <small *ngIf="material.duration" class="text-muted d-block mt-1">
+                  <i class="bi bi-clock me-1"></i>{{ material.duration }}
+                </small>
+              </div>
+
+              <!-- View Button -->
+              <a [href]="material.url" target="_blank" class="btn btn-primary w-100">
+                <i class="bi bi-box-arrow-up-right me-2"></i>View Material
+              </a>
+
+              <!-- Uploaded By -->
+              <div class="mt-3 text-center" *ngIf="material.uploadedBy">
+                <small class="text-muted">
+                  <i class="bi bi-person-circle me-1"></i>
+                  Uploaded by {{ material.uploadedBy.name }}
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Count -->
+      <div *ngIf="!loading && filteredMaterials.length > 0" class="mt-4 text-center text-muted">
+        <small>Showing {{ filteredMaterials.length }} of {{ materials.length }} materials</small>
+      </div>
+    </main>
+  </div>
+</div>

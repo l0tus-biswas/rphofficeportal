@@ -1,0 +1,21 @@
+.card {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.form-control:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+code {
+  background-color: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 90%;
+  color: #d63384;
+}

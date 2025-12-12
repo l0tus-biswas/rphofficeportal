@@ -1,0 +1,32 @@
+.admin-onboarding-list {
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 56px);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.card {
+  border: none;
+}
+
+.table th {
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+}
+
+.pagination {
+  margin-bottom: 0;
+}
+
+.page-link {
+  cursor: pointer;
+}

@@ -1,0 +1,277 @@
+<div class="apply-page">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        
+        <!-- Invalid Referral Code Message -->
+        <div *ngIf="invalidReferral" class="card shadow border-0">
+          <div class="card-body p-5 text-center">
+            <div class="mb-4">
+              <i class="bi bi-x-circle" style="font-size: 4rem; color: #6c757d;"></i>
+            </div>
+            <h2 class="mb-3" style="color: #2c3e50;">Access Forbidden</h2>
+            <p class="mb-4" style="color: #6c757d; font-size: 1.1rem;">Invalid or inactive referral code</p>
+            <div *ngIf="referralCode" class="p-3 mb-3" style="background-color: #f8f9fa; border-radius: 8px; border-left: 3px solid #6c757d;">
+              <p class="mb-0" style="color: #495057;">
+                The referral code <code style="background-color: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; color: #495057;">{{ referralCode }}</code> is not valid or has been deactivated.
+              </p>
+            </div>
+            <p style="color: #6c757d;">Please contact your referrer for a valid referral link.</p>
+          </div>
+        </div>
+
+        <!-- Application Form -->
+        <div *ngIf="!invalidReferral" class="card shadow-lg border-0">
+          <div class="card-body p-5">
+            <div class="text-center mb-4">
+              <h1 class="display-4 fw-bold text-primary">Join RHP Office</h1>
+              <p class="lead text-muted">
+                {{ currentStep === 0 ? 'Start your recruiting journey today' : 'Upload Required Documents' }}
+              </p>
+              
+              <div *ngIf="agentName" class="alert alert-info">
+                <i class="bi bi-person-check-fill me-2"></i>
+                You've been referred by <strong>{{ agentName }}</strong>
+              </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div *ngIf="!success" class="mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted">
+                  Step {{ currentStep + 1 }} of {{ totalSteps }}
+                </small>
+                <small class="text-muted">{{ progress | number:'1.0-0' }}% Complete</small>
+              </div>
+              <div class="progress" style="height: 8px;">
+                <div 
+                  class="progress-bar bg-primary" 
+                  role="progressbar" 
+                  [style.width.%]="progress"
+                  [attr.aria-valuenow]="progress"
+                  aria-valuemin="0" 
+                  aria-valuemax="100">
+                </div>
+              </div>
+              
+              <!-- Step Labels -->
+              <div class="d-flex justify-content-between mt-2" style="font-size: 0.75rem;">
+                <span [class.text-primary]="currentStep === 0" [class.fw-bold]="currentStep === 0">Basic Info</span>
+                <span [class.text-primary]="currentStep === 1" [class.fw-bold]="currentStep === 1">State License</span>
+                <span [class.text-primary]="currentStep === 2" [class.fw-bold]="currentStep === 2">Driver's License</span>
+                <span [class.text-primary]="currentStep === 3" [class.fw-bold]="currentStep === 3">Background</span>
+                <span [class.text-primary]="currentStep === 4" [class.fw-bold]="currentStep === 4">CMS Cert</span>
+                <span [class.text-primary]="currentStep === 5" [class.fw-bold]="currentStep === 5">Direct Deposit</span>
+              </div>
+            </div>
+
+            <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+              <i class="bi bi-check-circle-fill me-2"></i>
+              <strong>Success!</strong> Your application and documents have been submitted.
+              
+              <div *ngIf="credentials" class="mt-3 p-3 bg-white rounded border border-success">
+                <h6 class="fw-bold text-success mb-2"><i class="bi bi-key-fill me-2"></i>Your Login Credentials:</h6>
+                <p class="mb-1"><strong>Email:</strong> <code class="text-dark">{{ credentials.email }}</code></p>
+                <p class="mb-1"><strong>Password:</strong> <code class="text-dark">{{ credentials.password }}</code></p>
+                <small class="text-muted d-block mt-2">
+                  <i class="bi bi-info-circle me-1"></i>Please save these credentials. You'll be redirected to login shortly...
+                </small>
+              </div>
+            </div>
+
+            <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+              <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+            </div>
+
+            <!-- Step 0: Basic Information Form -->
+            <form [formGroup]="applyForm" *ngIf="!success && currentStep === 0">
+              <div class="row">
+                <div class="col-md-12 mb-3">
+                  <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="name" 
+                    formControlName="name"
+                    [class.is-invalid]="f['name'].invalid && f['name'].touched"
+                    placeholder="Enter your full name">
+                  <div *ngIf="f['name'].invalid && f['name'].touched" class="invalid-feedback">
+                    Name must be at least 2 characters
+                  </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                  <input 
+                    type="email" 
+                    class="form-control" 
+                    id="email" 
+                    formControlName="email"
+                    [class.is-invalid]="f['email'].invalid && f['email'].touched"
+                    placeholder="your.email@example.com">
+                  <div *ngIf="f['email'].invalid && f['email'].touched" class="invalid-feedback">
+                    Please enter a valid email address
+                  </div>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label for="phone" class="form-label">Phone <span class="text-danger">*</span></label>
+                  <input 
+                    type="tel" 
+                    class="form-control" 
+                    id="phone" 
+                    formControlName="phone"
+                    [class.is-invalid]="f['phone'].invalid && f['phone'].touched"
+                    placeholder="(123) 456-7890">
+                  <div *ngIf="f['phone'].invalid && f['phone'].touched" class="invalid-feedback">
+                    Please enter a valid phone number
+                  </div>
+                </div>
+
+                <div class="col-md-12 mb-3">
+                  <label for="address" class="form-label">Address</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="address" 
+                    formControlName="address"
+                    placeholder="Street address">
+                </div>
+
+                <div class="col-md-4 mb-3">
+                  <label for="city" class="form-label">City</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="city" 
+                    formControlName="city"
+                    placeholder="City">
+                </div>
+
+                <div class="col-md-4 mb-3">
+                  <label for="state" class="form-label">State</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="state" 
+                    formControlName="state"
+                    placeholder="State">
+                </div>
+
+                <div class="col-md-4 mb-3">
+                  <label for="zipCode" class="form-label">Zip Code</label>
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="zipCode" 
+                    formControlName="zipCode"
+                    placeholder="12345">
+                </div>
+              </div>
+
+              <div class="text-center mt-3">
+                <p class="text-muted small">
+                  Already have an account? <a routerLink="/login" class="text-decoration-none">Login here</a>
+                </p>
+              </div>
+            </form>
+
+            <!-- Steps 1-5: Document Upload -->
+            <div *ngIf="!success && currentStep > 0 && currentOnboardingStep" class="document-upload-step">
+              <div class="card bg-light border-0 mb-4">
+                <div class="card-body">
+                  <h5 class="card-title">
+                    <i [class]="currentOnboardingStep.icon + ' me-2 text-primary'"></i>
+                    {{ currentOnboardingStep.title }}
+                  </h5>
+                  <p class="card-text text-muted mb-0">{{ currentOnboardingStep.description }}</p>
+                </div>
+              </div>
+
+              <div class="upload-area mb-4">
+                <div *ngIf="!selectedFiles.has(currentOnboardingStep.key)" 
+                     class="border-2 border-dashed rounded p-5 text-center"
+                     style="border-color: #dee2e6; background-color: #f8f9fa;">
+                  <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                  <h6 class="mt-3 mb-2">Upload {{ currentOnboardingStep.title }}</h6>
+                  <p class="text-muted small mb-3">PDF files only, max 10MB</p>
+                  <label [for]="'file-' + currentOnboardingStep.key" class="btn btn-outline-primary">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Choose PDF File
+                  </label>
+                  <input 
+                    [id]="'file-' + currentOnboardingStep.key"
+                    type="file" 
+                    accept="application/pdf"
+                    (change)="onFileSelected($event, currentOnboardingStep.key)"
+                    class="d-none">
+                </div>
+
+                <div *ngIf="selectedFiles.has(currentOnboardingStep.key)" 
+                     class="alert alert-success d-flex align-items-center justify-content-between">
+                  <div>
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <strong>File selected:</strong> {{ selectedFiles.get(currentOnboardingStep.key)?.name }}
+                    <small class="d-block text-muted ms-4">
+                      {{ (selectedFiles.get(currentOnboardingStep.key)?.size || 0) / 1024 / 1024 | number:'1.2-2' }} MB
+                    </small>
+                  </div>
+                  <button 
+                    type="button" 
+                    class="btn btn-sm btn-outline-danger"
+                    (click)="removeFile(currentOnboardingStep.key)">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                <small>You can skip documents now and upload them later from your dashboard. However, uploading now speeds up your approval process.</small>
+              </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div *ngIf="!success" class="d-flex gap-2 mt-4">
+              <button 
+                *ngIf="currentStep > 0" 
+                type="button" 
+                class="btn btn-outline-secondary"
+                (click)="previousStep()"
+                [disabled]="loading">
+                <i class="bi bi-arrow-left me-2"></i>Previous
+              </button>
+
+              <button 
+                *ngIf="currentStep < totalSteps - 1"
+                type="button" 
+                class="btn btn-primary flex-grow-1"
+                (click)="nextStep()"
+                [disabled]="loading || (currentStep === 0 && applyForm.invalid)">
+                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+                {{ currentStep === 0 ? 'Continue' : 'Next' }}
+                <i *ngIf="!loading" class="bi bi-arrow-right ms-2"></i>
+              </button>
+
+              <button 
+                *ngIf="currentStep === totalSteps - 1"
+                type="button" 
+                class="btn btn-success flex-grow-1"
+                (click)="submitOnboardingDocs()"
+                [disabled]="loading || !canSubmitFinal()">
+                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+                {{ loading ? 'Creating Profile...' : 'Submit & Create Profile' }}
+                <i *ngIf="!loading" class="bi bi-check-circle ms-2"></i>
+              </button>
+            </div>
+
+            <div *ngIf="success" class="text-center mt-4">
+              <a routerLink="/login" class="btn btn-primary btn-lg">Go to Login</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

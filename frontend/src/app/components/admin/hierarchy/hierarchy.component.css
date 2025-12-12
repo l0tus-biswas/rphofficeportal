@@ -1,0 +1,75 @@
+.card {
+  border: none;
+  border-radius: 10px;
+}
+
+.hierarchy-tree {
+  max-height: 800px;
+  overflow-y: auto;
+}
+
+.tree-node {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+
+.tree-node:hover {
+  background-color: #f8f9fa;
+}
+
+.tree-node:last-child {
+  border-bottom: none;
+}
+
+.node-content {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.node-content.has-children {
+  font-weight: 500;
+}
+
+.node-info {
+  flex-grow: 1;
+}
+
+.btn-link {
+  color: #6c757d;
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  color: #495057;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+code {
+  font-size: 0.85em;
+}
+
+/* Scrollbar styling */
+.hierarchy-tree::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hierarchy-tree::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.hierarchy-tree::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.hierarchy-tree::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

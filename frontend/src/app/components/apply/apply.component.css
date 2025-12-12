@@ -1,0 +1,67 @@
+.apply-page {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+}
+
+.card {
+  border-radius: 15px;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.progress {
+  border-radius: 10px;
+  background-color: #e9ecef;
+}
+
+.progress-bar {
+  transition: width 0.3s ease;
+  border-radius: 10px;
+}
+
+.border-2 {
+  border-width: 2px !important;
+}
+
+.border-dashed {
+  border-style: dashed !important;
+}
+
+.upload-area {
+  transition: all 0.3s ease;
+}
+
+.upload-area label {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-area label:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.document-upload-step {
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

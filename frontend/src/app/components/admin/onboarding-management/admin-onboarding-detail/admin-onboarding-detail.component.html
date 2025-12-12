@@ -1,0 +1,364 @@
+<app-navbar></app-navbar>
+
+<div class="admin-onboarding-detail">
+  <div class="container-fluid py-4">
+    
+    <!-- Header -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-outline-secondary" (click)="goBack()">
+              <i class="bi bi-arrow-left me-2"></i>Back
+            </button>
+            <div>
+              <h1 class="h3 mb-1">Onboarding Review</h1>
+              <p class="text-muted mb-0">Review and manage agent documents</p>
+            </div>
+          </div>
+          <button class="btn btn-primary" (click)="openNoteModal()">
+            <i class="bi bi-chat-left-text me-2"></i>Add Note
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success/Error Messages -->
+    <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+      <button type="button" class="btn-close" (click)="success = ''" aria-label="Close"></button>
+    </div>
+
+    <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+      <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3 text-muted">Loading onboarding details...</p>
+    </div>
+
+    <!-- Content -->
+    <div *ngIf="!loading && onboarding">
+      
+      <!-- Agent Info & Status -->
+      <div class="row mb-4">
+        <div class="col-lg-8">
+          <div class="card shadow-sm h-100">
+            <div class="card-body">
+              <div class="d-flex align-items-start">
+                <div class="me-3">
+                  <i class="bi bi-person-circle text-primary" style="font-size: 4rem;"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h4 class="mb-1">{{ onboarding.user?.name || 'N/A' }}</h4>
+                  <p class="text-muted mb-2">
+                    <i class="bi bi-envelope me-2"></i>{{ onboarding.user?.email || 'N/A' }}
+                  </p>
+                  <div class="d-flex flex-wrap gap-3 text-muted small">
+                    <span *ngIf="onboarding.submittedAt">
+                      <i class="bi bi-calendar3 me-1"></i>
+                      Submitted: {{ formatDate(onboarding.submittedAt) }}
+                    </span>
+                    <span *ngIf="onboarding.reviewedAt">
+                      <i class="bi bi-eye me-1"></i>
+                      Reviewed: {{ formatDate(onboarding.reviewedAt) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card shadow-sm h-100">
+            <div class="card-body text-center">
+              <h6 class="text-muted mb-3">Overall Status</h6>
+              <span [ngClass]="getStatusBadgeClass(getOverallStatus())" style="font-size: 1.1rem; padding: 0.5rem 1rem;">
+                <i [ngClass]="getStatusIcon(getOverallStatus())" class="me-2"></i>
+                {{ getOverallStatus() | titlecase }}
+              </span>
+              <hr class="my-3">
+              <div class="d-flex justify-content-around text-center">
+                <div>
+                  <h4 class="mb-0">{{ getCompletedSteps() }}/5</h4>
+                  <small class="text-muted">Uploaded</small>
+                </div>
+                <div>
+                  <h4 class="mb-0">{{ getApprovedSteps() }}/5</h4>
+                  <small class="text-muted">Approved</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Documents Review -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <h5 class="mb-3">Documents</h5>
+          <div class="row g-3">
+            <div class="col-lg-6" *ngFor="let step of steps">
+              <div class="card shadow-sm h-100"
+                   [class.border-success]="getStepStatus(step.key) === 'approved'"
+                   [class.border-danger]="getStepStatus(step.key) === 'rejected'"
+                   [class.border-warning]="getStepStatus(step.key) === 'missing'"
+                   [class.border-info]="getStepStatus(step.key) === 'pending'">
+                <div class="card-header bg-white">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                      <i [ngClass]="getStatusIcon(getStepStatus(step.key))"
+                         [class.text-success]="getStepStatus(step.key) === 'approved'"
+                         [class.text-danger]="getStepStatus(step.key) === 'rejected'"
+                         [class.text-warning]="getStepStatus(step.key) === 'missing'"
+                         [class.text-info]="getStepStatus(step.key) === 'pending'"
+                         [class.text-secondary]="getStepStatus(step.key) === 'not-started'"
+                         class="me-2"></i>
+                      {{ step.label }}
+                    </h6>
+                    <span [ngClass]="getStatusBadgeClass(getStepStatus(step.key))">
+                      {{ getStepStatus(step.key) | titlecase }}
+                    </span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  
+                  <!-- File Info -->
+                  <div *ngIf="hasFile(step.key)">
+                    <div class="mb-3">
+                      <small class="text-muted d-block mb-1">File Name:</small>
+                      <div class="d-flex align-items-center" 
+                           style="cursor: pointer;"
+                           (click)="viewDocument(step.key)"
+                           title="Click to view PDF">
+                        <i class="bi bi-file-earmark-pdf text-danger me-2" style="font-size: 1.5rem;"></i>
+                        <span class="text-truncate text-primary text-decoration-underline">{{ getStepData(step.key).originalName }}</span>
+                      </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                      <div class="col-6">
+                        <small class="text-muted d-block">File Size:</small>
+                        <span>{{ formatFileSize(getStepData(step.key).size) }}</span>
+                      </div>
+                      <div class="col-6">
+                        <small class="text-muted d-block">Uploaded:</small>
+                        <span>{{ formatDate(getStepData(step.key).uploadedAt) }}</span>
+                      </div>
+                    </div>
+                    
+                    <!-- Admin Comment -->
+                    <div *ngIf="getStepData(step.key).adminComment" 
+                         class="alert alert-sm mb-3"
+                         [class.alert-danger]="getStepStatus(step.key) === 'rejected'"
+                         [class.alert-warning]="getStepStatus(step.key) === 'missing'"
+                         [class.alert-success]="getStepStatus(step.key) === 'approved'">
+                      <small>
+                        <i class="bi bi-chat-left-text me-1"></i>
+                        <strong>Comment:</strong> {{ getStepData(step.key).adminComment }}
+                      </small>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="d-flex gap-2 flex-wrap">
+                      <button 
+                        class="btn btn-sm btn-primary"
+                        (click)="viewDocument(step.key)">
+                        <i class="bi bi-eye me-1"></i>View
+                      </button>
+                      <button 
+                        class="btn btn-sm btn-outline-primary"
+                        (click)="downloadDocument(step.key)">
+                        <i class="bi bi-download me-1"></i>Download
+                      </button>
+                      <button 
+                        class="btn btn-sm btn-success"
+                        (click)="openActionModal(step.key, 'approved')">
+                        <i class="bi bi-check-circle me-1"></i>Approve
+                      </button>
+                      <button 
+                        class="btn btn-sm btn-danger"
+                        (click)="openActionModal(step.key, 'rejected')">
+                        <i class="bi bi-x-circle me-1"></i>Reject
+                      </button>
+                      <button 
+                        class="btn btn-sm btn-warning"
+                        (click)="openActionModal(step.key, 'missing')">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Missing
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- Not Uploaded -->
+                  <div *ngIf="!hasFile(step.key)" class="text-center text-muted py-3">
+                    <i class="bi bi-file-earmark-x" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2">Document not uploaded yet</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Notes -->
+      <div class="row">
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <h5 class="mb-0"><i class="bi bi-chat-square-text me-2"></i>Admin Notes</h5>
+              <button class="btn btn-sm btn-primary" (click)="openNoteModal()">
+                <i class="bi bi-plus-circle me-1"></i>Add Note
+              </button>
+            </div>
+            <div class="card-body">
+              <div *ngIf="onboarding.notes && onboarding.notes.length > 0" class="list-group list-group-flush">
+                <div class="list-group-item border-0 px-0" *ngFor="let note of onboarding.notes">
+                  <div class="d-flex align-items-start">
+                    <div class="me-3">
+                      <i class="bi bi-person-circle text-primary" style="font-size: 2.5rem;"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                      <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                          <strong>{{ note.createdBy?.name || 'Admin' }}</strong>
+                          <span class="badge bg-secondary ms-2">{{ note.role | titlecase }}</span>
+                        </div>
+                        <small class="text-muted">{{ formatDate(note.createdAt) }}</small>
+                      </div>
+                      <p class="mb-0">{{ note.message }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div *ngIf="!onboarding.notes || onboarding.notes.length === 0" class="text-center text-muted py-4">
+                <i class="bi bi-chat-square-text" style="font-size: 3rem;"></i>
+                <p class="mb-0 mt-2">No notes added yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Action Modal -->
+<div class="modal fade" [class.show]="showActionModal" [style.display]="showActionModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Update Document Status</h5>
+        <button type="button" class="btn-close" (click)="closeActionModal()"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">Update status for <strong>{{ selectedStepLabel }}</strong></p>
+        
+        <div class="mb-3">
+          <label class="form-label">Status <span class="text-danger">*</span></label>
+          <select class="form-select" [(ngModel)]="actionStatus">
+            <option value="pending">Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="missing">Missing/Resubmit</option>
+          </select>
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Comment (Optional)</label>
+          <textarea 
+            class="form-control" 
+            rows="3" 
+            [(ngModel)]="actionComment"
+            placeholder="Add a comment for the agent..."></textarea>
+          <small class="text-muted">This comment will be visible to the agent</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeActionModal()" [disabled]="actionLoading">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="submitAction()" [disabled]="actionLoading">
+          <span *ngIf="actionLoading" class="spinner-border spinner-border-sm me-2"></span>
+          {{ actionLoading ? 'Updating...' : 'Update Status' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showActionModal" *ngIf="showActionModal"></div>
+
+<!-- Note Modal -->
+<div class="modal fade" [class.show]="showNoteModal" [style.display]="showNoteModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Admin Note</h5>
+        <button type="button" class="btn-close" (click)="closeNoteModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Note Message <span class="text-danger">*</span></label>
+          <textarea 
+            class="form-control" 
+            rows="4" 
+            [(ngModel)]="noteMessage"
+            placeholder="Enter your note for the agent..."
+            required></textarea>
+          <small class="text-muted">This note will be visible to the agent</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeNoteModal()" [disabled]="noteLoading">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary" (click)="submitNote()" [disabled]="noteLoading || !noteMessage.trim()">
+          <span *ngIf="noteLoading" class="spinner-border spinner-border-sm me-2"></span>
+          {{ noteLoading ? 'Adding...' : 'Add Note' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showNoteModal" *ngIf="showNoteModal"></div>
+
+<!-- PDF Viewer Modal -->
+<div class="modal fade" [class.show]="showPdfModal" [style.display]="showPdfModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content" style="height: 90vh;">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+          {{ currentPdfName }}
+        </h5>
+        <button type="button" class="btn-close" (click)="closePdfModal()"></button>
+      </div>
+      <div class="modal-body p-0" style="overflow: hidden;">
+        <div *ngIf="pdfLoading" class="d-flex justify-content-center align-items-center h-100">
+          <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">Loading PDF...</p>
+          </div>
+        </div>
+        <iframe 
+          *ngIf="!pdfLoading && pdfUrl"
+          [src]="pdfUrl | safe: 'resourceUrl'"
+          width="100%" 
+          height="100%" 
+          frameborder="0"
+          style="border: none;">
+        </iframe>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showPdfModal" *ngIf="showPdfModal"></div>
+

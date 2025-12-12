@@ -1,0 +1,5 @@
+export const environment = {
+  production: true,
+  apiUrl: 'https://your-api-domain.com/api',
+  appUrl: 'https://rhpoffice.com'
+};
