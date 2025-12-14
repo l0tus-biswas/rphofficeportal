@@ -1,6 +1,6 @@
 [build]
-  command = "cd frontend && npm install && npm run build -- --configuration=production"
-  publish = "frontend/dist/rhpoffice-frontend"
+  command = "npm install && npm run build -- --configuration=production"
+  publish = "dist/rhpoffice-frontend"
 
 [[redirects]]
   from = "/*"
