@@ -59,11 +59,11 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Welcome to RHP Office!</h1>
+          <h1>Welcome to Escape!</h1>
         </div>
         <div class="content">
           <h2>Hello ${user.name},</h2>
-          <p>Welcome to the RHP Office recruiting platform! Your account has been created successfully.</p>
+          <p>Welcome to the Escape recruiting platform! Your account has been created successfully.</p>
           
           ${referredByAgent ? `<p>You were referred by: <strong>${referredByAgent.name}</strong></p>` : ''}
           
@@ -86,7 +86,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
           </ul>
         </div>
         <div class="footer">
-          <p>© 2025 RHP Office. All rights reserved.</p>
+          <p>© 2025 Escape. All rights reserved.</p>
           <p>If you have any questions, please contact our support team.</p>
         </div>
       </div>
@@ -96,7 +96,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
   
   await this.sendEmail({
     email: user.email,
-    subject: 'Welcome to RHP Office - Your Account Details',
+    subject: 'Welcome to Escape - Your Account Details',
     html
   });
 };
@@ -126,7 +126,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
         </div>
         <div class="content">
           <h2>Hello ${user.name},</h2>
-          <p>You have requested to reset your password for your RHP Office account.</p>
+          <p>You have requested to reset your password for your Escape account.</p>
           
           <p>Click the button below to reset your password:</p>
           
@@ -140,7 +140,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
           <p>For security reasons, the reset link is valid for only 10 minutes.</p>
         </div>
         <div class="footer">
-          <p>© 2025 RHP Office. All rights reserved.</p>
+          <p>© 2025 Escape. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -149,7 +149,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
   
   await this.sendEmail({
     email: user.email,
-    subject: 'Password Reset Request - RHP Office',
+    subject: 'Password Reset Request - Escape',
     html
   });
 };

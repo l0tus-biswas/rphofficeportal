@@ -36,18 +36,18 @@ const routes: Routes = [
     component: ProfileComponent, 
     canActivate: [AuthGuard] 
   },
-  { 
-    path: 'recruits', 
-    component: RecruitsComponent, 
-    canActivate: [AuthGuard],
-    data: { roles: ['agent', 'admin'] }
-  },
-  { 
-    path: 'downline', 
-    component: DownlineComponent, 
-    canActivate: [AuthGuard],
-    data: { roles: ['agent', 'admin'] }
-  },
+  // { 
+  //   path: 'recruits', 
+  //   component: RecruitsComponent, 
+  //   canActivate: [AuthGuard],
+  //   data: { roles: ['agent', 'admin'] }
+  // },
+  // { 
+  //   path: 'downline', 
+  //   component: DownlineComponent, 
+  //   canActivate: [AuthGuard],
+  //   data: { roles: ['agent', 'admin'] }
+  // },
   { 
     path: 'training', 
     component: TrainingComponent, 
@@ -71,24 +71,24 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  { 
-    path: 'admin/hierarchy', 
-    component: HierarchyComponent, 
-    canActivate: [AuthGuard],
-    data: { roles: ['admin'] }
-  },
+  // { 
+  //   path: 'admin/hierarchy', 
+  //   component: HierarchyComponent, 
+  //   canActivate: [AuthGuard],
+  //   data: { roles: ['admin'] }
+  // },
   { 
     path: 'admin/training', 
     component: TrainingManagementComponent, 
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  { 
-    path: 'admin/coupons', 
-    component: CouponManagementComponent, 
-    canActivate: [AuthGuard],
-    data: { roles: ['admin'] }
-  },
+  // { 
+  //   path: 'admin/coupons', 
+  //   component: CouponManagementComponent, 
+  //   canActivate: [AuthGuard],
+  //   data: { roles: ['admin'] }
+  // },
   { 
     path: 'admin/onboarding', 
     component: AdminOnboardingListComponent, 

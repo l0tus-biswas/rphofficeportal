@@ -1,8 +1,8 @@
-# RHP Office - Recruiting Platform
+# Escape - Recruiting Platform
 
 ## 📋 Project Overview
 
-RHP Office is a full-stack MERN (MongoDB, Express, React/Angular, Node.js) recruiting application with role-based authentication, onboarding document management, and genealogy tracking. The system allows agents to recruit new members through unique referral links and manages multi-step onboarding with document uploads.
+Escape is a full-stack MERN (MongoDB, Express, React/Angular, Node.js) recruiting application with role-based authentication, onboarding document management, and genealogy tracking. The system allows agents to recruit new members through unique referral links and manages multi-step onboarding with document uploads.
 
 ## 🚀 Features
 

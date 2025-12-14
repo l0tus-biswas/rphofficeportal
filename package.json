@@ -1,7 +1,7 @@
 {
   "name": "rhp-office-portal",
   "version": "1.0.0",
-  "description": "RHP Office Recruiting Platform - Full Stack Application",
+  "description": "Escape Recruiting Platform - Full Stack Application",
   "scripts": {
     "start": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "cd backend && npm start",
