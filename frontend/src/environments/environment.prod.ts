@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://your-api-domain.com/api',
-  appUrl: 'https://rhpoffice.com'
+  apiUrl: 'https://rphofficeportal.vercel.app/api',
+  appUrl: 'https://escapeportal.netlify.app'
 };
