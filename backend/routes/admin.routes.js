@@ -216,7 +216,7 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
 });
 
 // @route   DELETE /api/admin/users/:userId
-// @desc    Delete user (soft delete - deactivate)
+// @desc    Delete user (hard delete)
 // @access  Private (Admin only)
 router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
   try {
@@ -226,10 +226,8 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
-    // Soft delete - just deactivate
-    user.isActive = false;
-    user.updatedBy = req.user._id;
-    await user.save();
+    // Hard delete - permanently remove user
+    await User.findByIdAndDelete(req.params.userId);
     
     sendResponse(res, 200, {
       message: 'User deleted successfully'

@@ -127,13 +127,19 @@ export class UserManagementComponent implements OnInit {
   }
 
   deleteUser(user: any): void {
-    if (!confirm(`Are you sure you want to delete ${user.name}? This action cannot be undone.`)) return;
+    if (!confirm(`Are you sure you want to permanently delete ${user.name}? This action cannot be undone.`)) return;
     
     this.loading = true;
+    this.error = '';
+    this.success = '';
+    
     this.adminService.deleteUser(user._id).subscribe({
       next: (response) => {
         this.success = 'User deleted successfully!';
-        this.loadUsers();
+        // Remove user from local array immediately
+        this.users = this.users.filter(u => u._id !== user._id);
+        this.applyFilters();
+        this.loading = false;
         setTimeout(() => this.success = '', 3000);
       },
       error: (error) => {
