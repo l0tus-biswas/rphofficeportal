@@ -9,7 +9,10 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const app = express();
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
   origin: process.env.APP_URL || 'http://localhost:4200',
   credentials: true
@@ -17,6 +20,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// Serve static files from Angular app FIRST
+app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend'), {
+  maxAge: '1d',
+  etag: false
+}));
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -38,9 +47,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
 
-// Serve static files from Angular app (for production)
-app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend')));
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -51,7 +57,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Send all other requests to Angular app (for production)
+// Send all other non-API requests to Angular app (SPA fallback)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/rhpoffice-frontend/index.html'));
 });
