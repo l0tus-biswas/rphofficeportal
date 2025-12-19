@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
@@ -37,6 +38,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
 
+// Serve static files from Angular app (for production)
+app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend')));
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -47,12 +51,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
-  });
+// Send all other requests to Angular app (for production)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/rhpoffice-frontend/index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
