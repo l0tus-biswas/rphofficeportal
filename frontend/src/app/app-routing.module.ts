@@ -71,24 +71,24 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  // { 
-  //   path: 'admin/hierarchy', 
-  //   component: HierarchyComponent, 
-  //   canActivate: [AuthGuard],
-  //   data: { roles: ['admin'] }
-  // },
+  { 
+    path: 'admin/hierarchy', 
+    component: HierarchyComponent, 
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
   { 
     path: 'admin/training', 
     component: TrainingManagementComponent, 
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  // { 
-  //   path: 'admin/coupons', 
-  //   component: CouponManagementComponent, 
-  //   canActivate: [AuthGuard],
-  //   data: { roles: ['admin'] }
-  // },
+  { 
+    path: 'admin/coupons', 
+    component: CouponManagementComponent, 
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
   { 
     path: 'admin/onboarding', 
     component: AdminOnboardingListComponent, 
