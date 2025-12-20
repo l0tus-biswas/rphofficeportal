@@ -54,7 +54,7 @@ const routes: Routes = [
     canActivate: [AuthGuard] 
   },
   { 
-    path: 'dashboard/onboarding-upload', 
+    path: 'onboarding-upload', 
     component: OnboardingUploadComponent, 
     canActivate: [AuthGuard],
     data: { roles: ['agent', 'admin'] }

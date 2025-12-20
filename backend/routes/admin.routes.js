@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Onboarding = require('../models/Onboarding');
 const AuditLog = require('../models/AuditLog');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/email');
 const { generatePassword, sendResponse, errorResponse, paginate } = require('../utils/helpers');
+const path = require('path');
+const fs = require('fs');
+const { ONBOARDING_ROOT } = require('../utils/storage');
 
 // All routes require admin authentication
 router.use(protect);
@@ -231,6 +235,56 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
     
     sendResponse(res, 200, {
       message: 'User deleted successfully'
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/admin/onboarding/:userId
+// @desc    Delete onboarding record for a user
+// @access  Private (Admin only)
+router.delete('/onboarding/:userId', logAction('DELETE_ONBOARDING'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Validate userId
+    if (!userId || userId === 'null' || userId === 'undefined') {
+      return sendResponse(res, 400, { message: 'Invalid user ID' });
+    }
+    
+    // Find the onboarding record (using 'user' field, not 'userId')
+    const onboarding = await Onboarding.findOne({ user: userId });
+    
+    if (!onboarding) {
+      return sendResponse(res, 404, { message: 'Onboarding record not found' });
+    }
+    
+    // Delete all uploaded files for this user
+    const userOnboardingDir = path.join(ONBOARDING_ROOT, userId.toString());
+    try {
+      if (fs.existsSync(userOnboardingDir)) {
+        await fs.promises.rm(userOnboardingDir, { recursive: true, force: true });
+      }
+    } catch (fileError) {
+      console.warn(`Failed to delete onboarding files for user ${userId}:`, fileError.message);
+    }
+    
+    // Delete the onboarding record
+    await Onboarding.findByIdAndDelete(onboarding._id);
+    
+    // Update user's onboarding references
+    await User.findByIdAndUpdate(userId, {
+      $unset: {
+        onboarding: 1,
+        onboardingStatus: 1,
+        onboardingSubmittedAt: 1,
+        onboardingApprovedAt: 1
+      }
+    });
+    
+    sendResponse(res, 200, {
+      message: 'Onboarding record deleted successfully. User will need to upload documents again.'
     });
   } catch (error) {
     errorResponse(res, error);

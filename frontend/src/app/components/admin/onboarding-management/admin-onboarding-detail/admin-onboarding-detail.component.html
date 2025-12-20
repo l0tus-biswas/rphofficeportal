@@ -16,9 +16,14 @@
               <p class="text-muted mb-0">Review and manage agent documents</p>
             </div>
           </div>
-          <button class="btn btn-primary" (click)="openNoteModal()">
-            <i class="bi bi-chat-left-text me-2"></i>Add Note
-          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" (click)="openNoteModal()">
+              <i class="bi bi-chat-left-text me-2"></i>Add Note
+            </button>
+            <button class="btn btn-outline-danger" (click)="deleteOnboarding()">
+              <i class="bi bi-trash me-2"></i>Delete Onboarding
+            </button>
+          </div>
         </div>
       </div>
     </div>

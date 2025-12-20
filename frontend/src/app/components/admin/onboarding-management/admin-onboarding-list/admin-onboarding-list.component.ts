@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { OnboardingService } from '../../../../services/onboarding.service';
+import { AdminService } from '../../../../services/admin.service';
 
 @Component({
   selector: 'app-admin-onboarding-list',
@@ -46,6 +47,7 @@ export class AdminOnboardingListComponent implements OnInit {
 
   constructor(
     private onboardingService: OnboardingService,
+    private adminService: AdminService,
     private router: Router
   ) { }
 
@@ -168,5 +170,26 @@ export class AdminOnboardingListComponent implements OnInit {
     }
     
     return range;
+  }
+
+  deleteOnboarding(userId: string, userName: string): void {
+    if (!userId || userId === 'null' || userId === 'undefined') {
+      alert('Cannot delete: Invalid user ID');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete the onboarding record for ${userName}? The user will need to upload all documents again.`)) {
+      return;
+    }
+
+    this.adminService.deleteOnboarding(userId).subscribe({
+      next: (response) => {
+        alert(response.message || 'Onboarding record deleted successfully');
+        this.loadOnboardings(); // Reload the list
+      },
+      error: (error) => {
+        alert(error.error?.message || 'Failed to delete onboarding record');
+      }
+    });
   }
 }

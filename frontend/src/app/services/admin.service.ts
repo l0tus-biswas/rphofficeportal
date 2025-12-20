@@ -63,6 +63,10 @@ export class AdminService {
     return this.http.delete(`${this.apiUrl}/admin/users/${userId}`, this.getHeaders());
   }
 
+  deleteOnboarding(userId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/admin/onboarding/${userId}`, this.getHeaders());
+  }
+
   getStats(): Observable<any> {
     return this.http.get(`${this.apiUrl}/admin/stats`, this.getHeaders());
   }

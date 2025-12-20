@@ -167,6 +167,23 @@
               </div>
             </div>
 
+            <!-- Go to Status Button (shown when all docs uploaded) -->
+            <div *ngIf="areAllDocumentsUploaded()" class="alert alert-success d-flex align-items-center justify-content-between mt-4">
+              <div class="d-flex align-items-center">
+                <i class="bi bi-check-circle-fill me-2" style="font-size: 1.5rem;"></i>
+                <div>
+                  <strong>All documents uploaded!</strong>
+                  <p class="mb-0 small">View your onboarding status and track the review process.</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                class="btn btn-success"
+                (click)="goToOnboardingStatus()">
+                <i class="bi bi-eye me-2"></i>View Onboarding Status
+              </button>
+            </div>
+
             <!-- All Steps Overview -->
             <div class="mt-5 pt-4 border-top">
               <h5 class="mb-3">All Documents</h5>

@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { OnboardingService } from '../../../../services/onboarding.service';
+import { AdminService } from '../../../../services/admin.service';
 import { ONBOARDING_STEPS, OnboardingStepMeta } from '../../../../models/onboarding.model';
 
 @Component({
@@ -38,6 +39,7 @@ export class AdminOnboardingDetailComponent implements OnInit {
 
   constructor(
     private onboardingService: OnboardingService,
+    private adminService: AdminService,
     private route: ActivatedRoute,
     private router: Router
   ) { }
@@ -259,5 +261,22 @@ export class AdminOnboardingDetailComponent implements OnInit {
 
   goBack(): void {
     this.router.navigate(['/admin/onboarding']);
+  }
+
+  deleteOnboarding(): void {
+    const userName = this.onboarding?.user?.name || 'this user';
+    if (!confirm(`Are you sure you want to delete the onboarding record for ${userName}? The user will need to upload all documents again.`)) {
+      return;
+    }
+
+    this.adminService.deleteOnboarding(this.userId).subscribe({
+      next: (response) => {
+        alert(response.message || 'Onboarding record deleted successfully');
+        this.router.navigate(['/admin/onboarding']);
+      },
+      error: (error) => {
+        this.error = error.error?.message || 'Failed to delete onboarding record';
+      }
+    });
   }
 }

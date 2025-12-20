@@ -160,7 +160,7 @@
                           
                           <a 
                             *ngIf="canReupload(step.key)"
-                            routerLink="/dashboard/onboarding-upload"
+                            routerLink="/onboarding-upload"
                             class="btn btn-sm btn-outline-warning">
                             <i class="bi bi-arrow-repeat me-1"></i>Re-upload
                           </a>
@@ -170,7 +170,7 @@
                       <!-- Not Uploaded -->
                       <div *ngIf="!hasFile(step.key)" class="mt-2">
                         <a 
-                          routerLink="/dashboard/onboarding-upload"
+                          routerLink="/onboarding-upload"
                           class="btn btn-sm btn-primary">
                           <i class="bi bi-cloud-upload me-1"></i>Upload Now
                         </a>

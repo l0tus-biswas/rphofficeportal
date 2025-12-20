@@ -197,11 +197,22 @@
                   <small>{{ formatDate(onboarding.reviewedAt) }}</small>
                 </td>
                 <td>
-                  <button 
-                    class="btn btn-sm btn-outline-primary"
-                    (click)="viewDetails(onboarding.user._id)">
-                    <i class="bi bi-eye me-1"></i>Review
-                  </button>
+                  <div class="btn-group" role="group">
+                    <button 
+                      class="btn btn-sm btn-outline-primary"
+                      (click)="viewDetails(onboarding.userId || onboarding.user?._id)"
+                      [disabled]="!onboarding.userId && !onboarding.user?._id"
+                      title="Review Details">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    <button 
+                      class="btn btn-sm btn-outline-danger"
+                      (click)="deleteOnboarding(onboarding.userId || onboarding.user?._id, onboarding.user?.name || 'this user')"
+                      [disabled]="!onboarding.userId && !onboarding.user?._id"
+                      title="Delete Onboarding">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
                 </td>
               </tr>
               <tr *ngIf="onboardings.length === 0">

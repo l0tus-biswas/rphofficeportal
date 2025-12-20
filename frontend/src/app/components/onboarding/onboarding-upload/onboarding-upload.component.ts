@@ -179,4 +179,18 @@ export class OnboardingUploadComponent implements OnInit {
   getStatusIcon(status: string): string {
     return this.onboardingService.getStatusIcon(status);
   }
+
+  areAllDocumentsUploaded(): boolean {
+    if (!this.existingOnboarding?.steps) return false;
+    
+    // Check if all 5 required steps have files
+    return this.steps.every(step => {
+      const stepData = this.existingOnboarding?.steps?.[step.key];
+      return stepData && stepData.fileName;
+    });
+  }
+
+  goToOnboardingStatus(): void {
+    this.router.navigate(['/onboarding']);
+  }
 }
