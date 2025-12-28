@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicService } from '../../services/public.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-sign-apa',
@@ -31,6 +32,10 @@ export class SignApaComponent implements OnInit {
     if (!this.applicationId) {
       this.error = 'Invalid application ID';
     }
+  }
+
+  getLogoUrl(): string {
+    return this.branding.appLogo ? `${environment.baseUrl}${this.branding.appLogo}` : '';
   }
 
   signDocument(): void {

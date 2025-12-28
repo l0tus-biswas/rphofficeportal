@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { BrandingService } from '../../../services/branding.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-branding',
@@ -26,7 +27,7 @@ export class BrandingComponent implements OnInit {
       next: (response) => {
         this.appName = response.appName || 'Escape';
         if (response.appLogo) {
-          this.appLogo = `http://localhost:5000${response.appLogo}`;
+          this.appLogo = `${environment.baseUrl}${response.appLogo}`;
         }
       },
       error: (error) => {

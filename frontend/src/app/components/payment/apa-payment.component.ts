@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { PublicService } from '../../services/public.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-apa-payment',
@@ -46,6 +47,10 @@ export class ApaPaymentComponent implements OnInit {
     } else {
       this.error = 'Invalid application ID';
     }
+  }
+
+  getLogoUrl(): string {
+    return this.branding.appLogo ? `${environment.baseUrl}${this.branding.appLogo}` : '';
   }
 
   initializeForm(): void {
