@@ -1,0 +1,109 @@
+<app-navbar></app-navbar>
+
+<div class="container mt-4">
+  <div class="row">
+    <div class="col-md-8 offset-md-2">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0"><i class="fas fa-paint-brush me-2"></i>Branding Management</h4>
+        </div>
+        <div class="card-body">
+          
+          <!-- Success Message -->
+          <div *ngIf="successMessage" class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>{{ successMessage }}
+            <button type="button" class="btn-close" (click)="successMessage = ''"></button>
+          </div>
+
+          <!-- Error Message -->
+          <div *ngIf="errorMessage" class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i>{{ errorMessage }}
+            <button type="button" class="btn-close" (click)="errorMessage = ''"></button>
+          </div>
+
+          <form (ngSubmit)="saveBranding()">
+            
+            <!-- App Name -->
+            <div class="mb-4">
+              <label for="appName" class="form-label"><strong>Application Name</strong></label>
+              <input 
+                type="text" 
+                class="form-control" 
+                id="appName" 
+                [(ngModel)]="appName" 
+                name="appName"
+                placeholder="Enter application name"
+                maxlength="50">
+              <small class="form-text text-muted">This name will appear in the navbar, emails, and throughout the application.</small>
+            </div>
+
+            <!-- Current Logo Preview -->
+            <div class="mb-4" *ngIf="appLogo && !previewUrl">
+              <label class="form-label"><strong>Current Logo</strong></label>
+              <div class="border rounded p-3 bg-light text-center">
+                <img [src]="appLogo" alt="Current Logo" class="img-thumbnail" style="max-height: 150px;">
+              </div>
+            </div>
+
+            <!-- Logo Upload -->
+            <div class="mb-4">
+              <label for="logoFile" class="form-label"><strong>Upload New Logo</strong></label>
+              <input 
+                type="file" 
+                class="form-control" 
+                id="logoFile" 
+                (change)="onFileSelected($event)"
+                accept="image/*">
+              <small class="form-text text-muted">Accepted formats: JPEG, PNG, GIF, SVG (Max size: 2MB)</small>
+            </div>
+
+            <!-- Logo Preview -->
+            <div class="mb-4" *ngIf="previewUrl">
+              <label class="form-label"><strong>New Logo Preview</strong></label>
+              <div class="border rounded p-3 bg-light text-center position-relative">
+                <img [src]="previewUrl" alt="Logo Preview" class="img-thumbnail" style="max-height: 150px;">
+                <button 
+                  type="button" 
+                  class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2"
+                  (click)="clearLogo()">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-end gap-2">
+              <button 
+                type="button" 
+                class="btn btn-secondary" 
+                (click)="loadBranding()"
+                [disabled]="loading">
+                <i class="fas fa-undo me-2"></i>Reset
+              </button>
+              <button 
+                type="submit" 
+                class="btn btn-primary" 
+                [disabled]="loading || (!appName.trim() && !selectedFile)">
+                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                <i *ngIf="!loading" class="fas fa-save me-2"></i>
+                {{ loading ? 'Saving...' : 'Save Changes' }}
+              </button>
+            </div>
+          </form>
+
+          <!-- Info Section -->
+          <div class="mt-4 pt-4 border-top">
+            <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i>About Branding</h5>
+            <ul class="list-unstyled">
+              <li class="mb-2"><i class="fas fa-check text-success me-2"></i>The application name and logo will automatically update across all pages</li>
+              <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Changes will be reflected in email templates</li>
+              <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Users will see the updated branding immediately after refresh</li>
+              <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Logo should be square or landscape orientation for best results</li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

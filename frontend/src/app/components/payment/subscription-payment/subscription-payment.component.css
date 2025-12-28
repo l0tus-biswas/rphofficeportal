@@ -1,0 +1,13 @@
+.subscription-payment-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  background-attachment: fixed;
+}
+
+.subscription-payment-page .card {
+  border-radius: 15px;
+}
+
+#payment-element {
+  margin-bottom: 20px;
+}

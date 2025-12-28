@@ -27,11 +27,42 @@ export class PublicService {
     return this.http.get(`${this.apiUrl}/public/verify-referral/${code}`);
   }
 
+  validateReferralCode(code: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/public/verify-referral/${code}`);
+  }
+
+  createRegistrationPaymentIntent(email: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/registration-payment-intent`, { email });
+  }
+
   forgotPassword(email: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/auth/forgot-password`, { email });
   }
 
   resetPassword(token: string, password: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/auth/reset-password/${token}`, { password });
+  }
+
+  submitAPAApplication(applicationData: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application`, applicationData);
+  }
+
+  getAPAApplicationStatus(applicationId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/public/apa-application/${applicationId}`);
+  }
+
+  uploadComplianceDocument(applicationId: string, questionKey: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('questionKey', questionKey);
+    return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/compliance-document`, formData);
+  }
+
+  completeSignature(applicationId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/complete-signature`, {});
+  }
+
+  completePayment(applicationId: string, paymentData: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/complete-payment`, paymentData);
   }
 }

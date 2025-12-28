@@ -4,6 +4,9 @@ export interface User {
   email: string;
   phone: string;
   role: 'admin' | 'agent';
+  level?: 'associate' | 'senior associate' | 'field manager' | 'senior manager' | 'division executive' | 'regional executive' | 'national executive';
+  promotedAt?: Date;
+  promotedBy?: User;
   referralCode?: string;
   referredBy?: User;
   isActive: boolean;

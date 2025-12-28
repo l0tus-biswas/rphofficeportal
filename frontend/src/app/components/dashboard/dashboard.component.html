@@ -7,21 +7,83 @@
       <div class="welcome-header mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap">
           <div>
-            <h3 class="mb-2">Welcome, {{ user?.name }}</h3>
+            <h3 class="mb-2">{{ "Welcome" }}, {{ user?.name }}</h3>
             <p class="mb-0 text-muted">
               <i class="bi bi-envelope me-1"></i>{{ user?.email }}
             </p>
             <p *ngIf="user?.referredBy" class="mb-0 text-muted mt-1">
-              <i class="bi bi-person-check me-1"></i>Referred by: <strong>{{ user?.referredBy?.name }}</strong>
-              <button class="btn btn-sm btn-outline-info ms-2" (click)="showReferrerInfo()" title="View Contact Info">
+              <i class="bi bi-person-check me-1"></i>{{ "Referred By" }}: <strong>{{ user?.referredBy?.name }}</strong>
+              <button class="btn btn-sm btn-outline-info ms-2" (click)="showReferrerInfo()" [title]="'View Contact Info'">
                 <i class="bi bi-info-circle"></i>
               </button>
             </p>
           </div>
           <div *ngIf="user?.role" class="mt-2 mt-md-0">
-            <span class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+            <span class="badge bg-primary me-2" style="font-size: 1rem; padding: 0.5rem 1rem;">
               {{ user?.role | uppercase }}
             </span>
+            <span *ngIf="user?.role === 'agent' && user?.level" 
+                  class="badge bg-success" 
+                  style="font-size: 1rem; padding: 0.5rem 1rem;">
+              <i class="bi bi-trophy me-1"></i>{{ getLevelDisplay(user?.level) }}
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Licensing Countdown Timer (Agent Only) -->
+      <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress && !licensingProgress.isLicensed">
+        <div class="col-12">
+          <div class="card border-warning shadow-sm">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 class="card-title mb-1">
+                    <i class="bi bi-award me-2"></i>{{ "Licensing Progress" }}
+                  </h5>
+                  <p class="text-muted mb-0 small">{{ "Complete your licensing requirements" }}</p>
+                </div>
+                <div class="text-end">
+                  <h2 class="mb-0" [class]="getDaysRemainingColor(daysRemaining)">
+                    <i class="bi bi-clock-fill"></i>
+                    {{ daysRemaining }} {{ "days remaining" }}
+                  </h2>
+                  <small class="text-muted">{{ "Remaining" }}</small>
+                </div>
+              </div>
+              <div class="row mt-3">
+                <div class="col-md-8">
+                  <label class="small text-muted">{{ "Progress" }}</label>
+                  <div class="progress" style="height: 25px;">
+                    <div class="progress-bar" 
+                         [style.width.%]="licensingProgress.completionPercentage"
+                         [class.bg-danger]="(licensingProgress.completionPercentage || 0) < 40"
+                         [class.bg-warning]="(licensingProgress.completionPercentage || 0) >= 40 && (licensingProgress.completionPercentage || 0) < 80"
+                         [class.bg-success]="(licensingProgress.completionPercentage || 0) >= 80">
+                      {{ licensingProgress.completionPercentage }}%
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4 text-end d-flex align-items-end justify-content-end">
+                  <a routerLink="/licensing" class="btn btn-primary">
+                    <i class="bi bi-list-check me-1"></i> {{ "View Checklist" }}
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Licensed Badge (Agent Only) -->
+      <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress?.isLicensed">
+        <div class="col-12">
+          <div class="alert alert-success d-flex align-items-center" role="alert">
+            <i class="bi bi-check-circle-fill me-3" style="font-size: 2rem;"></i>
+            <div>
+              <h5 class="alert-heading mb-1">{{ "Licensed!" }}</h5>
+              <p class="mb-0">{{ "You have completed all licensing requirements" }}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -32,15 +94,15 @@
           <div class="card referral-card">
             <div class="card-body">
               <h5 class="card-title mb-3">
-                <i class="bi bi-share-fill me-2"></i>Your Referral Link
+                <i class="bi bi-share-fill me-2"></i>{{ "Your Referral Link" }}
               </h5>
               <p class="text-muted mb-3">
-                Share your unique referral link to grow your network.
+                {{ "Share your referral link to recruit new agents" }}
               </p>
               
               <div class="row g-3">
                 <div class="col-md-6">
-                  <label class="form-label fw-bold">Referral Code</label>
+                  <label class="form-label fw-bold">{{ "Referral Code" }}</label>
                   <div class="input-group">
                     <input type="text" class="form-control" [value]="user?.referralCode" readonly>
                     <button class="btn btn-outline-primary" (click)="copyReferralCode()">
@@ -50,11 +112,11 @@
                 </div>
                 
                 <div class="col-md-6">
-                  <label class="form-label fw-bold">Referral URL</label>
+                  <label class="form-label fw-bold">{{ "Referral URL" }}</label>
                   <div class="input-group">
                     <input type="text" class="form-control" [value]="referralLink" readonly>
                     <button class="btn btn-primary" (click)="copyReferralLink()">
-                      <i class="bi bi-clipboard"></i> Copy
+                      <i class="bi bi-clipboard"></i> {{ "Copy" }}
                     </button>
                   </div>
                 </div>
@@ -63,7 +125,7 @@
               <div class="referral-info mt-3">
                 <small class="text-muted">
                   <i class="bi bi-info-circle me-1"></i>
-                  Share this link to invite others to your network.
+                  {{ "Share your unique referral link with potential recruits" }}
                 </small>
               </div>
             </div>
@@ -77,16 +139,16 @@
 
         <!-- Agent Dashboard -->
         <div *ngIf="authService.isAgent() && !loading" class="fade-in">
-          <h5 class="mb-3 mt-4">Quick Actions</h5>
+          <h5 class="mb-3 mt-4">{{ "Quick Actions" }}</h5>
           <div class="row g-3">
             <div class="col-md-4">
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-people-fill display-4 text-primary mb-3"></i>
-                  <h5 class="card-title">My Recruits</h5>
-                  <p class="text-muted small mb-3">View and manage your direct recruits</p>
+                  <h5 class="card-title">{{ "My Recruits" }}</h5>
+                  <p class="text-muted small mb-3">{{ "Manage your direct recruits" }}</p>
                   <a routerLink="/recruits" class="btn btn-primary w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Recruits
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "View Recruits" }}
                   </a>
                 </div>
               </div>
@@ -96,10 +158,10 @@
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-diagram-3-fill display-4 text-success mb-3"></i>
-                  <h5 class="card-title">Downline Tree</h5>
-                  <p class="text-muted small mb-3">Explore your organization structure</p>
+                  <h5 class="card-title">{{ "Downline Tree" }}</h5>
+                  <p class="text-muted small mb-3">{{ "View your complete downline structure" }}</p>
                   <a routerLink="/downline" class="btn btn-success w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Downline
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "View Downline" }}
                   </a>
                 </div>
               </div>
@@ -109,10 +171,10 @@
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-book-fill display-4 text-info mb-3"></i>
-                  <h5 class="card-title">Training Materials</h5>
-                  <p class="text-muted small mb-3">Access learning resources and guides</p>
+                  <h5 class="card-title">{{ "Training Materials" }}</h5>
+                  <p class="text-muted small mb-3">{{ "Access training resources and materials" }}</p>
                   <a routerLink="/training" class="btn btn-info w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Access Training
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "Access Training" }}
                   </a>
                 </div>
               </div>
@@ -122,13 +184,13 @@
 
         <!-- Admin Dashboard -->
         <div *ngIf="authService.isAdmin() && !loading" class="fade-in">
-          <h5 class="mb-3">System Overview</h5>
+          <h5 class="mb-3">{{ "System Overview" }}</h5>
           <div class="row mb-4 g-3">
             <div class="col-lg-3 col-md-4 col-sm-6">
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-people-fill me-1"></i>Total Users
+                    <i class="bi bi-people-fill me-1"></i>{{ "Total Users" }}
                   </h6>
                   <h2 class="mb-0 text-primary">{{ stats.totalUsers || 0 }}</h2>
                   <span class="stat-icon">
@@ -142,7 +204,7 @@
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-shield-fill-check me-1"></i>Total Admins
+                    <i class="bi bi-shield-fill-check me-1"></i>{{ "Total Admins" }}
                   </h6>
                   <h2 class="mb-0 text-danger">{{ stats.totalAdmins || 0 }}</h2>
                   <span class="stat-icon">
@@ -156,7 +218,7 @@
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-briefcase-fill me-1"></i>Total Agents
+                    <i class="bi bi-briefcase-fill me-1"></i>{{ "Total Agents" }}
                   </h6>
                   <h2 class="mb-0 text-info">{{ stats.totalAgents || 0 }}</h2>
                   <span class="stat-icon">
@@ -170,7 +232,7 @@
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-check-circle-fill me-1"></i>Active Users
+                    <i class="bi bi-check-circle-fill me-1"></i>{{ "Active Users" }}
                   </h6>
                   <h2 class="mb-0 text-success">{{ stats.activeUsers || 0 }}</h2>
                   <span class="stat-icon">
@@ -184,7 +246,7 @@
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-x-circle-fill me-1"></i>Inactive Users
+                    <i class="bi bi-x-circle-fill me-1"></i>{{ "Inactive Users" }}
                   </h6>
                   <h2 class="mb-0 text-secondary">{{ stats.inactiveUsers || 0 }}</h2>
                   <span class="stat-icon">
@@ -198,7 +260,7 @@
               <div class="card stat-card">
                 <div class="card-body">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-calendar-check-fill me-1"></i>New This Month
+                    <i class="bi bi-calendar-check-fill me-1"></i>{{ "New This Month" }}
                   </h6>
                   <h2 class="mb-0 text-warning">{{ stats.recentUsers || 0 }}</h2>
                   <span class="stat-icon">
@@ -209,16 +271,16 @@
             </div>
           </div>
 
-          <h5 class="mb-3 mt-4">Admin Controls</h5>
+          <h5 class="mb-3 mt-4">{{ "Admin Controls" }}</h5>
           <div class="row g-3">
             <div class="col-md-4">
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-person-lines-fill display-4 text-danger mb-3"></i>
-                  <h5 class="card-title">User Management</h5>
-                  <p class="text-muted small mb-3">Create, edit, and manage all users</p>
+                  <h5 class="card-title">{{ "User Management" }}</h5>
+                  <p class="text-muted small mb-3">{{ "Manage user accounts and permissions" }}</p>
                   <a routerLink="/admin/users" class="btn btn-danger w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Manage Users
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "Manage Users" }}
                   </a>
                 </div>
               </div>
@@ -228,10 +290,10 @@
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-diagram-3-fill display-4 text-primary mb-3"></i>
-                  <h5 class="card-title">Full Hierarchy</h5>
-                  <p class="text-muted small mb-3">View complete organization tree</p>
+                  <h5 class="card-title">{{ "Full Hierarchy" }}</h5>
+                  <p class="text-muted small mb-3">{{ "View complete organizational hierarchy" }}</p>
                   <a routerLink="/admin/hierarchy" class="btn btn-primary w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> View Hierarchy
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "View Hierarchy" }}
                   </a>
                 </div>
               </div>
@@ -241,10 +303,10 @@
               <div class="card action-card">
                 <div class="card-body text-center">
                   <i class="bi bi-journals-fill display-4 text-success mb-3"></i>
-                  <h5 class="card-title">Training Management</h5>
-                  <p class="text-muted small mb-3">Create and organize training content</p>
+                  <h5 class="card-title">{{ "Training Management" }}</h5>
+                  <p class="text-muted small mb-3">{{ "Manage training materials and courses" }}</p>
                   <a routerLink="/admin/training" class="btn btn-success w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> Manage Training
+                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "Manage Training" }}
                   </a>
                 </div>
               </div>
@@ -259,14 +321,14 @@
               <div class="card action-card">
                 <div class="card-body text-center py-4">
                   <i class="bi bi-person-check display-4 text-primary mb-3"></i>
-                  <h4 class="mb-3">Welcome to Escape!</h4>
-                  <p class="text-muted mb-4">Get started by exploring training materials and updating your profile.</p>
+                  <h4 class="mb-3">{{ "Welcome to " + branding.appName }}</h4>
+                  <p class="text-muted mb-4">{{ "Get started with your journey" }}</p>
                   <div class="d-grid gap-2">
                     <a routerLink="/training" class="btn btn-primary">
-                      <i class="bi bi-book me-2"></i>View Training
+                      <i class="bi bi-book me-2"></i>{{ "View Training" }}
                     </a>
                     <a routerLink="/profile" class="btn btn-outline-primary">
-                      <i class="bi bi-person me-2"></i>Update Profile
+                      <i class="bi bi-person me-2"></i>{{ "Update Profile" }}
                     </a>
                   </div>
                 </div>
@@ -277,24 +339,24 @@
               <div class="card tips-card">
                 <div class="card-body">
                   <h5 class="card-title mb-3">
-                    <i class="bi bi-lightbulb me-2 text-warning"></i>Quick Tips
+                    <i class="bi bi-lightbulb me-2 text-warning"></i>{{ "Quick Tips" }}
                   </h5>
                   <ul class="list-unstyled mb-0">
                     <li>
                       <i class="bi bi-check-circle text-success me-2"></i>
-                      Complete your profile information
+                      {{ "Complete your onboarding documents as soon as possible" }}
                     </li>
                     <li>
                       <i class="bi bi-check-circle text-success me-2"></i>
-                      Share your referral link
+                      {{ "Keep your profile information up to date" }}
                     </li>
                     <li>
                       <i class="bi bi-check-circle text-success me-2"></i>
-                      Access training materials
+                      {{ "Review training materials regularly" }}
                     </li>
                     <li>
                       <i class="bi bi-check-circle text-success me-2"></i>
-                      Contact your upline for support
+                      {{ "Stay connected with your upline for guidance" }}
                     </li>
                   </ul>
                 </div>
@@ -312,35 +374,35 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">
-            <i class="bi bi-person-circle me-2"></i>Referrer Contact Information
+            <i class="bi bi-person-circle me-2"></i>{{ "Referrer Contact Information" }}
           </h5>
           <button type="button" class="btn-close" (click)="closeReferrerInfo()"></button>
         </div>
         <div class="modal-body">
           <div *ngIf="user?.referredBy">
             <div class="mb-3">
-              <label class="form-label text-muted small mb-1">Name</label>
+              <label class="form-label text-muted small mb-1">{{ "Name" }}</label>
               <div class="d-flex align-items-center">
                 <i class="bi bi-person-fill text-primary me-2"></i>
                 <strong>{{ user?.referredBy?.name }}</strong>
               </div>
             </div>
             <div class="mb-3">
-              <label class="form-label text-muted small mb-1">Email</label>
+              <label class="form-label text-muted small mb-1">{{ "Email" }}</label>
               <div class="d-flex align-items-center">
                 <i class="bi bi-envelope-fill text-primary me-2"></i>
                 <a [href]="'mailto:' + user?.referredBy?.email">{{ user?.referredBy?.email }}</a>
               </div>
             </div>
             <div *ngIf="user?.referredBy?.phone" class="mb-3">
-              <label class="form-label text-muted small mb-1">Phone</label>
+              <label class="form-label text-muted small mb-1">{{ "Phone" }}</label>
               <div class="d-flex align-items-center">
                 <i class="bi bi-telephone-fill text-primary me-2"></i>
                 <a [href]="'tel:' + user?.referredBy?.phone">{{ user?.referredBy?.phone }}</a>
               </div>
             </div>
             <div *ngIf="user?.referredBy?.referralCode" class="mb-3">
-              <label class="form-label text-muted small mb-1">Referral Code</label>
+              <label class="form-label text-muted small mb-1">{{ "Referral Code" }}</label>
               <div class="d-flex align-items-center">
                 <i class="bi bi-tag-fill text-primary me-2"></i>
                 <code>{{ user?.referredBy?.referralCode }}</code>
@@ -349,10 +411,4 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" (click)="closeReferrerInfo()">Close</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal-backdrop fade" [class.show]="showReferrerModal" *ngIf="showReferrerModal"></div>
-
+          <button type="button" class="btn btn-secondary" (click)="closeReferrerInfo()">{{ "Close" }}</button>

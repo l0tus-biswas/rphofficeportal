@@ -1,10 +1,11 @@
 <nav class="navbar navbar-expand-lg navbar-dark sticky-top" *ngIf="authService.isLoggedIn()">
   <div class="container-fluid px-3 px-lg-4">
     <a class="navbar-brand fw-bold d-flex align-items-center" routerLink="/dashboard">
-      <div class="brand-icon">
+      <div class="brand-icon" *ngIf="!branding.appLogo">
         <i class="bi bi-building-fill"></i>
       </div>
-      <span class="brand-text ms-2">Escape</span>
+      <img *ngIf="branding.appLogo" [src]="branding.appLogo" alt="Logo" class="brand-logo">
+      <span class="brand-text ms-2">{{ branding.appName }}</span>
     </a>
     
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
@@ -49,6 +50,20 @@
           </a>
         </li>
         
+        <li class="nav-item">
+          <a class="nav-link px-lg-3" routerLink="/licensing" routerLinkActive="active">
+            <i class="bi bi-award me-2"></i>
+            <span>Licensing</span>
+          </a>
+        </li>
+        
+        <li class="nav-item">
+          <a class="nav-link px-lg-3" routerLink="/production" routerLinkActive="active">
+            <i class="bi bi-graph-up me-2"></i>
+            <span>Production</span>
+          </a>
+        </li>
+        
         <li class="nav-item dropdown" *ngIf="authService.isAdmin()">
           <a class="nav-link dropdown-toggle px-lg-3" href="#" id="adminDropdown" role="button" 
              data-bs-toggle="dropdown" aria-expanded="false">
@@ -72,8 +87,8 @@
               </a>
             </li>
             <li>
-              <a class="dropdown-item" routerLink="/admin/onboarding">
-                <i class="bi bi-clipboard-check me-2"></i>Onboarding Review
+              <a class="dropdown-item" routerLink="/admin/apa-applications">
+                <i class="bi bi-file-earmark-check me-2"></i>APA Applications
               </a>
             </li>
             <li>
@@ -86,7 +101,17 @@
                 <i class="bi bi-ticket-perforated-fill me-2"></i>Coupon Management
               </a>
             </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/carriers">
+                <i class="bi bi-building me-2"></i>Carrier Management
+              </a>
+            </li>
             <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/branding">
+                <i class="bi bi-paint-brush me-2"></i>Branding Management
+              </a>
+            </li>
             <li>
               <a class="dropdown-item" routerLink="/admin/config">
                 <i class="bi bi-gear-fill me-2"></i>System Configuration
@@ -102,6 +127,14 @@
               {{ currentUser?.role | uppercase }}
             </span>
           </div>
+        </li>
+        
+        <!-- Notifications -->
+        <li class="nav-item ms-lg-2">
+          <a class="nav-link position-relative notification-bell" routerLink="/notifications">
+            <i class="bi bi-bell-fill fs-5"></i>
+            <span *ngIf="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+          </a>
         </li>
         
         <li class="nav-item dropdown ms-lg-2">
@@ -126,6 +159,16 @@
             <li>
               <a class="dropdown-item" routerLink="/profile">
                 <i class="bi bi-person me-2"></i>My Profile
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/transactions">
+                <i class="bi bi-credit-card me-2"></i>Billing
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/translation">
+                <i class="bi bi-translate me-2"></i>Translation
               </a>
             </li>
             <li>

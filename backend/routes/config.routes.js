@@ -5,6 +5,113 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
+
+// Configure multer for logo upload
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/branding');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'logo-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif|svg/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+
+// @route   GET /api/admin/config/branding
+// @desc    Get branding configuration (public)
+// @access  Public
+router.get('/branding', async (req, res) => {
+  try {
+    const appName = await SystemConfig.findOne({ key: 'app_name' });
+    const appLogo = await SystemConfig.findOne({ key: 'app_logo' });
+    
+    sendResponse(res, 200, {
+      appName: appName?.value || 'Escape',
+      appLogo: appLogo?.value || null
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/config/branding
+// @desc    Update branding configuration
+// @access  Private/Admin
+router.post('/branding', protect, authorize('admin'), upload.single('logo'), async (req, res) => {
+  try {
+    const { appName } = req.body;
+    
+    if (appName) {
+      await SystemConfig.findOneAndUpdate(
+        { key: 'app_name' },
+        {
+          key: 'app_name',
+          value: appName,
+          category: 'application',
+          description: 'Application name',
+          updatedBy: req.user._id
+        },
+        { upsert: true, new: true }
+      );
+    }
+    
+    if (req.file) {
+      const logoUrl = `/uploads/branding/${req.file.filename}`;
+      
+      // Delete old logo file if exists
+      const oldLogo = await SystemConfig.findOne({ key: 'app_logo' });
+      if (oldLogo && oldLogo.value) {
+        const oldPath = path.join(__dirname, '..', oldLogo.value);
+        if (fs.existsSync(oldPath)) {
+          fs.unlinkSync(oldPath);
+        }
+      }
+      
+      await SystemConfig.findOneAndUpdate(
+        { key: 'app_logo' },
+        {
+          key: 'app_logo',
+          value: logoUrl,
+          category: 'application',
+          description: 'Application logo URL',
+          updatedBy: req.user._id
+        },
+        { upsert: true, new: true }
+      );
+    }
+    
+    const updatedAppName = await SystemConfig.findOne({ key: 'app_name' });
+    const updatedAppLogo = await SystemConfig.findOne({ key: 'app_logo' });
+    
+    sendResponse(res, 200, {
+      message: 'Branding updated successfully',
+      appName: updatedAppName?.value || 'Escape',
+      appLogo: updatedAppLogo?.value || null
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
 
 // @route   GET /api/admin/config
 // @desc    Get all system configurations

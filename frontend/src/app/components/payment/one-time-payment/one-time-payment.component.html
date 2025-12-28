@@ -1,0 +1,92 @@
+<app-navbar></app-navbar>
+
+<div class="one-time-payment-page">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-6 col-md-8">
+        
+        <!-- Header -->
+        <div class="text-center mb-4">
+          <i class="bi bi-credit-card text-primary" style="font-size: 4rem;"></i>
+          <h1 class="h2 mt-3 mb-2">Complete Your Registration</h1>
+          <p class="text-muted">One-time registration fee of ${{ formatAmount(amount) }}</p>
+        </div>
+
+        <!-- Payment Card -->
+        <div class="card shadow-lg border-0">
+          <div class="card-body p-4 p-md-5">
+            
+            <!-- Success Message -->
+            <div *ngIf="success" class="alert alert-success">
+              <i class="bi bi-check-circle-fill me-2"></i>
+              Payment completed successfully! Redirecting...
+            </div>
+
+            <!-- Error Message -->
+            <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+              <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+            </div>
+
+            <!-- Loading State -->
+            <div *ngIf="loading" class="text-center py-5">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="mt-3 text-muted">Initializing payment...</p>
+            </div>
+
+            <!-- Payment Form -->
+            <div *ngIf="!loading && !success">
+              <div class="mb-4">
+                <h5 class="mb-3">Payment Details</h5>
+                <div id="payment-element"></div>
+              </div>
+
+              <div class="mb-4 p-3 bg-light rounded">
+                <h6 class="mb-2"><i class="bi bi-info-circle me-2"></i>What's Included:</h6>
+                <ul class="mb-0">
+                  <li>Complete agent onboarding process</li>
+                  <li>Access to training materials</li>
+                  <li>Medicare certification support</li>
+                  <li>Dedicated support team</li>
+                </ul>
+              </div>
+
+              <div class="d-grid gap-2">
+                <button 
+                  type="button"
+                  class="btn btn-primary btn-lg"
+                  (click)="handleSubmit()"
+                  [disabled]="processing">
+                  <span *ngIf="!processing">
+                    <i class="bi bi-lock-fill me-2"></i>Pay ${{ formatAmount(amount) }}
+                  </span>
+                  <span *ngIf="processing">
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    Processing...
+                  </span>
+                </button>
+                <p class="text-center text-muted small mb-0">
+                  <i class="bi bi-shield-check me-1"></i>Secured by Stripe
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Additional Info -->
+        <div class="text-center mt-4">
+          <p class="text-muted small">
+            After completing this payment, you'll need to set up a monthly subscription of $25/month to access the platform.
+          </p>
+          <p class="text-muted small">
+            Questions? <a href="mailto:support@escape.com">Contact Support</a>
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

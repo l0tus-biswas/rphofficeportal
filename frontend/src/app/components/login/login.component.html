@@ -3,17 +3,18 @@
     <!-- Left Side - Branding -->
     <div class="col-md-6 bg-primary text-white d-flex align-items-center justify-content-center">
       <div class="text-center">
-        <h1 class="display-3 fw-bold mb-4">Escape</h1>
-        <p class="lead">Your Partner in Building Success</p>
-        <i class="bi bi-people-fill" style="font-size: 5rem;"></i>
+        <img *ngIf="branding.appLogo" [src]="branding.appLogo" alt="{{ branding.appName }}" class="login-logo mb-3">
+        <i *ngIf="!branding.appLogo" class="bi bi-people-fill mb-3" style="font-size: 5rem;"></i>
+        <h1 class="display-3 fw-bold mb-4">{{ branding.appName }}</h1>
+        <p class="lead">Your Partner in Success</p>
       </div>
     </div>
 
     <!-- Right Side - Login Form -->
     <div class="col-md-6 d-flex align-items-center justify-content-center">
       <div class="w-75" style="max-width: 400px;">
-        <h2 class="mb-4 text-center">Welcome Back</h2>
-        <p class="text-muted text-center mb-4">Sign in to your account</p>
+        <h2 class="mb-4 text-center">{{ "Welcome Back" }}</h2>
+        <p class="text-muted text-center mb-4">{{ "Sign in to your account" }}</p>
 
         <div *ngIf="error" class="alert alert-danger alert-dismissible fade show" role="alert">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
@@ -22,7 +23,7 @@
 
         <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
           <div class="mb-3">
-            <label for="email" class="form-label">Email Address</label>
+            <label for="email" class="form-label">{{ "Email Address" }}</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-envelope"></i></span>
               <input 
@@ -31,15 +32,15 @@
                 id="email" 
                 formControlName="email"
                 [class.is-invalid]="f['email'].invalid && f['email'].touched"
-                placeholder="Enter your email">
+                [placeholder]="'Enter your email'">
             </div>
             <div *ngIf="f['email'].invalid && f['email'].touched" class="text-danger small mt-1">
-              Please enter a valid email address
+              {{ "Valid email required" }}
             </div>
           </div>
 
           <div class="mb-3">
-            <label for="password" class="form-label">Password</label>
+            <label for="password" class="form-label">{{ "Password" }}</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock"></i></span>
               <input 
@@ -48,15 +49,15 @@
                 id="password" 
                 formControlName="password"
                 [class.is-invalid]="f['password'].invalid && f['password'].touched"
-                placeholder="Enter your password">
+                [placeholder]="'Enter your password'">
             </div>
             <div *ngIf="f['password'].invalid && f['password'].touched" class="text-danger small mt-1">
-              Password is required
+              {{ "is required" }}
             </div>
           </div>
 
           <div class="mb-3 text-end">
-            <a routerLink="/forgot-password" class="text-decoration-none">Forgot Password?</a>
+            <a routerLink="/forgot-password" class="text-decoration-none">{{ "Forgot Password?" }}</a>
           </div>
 
           <button 
@@ -64,7 +65,7 @@
             class="btn btn-primary w-100 py-2" 
             [disabled]="loading || loginForm.invalid">
             <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
-            {{ loading ? 'Signing In...' : 'Sign In' }}
+            {{ loading ? "Signing In..." : "Sign In" }}
           </button>
         </form>
       </div>

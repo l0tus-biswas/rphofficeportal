@@ -154,7 +154,7 @@ export class AdminOnboardingDetailComponent implements OnInit {
     
     this.selectedStep = stepKey;
     this.selectedStepLabel = stepMeta.label;
-    this.actionStatus = currentStatus === 'approved' ? 'approved' : 'pending';
+    this.actionStatus = currentStatus || 'pending';
     this.actionComment = this.getStepData(stepKey).adminComment || '';
     this.showActionModal = true;
   }

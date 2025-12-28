@@ -1,10 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const SystemConfig = require('../models/SystemConfig');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { applyLimiter } = require('../middleware/rateLimiter.middleware');
 const { sendWelcomeEmail } = require('../utils/email');
 const { generatePassword, sendResponse, errorResponse } = require('../utils/helpers');
+const { createPaymentIntent } = require('../utils/stripe');
+
+// @route   GET /api/public/branding
+// @desc    Get branding configuration (public)
+// @access  Public
+router.get('/branding', async (req, res) => {
+  try {
+    const appName = await SystemConfig.findOne({ key: 'app_name' });
+    const appLogo = await SystemConfig.findOne({ key: 'app_logo' });
+    
+    sendResponse(res, 200, {
+      appName: appName?.value || 'Escape',
+      appLogo: appLogo?.value || null
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
 
 // @route   GET /api/public/apply
 // @desc    Get agent info for apply page (optional - for showing agent name)
@@ -130,7 +149,7 @@ router.get('/verify-referral/:code', async (req, res) => {
       referralCode: req.params.code, 
       isActive: true,
       role: { $in: ['agent', 'admin'] }
-    }).select('name referralCode role');
+    }).select('name email phone referralCode role');
     
     if (!user) {
       return sendResponse(res, 404, {
@@ -142,8 +161,50 @@ router.get('/verify-referral/:code', async (req, res) => {
       valid: true,
       agent: {
         name: user.name,
+        email: user.email,
+        phone: user.phone,
         referralCode: user.referralCode
       }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/public/registration-payment-intent
+// @desc    Create payment intent for registration (public route)
+// @access  Public
+router.post('/registration-payment-intent', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return sendResponse(res, 400, { message: 'Email is required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return sendResponse(res, 400, { message: 'Account already exists. Please login.' });
+    }
+
+    const amount = parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900; // $179
+
+    // Create payment intent without customer (will be created after payment)
+    const paymentIntent = await createPaymentIntent(
+      amount,
+      'usd',
+      null, // No customer yet
+      {
+        type: 'registration',
+        email: email,
+        description: 'Registration fee - account will be created after payment'
+      }
+    );
+
+    sendResponse(res, 200, {
+      clientSecret: paymentIntent.client_secret,
+      amount: amount
     });
   } catch (error) {
     errorResponse(res, error);

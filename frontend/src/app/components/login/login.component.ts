@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { BrandingService, BrandingConfig } from '../../services/branding.service';
 
 @Component({
   selector: 'app-login',
@@ -13,12 +14,14 @@ export class LoginComponent implements OnInit {
   loading = false;
   error = '';
   returnUrl = '/dashboard';
+  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
 
   constructor(
     private formBuilder: FormBuilder,
     private authService: AuthService,
     private router: Router,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private brandingService: BrandingService
   ) { }
 
   ngOnInit(): void {
@@ -26,6 +29,14 @@ export class LoginComponent implements OnInit {
     if (this.authService.isLoggedIn()) {
       this.router.navigate(['/dashboard']);
     }
+
+    // Load branding - get current value immediately
+    this.branding = this.brandingService.getCurrentBranding();
+    
+    // Subscribe for future updates
+    this.brandingService.branding$.subscribe(branding => {
+      this.branding = branding;
+    });
 
     this.loginForm = this.formBuilder.group({
       email: ['', [Validators.required, Validators.email]],

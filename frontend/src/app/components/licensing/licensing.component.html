@@ -1,0 +1,373 @@
+<app-navbar></app-navbar>
+
+<div class="licensing-page">
+  <div class="container-fluid py-4">
+    <div class="row">
+      <!-- Sidebar - Agent List (Admin only) -->
+      <div *ngIf="isAdmin" class="col-lg-3 col-md-4 mb-4">
+        <div class="card shadow-sm">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Agents</h5>
+          </div>
+          <div class="card-body p-0">
+            <!-- Filters -->
+            <div class="p-3 border-bottom">
+              <select class="form-select form-select-sm" [(ngModel)]="filterIsLicensed" (change)="loadLicensingProgress()">
+                <option value="all">All Agents</option>
+                <option value="unlicensed">Unlicensed Only</option>
+                <option value="licensed">Licensed Only</option>
+              </select>
+            </div>
+
+            <!-- Agent List -->
+            <div class="list-group list-group-flush" style="max-height: 600px; overflow-y: auto;">
+              <div *ngIf="loading" class="p-3 text-center">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <p class="mb-0 mt-2 small">Loading...</p>
+              </div>
+
+              <div *ngIf="!loading && licensingProgress.length === 0" class="p-3 text-center text-muted">
+                No agents found
+              </div>
+
+              <a *ngFor="let progress of licensingProgress"
+                 href="javascript:void(0)"
+                 class="list-group-item list-group-item-action"
+                 [class.active]="selectedAgent?.agent._id === progress.agent._id"
+                 (click)="selectAgent(progress)">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <strong>{{ progress.agent.name }}</strong>
+                    <div class="small">
+                      <span *ngIf="!progress.isLicensed" 
+                            [class]="getDaysRemainingColor(progress.daysRemaining || 0)">
+                        <i class="bi bi-clock"></i> {{ progress.daysRemaining }} days
+                      </span>
+                      <span *ngIf="progress.isLicensed" class="text-success">
+                        <i class="bi bi-check-circle-fill"></i> Licensed
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <span class="badge bg-secondary">{{ progress.completionPercentage }}%</span>
+                  </div>
+                </div>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content - Licensing Details -->
+      <div [class]="isAdmin ? 'col-lg-9 col-md-8' : 'col-12'">
+        <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+          <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+        </div>
+
+        <div *ngIf="!loading && !selectedAgent && isAdmin" class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>Select an agent from the list to view their licensing progress
+        </div>
+
+        <div *ngIf="!loading && !selectedAgent && !isAdmin" class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle me-2"></i>No licensing progress found. Please contact your administrator.
+        </div>
+
+        <!-- Agent Details -->
+        <div *ngIf="selectedAgent" class="card shadow-sm mb-4">
+          <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h4 class="mb-0">{{ selectedAgent.agent.name }}</h4>
+                <small>{{ selectedAgent.agent.email }}</small>
+              </div>
+              <div class="text-end">
+                <h2 class="mb-0" [class]="getDaysRemainingColor(selectedAgent.daysRemaining || 0)">
+                  <i class="bi bi-clock-fill"></i>
+                  {{ selectedAgent.daysRemaining }} days
+                </h2>
+                <small>{{ selectedAgent.isLicensed ? 'Licensed' : 'Until deadline' }}</small>
+              </div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <strong>Enrollment Date:</strong><br>
+                {{ formatDate(selectedAgent.enrollmentDate) }}
+              </div>
+              <div class="col-md-4">
+                <strong>Deadline:</strong><br>
+                {{ formatDate(selectedAgent.licensingDeadline) }}
+              </div>
+              <div class="col-md-4">
+                <strong>Completion:</strong><br>
+                <div class="progress" style="height: 25px;">
+                  <div class="progress-bar" 
+                       [style.width.%]="selectedAgent.completionPercentage"
+                       [class.bg-danger]="(selectedAgent.completionPercentage || 0) < 40"
+                       [class.bg-warning]="(selectedAgent.completionPercentage || 0) >= 40 && (selectedAgent.completionPercentage || 0) < 80"
+                       [class.bg-success]="(selectedAgent.completionPercentage || 0) >= 80">
+                    {{ selectedAgent.completionPercentage }}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="selectedAgent.isLicensed" class="alert alert-success">
+              <i class="bi bi-check-circle-fill me-2"></i>
+              <strong>Licensed!</strong> Obtained on {{ formatDate(selectedAgent.licenseObtainedDate) }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Licensing Checklist -->
+        <div *ngIf="selectedAgent" class="card shadow-sm">
+          <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Licensing Checklist</h5>
+          </div>
+          <div class="card-body">
+            <div class="list-group">
+              <!-- 1. Pre-license Course -->
+              <div class="list-group-item" [class]="getChecklistItemClass(selectedAgent.checklist.preLicenseCourse)">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           [checked]="selectedAgent.checklist.preLicenseCourse.completed"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('preLicenseCourse', 'completed', ($any($event.target)).checked)">
+                    <label class="form-check-label">
+                      <strong>1. Pre-license Course Completion</strong>
+                      <small class="d-block text-muted">Example: ExamFX</small>
+                    </label>
+                  </div>
+                  <span class="badge" [class.bg-success]="selectedAgent.checklist.preLicenseCourse.completed" 
+                        [class.bg-secondary]="!selectedAgent.checklist.preLicenseCourse.completed">
+                    {{ getChecklistItemStatus(selectedAgent.checklist.preLicenseCourse) }}
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.preLicenseCourse.completed" class="small text-muted mb-2">
+                  Completed: {{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}
+                </div>
+                <div *ngIf="isAdmin" class="mt-2">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-upload"></i> Upload Certificate
+                    <input type="file" hidden (change)="onFileSelected($event, 'preLicenseCourse')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                  </label>
+                  <span *ngIf="uploadingFile['preLicenseCourse']" class="ms-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.preLicenseCourse.documents?.length" class="mt-2">
+                  <strong class="small">Documents:</strong>
+                  <ul class="small mb-0">
+                    <li *ngFor="let doc of selectedAgent.checklist.preLicenseCourse.documents">
+                      <a [href]="doc.url" target="_blank">{{ doc.filename }}</a>
+                      <small class="text-muted">({{ formatDate(doc.uploadedAt) }})</small>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 2. State Exam Scheduling -->
+              <div class="list-group-item" [class]="getChecklistItemClass(selectedAgent.checklist.stateExam)">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           [checked]="selectedAgent.checklist.stateExam.scheduled"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('stateExam', 'scheduled', ($any($event.target)).checked)">
+                    <label class="form-check-label">
+                      <strong>2. State Exam Scheduling</strong>
+                    </label>
+                  </div>
+                  <span class="badge" [class.bg-success]="selectedAgent.checklist.stateExam.scheduled" 
+                        [class.bg-secondary]="!selectedAgent.checklist.stateExam.scheduled">
+                    {{ getChecklistItemStatus(selectedAgent.checklist.stateExam) }}
+                  </span>
+                </div>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="small">Attempts:</label>
+                    <input type="number" 
+                           class="form-control form-control-sm" 
+                           [value]="selectedAgent.checklist.stateExam.attempts"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('stateExam', 'attempts', ($any($event.target)).value)"
+                           min="0">
+                  </div>
+                  <div class="col-md-6" *ngIf="selectedAgent.checklist.stateExam.scheduledDate">
+                    <label class="small">Scheduled Date:</label>
+                    <div class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
+                  </div>
+                </div>
+                <div *ngIf="isAdmin" class="mt-2">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-upload"></i> Upload Document
+                    <input type="file" hidden (change)="onFileSelected($event, 'stateExam')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                  </label>
+                  <span *ngIf="uploadingFile['stateExam']" class="ms-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.stateExam.documents?.length" class="mt-2">
+                  <strong class="small">Documents:</strong>
+                  <ul class="small mb-0">
+                    <li *ngFor="let doc of selectedAgent.checklist.stateExam.documents">
+                      <a [href]="doc.url" target="_blank">{{ doc.filename }}</a>
+                      <small class="text-muted">({{ formatDate(doc.uploadedAt) }})</small>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 3. Fingerprinting Appointment -->
+              <div class="list-group-item" [class]="getChecklistItemClass(selectedAgent.checklist.fingerprinting)">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           [checked]="selectedAgent.checklist.fingerprinting.scheduled"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('fingerprinting', 'scheduled', ($any($event.target)).checked)">
+                    <label class="form-check-label">
+                      <strong>3. Fingerprinting Appointment Scheduled</strong>
+                    </label>
+                  </div>
+                  <span class="badge" [class.bg-success]="selectedAgent.checklist.fingerprinting.scheduled" 
+                        [class.bg-secondary]="!selectedAgent.checklist.fingerprinting.scheduled">
+                    {{ getChecklistItemStatus(selectedAgent.checklist.fingerprinting) }}
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.fingerprinting.appointmentDate" class="small text-muted mb-2">
+                  Appointment: {{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}
+                </div>
+                <div *ngIf="isAdmin" class="mt-2">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-upload"></i> Upload Document
+                    <input type="file" hidden (change)="onFileSelected($event, 'fingerprinting')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                  </label>
+                  <span *ngIf="uploadingFile['fingerprinting']" class="ms-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.fingerprinting.documents?.length" class="mt-2">
+                  <strong class="small">Documents:</strong>
+                  <ul class="small mb-0">
+                    <li *ngFor="let doc of selectedAgent.checklist.fingerprinting.documents">
+                      <a [href]="doc.url" target="_blank">{{ doc.filename }}</a>
+                      <small class="text-muted">({{ formatDate(doc.uploadedAt) }})</small>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 4. DICE Application -->
+              <div class="list-group-item" [class]="getChecklistItemClass(selectedAgent.checklist.diceApplication)">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           [checked]="selectedAgent.checklist.diceApplication.submitted"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('diceApplication', 'submitted', ($any($event.target)).checked)">
+                    <label class="form-check-label">
+                      <strong>4. License Application Submitted via DICE</strong>
+                    </label>
+                  </div>
+                  <span class="badge" [class.bg-success]="selectedAgent.checklist.diceApplication.submitted" 
+                        [class.bg-secondary]="!selectedAgent.checklist.diceApplication.submitted">
+                    {{ getChecklistItemStatus(selectedAgent.checklist.diceApplication) }}
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.diceApplication.submittedDate" class="small text-muted mb-2">
+                  Submitted: {{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}
+                </div>
+                <div *ngIf="isAdmin" class="mt-2">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-upload"></i> Upload Document
+                    <input type="file" hidden (change)="onFileSelected($event, 'diceApplication')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                  </label>
+                  <span *ngIf="uploadingFile['diceApplication']" class="ms-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.diceApplication.documents?.length" class="mt-2">
+                  <strong class="small">Documents:</strong>
+                  <ul class="small mb-0">
+                    <li *ngFor="let doc of selectedAgent.checklist.diceApplication.documents">
+                      <a [href]="doc.url" target="_blank">{{ doc.filename }}</a>
+                      <small class="text-muted">({{ formatDate(doc.uploadedAt) }})</small>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- 5. State Appointment Approved -->
+              <div class="list-group-item" [class]="getChecklistItemClass(selectedAgent.checklist.stateAppointment)">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           [checked]="selectedAgent.checklist.stateAppointment.approved"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('stateAppointment', 'approved', ($any($event.target)).checked)">
+                    <label class="form-check-label">
+                      <strong>5. State Appointment Approved</strong>
+                      <small class="d-block text-muted">Final step to complete licensing</small>
+                    </label>
+                  </div>
+                  <span class="badge" [class.bg-success]="selectedAgent.checklist.stateAppointment.approved" 
+                        [class.bg-secondary]="!selectedAgent.checklist.stateAppointment.approved">
+                    {{ getChecklistItemStatus(selectedAgent.checklist.stateAppointment) }}
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.stateAppointment.approvedDate" class="small text-muted mb-2">
+                  Approved: {{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}
+                </div>
+                <div *ngIf="isAdmin" class="mt-2">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-upload"></i> Upload Document
+                    <input type="file" hidden (change)="onFileSelected($event, 'stateAppointment')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+                  </label>
+                  <span *ngIf="uploadingFile['stateAppointment']" class="ms-2">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                  </span>
+                </div>
+                <div *ngIf="selectedAgent.checklist.stateAppointment.documents?.length" class="mt-2">
+                  <strong class="small">Documents:</strong>
+                  <ul class="small mb-0">
+                    <li *ngFor="let doc of selectedAgent.checklist.stateAppointment.documents">
+                      <a [href]="doc.url" target="_blank">{{ doc.filename }}</a>
+                      <small class="text-muted">({{ formatDate(doc.uploadedAt) }})</small>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Admin Notes -->
+            <div *ngIf="isAdmin" class="mt-4">
+              <div class="card">
+                <div class="card-header bg-light">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <strong>Admin Notes</strong>
+                    <button class="btn btn-sm btn-primary" (click)="updateAdminNotes()">
+                      <i class="bi bi-pencil"></i> Edit
+                    </button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <p class="mb-0" *ngIf="selectedAgent.adminNotes">{{ selectedAgent.adminNotes }}</p>
+                  <p class="mb-0 text-muted" *ngIf="!selectedAgent.adminNotes">No notes yet</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

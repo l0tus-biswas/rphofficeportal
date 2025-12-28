@@ -3,11 +3,14 @@ const router = express.Router();
 const User = require('../models/User');
 const Onboarding = require('../models/Onboarding');
 const AuditLog = require('../models/AuditLog');
+const Payment = require('../models/Payment');
+const Subscription = require('../models/Subscription');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/email');
 const { generatePassword, sendResponse, errorResponse, paginate } = require('../utils/helpers');
+const { cancelSubscription } = require('../utils/stripe');
 const path = require('path');
 const fs = require('fs');
 const { ONBOARDING_ROOT } = require('../utils/storage');
@@ -219,6 +222,54 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
   }
 });
 
+// @route   PUT /api/admin/users/:userId/promote
+// @desc    Promote/demote agent to new level
+// @access  Private (Admin only)
+router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res) => {
+  try {
+    const { level } = req.body;
+    
+    const validLevels = [
+      'associate',
+      'senior associate',
+      'field manager',
+      'senior manager',
+      'division executive',
+      'regional executive',
+      'national executive'
+    ];
+    
+    if (!level || !validLevels.includes(level)) {
+      return sendResponse(res, 400, { 
+        message: 'Invalid level. Must be one of: ' + validLevels.join(', ') 
+      });
+    }
+    
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+    
+    if (user.role !== 'agent') {
+      return sendResponse(res, 400, { message: 'Can only promote/demote agents' });
+    }
+    
+    const oldLevel = user.level;
+    user.level = level;
+    user.promotedAt = Date.now();
+    user.promotedBy = req.user._id;
+    await user.save();
+    
+    sendResponse(res, 200, {
+      message: `Agent level changed from ${oldLevel} to ${level}`,
+      user: await User.findById(user._id).select('-password').populate('promotedBy', 'name')
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   DELETE /api/admin/users/:userId
 // @desc    Delete user (hard delete)
 // @access  Private (Admin only)
@@ -354,6 +405,209 @@ router.get('/audit-logs', async (req, res) => {
         total,
         pages: Math.ceil(total / limit)
       }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/payments
+// @desc    Get all payments with filters and pagination
+// @access  Private (Admin only)
+router.get('/payments', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const type = req.query.type; // one-time or subscription
+    const status = req.query.status;
+    const userId = req.query.userId;
+
+    const filter = {};
+    if (type) filter.type = type;
+    if (status) filter.status = status;
+    if (userId) filter.user = userId;
+
+    const query = Payment.find(filter)
+      .populate('user', 'name email role')
+      .sort('-createdAt');
+
+    const payments = await paginate(query, page, limit);
+    const total = await Payment.countDocuments(filter);
+
+    // Calculate stats
+    const stats = await Payment.aggregate([
+      { $group: {
+        _id: '$status',
+        count: { $sum: 1 },
+        totalAmount: { $sum: '$amount' }
+      }}
+    ]);
+
+    sendResponse(res, 200, {
+      payments,
+      stats,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/subscriptions
+// @desc    Get all subscriptions with filters and pagination
+// @access  Private (Admin only)
+router.get('/subscriptions', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const status = req.query.status;
+
+    const filter = {};
+    if (status) filter.status = status;
+
+    const query = Subscription.find(filter)
+      .populate('user', 'name email role paymentAccessEnabled')
+      .sort('-createdAt');
+
+    const subscriptions = await paginate(query, page, limit);
+    const total = await Subscription.countDocuments(filter);
+
+    // Calculate stats
+    const stats = await Subscription.aggregate([
+      { $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }}
+    ]);
+
+    sendResponse(res, 200, {
+      subscriptions,
+      stats,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/payments/:userId/enable-access
+// @desc    Manually enable payment access for user
+// @access  Private (Admin only)
+router.post('/payments/:userId/enable-access', logAction('ENABLE_PAYMENT_ACCESS'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    user.paymentAccessEnabled = true;
+    await user.save();
+
+    sendResponse(res, 200, {
+      message: 'Payment access enabled successfully',
+      user: {
+        _id: user._id,
+        name: user.name,
+        paymentAccessEnabled: user.paymentAccessEnabled
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/payments/:userId/disable-access
+// @desc    Manually disable payment access for user
+// @access  Private (Admin only)
+router.post('/payments/:userId/disable-access', logAction('DISABLE_PAYMENT_ACCESS'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    user.paymentAccessEnabled = false;
+    await user.save();
+
+    sendResponse(res, 200, {
+      message: 'Payment access disabled successfully',
+      user: {
+        _id: user._id,
+        name: user.name,
+        paymentAccessEnabled: user.paymentAccessEnabled
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/subscriptions/:userId/cancel
+// @desc    Cancel user subscription
+// @access  Private (Admin only)
+router.post('/subscriptions/:userId/cancel', logAction('CANCEL_SUBSCRIPTION'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    if (!user.stripeSubscriptionId) {
+      return sendResponse(res, 404, { message: 'No active subscription found' });
+    }
+
+    // Cancel in Stripe
+    const stripeSubscription = await cancelSubscription(user.stripeSubscriptionId);
+
+    // Update local subscription record
+    const subscription = await Subscription.findOne({ 
+      stripeSubscriptionId: user.stripeSubscriptionId 
+    });
+    
+    if (subscription) {
+      subscription.status = 'canceled';
+      subscription.canceledAt = new Date();
+      subscription.endedAt = new Date();
+      await subscription.save();
+    }
+
+    // Update user
+    user.subscriptionStatus = 'canceled';
+    user.paymentAccessEnabled = false;
+    await user.save();
+
+    sendResponse(res, 200, {
+      message: 'Subscription canceled successfully',
+      subscription: stripeSubscription
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/payment-settings
+// @desc    Get payment settings (one-time fee, monthly fee)
+// @access  Private (Admin only)
+router.get('/payment-settings', async (req, res) => {
+  try {
+    sendResponse(res, 200, {
+      oneTimePrice: parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900,
+      monthlyPrice: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2500,
+      monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || '',
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
     });
   } catch (error) {
     errorResponse(res, error);

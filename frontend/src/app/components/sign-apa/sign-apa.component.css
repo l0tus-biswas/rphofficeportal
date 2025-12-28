@@ -1,0 +1,14 @@
+.sign-apa-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.document-preview {
+  background-color: white !important;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.signature-section {
+  background-color: #f8f9fa;
+}

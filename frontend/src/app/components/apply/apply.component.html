@@ -1,273 +1,591 @@
 <div class="apply-page">
   <div class="container py-5">
     <div class="row justify-content-center">
-      <div class="col-lg-8">
+      <div class="col-lg-10">
         
         <!-- Invalid Referral Code Message -->
         <div *ngIf="invalidReferral" class="card shadow border-0">
           <div class="card-body p-5 text-center">
             <div class="mb-4">
-              <i class="bi bi-x-circle" style="font-size: 4rem; color: #6c757d;"></i>
+              <i class="bi bi-x-circle" style="font-size: 4rem; color: #dc3545;"></i>
             </div>
-            <h2 class="mb-3" style="color: #2c3e50;">Access Forbidden</h2>
-            <p class="mb-4" style="color: #6c757d; font-size: 1.1rem;">Invalid or inactive referral code</p>
-            <div *ngIf="referralCode" class="p-3 mb-3" style="background-color: #f8f9fa; border-radius: 8px; border-left: 3px solid #6c757d;">
-              <p class="mb-0" style="color: #495057;">
-                The referral code <code style="background-color: #e9ecef; padding: 0.2rem 0.4rem; border-radius: 4px; color: #495057;">{{ referralCode }}</code> is not valid or has been deactivated.
-              </p>
+            <h2 class="mb-3">Access Forbidden</h2>
+            <p class="mb-4 text-muted">Invalid or inactive referral code</p>
+            <div *ngIf="referralCode" class="alert alert-warning">
+              The referral code <code>{{ referralCode }}</code> is not valid or has been deactivated.
             </div>
-            <p style="color: #6c757d;">Please contact your referrer for a valid referral link.</p>
+            <p class="text-muted">Please contact your referrer for a valid referral link.</p>
           </div>
         </div>
 
-        <!-- Application Form -->
-        <div *ngIf="!invalidReferral" class="card shadow-lg border-0">
+        <!-- APA Application Form -->
+        <div *ngIf="!invalidReferral" class="card shadow border-0">
           <div class="card-body p-5">
+            
+            <!-- Header -->
             <div class="text-center mb-4">
-              <h1 class="display-4 fw-bold text-primary">Join Escape</h1>
-              <p class="lead text-muted">
-                {{ currentStep === 0 ? 'Start your recruiting journey today' : 'Upload Required Documents' }}
-              </p>
+              <h1 class="display-5 fw-bold text-primary">Join {{ branding.appName }}</h1>
+              <p class="lead text-muted">Agent Producer Agreement (APA) Application</p>
               
-              <div *ngIf="agentName" class="alert alert-info">
+              <div *ngIf="recruiterName" class="alert alert-info">
                 <i class="bi bi-person-check-fill me-2"></i>
-                You've been referred by <strong>{{ agentName }}</strong>
+                You've been referred by <strong>{{ recruiterName }}</strong>
               </div>
             </div>
 
             <!-- Progress Bar -->
-            <div *ngIf="!success" class="mb-4">
+            <div class="mb-4">
               <div class="d-flex justify-content-between align-items-center mb-2">
-                <small class="text-muted">
-                  Step {{ currentStep + 1 }} of {{ totalSteps }}
-                </small>
-                <small class="text-muted">{{ progress | number:'1.0-0' }}% Complete</small>
+                <small class="text-muted">Section {{ currentSection }} of {{ totalSections }}</small>
+                <small class="text-muted">{{ progressPercentage | number:'1.0-0' }}% Complete</small>
               </div>
-              <div class="progress" style="height: 8px;">
-                <div 
-                  class="progress-bar bg-primary" 
-                  role="progressbar" 
-                  [style.width.%]="progress"
-                  [attr.aria-valuenow]="progress"
-                  aria-valuemin="0" 
-                  aria-valuemax="100">
-                </div>
-              </div>
-              
-              <!-- Step Labels -->
-              <div class="d-flex justify-content-between mt-2" style="font-size: 0.75rem;">
-                <span [class.text-primary]="currentStep === 0" [class.fw-bold]="currentStep === 0">Basic Info</span>
-                <span [class.text-primary]="currentStep === 1" [class.fw-bold]="currentStep === 1">State License</span>
-                <span [class.text-primary]="currentStep === 2" [class.fw-bold]="currentStep === 2">Driver's License</span>
-                <span [class.text-primary]="currentStep === 3" [class.fw-bold]="currentStep === 3">Background</span>
-                <span [class.text-primary]="currentStep === 4" [class.fw-bold]="currentStep === 4">CMS Cert</span>
-                <span [class.text-primary]="currentStep === 5" [class.fw-bold]="currentStep === 5">Direct Deposit</span>
+              <div class="progress" style="height: 10px;">
+                <div class="progress-bar bg-primary" role="progressbar" [style.width.%]="progressPercentage"></div>
               </div>
             </div>
 
-            <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
-              <i class="bi bi-check-circle-fill me-2"></i>
-              <strong>Success!</strong> Your application and documents have been submitted.
-              
-              <div *ngIf="credentials" class="mt-3 p-3 bg-white rounded border border-success">
-                <h6 class="fw-bold text-success mb-2"><i class="bi bi-key-fill me-2"></i>Your Login Credentials:</h6>
-                <p class="mb-1"><strong>Email:</strong> <code class="text-dark">{{ credentials.email }}</code></p>
-                <p class="mb-1"><strong>Password:</strong> <code class="text-dark">{{ credentials.password }}</code></p>
-                <small class="text-muted d-block mt-2">
-                  <i class="bi bi-info-circle me-1"></i>Please save these credentials. You'll be redirected to login shortly...
-                </small>
-              </div>
-            </div>
+            <!-- Section Tabs -->
+            <ul class="nav nav-pills nav-fill mb-4">
+              <li class="nav-item">
+                <button class="nav-link" [class.active]="currentSection === 1" [class.disabled]="currentSection < 1">
+                  <i class="bi bi-person-fill d-block"></i>
+                  <small>Personal Info</small>
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" [class.active]="currentSection === 2" [class.disabled]="currentSection < 2">
+                  <i class="bi bi-people-fill d-block"></i>
+                  <small>Recruiting</small>
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" [class.active]="currentSection === 3" [class.disabled]="currentSection < 3">
+                  <i class="bi bi-shield-check d-block"></i>
+                  <small>Compliance</small>
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" [class.active]="currentSection === 4" [class.disabled]="currentSection < 4">
+                  <i class="bi bi-cash-stack d-block"></i>
+                  <small>Financial</small>
+                </button>
+              </li>
+              <li class="nav-item">
+                <button class="nav-link" [class.active]="currentSection === 5" [class.disabled]="currentSection < 5">
+                  <i class="bi bi-award-fill d-block"></i>
+                  <small>Licensing</small>
+                </button>
+              </li>
+            </ul>
 
+            <!-- Error Message -->
             <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
-              <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
-              <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              {{ error }}
+              <button type="button" class="btn-close" (click)="error = ''"></button>
             </div>
 
-            <!-- Step 0: Basic Information Form -->
-            <form [formGroup]="applyForm" *ngIf="!success && currentStep === 0">
-              <div class="row">
-                <div class="col-md-12 mb-3">
-                  <label for="name" class="form-label">Full Name <span class="text-danger">*</span></label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="name" 
-                    formControlName="name"
-                    [class.is-invalid]="f['name'].invalid && f['name'].touched"
-                    placeholder="Enter your full name">
-                  <div *ngIf="f['name'].invalid && f['name'].touched" class="invalid-feedback">
-                    Name must be at least 2 characters
+            <!-- Section 1: Personal Information -->
+            <div *ngIf="currentSection === 1" [formGroup]="section1Form">
+              <h3 class="mb-4">Personal Information</h3>
+              
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Legal First Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="legalFirstName">
+                  <div *ngIf="section1Form.get('legalFirstName')?.invalid && section1Form.get('legalFirstName')?.touched" class="text-danger small">
+                    First name is required (min 2 characters)
+                  </div>
+                </div>
+                
+                <div class="col-md-4">
+                  <label class="form-label">Legal Middle Name</label>
+                  <input type="text" class="form-control" formControlName="legalMiddleName">
+                </div>
+                
+                <div class="col-md-4">
+                  <label class="form-label">Legal Last Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="legalLastName">
+                  <div *ngIf="section1Form.get('legalLastName')?.invalid && section1Form.get('legalLastName')?.touched" class="text-danger small">
+                    Last name is required (min 2 characters)
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Gender <span class="text-danger">*</span></label>
+                  <select class="form-select" formControlName="gender">
+                    <option value="">Select Gender</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                  </select>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+                  <input type="date" class="form-control" formControlName="dateOfBirth">
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Social Security Number <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="ssn" placeholder="123-45-6789">
+                  <div *ngIf="section1Form.get('ssn')?.invalid && section1Form.get('ssn')?.touched" class="text-danger small">
+                    Valid SSN required (format: 123-45-6789)
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Mobile Phone <span class="text-danger">*</span></label>
+                  <input type="tel" class="form-control" formControlName="mobilePhone" placeholder="(555) 123-4567">
+                </div>
+                
+                <div class="col-12">
+                  <label class="form-label">Email Address <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control" formControlName="email">
+                  <div *ngIf="section1Form.get('email')?.invalid && section1Form.get('email')?.touched" class="text-danger small">
+                    Valid email address required
+                  </div>
+                </div>
+                
+                <div class="col-12"><hr></div>
+                <h5>Home Address</h5>
+                
+                <div class="col-12">
+                  <label class="form-label">Street Address <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="homeStreet">
+                </div>
+                
+                <div class="col-md-5">
+                  <label class="form-label">City <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="homeCity">
+                </div>
+                
+                <div class="col-md-3">
+                  <label class="form-label">State <span class="text-danger">*</span></label>
+                  <select class="form-select" formControlName="homeState">
+                    <option value="">Select</option>
+                    <option *ngFor="let state of states" [value]="state">{{ state }}</option>
+                  </select>
+                </div>
+                
+                <div class="col-md-4">
+                  <label class="form-label">ZIP Code <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="homeZipCode" placeholder="12345">
+                </div>
+                
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" formControlName="hasDifferentMailing" id="differentMailing">
+                    <label class="form-check-label" for="differentMailing">
+                      Mailing address is different from home address
+                    </label>
+                  </div>
+                </div>
+                
+                <!-- Conditional Mailing Address -->
+                <ng-container *ngIf="section1Form.get('hasDifferentMailing')?.value">
+                  <div class="col-12"><hr></div>
+                  <h5>Mailing Address</h5>
+                  
+                  <div class="col-12">
+                    <label class="form-label">Street Address <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" formControlName="mailingStreet">
+                  </div>
+                  
+                  <div class="col-md-5">
+                    <label class="form-label">City <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" formControlName="mailingCity">
+                  </div>
+                  
+                  <div class="col-md-3">
+                    <label class="form-label">State <span class="text-danger">*</span></label>
+                    <select class="form-select" formControlName="mailingState">
+                      <option value="">Select</option>
+                      <option *ngFor="let state of states" [value]="state">{{ state }}</option>
+                    </select>
+                  </div>
+                  
+                  <div class="col-md-4">
+                    <label class="form-label">ZIP Code <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" formControlName="mailingZipCode">
+                  </div>
+                </ng-container>
+                
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" formControlName="previouslyContracted" id="previouslyContracted">
+                    <label class="form-check-label" for="previouslyContracted">
+                      I have previously been contracted with {{ branding.appName }}
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 2: Recruiting Information -->
+            <div *ngIf="currentSection === 2" [formGroup]="section2Form">
+              <h3 class="mb-4">Recruiting Information</h3>
+              
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Recruiter Full Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="recruiterFullName"
+                         [attr.readonly]="section2Form.get('recruiterFullName')?.disabled ? true : null">
+                  <small class="text-muted" *ngIf="section2Form.get('recruiterFullName')?.disabled">
+                    <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+                  </small>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Recruiter Agent ID</label>
+                  <input type="text" class="form-control" formControlName="recruiterAgentId"
+                         [attr.readonly]="section2Form.get('recruiterAgentId')?.disabled ? true : null"
+                         placeholder="Optional">
+                  <small class="text-muted" *ngIf="section2Form.get('recruiterAgentId')?.disabled">
+                    <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+                  </small>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Recruiter Email</label>
+                  <input type="email" class="form-control" formControlName="recruiterEmail"
+                         [attr.readonly]="section2Form.get('recruiterEmail')?.disabled ? true : null"
+                         placeholder="recruiter@example.com">
+                  <small class="text-muted" *ngIf="section2Form.get('recruiterEmail')?.disabled">
+                    <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+                  </small>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Recruiter Phone</label>
+                  <input type="tel" class="form-control" formControlName="recruiterPhone"
+                         [attr.readonly]="section2Form.get('recruiterPhone')?.disabled ? true : null"
+                         placeholder="(555) 555-5555">
+                  <small class="text-muted" *ngIf="section2Form.get('recruiterPhone')?.disabled">
+                    <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+                  </small>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Upline Leader Name</label>
+                  <input type="text" class="form-control" formControlName="uplineLeaderName" placeholder="Optional">
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">Team Name</label>
+                  <input type="text" class="form-control" formControlName="teamName" placeholder="Optional">
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Compliance & Background Questions -->
+            <div *ngIf="currentSection === 3" [formGroup]="section3Form">
+              <h3 class="mb-4">Background & Compliance Questions</h3>
+              <p class="text-muted">Please answer the following questions honestly. Select "Yes" and provide details if applicable.</p>
+              
+              <div class="row g-4">
+                <!-- Question 1 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="previouslyContractedOther" id="q1">
+                        <label class="form-check-label fw-bold" for="q1">
+                          Have you been previously contracted with any other insurance company or marketing organization?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('previouslyContractedOther')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="previouslyContractedOtherExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="col-md-6 mb-3">
-                  <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
-                  <input 
-                    type="email" 
-                    class="form-control" 
-                    id="email" 
-                    formControlName="email"
-                    [class.is-invalid]="f['email'].invalid && f['email'].touched"
-                    placeholder="your.email@example.com">
-                  <div *ngIf="f['email'].invalid && f['email'].touched" class="invalid-feedback">
-                    Please enter a valid email address
+                <!-- Question 2 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="felonyConviction" id="q2">
+                        <label class="form-check-label fw-bold" for="q2">
+                          Have you ever been convicted of a felony?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('felonyConviction')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="felonyConvictionExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="col-md-6 mb-3">
-                  <label for="phone" class="form-label">Phone <span class="text-danger">*</span></label>
-                  <input 
-                    type="tel" 
-                    class="form-control" 
-                    id="phone" 
-                    formControlName="phone"
-                    [class.is-invalid]="f['phone'].invalid && f['phone'].touched"
-                    placeholder="(123) 456-7890">
-                  <div *ngIf="f['phone'].invalid && f['phone'].touched" class="invalid-feedback">
-                    Please enter a valid phone number
+                <!-- Question 3 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="misdemeanorFraud" id="q3">
+                        <label class="form-check-label fw-bold" for="q3">
+                          Have you been convicted of fraud, misrepresentation, or any crime involving dishonesty?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('misdemeanorFraud')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="misdemeanorFraudExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="col-md-12 mb-3">
-                  <label for="address" class="form-label">Address</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="address" 
-                    formControlName="address"
-                    placeholder="Street address">
-                </div>
-
-                <div class="col-md-4 mb-3">
-                  <label for="city" class="form-label">City</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="city" 
-                    formControlName="city"
-                    placeholder="City">
-                </div>
-
-                <div class="col-md-4 mb-3">
-                  <label for="state" class="form-label">State</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="state" 
-                    formControlName="state"
-                    placeholder="State">
-                </div>
-
-                <div class="col-md-4 mb-3">
-                  <label for="zipCode" class="form-label">Zip Code</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="zipCode" 
-                    formControlName="zipCode"
-                    placeholder="12345">
-                </div>
-              </div>
-
-              <div class="text-center mt-3">
-                <p class="text-muted small">
-                  Already have an account? <a routerLink="/login" class="text-decoration-none">Login here</a>
-                </p>
-              </div>
-            </form>
-
-            <!-- Steps 1-5: Document Upload -->
-            <div *ngIf="!success && currentStep > 0 && currentOnboardingStep" class="document-upload-step">
-              <div class="card bg-light border-0 mb-4">
-                <div class="card-body">
-                  <h5 class="card-title">
-                    <i [class]="currentOnboardingStep.icon + ' me-2 text-primary'"></i>
-                    {{ currentOnboardingStep.title }}
-                  </h5>
-                  <p class="card-text text-muted mb-0">{{ currentOnboardingStep.description }}</p>
-                </div>
-              </div>
-
-              <div class="upload-area mb-4">
-                <div *ngIf="!selectedFiles.has(currentOnboardingStep.key)" 
-                     class="border-2 border-dashed rounded p-5 text-center"
-                     style="border-color: #dee2e6; background-color: #f8f9fa;">
-                  <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
-                  <h6 class="mt-3 mb-2">Upload {{ currentOnboardingStep.title }}</h6>
-                  <p class="text-muted small mb-3">PDF files only, max 10MB</p>
-                  <label [for]="'file-' + currentOnboardingStep.key" class="btn btn-outline-primary">
-                    <i class="bi bi-file-earmark-pdf me-2"></i>Choose PDF File
-                  </label>
-                  <input 
-                    [id]="'file-' + currentOnboardingStep.key"
-                    type="file" 
-                    accept="application/pdf"
-                    (change)="onFileSelected($event, currentOnboardingStep.key)"
-                    class="d-none">
-                </div>
-
-                <div *ngIf="selectedFiles.has(currentOnboardingStep.key)" 
-                     class="alert alert-success d-flex align-items-center justify-content-between">
-                  <div>
-                    <i class="bi bi-check-circle-fill me-2"></i>
-                    <strong>File selected:</strong> {{ selectedFiles.get(currentOnboardingStep.key)?.name }}
-                    <small class="d-block text-muted ms-4">
-                      {{ (selectedFiles.get(currentOnboardingStep.key)?.size || 0) / 1024 / 1024 | number:'1.2-2' }} MB
-                    </small>
+                <!-- Question 4 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="civilAction" id="q4">
+                        <label class="form-check-label fw-bold" for="q4">
+                          Have you been subject to any civil action or regulatory proceedings related to insurance activities?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('civilAction')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="civilActionExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
                   </div>
-                  <button 
-                    type="button" 
-                    class="btn btn-sm btn-outline-danger"
-                    (click)="removeFile(currentOnboardingStep.key)">
-                    <i class="bi bi-trash"></i>
-                  </button>
+                </div>
+
+                <!-- Question 5 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="licenseDenied" id="q5">
+                        <label class="form-check-label fw-bold" for="q5">
+                          Has your insurance license ever been denied, suspended, revoked, or subject to disciplinary action?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('licenseDenied')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="licenseDeniedExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Question 6 -->
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" formControlName="bondIssues" id="q6">
+                        <label class="form-check-label fw-bold" for="q6">
+                          Have you ever had difficulty obtaining or maintaining a surety bond?
+                        </label>
+                      </div>
+                      <div *ngIf="section3Form.get('bondIssues')?.value" class="mt-3">
+                        <label class="form-label">Please explain:</label>
+                        <textarea class="form-control" formControlName="bondIssuesExplanation" rows="3"></textarea>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                <small>You can skip documents now and upload them later from your dashboard. However, uploading now speeds up your approval process.</small>
+            <!-- Section 4: Financial Background -->
+            <div *ngIf="currentSection === 4" [formGroup]="section4Form">
+              <h3 class="mb-4">Financial Background</h3>
+              
+              <div class="row g-4">
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <label class="form-label fw-bold">Do you have any unsatisfied judgments? <span class="text-danger">*</span></label>
+                      <div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="unsatisfiedJudgments" [value]="true" id="judgYes">
+                          <label class="form-check-label" for="judgYes">Yes</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="unsatisfiedJudgments" [value]="false" id="judgNo">
+                          <label class="form-check-label" for="judgNo">No</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <label class="form-label fw-bold">Do you have any unsatisfied tax liens? <span class="text-danger">*</span></label>
+                      <div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="unsatisfiedLiens" [value]="true" id="lienYes">
+                          <label class="form-check-label" for="lienYes">Yes</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="unsatisfiedLiens" [value]="false" id="lienNo">
+                          <label class="form-check-label" for="lienNo">No</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <label class="form-label fw-bold">Have you ever filed for bankruptcy? <span class="text-danger">*</span></label>
+                      <div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="bankruptcyFiled" [value]="true" id="bankYes">
+                          <label class="form-check-label" for="bankYes">Yes</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="bankruptcyFiled" [value]="false" id="bankNo">
+                          <label class="form-check-label" for="bankNo">No</label>
+                        </div>
+                      </div>
+                      
+                      <div *ngIf="section4Form.get('bankruptcyFiled')?.value" class="mt-3">
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <label class="form-label">Bankruptcy Chapter <span class="text-danger">*</span></label>
+                            <select class="form-select" formControlName="bankruptcyChapter">
+                              <option value="">Select</option>
+                              <option value="7">Chapter 7</option>
+                              <option value="11">Chapter 11</option>
+                              <option value="13">Chapter 13</option>
+                            </select>
+                          </div>
+                          <div class="col-md-6">
+                            <label class="form-label">Bankruptcy Status <span class="text-danger">*</span></label>
+                            <select class="form-select" formControlName="bankruptcyStatus">
+                              <option value="">Select</option>
+                              <option value="Open">Open/Pending</option>
+                              <option value="Discharged">Discharged</option>
+                              <option value="Dismissed">Dismissed</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 5: Licensing Status -->
+            <div *ngIf="currentSection === 5" [formGroup]="section5Form">
+              <h3 class="mb-4">Licensing Status</h3>
+              
+              <div class="row g-4">
+                <div class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <label class="form-label fw-bold">Are you currently licensed to sell insurance? <span class="text-danger">*</span></label>
+                      <div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="currentlyLicensed" [value]="true" id="licYes">
+                          <label class="form-check-label" for="licYes">Yes</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                          <input class="form-check-input" type="radio" formControlName="currentlyLicensed" [value]="false" id="licNo">
+                          <label class="form-check-label" for="licNo">No</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="section5Form.get('currentlyLicensed')?.value" class="col-12">
+                  <div class="card">
+                    <div class="card-body">
+                      <label class="form-label fw-bold">License Types (check all that apply)</label>
+                      <div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" formControlName="licenseLife" id="licLife">
+                          <label class="form-check-label" for="licLife">Life Insurance</label>
+                        </div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" formControlName="licenseHealth" id="licHealth">
+                          <label class="form-check-label" for="licHealth">Health Insurance</label>
+                        </div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" formControlName="licenseOther" id="licOther">
+                          <label class="form-check-label" for="licOther">Other</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="section5Form.get('currentlyLicensed')?.value" class="col-12">
+                  <label class="form-label">States Licensed In <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="statesLicensed" placeholder="e.g., CA, TX, FL">
+                  <small class="text-muted">Enter comma-separated state abbreviations</small>
+                </div>
+
+                <div *ngIf="section5Form.get('currentlyLicensed')?.value" class="col-md-6">
+                  <label class="form-label">Primary License Number <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" formControlName="licenseNumber">
+                </div>
+
+                <div *ngIf="section5Form.get('currentlyLicensed')?.value" class="col-md-6">
+                  <label class="form-label">License Status <span class="text-danger">*</span></label>
+                  <select class="form-select" formControlName="licenseStatus">
+                    <option value="">Select</option>
+                    <option value="Active">Active</option>
+                    <option value="Pending Renewal">Pending Renewal</option>
+                    <option value="Expired">Expired</option>
+                  </select>
+                </div>
+
+                <div *ngIf="!section5Form.get('currentlyLicensed')?.value" class="col-12">
+                  <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    You will need to obtain an insurance license before you can start selling. We'll provide guidance after your application is approved.
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Navigation Buttons -->
-            <div *ngIf="!success" class="d-flex gap-2 mt-4">
+            <div class="d-flex justify-content-between mt-5">
               <button 
-                *ngIf="currentStep > 0" 
                 type="button" 
-                class="btn btn-outline-secondary"
-                (click)="previousStep()"
-                [disabled]="loading">
+                class="btn btn-outline-secondary" 
+                (click)="previousSection()"
+                [disabled]="currentSection === 1 || loading">
                 <i class="bi bi-arrow-left me-2"></i>Previous
               </button>
-
+              
               <button 
-                *ngIf="currentStep < totalSteps - 1"
+                *ngIf="currentSection < totalSections" 
                 type="button" 
-                class="btn btn-primary flex-grow-1"
-                (click)="nextStep()"
-                [disabled]="loading || (currentStep === 0 && applyForm.invalid)">
-                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
-                {{ currentStep === 0 ? 'Continue' : 'Next' }}
-                <i *ngIf="!loading" class="bi bi-arrow-right ms-2"></i>
+                class="btn btn-primary" 
+                (click)="nextSection()"
+                [disabled]="loading">
+                Next<i class="bi bi-arrow-right ms-2"></i>
               </button>
-
+              
               <button 
-                *ngIf="currentStep === totalSteps - 1"
+                *ngIf="currentSection === totalSections" 
                 type="button" 
-                class="btn btn-success flex-grow-1"
-                (click)="submitOnboardingDocs()"
-                [disabled]="loading || !canSubmitFinal()">
-                <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
-                {{ loading ? 'Creating Profile...' : 'Submit & Create Profile' }}
-                <i *ngIf="!loading" class="bi bi-check-circle ms-2"></i>
+                class="btn btn-success" 
+                (click)="submitApplication()"
+                [disabled]="loading">
+                <span *ngIf="!loading">
+                  <i class="bi bi-check-circle me-2"></i>Submit Application
+                </span>
+                <span *ngIf="loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Submitting...
+                </span>
               </button>
             </div>
 
-            <div *ngIf="success" class="text-center mt-4">
-              <a routerLink="/login" class="btn btn-primary btn-lg">Go to Login</a>
-            </div>
           </div>
         </div>
 

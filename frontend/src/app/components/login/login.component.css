@@ -6,6 +6,12 @@
   background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
 }
 
+.login-logo {
+  max-width: 200px;
+  height: auto;
+  object-fit: contain;
+}
+
 .form-control:focus {
   border-color: #4CAF50;
   box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);

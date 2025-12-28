@@ -1,0 +1,168 @@
+<app-navbar></app-navbar>
+
+<div class="container-fluid py-4">
+  <div class="row">
+    <div class="col-12">
+      
+      <!-- Header -->
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2>APA Applications</h2>
+          <p class="text-muted mb-0">Manage agent producer agreement applications</p>
+        </div>
+      </div>
+
+      <!-- Status Stats -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="card bg-warning bg-opacity-10 border-warning">
+            <div class="card-body">
+              <h6 class="text-warning mb-2">Pending Signature</h6>
+              <h3 class="mb-0">{{ statusCounts['pending_signature'] || 0 }}</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-info bg-opacity-10 border-info">
+            <div class="card-body">
+              <h6 class="text-info mb-2">Pending Payment</h6>
+              <h3 class="mb-0">{{ statusCounts['pending_payment'] || 0 }}</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-success bg-opacity-10 border-success">
+            <div class="card-body">
+              <h6 class="text-success mb-2">Active</h6>
+              <h3 class="mb-0">{{ statusCounts['active'] || 0 }}</h3>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-danger bg-opacity-10 border-danger">
+            <div class="card-body">
+              <h6 class="text-danger mb-2">Rejected</h6>
+              <h3 class="mb-0">{{ statusCounts['rejected'] || 0 }}</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label">Status</label>
+              <select class="form-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+                <option value="all">All Status</option>
+                <option value="pending_signature">Pending Signature</option>
+                <option value="pending_payment">Pending Payment</option>
+                <option value="active">Active</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Search</label>
+              <div class="input-group">
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  [(ngModel)]="searchQuery"
+                  placeholder="Search by name or email..."
+                  (keyup.enter)="applyFilters()">
+                <button class="btn btn-primary" (click)="applyFilters()">
+                  <i class="bi bi-search"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label d-block">&nbsp;</label>
+              <button class="btn btn-outline-secondary w-100" (click)="searchQuery=''; statusFilter='all'; applyFilters()">
+                <i class="bi bi-x-circle me-1"></i>Clear Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div *ngIf="error" class="alert alert-danger">
+        {{ error }}
+      </div>
+
+      <!-- Loading -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Applications Table -->
+      <div *ngIf="!loading" class="card">
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Applicant</th>
+                  <th>Email</th>
+                  <th>Recruiter</th>
+                  <th>Status</th>
+                  <th>Submitted</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let app of applications" style="cursor: pointer;">
+                  <td (click)="viewApplication(app._id)">
+                    {{ app.personalInfo.legalFirstName }} {{ app.personalInfo.legalLastName }}
+                  </td>
+                  <td (click)="viewApplication(app._id)">{{ app.personalInfo.email }}</td>
+                  <td (click)="viewApplication(app._id)">{{ app.recruitingInfo.recruiterFullName }}</td>
+                  <td (click)="viewApplication(app._id)">
+                    <span class="badge" [ngClass]="getStatusBadgeClass(app.status)">
+                      {{ getStatusLabel(app.status) }}
+                    </span>
+                  </td>
+                  <td (click)="viewApplication(app._id)">{{ app.submittedAt | date:'short' }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-primary" (click)="viewApplication(app._id)">
+                      <i class="bi bi-eye"></i> View
+                    </button>
+                  </td>
+                </tr>
+                <tr *ngIf="applications.length === 0">
+                  <td colspan="6" class="text-center py-4 text-muted">
+                    No applications found
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <nav *ngIf="totalPages > 1" aria-label="Applications pagination">
+            <ul class="pagination justify-content-center mb-0">
+              <li class="page-item" [class.disabled]="currentPage === 1">
+                <button class="page-link" (click)="changePage(currentPage - 1)">Previous</button>
+              </li>
+              <li class="page-item" *ngFor="let page of [].constructor(totalPages); let i = index"
+                  [class.active]="currentPage === i + 1">
+                <button class="page-link" (click)="changePage(i + 1)">{{ i + 1 }}</button>
+              </li>
+              <li class="page-item" [class.disabled]="currentPage === totalPages">
+                <button class="page-link" (click)="changePage(currentPage + 1)">Next</button>
+              </li>
+            </ul>
+          </nav>
+
+          <p class="text-muted small text-center mt-3 mb-0">
+            Showing {{ applications.length }} of {{ total }} applications
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

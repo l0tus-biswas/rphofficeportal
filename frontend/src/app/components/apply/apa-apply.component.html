@@ -1,0 +1,576 @@
+<div class="apply-container">
+  <div class="progress-header">
+    <h2>Agent Production Agreement Application</h2>
+    <div class="progress-bar">
+      <div class="progress-step" *ngFor="let step of [1,2,3,4,5]" 
+           [class.active]="currentSection >= step" 
+           [class.current]="currentSection === step">
+        <div class="step-number">{{ step }}</div>
+        <div class="step-label">
+          <span *ngIf="step === 1">Personal Info</span>
+          <span *ngIf="step === 2">Recruiting</span>
+          <span *ngIf="step === 3">Compliance</span>
+          <span *ngIf="step === 4">Financial</span>
+          <span *ngIf="step === 5">Licensing</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
+  <div class="alert alert-warning" *ngIf="invalidReferral">
+    Invalid or missing referral code. Please contact your recruiter.
+  </div>
+
+  <!-- Section 1: Personal Information -->
+  <form [formGroup]="section1Form" *ngIf="currentSection === 1" class="section-form">
+    <h3>Personal Information</h3>
+    
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Legal First Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="legalFirstName"
+               [class.is-invalid]="section1Form.get('legalFirstName')?.invalid && section1Form.get('legalFirstName')?.touched">
+        <div class="invalid-feedback" *ngIf="section1Form.get('legalFirstName')?.errors?.['required']">
+          First name is required
+        </div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Legal Middle Name</label>
+        <input type="text" class="form-control" formControlName="legalMiddleName">
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Legal Last Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="legalLastName"
+               [class.is-invalid]="section1Form.get('legalLastName')?.invalid && section1Form.get('legalLastName')?.touched">
+        <div class="invalid-feedback" *ngIf="section1Form.get('legalLastName')?.errors?.['required']">
+          Last name is required
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Gender <span class="text-danger">*</span></label>
+        <select class="form-select" formControlName="gender"
+                [class.is-invalid]="section1Form.get('gender')?.invalid && section1Form.get('gender')?.touched">
+          <option value="">Select Gender</option>
+          <option value="M">Male</option>
+          <option value="F">Female</option>
+        </select>
+        <div class="invalid-feedback">Gender is required</div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" formControlName="dateOfBirth"
+               [class.is-invalid]="section1Form.get('dateOfBirth')?.invalid && section1Form.get('dateOfBirth')?.touched">
+        <div class="invalid-feedback">Date of birth is required</div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Social Security Number <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="ssn" placeholder="XXX-XX-XXXX"
+               [class.is-invalid]="section1Form.get('ssn')?.invalid && section1Form.get('ssn')?.touched">
+        <div class="invalid-feedback">Valid SSN is required (XXX-XX-XXXX)</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Mobile Phone <span class="text-danger">*</span></label>
+        <input type="tel" class="form-control" formControlName="mobilePhone" placeholder="(555) 555-5555"
+               [class.is-invalid]="section1Form.get('mobilePhone')?.invalid && section1Form.get('mobilePhone')?.touched">
+        <div class="invalid-feedback">Valid phone number is required</div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Email <span class="text-danger">*</span></label>
+        <input type="email" class="form-control" formControlName="email"
+               [class.is-invalid]="section1Form.get('email')?.invalid && section1Form.get('email')?.touched">
+        <div class="invalid-feedback">Valid email is required</div>
+      </div>
+    </div>
+
+    <h4 class="mt-4">Home Address</h4>
+    <div class="row">
+      <div class="col-12 mb-3">
+        <label class="form-label">Street Address <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="homeStreet"
+               [class.is-invalid]="section1Form.get('homeStreet')?.invalid && section1Form.get('homeStreet')?.touched">
+        <div class="invalid-feedback">Street address is required</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-5 mb-3">
+        <label class="form-label">City <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="homeCity"
+               [class.is-invalid]="section1Form.get('homeCity')?.invalid && section1Form.get('homeCity')?.touched">
+        <div class="invalid-feedback">City is required</div>
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">State <span class="text-danger">*</span></label>
+        <select class="form-select" formControlName="homeState"
+                [class.is-invalid]="section1Form.get('homeState')?.invalid && section1Form.get('homeState')?.touched">
+          <option value="">Select State</option>
+          <option value="AL">Alabama</option>
+          <option value="AK">Alaska</option>
+          <option value="AZ">Arizona</option>
+          <option value="AR">Arkansas</option>
+          <option value="CA">California</option>
+          <option value="CO">Colorado</option>
+          <option value="CT">Connecticut</option>
+          <option value="DE">Delaware</option>
+          <option value="FL">Florida</option>
+          <option value="GA">Georgia</option>
+          <option value="HI">Hawaii</option>
+          <option value="ID">Idaho</option>
+          <option value="IL">Illinois</option>
+          <option value="IN">Indiana</option>
+          <option value="IA">Iowa</option>
+          <option value="KS">Kansas</option>
+          <option value="KY">Kentucky</option>
+          <option value="LA">Louisiana</option>
+          <option value="ME">Maine</option>
+          <option value="MD">Maryland</option>
+          <option value="MA">Massachusetts</option>
+          <option value="MI">Michigan</option>
+          <option value="MN">Minnesota</option>
+          <option value="MS">Mississippi</option>
+          <option value="MO">Missouri</option>
+          <option value="MT">Montana</option>
+          <option value="NE">Nebraska</option>
+          <option value="NV">Nevada</option>
+          <option value="NH">New Hampshire</option>
+          <option value="NJ">New Jersey</option>
+          <option value="NM">New Mexico</option>
+          <option value="NY">New York</option>
+          <option value="NC">North Carolina</option>
+          <option value="ND">North Dakota</option>
+          <option value="OH">Ohio</option>
+          <option value="OK">Oklahoma</option>
+          <option value="OR">Oregon</option>
+          <option value="PA">Pennsylvania</option>
+          <option value="RI">Rhode Island</option>
+          <option value="SC">South Carolina</option>
+          <option value="SD">South Dakota</option>
+          <option value="TN">Tennessee</option>
+          <option value="TX">Texas</option>
+          <option value="UT">Utah</option>
+          <option value="VT">Vermont</option>
+          <option value="VA">Virginia</option>
+          <option value="WA">Washington</option>
+          <option value="WV">West Virginia</option>
+          <option value="WI">Wisconsin</option>
+          <option value="WY">Wyoming</option>
+        </select>
+        <div class="invalid-feedback">State is required</div>
+      </div>
+      <div class="col-md-3 mb-3">
+        <label class="form-label">Zip Code <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="homeZipCode" placeholder="Postal/Zip Code"
+               [class.is-invalid]="section1Form.get('homeZipCode')?.invalid && section1Form.get('homeZipCode')?.touched">
+        <div class="invalid-feedback">Valid postal/zip code is required (4-10 digits)</div>
+      </div>
+    </div>
+
+    <div class="mb-3 form-check">
+      <input type="checkbox" class="form-check-input" formControlName="hasDifferentMailing" id="hasDifferentMailing">
+      <label class="form-check-label" for="hasDifferentMailing">
+        I have a different mailing address
+      </label>
+    </div>
+
+    <div *ngIf="section1Form.get('hasDifferentMailing')?.value">
+      <h4 class="mt-4">Mailing Address</h4>
+      <div class="row">
+        <div class="col-12 mb-3">
+          <label class="form-label">Street Address <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" formControlName="mailingStreet"
+                 [class.is-invalid]="section1Form.get('mailingStreet')?.invalid && section1Form.get('mailingStreet')?.touched">
+          <div class="invalid-feedback">Mailing street address is required</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-5 mb-3">
+          <label class="form-label">City <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" formControlName="mailingCity"
+                 [class.is-invalid]="section1Form.get('mailingCity')?.invalid && section1Form.get('mailingCity')?.touched">
+          <div class="invalid-feedback">City is required</div>
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label">State <span class="text-danger">*</span></label>
+          <select class="form-select" formControlName="mailingState"
+                  [class.is-invalid]="section1Form.get('mailingState')?.invalid && section1Form.get('mailingState')?.touched">
+            <option value="">Select State</option>
+            <option value="AL">Alabama</option>
+            <option value="AK">Alaska</option>
+            <option value="AZ">Arizona</option>
+            <option value="AR">Arkansas</option>
+            <option value="CA">California</option>
+            <option value="CO">Colorado</option>
+            <option value="CT">Connecticut</option>
+            <option value="DE">Delaware</option>
+            <option value="FL">Florida</option>
+            <option value="GA">Georgia</option>
+            <option value="HI">Hawaii</option>
+            <option value="ID">Idaho</option>
+            <option value="IL">Illinois</option>
+            <option value="IN">Indiana</option>
+            <option value="IA">Iowa</option>
+            <option value="KS">Kansas</option>
+            <option value="KY">Kentucky</option>
+            <option value="LA">Louisiana</option>
+            <option value="ME">Maine</option>
+            <option value="MD">Maryland</option>
+            <option value="MA">Massachusetts</option>
+            <option value="MI">Michigan</option>
+            <option value="MN">Minnesota</option>
+            <option value="MS">Mississippi</option>
+            <option value="MO">Missouri</option>
+            <option value="MT">Montana</option>
+            <option value="NE">Nebraska</option>
+            <option value="NV">Nevada</option>
+            <option value="NH">New Hampshire</option>
+            <option value="NJ">New Jersey</option>
+            <option value="NM">New Mexico</option>
+            <option value="NY">New York</option>
+            <option value="NC">North Carolina</option>
+            <option value="ND">North Dakota</option>
+            <option value="OH">Ohio</option>
+            <option value="OK">Oklahoma</option>
+            <option value="OR">Oregon</option>
+            <option value="PA">Pennsylvania</option>
+            <option value="RI">Rhode Island</option>
+            <option value="SC">South Carolina</option>
+            <option value="SD">South Dakota</option>
+            <option value="TN">Tennessee</option>
+            <option value="TX">Texas</option>
+            <option value="UT">Utah</option>
+            <option value="VT">Vermont</option>
+            <option value="VA">Virginia</option>
+            <option value="WA">Washington</option>
+            <option value="WV">West Virginia</option>
+            <option value="WI">Wisconsin</option>
+            <option value="WY">Wyoming</option>
+          </select>
+          <div class="invalid-feedback">State is required</div>
+        </div>
+        <div class="col-md-3 mb-3">
+          <label class="form-label">Zip Code <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="mailingZipCode" placeholder="Postal/Zip Code"
+               [class.is-invalid]="section1Form.get('mailingZipCode')?.invalid && section1Form.get('mailingZipCode')?.touched">
+        <div class="invalid-feedback">Valid postal/zip code is required (4-10 digits)</div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Section 2: Recruiting Information -->
+  <form [formGroup]="section2Form" *ngIf="currentSection === 2" class="section-form">
+    <h3>Recruiting Information</h3>
+    
+    <div class="alert alert-info" *ngIf="recruiterName">
+      <i class="bi bi-info-circle me-2"></i>
+      Recruited by: <strong>{{ recruiterName }}</strong>
+    </div>
+    
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Recruiter Full Name <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" formControlName="recruiterFullName"
+               [class.is-invalid]="section2Form.get('recruiterFullName')?.invalid && section2Form.get('recruiterFullName')?.touched"
+               [attr.readonly]="section2Form.get('recruiterFullName')?.disabled ? true : null">
+        <div class="invalid-feedback">Recruiter name is required</div>
+        <small class="text-muted" *ngIf="section2Form.get('recruiterFullName')?.disabled">
+          <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+        </small>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Recruiter Agent ID</label>
+        <input type="text" class="form-control" formControlName="recruiterAgentId"
+               [attr.readonly]="section2Form.get('recruiterAgentId')?.disabled ? true : null">
+        <small class="text-muted" *ngIf="section2Form.get('recruiterAgentId')?.disabled">
+          <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+        </small>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Recruiter Email</label>
+        <input type="email" class="form-control" formControlName="recruiterEmail"
+               [attr.readonly]="section2Form.get('recruiterEmail')?.disabled ? true : null"
+               placeholder="recruiter@example.com">
+        <small class="text-muted" *ngIf="section2Form.get('recruiterEmail')?.disabled">
+          <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+        </small>
+      </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Recruiter Phone</label>
+        <input type="tel" class="form-control" formControlName="recruiterPhone"
+               [attr.readonly]="section2Form.get('recruiterPhone')?.disabled ? true : null"
+               placeholder="(555) 555-5555">
+        <small class="text-muted" *ngIf="section2Form.get('recruiterPhone')?.disabled">
+          <i class="bi bi-lock me-1"></i>Auto-filled from referral code
+        </small>
+      </div>
+    </div>
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Upline Leader Name</label>
+        <input type="text" class="form-control" formControlName="uplineLeaderName">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Team Name</label>
+        <input type="text" class="form-control" formControlName="teamName">
+      </div>
+    </div>
+  </form>
+
+  <!-- Section 3: Compliance Questions -->
+  <form [formGroup]="section3Form" *ngIf="currentSection === 3" class="section-form">
+    <h3>Compliance Questions</h3>
+    <p class="text-muted">Please answer the following questions honestly. If you answer "Yes" to any question, please provide a detailed explanation.</p>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="previouslyContractedOther" id="q1">
+        <label class="form-check-label fw-bold" for="q1">
+          Have you previously been contracted with another insurance agency or company?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('previouslyContractedOther')?.value" class="ms-4">
+        <label class="form-label">Please explain:</label>
+        <textarea class="form-control" formControlName="previouslyContractedOtherExplanation" rows="3"></textarea>
+      </div>
+    </div>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="felonyConviction" id="q2">
+        <label class="form-check-label fw-bold" for="q2">
+          Have you ever been convicted of a felony?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('felonyConviction')?.value" class="ms-4">
+        <label class="form-label">Please explain and upload documentation:</label>
+        <textarea class="form-control mb-2" formControlName="felonyConvictionExplanation" rows="3"></textarea>
+        <input type="file" class="form-control" (change)="onFileSelected('felonyConviction', $event)">
+      </div>
+    </div>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="misdemeanorFraud" id="q3">
+        <label class="form-check-label fw-bold" for="q3">
+          Have you ever been convicted of a misdemeanor involving fraud, dishonesty, or breach of trust?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('misdemeanorFraud')?.value" class="ms-4">
+        <label class="form-label">Please explain and upload documentation:</label>
+        <textarea class="form-control mb-2" formControlName="misdemeanorFraudExplanation" rows="3"></textarea>
+        <input type="file" class="form-control" (change)="onFileSelected('misdemeanorFraud', $event)">
+      </div>
+    </div>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="civilAction" id="q4">
+        <label class="form-check-label fw-bold" for="q4">
+          Are you currently subject to any civil action or investigation?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('civilAction')?.value" class="ms-4">
+        <label class="form-label">Please explain and upload documentation:</label>
+        <textarea class="form-control mb-2" formControlName="civilActionExplanation" rows="3"></textarea>
+        <input type="file" class="form-control" (change)="onFileSelected('civilAction', $event)">
+      </div>
+    </div>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="licenseDenied" id="q5">
+        <label class="form-check-label fw-bold" for="q5">
+          Has an insurance license ever been denied, suspended, or revoked?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('licenseDenied')?.value" class="ms-4">
+        <label class="form-label">Please explain and upload documentation:</label>
+        <textarea class="form-control mb-2" formControlName="licenseDeniedExplanation" rows="3"></textarea>
+        <input type="file" class="form-control" (change)="onFileSelected('licenseDenied', $event)">
+      </div>
+    </div>
+
+    <div class="compliance-question mb-4">
+      <div class="form-check mb-2">
+        <input type="checkbox" class="form-check-input" formControlName="bondIssues" id="q6">
+        <label class="form-check-label fw-bold" for="q6">
+          Have you ever had issues with bonding or surety companies?
+        </label>
+      </div>
+      <div *ngIf="section3Form.get('bondIssues')?.value" class="ms-4">
+        <label class="form-label">Please explain and upload documentation:</label>
+        <textarea class="form-control mb-2" formControlName="bondIssuesExplanation" rows="3"></textarea>
+        <input type="file" class="form-control" (change)="onFileSelected('bondIssues', $event)">
+      </div>
+    </div>
+  </form>
+
+  <!-- Section 4: Financial Background -->
+  <form [formGroup]="section4Form" *ngIf="currentSection === 4" class="section-form">
+    <h3>Financial Background</h3>
+    <p class="text-muted">Please answer the following questions about your financial history.</p>
+
+    <div class="mb-4">
+      <label class="form-label fw-bold">Do you have any unsatisfied judgments? <span class="text-danger">*</span></label>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="true" formControlName="unsatisfiedJudgments" id="judgmentsYes">
+        <label class="form-check-label" for="judgmentsYes">Yes</label>
+      </div>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="false" formControlName="unsatisfiedJudgments" id="judgmentsNo">
+        <label class="form-check-label" for="judgmentsNo">No</label>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label fw-bold">Do you have any unsatisfied liens? <span class="text-danger">*</span></label>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="true" formControlName="unsatisfiedLiens" id="liensYes">
+        <label class="form-check-label" for="liensYes">Yes</label>
+      </div>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="false" formControlName="unsatisfiedLiens" id="liensNo">
+        <label class="form-check-label" for="liensNo">No</label>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label fw-bold">Have you filed for bankruptcy in the past 7 years? <span class="text-danger">*</span></label>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="true" formControlName="bankruptcyFiled" id="bankruptcyYes">
+        <label class="form-check-label" for="bankruptcyYes">Yes</label>
+      </div>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="false" formControlName="bankruptcyFiled" id="bankruptcyNo">
+        <label class="form-check-label" for="bankruptcyNo">No</label>
+      </div>
+    </div>
+
+    <div *ngIf="section4Form.get('bankruptcyFiled')?.value" class="ms-4">
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Bankruptcy Chapter <span class="text-danger">*</span></label>
+          <select class="form-select" formControlName="bankruptcyChapter"
+                  [class.is-invalid]="section4Form.get('bankruptcyChapter')?.invalid && section4Form.get('bankruptcyChapter')?.touched">
+            <option value="">Select Chapter</option>
+            <option value="7">Chapter 7</option>
+            <option value="11">Chapter 11</option>
+            <option value="13">Chapter 13</option>
+          </select>
+          <div class="invalid-feedback">Bankruptcy chapter is required</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Status <span class="text-danger">*</span></label>
+          <select class="form-select" formControlName="bankruptcyStatus"
+                  [class.is-invalid]="section4Form.get('bankruptcyStatus')?.invalid && section4Form.get('bankruptcyStatus')?.touched">
+            <option value="">Select Status</option>
+            <option value="Open">Open/Pending</option>
+            <option value="Discharged">Discharged</option>
+            <option value="Dismissed">Dismissed</option>
+          </select>
+          <div class="invalid-feedback">Bankruptcy status is required</div>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Section 5: Licensing Information -->
+  <form [formGroup]="section5Form" *ngIf="currentSection === 5" class="section-form">
+    <h3>Licensing Information</h3>
+
+    <div class="mb-4">
+      <label class="form-label fw-bold">Are you currently licensed to sell insurance? <span class="text-danger">*</span></label>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="true" formControlName="currentlyLicensed" id="licensedYes">
+        <label class="form-check-label" for="licensedYes">Yes</label>
+      </div>
+      <div class="form-check">
+        <input type="radio" class="form-check-input" [value]="false" formControlName="currentlyLicensed" id="licensedNo">
+        <label class="form-check-label" for="licensedNo">No</label>
+      </div>
+    </div>
+
+    <div *ngIf="section5Form.get('currentlyLicensed')?.value">
+      <div class="mb-3">
+        <label class="form-label">License Types (select all that apply) <span class="text-danger">*</span></label>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" value="Life" id="licLife">
+          <label class="form-check-label" for="licLife">Life</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" value="Health" id="licHealth">
+          <label class="form-check-label" for="licHealth">Health</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" value="Property & Casualty" id="licPC">
+          <label class="form-check-label" for="licPC">Property & Casualty</label>
+        </div>
+        <div class="form-check">
+          <input type="checkbox" class="form-check-input" value="Variable Annuity" id="licVA">
+          <label class="form-check-label" for="licVA">Variable Annuity</label>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">States Licensed In (comma-separated) <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" formControlName="statesLicensed" placeholder="e.g., CA, TX, FL"
+                 [class.is-invalid]="section5Form.get('statesLicensed')?.invalid && section5Form.get('statesLicensed')?.touched">
+          <div class="invalid-feedback">States are required</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Primary License Number <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" formControlName="licenseNumber"
+                 [class.is-invalid]="section5Form.get('licenseNumber')?.invalid && section5Form.get('licenseNumber')?.touched">
+          <div class="invalid-feedback">License number is required</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">License Status <span class="text-danger">*</span></label>
+        <select class="form-select" formControlName="licenseStatus"
+                [class.is-invalid]="section5Form.get('licenseStatus')?.invalid && section5Form.get('licenseStatus')?.touched">
+          <option value="">Select Status</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+          <option value="Pending Renewal">Pending Renewal</option>
+        </select>
+        <div class="invalid-feedback">License status is required</div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Navigation Buttons -->
+  <div class="navigation-buttons">
+    <button type="button" class="btn btn-secondary" (click)="previousSection()" 
+            [disabled]="currentSection === 1">
+      <i class="bi bi-arrow-left me-2"></i>Previous
+    </button>
+    
+    <button type="button" class="btn btn-primary" (click)="nextSection()" 
+            *ngIf="currentSection < totalSections">
+      Next<i class="bi bi-arrow-right ms-2"></i>
+    </button>
+    
+    <button type="button" class="btn btn-success" (click)="submitApplication()" 
+            *ngIf="currentSection === totalSections" [disabled]="loading">
+      <span *ngIf="!loading">
+        <i class="bi bi-check-circle me-2"></i>Submit Application
+      </span>
+      <span *ngIf="loading">
+        <span class="spinner-border spinner-border-sm me-2"></span>Submitting...
+      </span>
+    </button>
+  </div>
+</div>

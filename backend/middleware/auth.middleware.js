@@ -35,6 +35,31 @@ exports.protect = async (req, res, next) => {
         });
       }
       
+      // Skip payment check for admins
+      if (req.user.role === 'admin') {
+        next();
+        return;
+      }
+      
+      // PAYMENT CHECK TEMPORARILY DISABLED - Agents can access without payment
+      // TODO: Re-enable when ready to enforce payment requirements
+      /*
+      // Check payment access (except for payment-related routes)
+      const isPaymentRoute = req.path.includes('/api/payments') || 
+                              req.path.includes('/api/user/payments') ||
+                              req.path.includes('/api/user/subscription');
+      
+      if (!isPaymentRoute && !req.user.paymentAccessEnabled) {
+        return res.status(403).json({
+          success: false,
+          message: 'Payment required. Please complete your payment to access the platform.',
+          paymentRequired: true,
+          oneTimePaymentCompleted: req.user.oneTimePaymentCompleted || false,
+          subscriptionActive: req.user.subscriptionStatus === 'active'
+        });
+      }
+      */
+      
       next();
     } catch (err) {
       return res.status(401).json({

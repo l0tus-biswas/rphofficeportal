@@ -1,0 +1,19 @@
+.language-card {
+  transition: all 0.3s ease;
+  border: 2px solid #e0e0e0;
+}
+
+.language-card:hover {
+  border-color: #0d6efd;
+  box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
+  transform: translateY(-2px);
+}
+
+.language-card.active {
+  border-color: #198754;
+  background-color: #f0f9ff;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+}

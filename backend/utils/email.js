@@ -1,4 +1,21 @@
 const nodemailer = require('nodemailer');
+const SystemConfig = require('../models/SystemConfig');
+
+// Get branding configuration
+const getBranding = async () => {
+  try {
+    const appName = await SystemConfig.findOne({ key: 'app_name' });
+    const appLogo = await SystemConfig.findOne({ key: 'app_logo' });
+    
+    return {
+      appName: appName?.value || 'Escape',
+      appLogo: appLogo?.value ? `${process.env.APP_URL}${appLogo.value}` : null
+    };
+  } catch (error) {
+    console.error('Error fetching branding:', error);
+    return { appName: 'Escape', appLogo: null };
+  }
+};
 
 // Create transporter
 const createTransporter = () => {
@@ -40,6 +57,7 @@ exports.sendEmail = async (options) => {
 
 // Welcome email template
 exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
+  const branding = await getBranding();
   const loginUrl = `${process.env.APP_URL}/login`;
   
   const html = `
@@ -50,6 +68,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
+        .logo { max-width: 150px; margin-bottom: 10px; }
         .content { padding: 20px; background-color: #f9f9f9; }
         .credentials { background-color: #fff; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
         .button { display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
@@ -59,11 +78,12 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
     <body>
       <div class="container">
         <div class="header">
-          <h1>Welcome to Escape!</h1>
+          ${branding.appLogo ? `<img src="${branding.appLogo}" alt="${branding.appName}" class="logo" />` : ''}
+          <h1>Welcome to ${branding.appName}!</h1>
         </div>
         <div class="content">
           <h2>Hello ${user.name},</h2>
-          <p>Welcome to the Escape recruiting platform! Your account has been created successfully.</p>
+          <p>Welcome to the ${branding.appName} recruiting platform! Your account has been created successfully.</p>
           
           ${referredByAgent ? `<p>You were referred by: <strong>${referredByAgent.name}</strong></p>` : ''}
           
@@ -86,7 +106,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
           </ul>
         </div>
         <div class="footer">
-          <p>© 2025 Escape. All rights reserved.</p>
+          <p>© 2025 ${branding.appName}. All rights reserved.</p>
           <p>If you have any questions, please contact our support team.</p>
         </div>
       </div>
@@ -96,13 +116,14 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
   
   await this.sendEmail({
     email: user.email,
-    subject: 'Welcome to Escape - Your Account Details',
+    subject: `Welcome to ${branding.appName} - Your Account Details`,
     html
   });
 };
 
 // Password reset email
 exports.sendPasswordResetEmail = async (user, resetToken) => {
+  const branding = await getBranding();
   const resetUrl = `${process.env.APP_URL}/reset-password?token=${resetToken}`;
   
   const html = `
@@ -113,6 +134,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; }
+        .logo { max-width: 150px; margin-bottom: 10px; }
         .content { padding: 20px; background-color: #f9f9f9; }
         .button { display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
         .warning { background-color: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 20px 0; }
@@ -122,11 +144,12 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
     <body>
       <div class="container">
         <div class="header">
+          ${branding.appLogo ? `<img src="${branding.appLogo}" alt="${branding.appName}" class="logo" />` : ''}
           <h1>Password Reset Request</h1>
         </div>
         <div class="content">
           <h2>Hello ${user.name},</h2>
-          <p>You have requested to reset your password for your Escape account.</p>
+          <p>You have requested to reset your password for your ${branding.appName} account.</p>
           
           <p>Click the button below to reset your password:</p>
           
@@ -140,7 +163,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
           <p>For security reasons, the reset link is valid for only 10 minutes.</p>
         </div>
         <div class="footer">
-          <p>© 2025 Escape. All rights reserved.</p>
+          <p>© 2025 ${branding.appName}. All rights reserved.</p>
         </div>
       </div>
     </body>
@@ -149,7 +172,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
   
   await this.sendEmail({
     email: user.email,
-    subject: 'Password Reset Request - Escape',
+    subject: `Password Reset Request - ${branding.appName}`,
     html
   });
 };

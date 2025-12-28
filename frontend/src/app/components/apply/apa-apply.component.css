@@ -1,0 +1,239 @@
+.apply-container {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+.progress-header {
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.progress-header h2 {
+  color: #6f42c1;
+  margin-bottom: 30px;
+  font-weight: 600;
+}
+
+.progress-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  margin: 0 auto;
+  max-width: 700px;
+}
+
+.progress-bar::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: #dee2e6;
+  z-index: 0;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e9ecef;
+  border: 2px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #6c757d;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.progress-step.active .step-number {
+  background: #6f42c1;
+  border-color: #6f42c1;
+  color: white;
+}
+
+.progress-step.current .step-number {
+  box-shadow: 0 0 0 4px rgba(111, 66, 193, 0.2);
+  transform: scale(1.1);
+}
+
+.step-label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  text-align: center;
+  font-weight: 500;
+}
+
+.progress-step.active .step-label {
+  color: #6f42c1;
+  font-weight: 600;
+}
+
+.section-form {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.section-form h3 {
+  color: #6f42c1;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.section-form h4 {
+  color: #495057;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.form-label {
+  font-weight: 500;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}
+
+.compliance-question {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #6f42c1;
+}
+
+.compliance-question .form-check-label {
+  font-size: 1rem;
+}
+
+.navigation-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.navigation-buttons .btn {
+  padding: 12px 30px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-primary {
+  background: #6f42c1;
+  border-color: #6f42c1;
+}
+
+.btn-primary:hover {
+  background: #5a32a3;
+  border-color: #5a32a3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(111, 66, 193, 0.3);
+}
+
+.btn-success {
+  background: #28a745;
+  border-color: #28a745;
+}
+
+.btn-success:hover {
+  background: #218838;
+  border-color: #218838;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-secondary {
+  background: #6c757d;
+  border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+  border-color: #5a6268;
+}
+
+.alert {
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #6f42c1;
+  box-shadow: 0 0 0 0.2rem rgba(111, 66, 193, 0.25);
+}
+
+.is-invalid {
+  border-color: #dc3545;
+}
+
+.invalid-feedback {
+  display: block;
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.form-control[readonly] {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.text-muted {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .apply-container {
+    padding: 15px;
+  }
+
+  .progress-bar {
+    max-width: 100%;
+  }
+
+  .step-label {
+    font-size: 0.7rem;
+  }
+
+  .step-number {
+    width: 35px;
+    height: 35px;
+    font-size: 0.9rem;
+  }
+
+  .section-form {
+    padding: 20px 15px;
+  }
+
+  .navigation-buttons {
+    flex-direction: column;
+  }
+
+  .navigation-buttons .btn {
+    width: 100%;
+  }
+}

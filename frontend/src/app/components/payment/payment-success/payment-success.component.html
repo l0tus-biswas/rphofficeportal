@@ -1,0 +1,49 @@
+<div class="payment-success-page">
+  <div class="container">
+    <div class="row justify-content-center align-items-center min-vh-100">
+      <div class="col-md-6 text-center">
+        <div class="success-animation mb-4">
+          <i class="bi bi-check-circle-fill text-success" style="font-size: 6rem;"></i>
+        </div>
+        
+        <h1 class="display-4 mb-3">Payment Successful!</h1>
+        
+        <p class="lead mb-4" *ngIf="paymentType === 'one-time' && !processing">
+          Your one-time registration fee has been processed successfully.
+        </p>
+        
+        <p class="lead mb-4" *ngIf="processing">
+          Creating your account and setting up your profile...
+        </p>
+        
+        <p class="lead mb-4" *ngIf="paymentType === 'subscription'">
+          Your subscription is now active!
+        </p>
+        
+        <div class="alert alert-danger" *ngIf="error">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          {{ error }}
+        </div>
+        
+        <div class="alert alert-info d-inline-block" *ngIf="!error">
+          <i class="bi bi-clock-history me-2"></i>
+          <span *ngIf="paymentType === 'one-time' && !processing">
+            Redirecting to subscription setup...
+          </span>
+          <span *ngIf="processing">
+            Please wait while we complete your registration...
+          </span>
+          <span *ngIf="paymentType === 'subscription'">
+            Redirecting to dashboard...
+          </span>
+        </div>
+        
+        <div class="mt-4" *ngIf="!error">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

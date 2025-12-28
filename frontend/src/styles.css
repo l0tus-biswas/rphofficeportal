@@ -20,6 +20,32 @@ body {
   background-color: #f8f9fa;
   color: #333;
   line-height: 1.6;
+  top: 0 !important; /* Prevent Google Translate from pushing content down */
+}
+
+/* Hide Google Translate banner and branding globally */
+.goog-te-banner-frame {
+  display: none !important;
+}
+
+body > .skiptranslate {
+  display: none !important;
+}
+
+body {
+  top: 0px !important;
+}
+
+#google_translate_element .skiptranslate {
+  display: none !important;
+}
+
+.goog-te-gadget img {
+  display: none !important;
+}
+
+#goog-gt-tt, .goog-te-balloon-frame {
+  display: none !important;
 }
 
 /* Utility Classes */

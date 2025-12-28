@@ -35,6 +35,26 @@ const userSchema = new mongoose.Schema({
     default: 'agent'
   },
   
+  // Agent Level/Rank
+  level: {
+    type: String,
+    enum: [
+      'associate',
+      'senior associate',
+      'field manager',
+      'senior manager',
+      'division executive',
+      'regional executive',
+      'national executive'
+    ],
+    default: 'associate'
+  },
+  promotedAt: Date,
+  promotedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  
   // Referral System
   referralCode: {
     type: String,
@@ -93,6 +113,37 @@ const userSchema = new mongoose.Schema({
   },
   onboardingSubmittedAt: Date,
   onboardingApprovedAt: Date,
+  
+  // Payment & Subscription
+  oneTimePaymentCompleted: {
+    type: Boolean,
+    default: false
+  },
+  oneTimePaymentAmount: {
+    type: Number,
+    default: 17900 // $179 in cents
+  },
+  oneTimePaymentDate: Date,
+  stripeCustomerId: {
+    type: String,
+    sparse: true
+  },
+  stripeSubscriptionId: {
+    type: String,
+    sparse: true
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['none', 'active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'trialing', 'unpaid'],
+    default: 'none'
+  },
+  subscriptionStartDate: Date,
+  nextBillingDate: Date,
+  lastPaymentDate: Date,
+  paymentAccessEnabled: {
+    type: Boolean,
+    default: false
+  },
   
   // Audit Fields
   createdAt: {
@@ -171,25 +222,58 @@ userSchema.methods.getResetPasswordToken = function() {
 userSchema.methods.getDownlineTree = async function() {
   const User = mongoose.model('User');
   
-  const buildTree = async (userId) => {
-    const user = await User.findById(userId)
-      .select('name email role referralCode isActive createdAt')
+  // Fetch all descendants at once to avoid N+1 queries
+  const getAllDescendants = async (rootId) => {
+    const allUsers = [];
+    const queue = [rootId];
+    const visited = new Set();
+    
+    while (queue.length > 0) {
+      const currentIds = [...queue];
+      queue.length = 0;
+      
+      const users = await User.find({ 
+        referredBy: { $in: currentIds },
+        _id: { $nin: Array.from(visited) }
+      })
+      .select('_id name email role referralCode isActive createdAt referredBy')
       .lean();
+      
+      users.forEach(user => {
+        if (!visited.has(user._id.toString())) {
+          visited.add(user._id.toString());
+          allUsers.push(user);
+          queue.push(user._id);
+        }
+      });
+    }
     
-    if (!user) return null;
-    
-    const children = await User.find({ referredBy: userId })
-      .select('_id name email role referralCode isActive createdAt')
-      .lean();
-    
-    user.children = await Promise.all(
-      children.map(child => buildTree(child._id))
-    );
-    
-    return user;
+    return allUsers;
   };
   
-  return await buildTree(this._id);
+  // Get all descendants
+  const descendants = await getAllDescendants(this._id);
+  
+  // Build tree structure from flat list
+  const buildTree = (userId, usersMap) => {
+    const children = descendants.filter(u => u.referredBy && u.referredBy.toString() === userId.toString());
+    return children.map(child => ({
+      ...child,
+      children: buildTree(child._id, usersMap)
+    }));
+  };
+  
+  // Get root user
+  const rootUser = await User.findById(this._id)
+    .select('_id name email role referralCode isActive createdAt')
+    .lean();
+  
+  if (!rootUser) return null;
+  
+  // Build tree
+  rootUser.children = buildTree(this._id, descendants);
+  
+  return rootUser;
 };
 
 // Static method to get full hierarchy for admin

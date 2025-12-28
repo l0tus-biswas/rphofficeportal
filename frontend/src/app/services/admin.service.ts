@@ -74,4 +74,12 @@ export class AdminService {
   getAuditLogs(page: number = 1, limit: number = 50): Observable<any> {
     return this.http.get(`${this.apiUrl}/admin/audit-logs?page=${page}&limit=${limit}`, this.getHeaders());
   }
+
+  getAllAgents(): Observable<User[]> {
+    return this.http.get<User[]>(`${this.apiUrl}/admin/users?role=agent`, this.getHeaders());
+  }
+
+  promoteAgent(userId: string, level: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/users/${userId}/promote`, { level }, this.getHeaders());
+  }
 }

@@ -98,6 +98,10 @@
                     <span class="badge text-capitalize" [ngClass]="getRoleBadgeClass(user.role)">
                       {{ user.role }}
                     </span>
+                    <br *ngIf="user.role === 'agent' && user.level">
+                    <small *ngIf="user.role === 'agent' && user.level" class="badge bg-success mt-1">
+                      <i class="bi bi-trophy"></i> {{ getLevelDisplay(user.level) }}
+                    </small>
                   </td>
                   <td>
                     <code *ngIf="user.referralCode" class="bg-light p-1 rounded">{{ user.referralCode }}</code>
@@ -115,6 +119,12 @@
                     <div class="btn-group btn-group-sm">
                       <button class="btn btn-outline-primary" (click)="openEditModal(user)" title="Edit">
                         <i class="bi bi-pencil-square"></i>
+                      </button>
+                      <button *ngIf="user.role === 'agent'" 
+                        class="btn btn-outline-info" 
+                        (click)="promoteAgent(user)" 
+                        title="Promote/Demote">
+                        <i class="bi bi-trophy"></i>
                       </button>
                       <button class="btn" 
                         [ngClass]="user.isActive ? 'btn-outline-warning' : 'btn-outline-success'"

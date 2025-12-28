@@ -178,4 +178,85 @@ export class UserManagementComponent implements OnInit {
     };
     return classes[role] || 'bg-secondary';
   }
+
+  promoteAgent(user: any): void {
+    const levels = [
+      'associate',
+      'senior associate',
+      'field manager',
+      'senior manager',
+      'division executive',
+      'regional executive',
+      'national executive'
+    ];
+    
+    const currentLevel = user.level || 'associate';
+    const levelOptions = levels.map(level => {
+      const selected = level === currentLevel ? 'selected' : '';
+      return `<option value="${level}" ${selected}>${this.getLevelDisplay(level)}</option>`;
+    }).join('');
+    
+    const selectHtml = `
+      <select id="levelSelect" class="form-select">
+        ${levelOptions}
+      </select>
+    `;
+    
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+      <div class="modal fade show" style="display: block; background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Promote/Demote ${user.name}</h5>
+              <button type="button" class="btn-close" onclick="this.closest('.modal').remove()"></button>
+            </div>
+            <div class="modal-body">
+              <label class="form-label">Select Level:</label>
+              ${selectHtml}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" onclick="this.closest('.modal').remove()">Cancel</button>
+              <button type="button" class="btn btn-primary" id="confirmPromote">Update Level</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    modal.querySelector('#confirmPromote')?.addEventListener('click', () => {
+      const select = modal.querySelector('#levelSelect') as HTMLSelectElement;
+      const newLevel = select.value;
+      
+      if (newLevel === currentLevel) {
+        modal.remove();
+        return;
+      }
+      
+      this.loading = true;
+      this.adminService.promoteAgent(user._id, newLevel).subscribe({
+        next: (response) => {
+          this.success = response.message || 'Agent level updated successfully!';
+          this.loadUsers();
+          this.loading = false;
+          modal.remove();
+          setTimeout(() => this.success = '', 3000);
+        },
+        error: (error) => {
+          this.error = error.error?.message || 'Failed to update agent level';
+          this.loading = false;
+          modal.remove();
+        }
+      });
+    });
+  }
+
+  getLevelDisplay(level: string | undefined): string {
+    if (!level) return 'Associate';
+    return level.split(' ').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
 }

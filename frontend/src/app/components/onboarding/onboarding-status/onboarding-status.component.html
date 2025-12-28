@@ -1,89 +1,226 @@
 <app-navbar></app-navbar>
 
-<div class="onboarding-status-page">
-  <div class="container py-4">
+<div class="container py-4">
+  
+  <!-- Loading State -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 text-muted">Loading your application...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="!loading && error" class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+  </div>
+
+  <!-- Application Content -->
+  <div *ngIf="!loading && !error && application">
     
     <!-- Header -->
     <div class="row mb-4">
       <div class="col-12">
-        <div>
-          <h1 class="h3 mb-1">Onboarding Status</h1>
-          <p class="text-muted mb-0">Track your document submission progress</p>
+        <h3>My APA Application</h3>
+        <p class="text-muted">Review your submitted application details</p>
+      </div>
+    </div>
+
+    <!-- Status Badge -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h5 class="mb-1">Application Status</h5>
+                <p class="text-muted mb-0">Submitted on {{ application.createdAt | date:'medium' }}</p>
+              </div>
+              <span class="badge fs-5" 
+                    [class.bg-success]="application.status === 'active'"
+                    [class.bg-warning]="application.status === 'pending_payment' || application.status === 'pending_signature'"
+                    [class.bg-danger]="application.status === 'rejected'"
+                    [class.bg-info]="application.status === 'pending_review'">
+                {{ application.status | uppercase }}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div *ngIf="loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
+    <!-- Personal Information -->
+    <div class="row mb-4">
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-0">Personal Information</h5>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm mb-0">
+              <tr>
+                <th width="40%">Full Name:</th>
+                <td>{{ application.personalInfo.legalFirstName }} {{ application.personalInfo.legalMiddleName }} {{ application.personalInfo.legalLastName }}</td>
+              </tr>
+              <tr>
+                <th>Gender:</th>
+                <td>{{ application.personalInfo.gender === 'M' ? 'Male' : 'Female' }}</td>
+              </tr>
+              <tr>
+                <th>Date of Birth:</th>
+                <td>{{ application.personalInfo.dateOfBirth | date }}</td>
+              </tr>
+              <tr>
+                <th>SSN:</th>
+                <td>***-**-{{ application.personalInfo.ssn?.slice(-4) }}</td>
+              </tr>
+              <tr>
+                <th>Mobile Phone:</th>
+                <td>{{ application.personalInfo.mobilePhone }}</td>
+              </tr>
+              <tr>
+                <th>Email:</th>
+                <td>{{ application.personalInfo.email }}</td>
+              </tr>
+              <tr>
+                <th>Home Address:</th>
+                <td>
+                  {{ application.personalInfo.homeAddress.street }}<br>
+                  {{ application.personalInfo.homeAddress.city }}, {{ application.personalInfo.homeAddress.state }} {{ application.personalInfo.homeAddress.zipCode }}
+                </td>
+              </tr>
+              <tr *ngIf="application.personalInfo.mailingAddress?.street">
+                <th>Mailing Address:</th>
+                <td>
+                  {{ application.personalInfo.mailingAddress.street }}<br>
+                  {{ application.personalInfo.mailingAddress.city }}, {{ application.personalInfo.mailingAddress.state }} {{ application.personalInfo.mailingAddress.zipCode }}
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
       </div>
-      <p class="mt-3 text-muted">Loading your onboarding status...</p>
+
+      <!-- Recruiting Information -->
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <h5 class="mb-0">Recruiting Information</h5>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm mb-0">
+              <tr *ngIf="application.recruitingInfo.referralCode">
+                <th width="40%">Referral Code:</th>
+                <td><code>{{ application.recruitingInfo.referralCode }}</code></td>
+              </tr>
+              <tr *ngIf="application.recruitingInfo.recruiterFullName">
+                <th>Recruiter Name:</th>
+                <td>{{ application.recruitingInfo.recruiterFullName }}</td>
+              </tr>
+              <tr *ngIf="application.recruitingInfo.recruiterAgentId">
+                <th>Recruiter Agent ID:</th>
+                <td><code>{{ application.recruitingInfo.recruiterAgentId }}</code></td>
+              </tr>
+              <tr *ngIf="application.recruitingInfo.recruiterContact">
+                <th>Recruiter Contact:</th>
+                <td>{{ application.recruitingInfo.recruiterContact }}</td>
+              </tr>
+              <tr *ngIf="application.recruitingInfo.uplineLeaderName">
+                <th>Upline Leader:</th>
+                <td>{{ application.recruitingInfo.uplineLeaderName }}</td>
+              </tr>
+              <tr *ngIf="application.recruitingInfo.teamName">
+                <th>Team:</th>
+                <td>{{ application.recruitingInfo.teamName }}</td>
+              </tr>
+              <tr *ngIf="!application.recruitingInfo.referralCode && !application.recruitingInfo.recruiterContact">
+                <td colspan="2" class="text-muted text-center">No recruiting information provided</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Error State -->
-    <div *ngIf="!loading && error" class="alert alert-danger">
-      <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
-      <button class="btn btn-sm btn-outline-danger ms-3" (click)="loadOnboarding()">
-        <i class="bi bi-arrow-clockwise me-1"></i>Retry
-      </button>
-    </div>
-
-    <!-- Content -->
-    <div *ngIf="!loading && !error">
-      
-      <!-- Overall Status Card -->
-      <div class="row mb-4">
-        <div class="col-12">
-          <div class="card shadow-sm">
-            <div class="card-body">
-              <div class="row align-items-center">
-                <div class="col-md-8">
-                  <div class="d-flex align-items-center mb-2">
-                    <h5 class="mb-0 me-3">Overall Status:</h5>
-                    <span [ngClass]="getStatusBadgeClass(getOverallStatus())">
-                      <i [ngClass]="getStatusIcon(getOverallStatus())" class="me-1"></i>
-                      {{ getOverallStatus() | titlecase }}
-                    </span>
-                  </div>
-                  <p class="text-muted mb-3">{{ getStatusMessage() }}</p>
-                  <div class="d-flex align-items-center gap-3 text-muted small">
-                    <span *ngIf="onboarding?.submittedAt">
-                      <i class="bi bi-calendar3 me-1"></i>
-                      Submitted: {{ formatDate(onboarding.submittedAt) }}
-                    </span>
-                    <span *ngIf="onboarding?.reviewedAt">
-                      <i class="bi bi-eye me-1"></i>
-                      Reviewed: {{ formatDate(onboarding.reviewedAt) }}
-                    </span>
+    <!-- Compliance Questions -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Background & Compliance Questions</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6 mb-3" *ngFor="let q of [
+                { key: 'previouslyContractedOther', label: 'Have you previously been contracted or employed with another insurance company, Broker Dealer, Investment Adviser, or any other financial services company?' },
+                { key: 'felonyConviction', label: 'Have you ever been convicted of a felony?' },
+                { key: 'misdemeanorFraud', label: 'Have you ever been convicted of a misdemeanor involving fraud, dishonesty, theft, breach of fiduciary duty, or any crime involving money or securities?' },
+                { key: 'civilAction', label: 'Have you been a defendant in any civil action, or been the subject of an administrative or regulatory action or proceeding, including before the SEC, FINRA, SIPC, or any state regulatory agency?' },
+                { key: 'licenseDenied', label: 'Have you ever had any professional or business license (insurance or otherwise) denied, suspended, or revoked?' },
+                { key: 'bondIssues', label: 'Has a bonding company ever denied, paid out on, or revoked a surety bond for you?' }
+              ]">
+                <div class="border rounded p-3">
+                  <strong class="d-block mb-2">{{ q.label }}</strong>
+                  <span class="badge" 
+                        [class.bg-success]="!application.complianceQuestions[q.key]?.answer" 
+                        [class.bg-warning]="application.complianceQuestions[q.key]?.answer">
+                    {{ application.complianceQuestions[q.key]?.answer ? 'YES' : 'NO' }}
+                  </span>
+                  <div *ngIf="application.complianceQuestions[q.key]?.answer && application.complianceQuestions[q.key]?.explanation" 
+                       class="mt-2 p-2 bg-light rounded">
+                    <small><strong>Explanation:</strong><br>{{ application.complianceQuestions[q.key]?.explanation }}</small>
                   </div>
                 </div>
-                <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                  <div class="position-relative d-inline-block">
-                    <svg width="120" height="120" viewBox="0 0 120 120">
-                      <circle 
-                        cx="60" 
-                        cy="60" 
-                        r="54" 
-                        fill="none" 
-                        stroke="#e9ecef" 
-                        stroke-width="12">
-                      </circle>
-                      <circle 
-                        cx="60" 
-                        cy="60" 
-                        r="54" 
-                        fill="none" 
-                        [attr.stroke]="getProgressPercentage() === 100 ? '#198754' : '#0d6efd'"
-                        stroke-width="12"
-                        [attr.stroke-dasharray]="339.292"
-                        [attr.stroke-dashoffset]="339.292 - (339.292 * getProgressPercentage() / 100)"
-                        transform="rotate(-90 60 60)">
-                      </circle>
-                    </svg>
-                    <div class="position-absolute top-50 start-50 translate-middle text-center">
-                      <div class="h4 mb-0 fw-bold">{{ getCompletedSteps() }}/{{ getTotalSteps() }}</div>
-                      <small class="text-muted">Documents</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financial Background -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Financial Background</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-12 mb-3">
+                <div class="border rounded p-3">
+                  <strong class="d-block mb-2">Do you have any unsatisfied judgments or liens against you?</strong>
+                  <span class="badge" 
+                        [class.bg-success]="!application.financialBackground.unsatisfiedJudgments" 
+                        [class.bg-warning]="application.financialBackground.unsatisfiedJudgments">
+                    Judgments: {{ application.financialBackground.unsatisfiedJudgments ? 'YES' : 'NO' }}
+                  </span>
+                  <br>
+                  <span class="badge mt-2" 
+                        [class.bg-success]="!application.financialBackground.unsatisfiedLiens" 
+                        [class.bg-warning]="application.financialBackground.unsatisfiedLiens">
+                    Liens: {{ application.financialBackground.unsatisfiedLiens ? 'YES' : 'NO' }}
+                  </span>
+                </div>
+              </div>
+              <div class="col-md-12 mb-3">
+                <div class="border rounded p-3">
+                  <strong class="d-block mb-2">Have you ever filed for bankruptcy?</strong>
+                  <span class="badge" 
+                        [class.bg-success]="!application.financialBackground.bankruptcy?.filed" 
+                        [class.bg-warning]="application.financialBackground.bankruptcy?.filed">
+                    {{ application.financialBackground.bankruptcy?.filed ? 'YES' : 'NO' }}
+                  </span>
+                  <div *ngIf="application.financialBackground.bankruptcy?.filed" class="mt-3">
+                    <div class="row">
+                      <div class="col-6">
+                        <small class="text-muted d-block">Chapter:</small>
+                        <strong>Chapter {{ application.financialBackground.bankruptcy?.chapter }}</strong>
+                      </div>
+                      <div class="col-6">
+                        <small class="text-muted d-block">Status:</small>
+                        <strong>{{ application.financialBackground.bankruptcy?.status }}</strong>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -92,127 +229,97 @@
           </div>
         </div>
       </div>
-
-      <!-- Documents Status -->
-      <div class="row mb-4">
-        <div class="col-12">
-          <h5 class="mb-3">Document Status</h5>
-          
-          <div class="row g-3">
-            <div class="col-md-6" *ngFor="let step of steps">
-              <div class="card h-100 shadow-sm"
-                   [class.border-success]="getStepStatus(step.key) === 'approved'"
-                   [class.border-danger]="getStepStatus(step.key) === 'rejected'"
-                   [class.border-warning]="getStepStatus(step.key) === 'missing'">
-                <div class="card-body">
-                  <div class="d-flex align-items-start">
-                    <div class="me-3">
-                      <i [ngClass]="getStatusIcon(getStepStatus(step.key))"
-                         [class.text-success]="getStepStatus(step.key) === 'approved'"
-                         [class.text-danger]="getStepStatus(step.key) === 'rejected'"
-                         [class.text-warning]="getStepStatus(step.key) === 'missing'"
-                         [class.text-info]="getStepStatus(step.key) === 'pending'"
-                         [class.text-secondary]="getStepStatus(step.key) === 'not-started'"
-                         style="font-size: 2rem;"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                      <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h6 class="mb-0">{{ step.label }}</h6>
-                        <span [ngClass]="getStatusBadgeClass(getStepStatus(step.key))">
-                          {{ getStepStatus(step.key) | titlecase }}
-                        </span>
-                      </div>
-                      
-                      <p class="text-muted small mb-2">{{ step.description }}</p>
-                      
-                      <!-- File Info -->
-                      <div *ngIf="hasFile(step.key)" class="mt-2">
-                        <div class="d-flex align-items-center text-muted small mb-2">
-                          <i class="bi bi-file-earmark-pdf me-1"></i>
-                          <span class="text-truncate">{{ getStepData(step.key).originalName }}</span>
-                        </div>
-                        
-                        <!-- Admin Comment -->
-                        <div *ngIf="getStepData(step.key).adminComment" 
-                             class="alert alert-sm mb-2"
-                             [class.alert-danger]="getStepStatus(step.key) === 'rejected'"
-                             [class.alert-warning]="getStepStatus(step.key) === 'missing'"
-                             [class.alert-success]="getStepStatus(step.key) === 'approved'">
-                          <small>
-                            <i class="bi bi-chat-left-text me-1"></i>
-                            <strong>Admin:</strong> {{ getStepData(step.key).adminComment }}
-                          </small>
-                        </div>
-                        
-                        <!-- Upload Date -->
-                        <div class="text-muted small mb-2">
-                          <i class="bi bi-clock me-1"></i>
-                          Uploaded: {{ formatDate(getStepData(step.key).uploadedAt) }}
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="d-flex gap-2">
-                          <button 
-                            class="btn btn-sm btn-outline-primary"
-                            (click)="downloadDocument(step.key)">
-                            <i class="bi bi-download me-1"></i>Download
-                          </button>
-                          
-                          <a 
-                            *ngIf="canReupload(step.key)"
-                            routerLink="/onboarding-upload"
-                            class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-arrow-repeat me-1"></i>Re-upload
-                          </a>
-                        </div>
-                      </div>
-                      
-                      <!-- Not Uploaded -->
-                      <div *ngIf="!hasFile(step.key)" class="mt-2">
-                        <a 
-                          routerLink="/onboarding-upload"
-                          class="btn btn-sm btn-primary">
-                          <i class="bi bi-cloud-upload me-1"></i>Upload Now
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Admin Notes -->
-      <div class="row" *ngIf="onboarding?.notes && onboarding.notes.length > 0">
-        <div class="col-12">
-          <div class="card shadow-sm">
-            <div class="card-header bg-white">
-              <h5 class="mb-0"><i class="bi bi-chat-square-text me-2"></i>Admin Notes</h5>
-            </div>
-            <div class="card-body">
-              <div class="list-group list-group-flush">
-                <div class="list-group-item border-0 px-0" *ngFor="let note of onboarding.notes">
-                  <div class="d-flex align-items-start">
-                    <div class="me-3">
-                      <i class="bi bi-person-circle text-primary" style="font-size: 2rem;"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                      <div class="d-flex justify-content-between align-items-start mb-1">
-                        <strong>{{ note.createdBy?.name || 'Admin' }}</strong>
-                        <small class="text-muted">{{ formatDate(note.createdAt) }}</small>
-                      </div>
-                      <p class="mb-0">{{ note.message }}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </div>
+
+    <!-- Licensing Status -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Licensing Status</h5>
+          </div>
+          <div class="card-body">
+            <div class="border rounded p-3">
+              <strong class="d-block mb-2">Are you currently licensed to sell insurance products?</strong>
+              <span class="badge" 
+                    [class.bg-success]="application.licensingStatus.currentlyLicensed" 
+                    [class.bg-secondary]="!application.licensingStatus.currentlyLicensed">
+                {{ application.licensingStatus.currentlyLicensed ? 'YES' : 'NO' }}
+              </span>
+              <div *ngIf="application.licensingStatus.currentlyLicensed" class="mt-3">
+                <div class="row">
+                  <div class="col-md-3 mb-2">
+                    <small class="text-muted d-block">License Types:</small>
+                    <strong>{{ application.licensingStatus.licenseTypes?.join(', ') || 'N/A' }}</strong>
+                  </div>
+                  <div class="col-md-3 mb-2">
+                    <small class="text-muted d-block">States Licensed:</small>
+                    <strong>{{ application.licensingStatus.statesLicensed?.join(', ') || 'N/A' }}</strong>
+                  </div>
+                  <div class="col-md-3 mb-2">
+                    <small class="text-muted d-block">License Number:</small>
+                    <strong>{{ application.licensingStatus.licenseNumber || 'N/A' }}</strong>
+                  </div>
+                  <div class="col-md-3 mb-2">
+                    <small class="text-muted d-block">License Status:</small>
+                    <strong>{{ application.licensingStatus.licenseStatus || 'N/A' }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Information -->
+    <div class="row mb-4" *ngIf="application.payment">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">Payment Information</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-4">
+                <p class="mb-2"><strong>Onboarding Fee:</strong> 
+                  <span class="text-success fw-bold" *ngIf="application.payment.onboardingFeeWaived">WAIVED</span>
+                  <span *ngIf="!application.payment.onboardingFeeWaived">${{ application.payment.onboardingFeeAmount }}</span>
+                </p>
+              </div>
+              <div class="col-md-4">
+                <p class="mb-2"><strong>Monthly Fee:</strong> ${{ application.payment.monthlyFeeAmount }}</p>
+              </div>
+              <div class="col-md-4">
+                <p class="mb-2"><strong>Payment Status:</strong> 
+                  <span class="badge" 
+                        [class.bg-success]="application.payment.onboardingFeePaid" 
+                        [class.bg-warning]="!application.payment.onboardingFeePaid">
+                    {{ application.payment.onboardingFeePaid ? 'PAID' : 'PENDING' }}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Notes -->
+    <div class="row mb-4" *ngIf="application.adminNotes">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-chat-text me-2"></i>Admin Notes</h5>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info mb-0">
+              <p class="mb-0" style="white-space: pre-wrap;">{{ application.adminNotes }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>

@@ -18,6 +18,13 @@
   justify-content: center;
 }
 
+.brand-logo {
+  height: 35px;
+  width: auto;
+  max-width: 150px;
+  object-fit: contain;
+}
+
 .nav-link {
   padding: 0.5rem 1rem !important;
   border-radius: 6px;
@@ -98,5 +105,123 @@
     border-radius: 10px;
     padding: 1rem;
     margin-top: 1rem;
+  }
+}
+
+/* Notification Bell */
+.notification-bell {
+  position: relative;
+  padding: 0.5rem 0.8rem !important;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.notification-bell:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #dc3545;
+  color: white;
+  border-radius: 10px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+  border: 2px solid #0d6efd;
+}
+
+@media (max-width: 991.98px) {
+  .notification-bell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Google Translate Styling */
+.language-selector {
+  display: flex !important;
+  align-items: center;
+  min-height: 40px;
+}
+
+#google_translate_element {
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Hide Google Translate branding and text */
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+#goog-gt-tt {
+  display: none !important;
+}
+
+.goog-logo-link {
+  display: none !important;
+}
+
+.goog-te-gadget {
+  color: transparent !important;
+  font-size: 0 !important;
+}
+
+.goog-te-gadget > span {
+  display: none !important;
+}
+
+.goog-te-gadget > div {
+  display: none !important;
+}
+
+/* Style the dropdown */
+.goog-te-combo {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 0.5rem 2rem 0.5rem 0.7rem !important;
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+  color: #0d6efd !important;
+  cursor: pointer !important;
+  outline: none !important;
+  min-width: 100px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%230d6efd' d='M6 9L1 4h10z'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.5rem center !important;
+}
+
+.goog-te-combo:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.goog-te-combo:focus {
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25) !important;
+}
+
+/* Remove top frame */
+body {
+  top: 0 !important;
+}
+
+.skiptranslate {
+  display: none !important;
+}
+
+/* Mobile responsive */
+@media (max-width: 991.98px) {
+  .language-selector {
+    margin: 0.5rem 0;
+  }
+  
+  .goog-te-combo {
+    width: 100%;
   }
 }

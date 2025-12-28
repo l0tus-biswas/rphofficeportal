@@ -1,0 +1,125 @@
+<div class="sign-apa-page">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        
+        <div class="card shadow border-0">
+          <div class="card-body p-5">
+            
+            <!-- Header -->
+            <div class="text-center mb-5">
+              <div *ngIf="branding.appLogo" class="mb-3">
+                <img [src]="'http://localhost:5000/' + branding.appLogo" [alt]="branding.appName" style="max-height: 80px;">
+              </div>
+              <h1 class="display-5 fw-bold text-primary">{{ branding.appName }}</h1>
+              <p class="lead text-muted">Agent Producer Agreement</p>
+            </div>
+
+            <!-- Error Message -->
+            <div *ngIf="error" class="alert alert-danger">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              {{ error }}
+            </div>
+
+            <!-- Success Message -->
+            <div *ngIf="signed" class="text-center">
+              <div class="mb-4">
+                <i class="bi bi-check-circle-fill" style="font-size: 5rem; color: #28a745;"></i>
+              </div>
+              <h2 class="text-success mb-3">Document Signed Successfully!</h2>
+              <p class="lead mb-4">Thank you for signing the Agent Producer Agreement.</p>
+              <p class="text-muted">Redirecting to payment setup...</p>
+              <div class="spinner-border text-primary mt-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+
+            <!-- Document Preview and Signature -->
+            <div *ngIf="!signed && !error">
+              <div class="alert alert-info mb-4">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                <strong>Mock DocuSign Page</strong> - This is a simulation for testing purposes.
+              </div>
+
+              <!-- Mock Document Content -->
+              <div class="document-preview bg-light p-4 mb-4" style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">
+                <h3 class="text-center mb-4">AGENT PRODUCER AGREEMENT</h3>
+                
+                <p><strong>This Agreement</strong> is made between {{ branding.appName }} ("Company") and the applicant ("Agent").</p>
+                
+                <h5 class="mt-4">1. APPOINTMENT</h5>
+                <p>The Company hereby appoints the Agent as an independent contractor to market and sell insurance products on behalf of the Company and its carrier partners.</p>
+                
+                <h5 class="mt-4">2. AGENT RESPONSIBILITIES</h5>
+                <ul>
+                  <li>Maintain all required state insurance licenses in good standing</li>
+                  <li>Comply with all applicable insurance laws and regulations</li>
+                  <li>Follow Company policies, procedures, and ethical guidelines</li>
+                  <li>Submit accurate and complete applications</li>
+                  <li>Provide excellent customer service to clients</li>
+                </ul>
+                
+                <h5 class="mt-4">3. COMPENSATION</h5>
+                <p>Agent shall receive commissions on policies sold according to the Company's commission schedule. Commissions are subject to policy activation and premium payment.</p>
+                
+                <h5 class="mt-4">4. INDEPENDENT CONTRACTOR</h5>
+                <p>Agent is an independent contractor and not an employee of the Company. Agent is responsible for all taxes, insurance, and business expenses.</p>
+                
+                <h5 class="mt-4">5. TERMINATION</h5>
+                <p>Either party may terminate this agreement with 30 days written notice. The Company may terminate immediately for cause, including fraud or misconduct.</p>
+                
+                <h5 class="mt-4">6. CONFIDENTIALITY</h5>
+                <p>Agent agrees to maintain the confidentiality of all proprietary information, client data, and business practices of the Company.</p>
+                
+                <h5 class="mt-4">7. COMPLIANCE</h5>
+                <p>Agent agrees to comply with all applicable federal and state laws, including but not limited to insurance regulations, anti-fraud statutes, and consumer protection laws.</p>
+                
+                <p class="mt-4"><em>By signing below, Agent acknowledges reading and agreeing to all terms and conditions of this Agreement.</em></p>
+              </div>
+
+              <!-- Signature Section -->
+              <div class="signature-section p-4 border rounded bg-white">
+                <h4 class="mb-4">Electronic Signature</h4>
+                
+                <div class="form-check mb-3">
+                  <input class="form-check-input" type="checkbox" id="agree" [(ngModel)]="agreeToTerms">
+                  <label class="form-check-label" for="agree">
+                    I have read and agree to the terms of the Agent Producer Agreement
+                  </label>
+                </div>
+                
+                <div class="form-check mb-4">
+                  <input class="form-check-input" type="checkbox" id="electronic" [(ngModel)]="agreeToElectronic">
+                  <label class="form-check-label" for="electronic">
+                    I agree to use electronic signatures and electronic records
+                  </label>
+                </div>
+                
+                <div class="d-grid gap-2">
+                  <button 
+                    class="btn btn-success btn-lg" 
+                    [disabled]="!agreeToTerms || !agreeToElectronic || loading"
+                    (click)="signDocument()">
+                    <span *ngIf="!loading">
+                      <i class="bi bi-pen-fill me-2"></i>Sign Document
+                    </span>
+                    <span *ngIf="loading">
+                      <span class="spinner-border spinner-border-sm me-2"></span>Processing...
+                    </span>
+                  </button>
+                </div>
+                
+                <p class="text-muted small mt-3 text-center">
+                  <i class="bi bi-shield-check me-1"></i>
+                  Your signature is secure and legally binding
+                </p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>

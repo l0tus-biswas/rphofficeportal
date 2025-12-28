@@ -4,7 +4,7 @@
   <div class="row">
     <main class="col-12 px-md-4">
       <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2"><i class="bi bi-book-fill me-2"></i>Training Materials</h1>
+        <h1 class="h2"><i class="bi bi-book-fill me-2"></i>{{ "Training Materials" }}</h1>
       </div>
 
       <!-- Alert Messages -->
@@ -20,14 +20,14 @@
             <div class="col-md-5">
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" placeholder="Search materials..." 
+                <input type="text" class="form-control" [placeholder]="'Search'" 
                   [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
               </div>
             </div>
             <div class="col-md-3">
               <select class="form-select" [(ngModel)]="selectedCategory" (change)="onFilterChange()">
                 <option *ngFor="let cat of categories" [value]="cat">
-                  {{ cat === 'all' ? 'All Categories' : cat }}
+                  {{ cat === 'all' ? "Filter" : cat }}
                 </option>
               </select>
             </div>
@@ -53,9 +53,9 @@
       <!-- Loading State -->
       <div *ngIf="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
+          <span class="visually-hidden">{{ "Loading" }}</span>
         </div>
-        <p class="mt-3 text-muted">Loading training materials...</p>
+        <p class="mt-3 text-muted">{{ "Loading" }}</p>
       </div>
 
       <!-- Empty State -->

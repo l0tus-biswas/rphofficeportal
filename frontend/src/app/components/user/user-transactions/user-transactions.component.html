@@ -1,0 +1,172 @@
+<app-navbar></app-navbar>
+
+<div class="container py-4">
+  
+  <!-- Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <h3>Billing & Payment History</h3>
+      <p class="text-muted">View your transactions and subscription details</p>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 text-muted">Loading transactions...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="!loading && error" class="alert alert-danger">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+  </div>
+
+  <!-- Content -->
+  <div *ngIf="!loading && !error">
+    
+    <!-- Payment Status Cards -->
+    <div class="row g-3 mb-4" *ngIf="paymentStatus">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="text-muted mb-2">One-Time Payment</h6>
+            <h4 class="mb-0" *ngIf="paymentStatus.oneTimePaymentCompleted">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>Paid
+            </h4>
+            <h4 class="mb-0" *ngIf="!paymentStatus.oneTimePaymentCompleted">
+              <i class="bi bi-x-circle-fill text-danger me-2"></i>Pending
+            </h4>
+            <small class="text-muted" *ngIf="paymentStatus.oneTimePaymentDate">
+              {{ formatDate(paymentStatus.oneTimePaymentDate) }}
+            </small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="text-muted mb-2">Subscription Status</h6>
+            <h4 class="mb-0">
+              <span [ngClass]="getSubscriptionStatusBadge(paymentStatus.subscriptionStatus)">
+                {{ paymentStatus.subscriptionStatus | titlecase }}
+              </span>
+            </h4>
+            <small class="text-muted">$25/month</small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card">
+          <div class="card-body">
+            <h6 class="text-muted mb-2">Next Billing Date</h6>
+            <h4 class="mb-0">
+              {{ formatDate(paymentStatus.nextBillingDate) }}
+            </h4>
+            <small class="text-muted" *ngIf="paymentStatus.paymentAccessEnabled">
+              <i class="bi bi-check-circle-fill text-success me-1"></i>Access Enabled
+            </small>
+            <small class="text-danger" *ngIf="!paymentStatus.paymentAccessEnabled">
+              <i class="bi bi-x-circle-fill me-1"></i>Access Disabled
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscription Details -->
+    <div class="card mb-4" *ngIf="subscription">
+      <div class="card-header">
+        <h5 class="mb-0">Current Subscription</h5>
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-3 mb-2">
+            <strong>Status:</strong>
+            <span class="ms-2" [ngClass]="getSubscriptionStatusBadge(subscription.status)">
+              {{ subscription.status | titlecase }}
+            </span>
+          </div>
+          <div class="col-md-3 mb-2">
+            <strong>Amount:</strong> {{ formatAmount(subscription.amount) }}/{{ subscription.interval }}
+          </div>
+          <div class="col-md-3 mb-2">
+            <strong>Started:</strong> {{ formatDate(subscription.currentPeriodStart) }}
+          </div>
+          <div class="col-md-3 mb-2">
+            <strong>Renews:</strong> {{ formatDate(subscription.currentPeriodEnd) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transaction History -->
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Transaction History</h5>
+      </div>
+      <div class="card-body p-0">
+        
+        <!-- Table -->
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let payment of payments">
+                <td>{{ formatDate(payment.createdAt) }}</td>
+                <td>
+                  <span class="badge bg-primary" *ngIf="payment.type === 'one-time'">One-Time</span>
+                  <span class="badge bg-info" *ngIf="payment.type === 'subscription'">Subscription</span>
+                </td>
+                <td>{{ payment.description || 'Payment' }}</td>
+                <td>{{ formatAmount(payment.amount) }}</td>
+                <td>
+                  <span [ngClass]="getStatusBadgeClass(payment.status)">
+                    {{ payment.status | titlecase }}
+                  </span>
+                </td>
+              </tr>
+              <tr *ngIf="payments.length === 0">
+                <td colspan="5" class="text-center py-5 text-muted">
+                  <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                  <p class="mt-2 mb-0">No transactions found</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="card-footer" *ngIf="totalPages > 1">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+              Page {{ currentPage }} of {{ totalPages }}
+            </div>
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li class="page-item" [class.disabled]="currentPage === 1">
+                  <a class="page-link" (click)="previousPage()">Previous</a>
+                </li>
+                <li class="page-item" [class.disabled]="currentPage === totalPages">
+                  <a class="page-link" (click)="nextPage()">Next</a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
