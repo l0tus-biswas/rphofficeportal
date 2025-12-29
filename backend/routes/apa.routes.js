@@ -67,8 +67,8 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
       return errorResponse(res, new Error('An account already exists with this email'), 400);
     }
 
-    // Create new APA application
-    const application = new APAApplication({
+    // Prepare application data (but don't save yet)
+    const applicationData = {
       personalInfo: {
         ...personalInfo,
         email: personalInfo.email.toLowerCase()
@@ -79,26 +79,24 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
       licensingStatus,
       status: 'pending_signature',
       submittedAt: new Date()
-    });
+    };
 
-    await application.save();
+    // Create temporary application object for DocuSign URL generation
+    const tempApplication = new APAApplication(applicationData);
+    const docusignUrl = await initiateDocuSign(tempApplication);
 
-    // TODO: Trigger DocuSign envelope creation
-    // For now, we'll simulate this with a placeholder
-    const docusignUrl = await initiateDocuSign(application);
-    
-    // Update application with DocuSign info
-    application.docusign.envelopeId = 'ENVELOPE_' + Date.now(); // Placeholder
-    application.docusign.status = 'sent';
-    application.docusign.sentAt = new Date();
-    await application.save();
+    // Now save the application with DocuSign info
+    tempApplication.docusign.envelopeId = 'ENVELOPE_' + Date.now(); // Placeholder
+    tempApplication.docusign.status = 'sent';
+    tempApplication.docusign.sentAt = new Date();
+    await tempApplication.save();
 
-    // Send confirmation email
-    await sendApplicationConfirmationEmail(application);
+    // Send confirmation email after successful save
+    await sendApplicationConfirmationEmail(tempApplication);
 
     sendResponse(res, 201, {
       message: 'Application submitted successfully. Please check your email to sign the APA agreement.',
-      applicationId: application._id,
+      applicationId: tempApplication._id,
       docusignUrl: docusignUrl,
       nextStep: 'signature'
     });
