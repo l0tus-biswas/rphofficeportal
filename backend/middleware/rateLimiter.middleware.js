@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 exports.apiLimiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  skip: (req) => process.env.NODE_ENV === 'development',
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
@@ -16,6 +17,7 @@ exports.apiLimiter = rateLimit({
 exports.authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5,
+  skip: (req) => process.env.NODE_ENV === 'development',
   skipSuccessfulRequests: false,
   message: {
     success: false,
@@ -38,6 +40,7 @@ exports.applyLimiter = rateLimit({
 exports.resetLimiter = rateLimit({
   windowMs: parseInt(process.env.RESET_RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
   max: parseInt(process.env.RESET_RATE_LIMIT_MAX) || 3,
+  skip: (req) => process.env.NODE_ENV === 'development',
   message: {
     success: false,
     message: 'Too many password reset attempts, please try again later.'
