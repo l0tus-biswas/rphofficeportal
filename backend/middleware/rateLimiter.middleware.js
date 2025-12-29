@@ -27,6 +27,7 @@ exports.authLimiter = rateLimit({
 exports.applyLimiter = rateLimit({
   windowMs: parseInt(process.env.APPLY_RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
   max: parseInt(process.env.APPLY_RATE_LIMIT_MAX) || 20,
+  skip: (req) => process.env.NODE_ENV === 'development', // Skip rate limiting in development
   message: {
     success: false,
     message: 'Too many applications from this IP, please try again later.'

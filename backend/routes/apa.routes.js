@@ -42,8 +42,7 @@ const upload = multer({
 // @route   POST /api/public/apa-application
 // @desc    Submit APA application (Step 1 - Form submission)
 // @access  Public
-// Note: applyLimiter temporarily removed for development - add back for production
-router.post('/apa-application', async (req, res) => {
+router.post('/apa-application', applyLimiter, async (req, res) => {
   try {
     const { personalInfo, recruitingInfo, complianceQuestions, financialBackground, licensingStatus } = req.body;
 
