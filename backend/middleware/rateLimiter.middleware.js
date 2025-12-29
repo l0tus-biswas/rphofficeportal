@@ -14,8 +14,8 @@ exports.apiLimiter = rateLimit({
 
 // Strict rate limiter for auth endpoints
 exports.authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500, // 5 requests per window
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5,
   skipSuccessfulRequests: false,
   message: {
     success: false,
@@ -25,8 +25,8 @@ exports.authLimiter = rateLimit({
 
 // Public apply form rate limiter
 exports.applyLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 applications per hour per IP
+  windowMs: parseInt(process.env.APPLY_RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
+  max: parseInt(process.env.APPLY_RATE_LIMIT_MAX) || 20,
   message: {
     success: false,
     message: 'Too many applications from this IP, please try again later.'
@@ -35,8 +35,8 @@ exports.applyLimiter = rateLimit({
 
 // Password reset rate limiter
 exports.resetLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  windowMs: parseInt(process.env.RESET_RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
+  max: parseInt(process.env.RESET_RATE_LIMIT_MAX) || 3,
   message: {
     success: false,
     message: 'Too many password reset attempts, please try again later.'
