@@ -203,7 +203,7 @@
               <small class="text-muted d-block mb-2">Share this link to recruit new members</small>
               <div class="input-group">
                 <input type="text" class="form-control" 
-                  [value]="'http://localhost:4200/apply?ref=' + currentUser?.referralCode"
+                  [value]="getReferralLink()"
                   readonly>
                 <button class="btn btn-primary" (click)="copyReferralLink()">
                   <i class="bi bi-clipboard"></i>

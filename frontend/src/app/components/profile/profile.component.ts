@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-profile',
@@ -182,9 +183,13 @@ export class ProfileComponent implements OnInit {
   }
 
   copyReferralLink(): void {
-    const link = `http://localhost:4200/apply?ref=${this.currentUser?.referralCode}`;
+    const link = `${environment.appUrl}/apply?ref=${this.currentUser?.referralCode}`;
     navigator.clipboard.writeText(link);
     this.profileSuccess = 'Referral link copied to clipboard!';
     setTimeout(() => this.profileSuccess = '', 3000);
+  }
+
+  getReferralLink(): string {
+    return `${environment.appUrl}/apply?ref=${this.currentUser?.referralCode}`;
   }
 }

@@ -435,6 +435,7 @@ function generateReferralCode() {
 
 async function sendApplicationConfirmationEmail(application) {
   const { legalFirstName, legalLastName, email } = application.personalInfo;
+  const signUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
   
   await sendEmail({
     email: email,
@@ -443,7 +444,8 @@ async function sendApplicationConfirmationEmail(application) {
       <h2>Thank you for your application!</h2>
       <p>Dear ${legalFirstName} ${legalLastName},</p>
       <p>We have received your APA application. The next step is to review and sign the Agent Partnership Agreement.</p>
-      <p>You will receive a separate email from DocuSign with the agreement to review and sign.</p>
+      <p><a href="${signUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0;">Review and Sign Agreement</a></p>
+      <p>Or copy this link: <strong>${signUrl}</strong></p>
       <p><strong>Application ID:</strong> ${application._id}</p>
       <p>If you have any questions, please contact your recruiter.</p>
     `
