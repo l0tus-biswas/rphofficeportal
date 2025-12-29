@@ -239,7 +239,7 @@ router.post('/apa-application/:id/complete-signature', async (req, res) => {
     sendResponse(res, 200, {
       success: true,
       message: 'Document signed successfully',
-      paymentUrl: `${process.env.FRONTEND_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`
+      paymentUrl: `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`
     });
 
   } catch (error) {
@@ -418,7 +418,7 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
 // Helper functions
 async function initiateDocuSign(application) {
   // Mock DocuSign - returns URL to our mock signature page
-  const mockUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
+  const mockUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
   return mockUrl;
 }
 
@@ -433,7 +433,7 @@ function generateReferralCode() {
 
 async function sendApplicationConfirmationEmail(application) {
   const { legalFirstName, legalLastName, email } = application.personalInfo;
-  const signUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
+  const signUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
   
   await sendEmail({
     email: email,
@@ -452,7 +452,7 @@ async function sendApplicationConfirmationEmail(application) {
 
 async function sendPaymentLinkEmail(application) {
   const { legalFirstName, email } = application.personalInfo;
-  const paymentUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`;
+  const paymentUrl = `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`;
   
   await sendEmail({
     email: email,
@@ -472,7 +472,7 @@ async function sendPaymentLinkEmail(application) {
 }
 
 async function sendWelcomeEmail(user, password) {
-  const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/login`;
+  const loginUrl = `${process.env.APP_URL || 'http://localhost:4200'}/login`;
   
   await sendEmail({
     email: user.email,
