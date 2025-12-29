@@ -319,9 +319,63 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
         isActive: true,
         startDate: new Date(),
         amount: monthlyFee
+      },
+      stripeCustomerId: application.payment.stripeCustomerId,
+      stripeSubscriptionId: application.payment.stripeSubscriptionId,
+      oneTimePaymentCompleted: true,
+      oneTimePaymentDate: new Date(),
+      lastPaymentDate: new Date(),
+      paymentAccessEnabled: true
+      // Note: subscriptionStatus, subscriptionStartDate, nextBillingDate will be set after Subscription creation
+    });
+
+    await newUser.save();
+
+    // Create Payment record for onboarding fee (if paid)
+    if (onboardingFee > 0) {
+      const Payment = require('../models/Payment');
+      await Payment.create({
+        user: newUser._id,
+        type: 'one-time',
+        amount: onboardingFee * 100, // Convert to cents
+        currency: 'usd',
+        stripePaymentIntentId: application.payment.stripePaymentIntentId,
+        status: 'succeeded',
+        description: 'APA Onboarding Fee',
+        paidAt: new Date(),
+        metadata: {
+          applicationId: application._id,
+          source: 'apa_application'
+        }
+      });
+    }
+
+    // Create Subscription record for monthly fee (SOURCE OF TRUTH)
+    const Subscription = require('../models/Subscription');
+    const subscriptionStartDate = new Date();
+    const subscriptionEndDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    
+    await Subscription.create({
+      user: newUser._id,
+      stripeSubscriptionId: application.payment.stripeSubscriptionId,
+      stripeCustomerId: application.payment.stripeCustomerId,
+      stripePriceId: process.env.STRIPE_MONTHLY_PRICE_ID || 'price_monthly_default',
+      status: 'active',
+      amount: monthlyFee * 100, // Convert to cents
+      currency: 'usd',
+      interval: 'month',
+      currentPeriodStart: subscriptionStartDate,
+      currentPeriodEnd: subscriptionEndDate,
+      metadata: {
+        applicationId: application._id,
+        source: 'apa_application'
       }
     });
 
+    // SYNC: Update User model fields to match Subscription (for caching)
+    newUser.subscriptionStatus = 'active';
+    newUser.subscriptionStartDate = subscriptionStartDate;
+    newUser.nextBillingDate = subscriptionEndDate;
     await newUser.save();
 
     // Update application status

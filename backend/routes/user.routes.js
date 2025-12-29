@@ -42,11 +42,8 @@ router.get('/subscription', protect, async (req, res) => {
   try {
     const subscription = await Subscription.findOne({ user: req.user._id });
 
-    if (!subscription) {
-      return sendResponse(res, 404, { message: 'No subscription found' });
-    }
-
-    sendResponse(res, 200, { subscription });
+    // Return null subscription instead of 404 so UI can handle it gracefully
+    sendResponse(res, 200, { subscription: subscription || null });
   } catch (error) {
     errorResponse(res, error);
   }

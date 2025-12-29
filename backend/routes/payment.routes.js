@@ -173,21 +173,33 @@ router.get('/status', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
 
+    // Fetch subscription from Subscription model (source of truth)
     let subscriptionDetails = null;
+    let subscriptionStatus = user.subscriptionStatus || 'none';
+    let nextBillingDate = user.nextBillingDate;
+    let subscriptionStartDate = user.subscriptionStartDate;
+    
     if (user.stripeSubscriptionId) {
       const subscription = await Subscription.findOne({ 
         stripeSubscriptionId: user.stripeSubscriptionId 
       });
-      subscriptionDetails = subscription;
+      
+      if (subscription) {
+        subscriptionDetails = subscription;
+        // Use Subscription model as source of truth, fall back to User fields
+        subscriptionStatus = subscription.status || subscriptionStatus;
+        nextBillingDate = subscription.currentPeriodEnd || nextBillingDate;
+        subscriptionStartDate = subscription.currentPeriodStart || subscriptionStartDate;
+      }
     }
 
     sendResponse(res, 200, {
       oneTimePaymentCompleted: user.oneTimePaymentCompleted,
       oneTimePaymentAmount: user.oneTimePaymentAmount,
       oneTimePaymentDate: user.oneTimePaymentDate,
-      subscriptionStatus: user.subscriptionStatus,
-      subscriptionStartDate: user.subscriptionStartDate,
-      nextBillingDate: user.nextBillingDate,
+      subscriptionStatus: subscriptionStatus,
+      subscriptionStartDate: subscriptionStartDate,
+      nextBillingDate: nextBillingDate,
       lastPaymentDate: user.lastPaymentDate,
       paymentAccessEnabled: user.paymentAccessEnabled,
       subscription: subscriptionDetails
