@@ -9,6 +9,9 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
+// Trust proxy - necessary for getting real IP behind reverse proxy
+app.set('trust proxy', true);
+
 // Middleware
 app.use(helmet({
   contentSecurityPolicy: false,
