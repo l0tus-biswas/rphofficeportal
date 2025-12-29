@@ -329,24 +329,24 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
 
     await newUser.save();
 
-    // Create Payment record for onboarding fee (if paid)
-    if (onboardingFee > 0) {
-      const Payment = require('../models/Payment');
-      await Payment.create({
-        user: newUser._id,
-        type: 'one-time',
-        amount: onboardingFee * 100, // Convert to cents
-        currency: 'usd',
-        stripePaymentIntentId: application.payment.stripePaymentIntentId,
-        status: 'succeeded',
-        description: 'APA Onboarding Fee',
-        paidAt: new Date(),
-        metadata: {
-          applicationId: application._id,
-          source: 'apa_application'
-        }
-      });
-    }
+    // Create Payment record for onboarding fee (always create, even if $0)
+    const Payment = require('../models/Payment');
+    await Payment.create({
+      user: newUser._id,
+      type: 'one-time',
+      amount: onboardingFee * 100, // Convert to cents
+      currency: 'usd',
+      stripePaymentIntentId: application.payment.stripePaymentIntentId,
+      status: 'succeeded',
+      description: onboardingFeeWaived ? 'APA Onboarding Fee (Waived - Licensed Agent)' : 'APA Onboarding Fee',
+      paidAt: new Date(),
+      metadata: {
+        applicationId: application._id,
+        source: 'apa_application',
+        feeWaived: onboardingFeeWaived,
+        originalAmount: 16900 // $169 in cents
+      }
+    });
 
     // Create Subscription record for monthly fee (SOURCE OF TRUTH)
     const Subscription = require('../models/Subscription');
