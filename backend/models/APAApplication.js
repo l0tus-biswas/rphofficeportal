@@ -152,6 +152,33 @@ const apaApplicationSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+// Pre-save middleware to convert empty strings to null for enum fields
+apaApplicationSchema.pre('save', function(next) {
+  // Financial background bankruptcy fields
+  if (this.financialBackground?.bankruptcy) {
+    // If bankruptcy was not filed, clear chapter and status
+    if (this.financialBackground.bankruptcy.filed === false) {
+      this.financialBackground.bankruptcy.chapter = null;
+      this.financialBackground.bankruptcy.status = null;
+    } else {
+      // Convert empty strings to null for enum validation
+      if (this.financialBackground.bankruptcy.chapter === '') {
+        this.financialBackground.bankruptcy.chapter = null;
+      }
+      if (this.financialBackground.bankruptcy.status === '') {
+        this.financialBackground.bankruptcy.status = null;
+      }
+    }
+  }
+  
+  // Licensing status - convert empty string to null
+  if (this.licensingStatus?.licenseStatus === '') {
+    this.licensingStatus.licenseStatus = null;
+  }
+  
+  next();
+});
+
 // Indexes
 apaApplicationSchema.index({ email: 1 });
 apaApplicationSchema.index({ status: 1 });
