@@ -8,6 +8,13 @@ const fs = require('fs');
 const { sendResponse, errorResponse, generatePassword } = require('../utils/helpers');
 const { sendEmail } = require('../utils/email');
 const { applyLimiter } = require('../middleware/rateLimiter.middleware');
+const { 
+  createAPAEnvelope, 
+  getEnvelopeStatus, 
+  downloadSignedDocument,
+  processWebhook,
+  validateWebhookSignature 
+} = require('../utils/docusign');
 
 // Configure multer for compliance document uploads
 const storage = multer.diskStorage({
@@ -81,13 +88,15 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
       submittedAt: new Date()
     };
 
-    // Create temporary application object for DocuSign URL generation
+    // Create temporary application object for DocuSign envelope creation
     const tempApplication = new APAApplication(applicationData);
-    const docusignUrl = await initiateDocuSign(tempApplication);
+    
+    // Create real DocuSign envelope
+    const docusignResult = await initiateDocuSign(tempApplication);
 
     // Now save the application with DocuSign info
-    tempApplication.docusign.envelopeId = 'ENVELOPE_' + Date.now(); // Placeholder
-    tempApplication.docusign.status = 'sent';
+    tempApplication.docusign.envelopeId = docusignResult.envelopeId;
+    tempApplication.docusign.status = docusignResult.status;
     tempApplication.docusign.sentAt = new Date();
     await tempApplication.save();
 
@@ -97,7 +106,8 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
     sendResponse(res, 201, {
       message: 'Application submitted successfully. Please check your email to sign the APA agreement.',
       applicationId: tempApplication._id,
-      docusignUrl: docusignUrl,
+      docusignUrl: docusignResult.signingUrl,
+      envelopeId: docusignResult.envelopeId,
       nextStep: 'signature'
     });
 
@@ -142,26 +152,61 @@ router.get('/apa-application/:id', async (req, res) => {
   }
 });
 
-// @route   POST /api/public/apa-application/:id/docusign-webhook
-// @desc    DocuSign webhook - handle signature completion
-// @access  Public (but should validate DocuSign signature)
-router.post('/apa-application/:id/docusign-webhook', async (req, res) => {
+// @route   POST /api/public/apa-application/docusign-webhook
+// @desc    DocuSign webhook - handle signature completion (global endpoint)
+// @access  Public (validates DocuSign HMAC signature)
+router.post('/apa-application/docusign-webhook', async (req, res) => {
   try {
-    const { envelopeId, status, signedAt } = req.body;
+    // Validate webhook signature
+    if (!validateWebhookSignature(req)) {
+      console.error('Invalid DocuSign webhook signature');
+      return errorResponse(res, new Error('Invalid webhook signature'), 401);
+    }
 
-    const application = await APAApplication.findById(req.params.id);
+    // Process webhook data
+    const webhookData = await processWebhook(req.body);
+    const { envelopeId, status, appStatus, signedAt } = webhookData;
+
+    console.log('Processing DocuSign webhook:', {
+      envelopeId,
+      status,
+      appStatus
+    });
+
+    // Find application by envelope ID
+    const application = await APAApplication.findOne({ 'docusign.envelopeId': envelopeId });
     if (!application) {
-      return errorResponse(res, new Error('Application not found'), 404);
+      console.warn('Application not found for envelope:', envelopeId);
+      return sendResponse(res, 200, { message: 'Envelope not found, webhook acknowledged' });
     }
 
     // Update DocuSign status
     application.docusign.status = status;
-    if (status === 'signed' || status === 'completed') {
-      application.docusign.signedAt = signedAt || new Date();
+    
+    if (status === 'completed') {
+      application.docusign.signedDate = signedAt || new Date();
       application.status = 'pending_payment'; // Unlock payment step
+      
+      // Download signed document
+      const signedDocPath = path.join(
+        __dirname,
+        '../uploads/apa-signed',
+        `${application._id}_signed_apa.pdf`
+      );
+      
+      try {
+        await downloadSignedDocument(envelopeId, signedDocPath);
+        application.docusign.signedDocumentPath = signedDocPath;
+      } catch (downloadError) {
+        console.error('Failed to download signed document:', downloadError);
+        // Continue anyway - document can be retrieved later
+      }
       
       // Send payment link email
       await sendPaymentLinkEmail(application);
+    } else if (status === 'declined' || status === 'voided') {
+      // Handle declined/voided envelopes
+      application.status = 'signature_' + status;
     }
 
     await application.save();
@@ -170,7 +215,8 @@ router.post('/apa-application/:id/docusign-webhook', async (req, res) => {
 
   } catch (error) {
     console.error('DocuSign Webhook Error:', error);
-    errorResponse(res, error);
+    // Always return 200 to DocuSign to prevent retries
+    res.status(200).json({ message: 'Webhook received with errors' });
   }
 });
 
@@ -417,9 +463,26 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
 
 // Helper functions
 async function initiateDocuSign(application) {
-  // Mock DocuSign - returns URL to our mock signature page
-  const mockUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
-  return mockUrl;
+  try {
+    // Use real DocuSign integration if configured
+    if (process.env.DOCUSIGN_INTEGRATION_KEY && process.env.DOCUSIGN_ACCOUNT_ID) {
+      console.log('Creating DocuSign envelope for application:', application._id);
+      const result = await createAPAEnvelope(application);
+      return result; // Returns { envelopeId, signingUrl, status }
+    } else {
+      // Fallback to mock for development
+      console.warn('DocuSign not configured - using mock signing page');
+      const mockUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
+      return {
+        envelopeId: 'MOCK_' + Date.now(),
+        signingUrl: mockUrl,
+        status: 'sent'
+      };
+    }
+  } catch (error) {
+    console.error('DocuSign initiation error:', error);
+    throw new Error('Failed to initiate document signing: ' + error.message);
+  }
 }
 
 function generateReferralCode() {
