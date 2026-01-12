@@ -18,8 +18,59 @@
           </div>
         </div>
 
+        <!-- Signature Still Pending Message -->
+        <div *ngIf="isPendingSignature && !invalidReferral && !showInstructions" class="card shadow border-0 border-warning">
+          <div class="card-body p-5">
+            <div class="text-center mb-4">
+              <i class="bi bi-exclamation-triangle" style="font-size: 4rem; color: #ff9800;"></i>
+            </div>
+            
+            <h2 class="text-center mb-3 text-warning">Signature Still Pending</h2>
+            
+            <p class="text-center lead mb-4">
+              Your application has been submitted, but the DocuSign agreement has not been completed yet.
+            </p>
+            
+            <div class="alert alert-warning">
+              <h5 class="alert-heading">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>Important: Complete Your Signature
+              </h5>
+              <hr>
+              <p class="mb-2">You must complete all signature fields in the DocuSign document and click "Finish" to proceed with your application.</p>
+              <ul class="mb-0">
+                <li>Sign all required signature fields</li>
+                <li>Initial where indicated</li>
+                <li>Click "Finish" or "Complete" when done</li>
+              </ul>
+            </div>
+
+            <p class="text-muted text-center mb-4">
+              Please check your email for the DocuSign link, or click the button below to resume signing.
+            </p>
+
+            <div class="text-center">
+              <button 
+                type="button" 
+                class="btn btn-warning btn-lg"
+                (click)="resumeSigning()"
+                [disabled]="loading">
+                <span *ngIf="!loading">
+                  <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
+                </span>
+                <span *ngIf="loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Loading...
+                </span>
+              </button>
+            </div>
+
+            <p class="text-center text-muted mt-4 mb-0">
+              <small>Need help? Contact your recruiter for assistance.</small>
+            </p>
+          </div>
+        </div>
+
         <!-- APA Application Form -->
-        <div *ngIf="!invalidReferral" class="card shadow border-0">
+        <div *ngIf="!invalidReferral && !showInstructions && !isPendingSignature" class="card shadow border-0">
           <div class="card-body p-5">
             
             <!-- Header -->
@@ -586,6 +637,46 @@
               </button>
             </div>
 
+          </div>
+        </div>
+
+        <!-- DocuSign Signing Instructions Modal -->
+        <div *ngIf="showInstructions" class="card shadow border-0 mt-4">
+          <div class="card-body p-5 text-center">
+            <div class="mb-4">
+              <i class="bi bi-file-earmark-text" style="font-size: 4rem; color: #4CAF50;"></i>
+            </div>
+            
+            <h2 class="mb-3 text-success">Application Submitted Successfully!</h2>
+            
+            <div class="alert alert-info text-start">
+              <h5 class="alert-heading">
+                <i class="bi bi-info-circle-fill me-2"></i>Next Step: Sign Your Agreement
+              </h5>
+              <hr>
+              <p class="mb-2">You will now be redirected to DocuSign to review and sign your Agent Partnership Agreement (APA).</p>
+              
+              <p class="mb-2"><strong>Important Instructions:</strong></p>
+              <ul class="mb-2">
+                <li>Carefully review the entire document</li>
+                <li><strong class="text-danger">You MUST add your signature at the designated signature fields</strong></li>
+                <li>Click all required signature/initial boxes in the document</li>
+                <li>Complete all fields marked as required</li>
+                <li>Click "Finish" or "Complete" when all signatures are placed</li>
+              </ul>
+              
+              <p class="mb-0">
+                <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                <strong>Note:</strong> After signing, you will be redirected to complete your payment setup.
+              </p>
+            </div>
+
+            <button 
+              type="button" 
+              class="btn btn-success btn-lg mt-3"
+              (click)="proceedToDocuSign()">
+              <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
+            </button>
           </div>
         </div>
 

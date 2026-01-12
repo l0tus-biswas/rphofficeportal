@@ -295,19 +295,23 @@
 
     <div class="row">
       <div class="col-md-6 mb-3">
-        <label class="form-label">Recruiter Email</label>
+        <label class="form-label">Recruiter Email <span class="text-danger">*</span></label>
         <input type="email" class="form-control" formControlName="recruiterEmail"
+               [class.is-invalid]="section2Form.get('recruiterEmail')?.invalid && section2Form.get('recruiterEmail')?.touched"
                [attr.readonly]="section2Form.get('recruiterEmail')?.disabled ? true : null"
                placeholder="recruiter@example.com">
+        <div class="invalid-feedback">Valid recruiter email is required</div>
         <small class="text-muted" *ngIf="section2Form.get('recruiterEmail')?.disabled">
           <i class="bi bi-lock me-1"></i>Auto-filled from referral code
         </small>
       </div>
       <div class="col-md-6 mb-3">
-        <label class="form-label">Recruiter Phone</label>
+        <label class="form-label">Recruiter Phone <span class="text-danger">*</span></label>
         <input type="tel" class="form-control" formControlName="recruiterPhone"
+               [class.is-invalid]="section2Form.get('recruiterPhone')?.invalid && section2Form.get('recruiterPhone')?.touched"
                [attr.readonly]="section2Form.get('recruiterPhone')?.disabled ? true : null"
                placeholder="(555) 555-5555">
+        <div class="invalid-feedback">Recruiter phone is required</div>
         <small class="text-muted" *ngIf="section2Form.get('recruiterPhone')?.disabled">
           <i class="bi bi-lock me-1"></i>Auto-filled from referral code
         </small>
@@ -340,8 +344,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('previouslyContractedOther')?.value" class="ms-4">
-        <label class="form-label">Please explain:</label>
-        <textarea class="form-control" formControlName="previouslyContractedOtherExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain: <span class="text-danger">*</span></label>
+        <textarea class="form-control" formControlName="previouslyContractedOtherExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('previouslyContractedOtherExplanation')?.invalid && section3Form.get('previouslyContractedOtherExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
       </div>
     </div>
 
@@ -353,8 +359,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('felonyConviction')?.value" class="ms-4">
-        <label class="form-label">Please explain and upload documentation:</label>
-        <textarea class="form-control mb-2" formControlName="felonyConvictionExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain and upload documentation: <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" formControlName="felonyConvictionExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('felonyConvictionExplanation')?.invalid && section3Form.get('felonyConvictionExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
         <input type="file" class="form-control" (change)="onFileSelected('felonyConviction', $event)">
       </div>
     </div>
@@ -367,8 +375,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('misdemeanorFraud')?.value" class="ms-4">
-        <label class="form-label">Please explain and upload documentation:</label>
-        <textarea class="form-control mb-2" formControlName="misdemeanorFraudExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain and upload documentation: <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" formControlName="misdemeanorFraudExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('misdemeanorFraudExplanation')?.invalid && section3Form.get('misdemeanorFraudExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
         <input type="file" class="form-control" (change)="onFileSelected('misdemeanorFraud', $event)">
       </div>
     </div>
@@ -381,8 +391,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('civilAction')?.value" class="ms-4">
-        <label class="form-label">Please explain and upload documentation:</label>
-        <textarea class="form-control mb-2" formControlName="civilActionExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain and upload documentation: <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" formControlName="civilActionExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('civilActionExplanation')?.invalid && section3Form.get('civilActionExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
         <input type="file" class="form-control" (change)="onFileSelected('civilAction', $event)">
       </div>
     </div>
@@ -395,8 +407,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('licenseDenied')?.value" class="ms-4">
-        <label class="form-label">Please explain and upload documentation:</label>
-        <textarea class="form-control mb-2" formControlName="licenseDeniedExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain and upload documentation: <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" formControlName="licenseDeniedExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('licenseDeniedExplanation')?.invalid && section3Form.get('licenseDeniedExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
         <input type="file" class="form-control" (change)="onFileSelected('licenseDenied', $event)">
       </div>
     </div>
@@ -409,8 +423,10 @@
         </label>
       </div>
       <div *ngIf="section3Form.get('bondIssues')?.value" class="ms-4">
-        <label class="form-label">Please explain and upload documentation:</label>
-        <textarea class="form-control mb-2" formControlName="bondIssuesExplanation" rows="3"></textarea>
+        <label class="form-label">Please explain and upload documentation: <span class="text-danger">*</span></label>
+        <textarea class="form-control mb-2" formControlName="bondIssuesExplanation" rows="3"
+                  [class.is-invalid]="section3Form.get('bondIssuesExplanation')?.invalid && section3Form.get('bondIssuesExplanation')?.touched"></textarea>
+        <div class="invalid-feedback">Explanation is required (minimum 10 characters)</div>
         <input type="file" class="form-control" (change)="onFileSelected('bondIssues', $event)">
       </div>
     </div>
@@ -418,42 +434,57 @@
 
   <!-- Section 4: Financial Background -->
   <form [formGroup]="section4Form" *ngIf="currentSection === 4" class="section-form">
-    <h3>Financial Background</h3>
+    <h3>Financial Background 1</h3>
     <p class="text-muted">Please answer the following questions about your financial history.</p>
 
     <div class="mb-4">
       <label class="form-label fw-bold">Do you have any unsatisfied judgments? <span class="text-danger">*</span></label>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="true" formControlName="unsatisfiedJudgments" id="judgmentsYes">
+        <input type="radio" class="form-check-input" name="unsatisfiedJudgments" [value]="true" formControlName="unsatisfiedJudgments" id="judgmentsYes"
+               [class.is-invalid]="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
         <label class="form-check-label" for="judgmentsYes">Yes</label>
       </div>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="false" formControlName="unsatisfiedJudgments" id="judgmentsNo">
+        <input type="radio" class="form-check-input" name="unsatisfiedJudgments" [value]="false" formControlName="unsatisfiedJudgments" id="judgmentsNo"
+               [class.is-invalid]="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
         <label class="form-check-label" for="judgmentsNo">No</label>
+      </div>
+      <div class="text-danger small mt-2" *ngIf="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
+        <i class="bi bi-exclamation-circle me-1"></i><strong>Required</strong> - Please select Yes or No
       </div>
     </div>
 
     <div class="mb-4">
       <label class="form-label fw-bold">Do you have any unsatisfied liens? <span class="text-danger">*</span></label>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="true" formControlName="unsatisfiedLiens" id="liensYes">
+        <input type="radio" class="form-check-input" name="unsatisfiedLiens" [value]="true" formControlName="unsatisfiedLiens" id="liensYes"
+               [class.is-invalid]="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
         <label class="form-check-label" for="liensYes">Yes</label>
       </div>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="false" formControlName="unsatisfiedLiens" id="liensNo">
+        <input type="radio" class="form-check-input" name="unsatisfiedLiens" [value]="false" formControlName="unsatisfiedLiens" id="liensNo"
+               [class.is-invalid]="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
         <label class="form-check-label" for="liensNo">No</label>
+      </div>
+      <div class="text-danger small mt-2" *ngIf="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
+        <i class="bi bi-exclamation-circle me-1"></i><strong>Required</strong> - Please select Yes or No
       </div>
     </div>
 
     <div class="mb-4">
       <label class="form-label fw-bold">Have you filed for bankruptcy in the past 7 years? <span class="text-danger">*</span></label>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="true" formControlName="bankruptcyFiled" id="bankruptcyYes">
+        <input type="radio" class="form-check-input" name="bankruptcyFiled" [value]="true" formControlName="bankruptcyFiled" id="bankruptcyYes"
+               [class.is-invalid]="section4Form.get('bankruptcyFiled')?.invalid && section4Form.get('bankruptcyFiled')?.touched">
         <label class="form-check-label" for="bankruptcyYes">Yes</label>
       </div>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="false" formControlName="bankruptcyFiled" id="bankruptcyNo">
+        <input type="radio" class="form-check-input" name="bankruptcyFiled" [value]="false" formControlName="bankruptcyFiled" id="bankruptcyNo"
+               [class.is-invalid]="section4Form.get('bankruptcyFiled')?.invalid && section4Form.get('bankruptcyFiled')?.touched">
         <label class="form-check-label" for="bankruptcyNo">No</label>
+      </div>
+      <div class="text-danger small mt-2" *ngIf="section4Form.get('bankruptcyFiled')?.invalid && section4Form.get('bankruptcyFiled')?.touched">
+        <i class="bi bi-exclamation-circle me-1"></i><strong>Required</strong> - Please select Yes or No
       </div>
     </div>
 
@@ -492,12 +523,17 @@
     <div class="mb-4">
       <label class="form-label fw-bold">Are you currently licensed to sell insurance? <span class="text-danger">*</span></label>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="true" formControlName="currentlyLicensed" id="licensedYes">
+        <input type="radio" class="form-check-input" name="currentlyLicensed" [value]="true" formControlName="currentlyLicensed" id="licensedYes"
+               [class.is-invalid]="section5Form.get('currentlyLicensed')?.invalid && section5Form.get('currentlyLicensed')?.touched">
         <label class="form-check-label" for="licensedYes">Yes</label>
       </div>
       <div class="form-check">
-        <input type="radio" class="form-check-input" [value]="false" formControlName="currentlyLicensed" id="licensedNo">
+        <input type="radio" class="form-check-input" name="currentlyLicensed" [value]="false" formControlName="currentlyLicensed" id="licensedNo"
+               [class.is-invalid]="section5Form.get('currentlyLicensed')?.invalid && section5Form.get('currentlyLicensed')?.touched">
         <label class="form-check-label" for="licensedNo">No</label>
+      </div>
+      <div class="invalid-feedback d-block" *ngIf="section5Form.get('currentlyLicensed')?.invalid && section5Form.get('currentlyLicensed')?.touched">
+        <strong>Required</strong> - Please select Yes or No
       </div>
     </div>
 

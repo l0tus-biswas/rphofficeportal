@@ -5,6 +5,7 @@ const Onboarding = require('../models/Onboarding');
 const AuditLog = require('../models/AuditLog');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
+const APAApplication = require('../models/APAApplication');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -281,11 +282,26 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
+    // Delete all related records for this user
+    const userId = req.params.userId;
+    
+    // Delete APAApplication records
+    await APAApplication.deleteMany({ userId: userId });
+    
+    // Delete Onboarding records
+    await Onboarding.deleteMany({ user: userId });
+    
+    // Delete Payment records
+    await Payment.deleteMany({ user: userId });
+    
+    // Delete Subscription records
+    await Subscription.deleteMany({ user: userId });
+    
     // Hard delete - permanently remove user
-    await User.findByIdAndDelete(req.params.userId);
+    await User.findByIdAndDelete(userId);
     
     sendResponse(res, 200, {
-      message: 'User deleted successfully'
+      message: 'User and all related records deleted successfully'
     });
   } catch (error) {
     errorResponse(res, error);

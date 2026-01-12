@@ -47,7 +47,7 @@
         <div class="card-body">
           <h5 class="card-title">Actions</h5>
           <p class="text-muted small mb-3">Current Status: <strong>{{ application.status }}</strong></p>
-          <div class="btn-group" role="group">
+          <div class="btn-group mb-2" role="group">
             <button 
               class="btn btn-success" 
               (click)="approveApplication()"
@@ -63,6 +63,22 @@
               <i class="bi bi-x-circle me-2"></i>Reject
             </button>
           </div>
+          
+          <!-- Resend DocuSign Button -->
+          <div *ngIf="application.status === 'pending_signature' || application.docusign?.status !== 'completed'" class="mt-2">
+            <button 
+              class="btn btn-warning btn-sm" 
+              (click)="resendDocuSign()"
+              [disabled]="loading">
+              <i class="bi bi-envelope-paper me-2"></i>
+              <span *ngIf="!loading">Resend DocuSign Email</span>
+              <span *ngIf="loading">Sending...</span>
+            </button>
+            <p class="text-muted small mt-2 mb-0">
+              <i class="bi bi-info-circle me-1"></i>Send a new DocuSign envelope with signing instructions to the applicant
+            </p>
+          </div>
+          
           <p class="text-muted small mt-2 mb-0" *ngIf="application.status === 'active'">
             <i class="bi bi-info-circle me-1"></i>This application is already approved
           </p>

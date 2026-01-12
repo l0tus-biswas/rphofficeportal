@@ -22,6 +22,49 @@
               <button type="button" class="btn-close" (click)="error = ''"></button>
             </div>
 
+            <!-- Pending Signature Notice -->
+            <div *ngIf="isPendingSignature" class="text-center py-4">
+              <div class="mb-4">
+                <i class="bi bi-pen-fill" style="font-size: 4rem; color: #ffc107;"></i>
+              </div>
+              <h2 class="mb-3">Signature Required</h2>
+              <p class="lead mb-2">Your application is waiting for your signature</p>
+              <p class="text-muted">You must complete signing the Agent Partnership Agreement before proceeding to payment.</p>
+              
+              <div class="alert alert-warning text-start mt-4">
+                <h5 class="alert-heading">
+                  <i class="bi bi-info-circle-fill me-2"></i>Important Instructions:
+                </h5>
+                <hr>
+                <ul class="mb-2">
+                  <li>Review the entire document carefully</li>
+                  <li><strong>Add your signature at all designated signature fields</strong></li>
+                  <li>Click all required signature/initial boxes</li>
+                  <li>Complete all required fields</li>
+                  <li>Click "Finish" when done</li>
+                </ul>
+                <p class="mb-0">
+                  <i class="bi bi-arrow-repeat me-2"></i>
+                  After signing, you will be redirected back to this payment page.
+                </p>
+              </div>
+
+              <button 
+                type="button" 
+                class="btn btn-warning btn-lg mt-4"
+                (click)="proceedToSign()"
+                [disabled]="loading">
+                <span *ngIf="!loading">
+                  <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
+                </span>
+                <span *ngIf="loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Loading...
+                </span>
+              </button>
+              
+              <p class="text-muted small mt-3">Application ID: {{ applicationId }}</p>
+            </div>
+
             <!-- Success Message -->
             <div *ngIf="success" class="text-center">
               <div class="mb-4">
@@ -38,10 +81,16 @@
               <div class="spinner-border text-primary mt-3" role="status">
                 <span class="visually-hidden">Loading...</span>
               </div>
+              <button 
+                type="button" 
+                class="btn btn-primary mt-3"
+                (click)="navigateToLogin()">
+                Go to Login Now
+              </button>
             </div>
 
             <!-- Payment Form -->
-            <div *ngIf="!success && !error" [formGroup]="paymentForm">
+            <div *ngIf="!success && !error && !isPendingSignature" [formGroup]="paymentForm">
               
               <!-- Mock Payment Notice -->
               <div class="alert alert-warning mb-4">

@@ -41,6 +41,10 @@ export class ApaService {
     return this.http.put(`${this.apiUrl}/apa-applications/${id}/notes`, { adminNotes });
   }
 
+  resendDocuSign(id: string): Observable<any> {
+    return this.http.post(`${environment.apiUrl}/public/apa-application/${id}/resend-docusign`, {});
+  }
+
   getStats(): Observable<any> {
     return this.http.get(`${this.apiUrl}/apa-applications/stats/overview`);
   }

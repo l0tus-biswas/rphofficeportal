@@ -15,6 +15,8 @@ export class ApaPaymentComponent implements OnInit {
   loading = false;
   error = '';
   success = false;
+  isPendingSignature = false;
+  docusignUrl = '';
   
   paymentForm!: FormGroup;
   branding: BrandingConfig = { appName: 'Escape', appLogo: null };
@@ -70,6 +72,18 @@ export class ApaPaymentComponent implements OnInit {
         this.loading = false;
         const app = response.application;
         
+        // Check if signature is still pending
+        if (app.status === 'pending_signature') {
+          this.isPendingSignature = true;
+          this.error = `Application is not ready for payment (status: ${app.status})`;
+          
+          // Get DocuSign URL if envelope exists
+          if (app.docusign?.envelopeId) {
+            this.docusignUrl = response.docusignUrl || '';
+          }
+          return;
+        }
+        
         if (app.status !== 'pending_payment') {
           this.error = `Application is not ready for payment (status: ${app.status})`;
           return;
@@ -112,6 +126,29 @@ export class ApaPaymentComponent implements OnInit {
     return this.onboardingFee + this.monthlyFee;
   }
 
+  proceedToSign(): void {
+    // Try to resend DocuSign if no URL available
+    if (!this.docusignUrl) {
+      this.loading = true;
+      this.publicService.resendDocuSign(this.applicationId).subscribe({
+        next: (response) => {
+          this.loading = false;
+          if (response.docusignUrl) {
+            window.location.href = response.docusignUrl;
+          } else {
+            this.error = 'Unable to retrieve DocuSign URL. Please contact support.';
+          }
+        },
+        error: (error) => {
+          this.loading = false;
+          this.error = error.error?.message || 'Failed to get signing link';
+        }
+      });
+    } else {
+      window.location.href = this.docusignUrl;
+    }
+  }
+
   submitPayment(): void {
     if (this.paymentForm.invalid) {
       Object.keys(this.paymentForm.controls).forEach(key => {
@@ -122,6 +159,10 @@ export class ApaPaymentComponent implements OnInit {
 
     this.loading = true;
     this.error = '';
+    this.success = false;
+
+    console.log('=== Submitting Payment ===');
+    console.log('Application ID:', this.applicationId);
 
     // Mock payment data
     const paymentData = {
@@ -133,22 +174,41 @@ export class ApaPaymentComponent implements OnInit {
       }
     };
 
+    console.log('Payment data:', paymentData);
+
     this.publicService.completePayment(this.applicationId, paymentData).subscribe({
       next: (response) => {
+        console.log('=== Payment Response Received ===');
+        console.log('Response:', response);
+        
         this.loading = false;
         this.success = true;
+        this.error = '';
+        
+        console.log('Success flag set to:', this.success);
+        console.log('Payment successful, will redirect to login in 5 seconds...');
         
         // Redirect to login after 5 seconds
         setTimeout(() => {
-          this.router.navigate(['/login'], {
-            queryParams: { message: 'Account created successfully. Check your email for login credentials.' }
-          });
+          console.log('Timeout triggered, navigating now...');
+          this.navigateToLogin();
         }, 5000);
       },
       error: (error) => {
+        console.error('=== Payment Error ===');
+        console.error('Error details:', error);
+        
         this.loading = false;
+        this.success = false;
         this.error = error.error?.message || 'Payment failed. Please try again.';
       }
+    });
+  }
+
+  navigateToLogin(): void {
+    console.log('Navigating to login page...');
+    this.router.navigate(['/login'], {
+      queryParams: { message: 'Account created successfully. Check your email for login credentials.' }
     });
   }
 }

@@ -1,7 +1,9 @@
-import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, FormArray } from '@angular/forms';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, FormArray, AbstractControl, ValidationErrors } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicService } from '../../services/public.service';
+
+type SectionInfo = { form: FormGroup; section: number; name: string };
 
 @Component({
   selector: 'app-apa-apply',
@@ -32,12 +34,23 @@ export class ApaApplyComponent implements OnInit {
     private formBuilder: FormBuilder,
     private publicService: PublicService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     this.initializeForms();
     this.loadReferralInfo();
+  }
+
+  // Custom validator for boolean radio buttons (Yes/No)
+  private requiredBooleanValidator(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+    // Must be explicitly true or false, not null, undefined, or empty string
+    if (value !== true && value !== false) {
+      return { required: true };
+    }
+    return null;
   }
 
   initializeForms(): void {
@@ -67,7 +80,8 @@ export class ApaApplyComponent implements OnInit {
     this.section2Form = this.formBuilder.group({
       recruiterFullName: ['', Validators.required],
       recruiterAgentId: [''],
-      recruiterContact: ['', Validators.required],
+      recruiterEmail: ['', [Validators.required, Validators.email]],
+      recruiterPhone: ['', Validators.required],
       uplineLeaderName: [''],
       teamName: ['']
     });
@@ -90,16 +104,16 @@ export class ApaApplyComponent implements OnInit {
 
     // Section 4: Financial
     this.section4Form = this.formBuilder.group({
-      unsatisfiedJudgments: [null],
-      unsatisfiedLiens: [null],
-      bankruptcyFiled: [null],
+      unsatisfiedJudgments: [null, this.requiredBooleanValidator.bind(this)],
+      unsatisfiedLiens: [null, this.requiredBooleanValidator.bind(this)],
+      bankruptcyFiled: [null, this.requiredBooleanValidator.bind(this)],
       bankruptcyChapter: [''],
       bankruptcyStatus: ['']
     });
 
     // Section 5: Licensing
     this.section5Form = this.formBuilder.group({
-      currentlyLicensed: [null],
+      currentlyLicensed: [null, this.requiredBooleanValidator.bind(this)],
       licenseTypes: this.formBuilder.array([]),
       statesLicensed: [''],
       licenseNumber: [''],
@@ -147,6 +161,28 @@ export class ApaApplyComponent implements OnInit {
         control?.updateValueAndValidity();
       });
     });
+
+    // Dynamic validation for compliance explanations
+    const complianceFields = [
+      { checkbox: 'previouslyContractedOther', explanation: 'previouslyContractedOtherExplanation' },
+      { checkbox: 'felonyConviction', explanation: 'felonyConvictionExplanation' },
+      { checkbox: 'misdemeanorFraud', explanation: 'misdemeanorFraudExplanation' },
+      { checkbox: 'civilAction', explanation: 'civilActionExplanation' },
+      { checkbox: 'licenseDenied', explanation: 'licenseDeniedExplanation' },
+      { checkbox: 'bondIssues', explanation: 'bondIssuesExplanation' }
+    ];
+
+    complianceFields.forEach(field => {
+      this.section3Form.get(field.checkbox)?.valueChanges.subscribe(checked => {
+        const explanationControl = this.section3Form.get(field.explanation);
+        if (checked) {
+          explanationControl?.setValidators([Validators.required, Validators.minLength(10)]);
+        } else {
+          explanationControl?.clearValidators();
+        }
+        explanationControl?.updateValueAndValidity();
+      });
+    });
   }
 
   loadReferralInfo(): void {
@@ -158,7 +194,8 @@ export class ApaApplyComponent implements OnInit {
             this.recruiterName = response.agentName;
             this.section2Form.patchValue({
               recruiterFullName: response.agentName,
-              recruiterContact: response.agentEmail || response.agentPhone
+              recruiterEmail: response.agentEmail,
+              recruiterPhone: response.agentPhone
             });
           } else {
             this.invalidReferral = true;
@@ -173,29 +210,135 @@ export class ApaApplyComponent implements OnInit {
     }
   }
 
+  private getFieldLabel(section: number, fieldName: string): string {
+    const sectionFieldLabels: Record<number, Record<string, string>> = {
+      1: {
+        legalFirstName: 'Legal First Name',
+        legalMiddleName: 'Legal Middle Name',
+        legalLastName: 'Legal Last Name',
+        gender: 'Gender',
+        dateOfBirth: 'Date of Birth',
+        ssn: 'Social Security Number',
+        mobilePhone: 'Mobile Phone',
+        email: 'Email Address',
+        homeStreet: 'Home Street Address',
+        homeCity: 'Home City',
+        homeState: 'Home State',
+        homeZipCode: 'Home Zip Code',
+        mailingStreet: 'Mailing Street Address',
+        mailingCity: 'Mailing City',
+        mailingState: 'Mailing State',
+        mailingZipCode: 'Mailing Zip Code'
+      },
+      2: {
+        recruiterFullName: 'Recruiter Full Name',
+        recruiterAgentId: 'Recruiter Agent ID',
+        recruiterEmail: 'Recruiter Email',
+        recruiterPhone: 'Recruiter Phone',
+        uplineLeaderName: 'Upline Leader Name',
+        teamName: 'Team Name'
+      },
+      3: {
+        previouslyContractedOtherExplanation: 'Previous Contract Explanation',
+        felonyConvictionExplanation: 'Felony Conviction Explanation',
+        misdemeanorFraudExplanation: 'Misdemeanor Fraud Explanation',
+        civilActionExplanation: 'Civil Action Explanation',
+        licenseDeniedExplanation: 'License Denial Explanation',
+        bondIssuesExplanation: 'Bond Issues Explanation'
+      },
+      4: {
+        unsatisfiedJudgments: 'Unsatisfied Judgments',
+        unsatisfiedLiens: 'Unsatisfied Tax Liens',
+        bankruptcyFiled: 'Bankruptcy History',
+        bankruptcyChapter: 'Bankruptcy Chapter',
+        bankruptcyStatus: 'Bankruptcy Status'
+      },
+      5: {
+        currentlyLicensed: 'Currently Licensed',
+        licenseTypes: 'License Types',
+        statesLicensed: 'States Licensed',
+        licenseNumber: 'License Number',
+        licenseStatus: 'License Status'
+      }
+    };
+
+    return sectionFieldLabels[section]?.[fieldName] || this.formatFieldName(fieldName);
+  }
+
+  private formatFieldName(fieldName: string): string {
+    return fieldName
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^./, (char) => char.toUpperCase());
+  }
+
+  private logFormsSnapshot(context: string): void {
+    console.log(`=== Form Snapshot: ${context} ===`);
+    console.log('Section 1 form values:', this.section1Form?.value);
+    console.log('Section 2 form values:', this.section2Form?.value);
+    console.log('Section 3 form values:', this.section3Form?.value);
+    console.log('Section 4 form values:', this.section4Form?.value);
+    console.log('Section 5 form values:', this.section5Form?.value);
+  }
+
   nextSection(): void {
     const currentForm = this.getCurrentForm();
     
-    // Mark all fields as touched to show validation errors
+    console.log('=== NEXT SECTION CLICKED ===');
+    console.log('Current section:', this.currentSection);
+    console.log('Form value:', currentForm.value);
+
+    this.logFormsSnapshot(`before navigating from section ${this.currentSection}`);
+    
+    // Mark all fields as touched to trigger validation display
     Object.keys(currentForm.controls).forEach(key => {
-      currentForm.get(key)?.markAsTouched();
+      const control = currentForm.get(key);
+      if (control) {
+        control.markAsTouched();
+        control.markAsDirty();
+        control.updateValueAndValidity();
+      }
     });
     
+    // Force Angular to detect changes
+    this.cdr.detectChanges();
+    
+    console.log('Form valid?', currentForm.valid);
+    console.log('Form invalid?', currentForm.invalid);
+    
+    // Check if form is invalid
     if (currentForm.invalid) {
-      // Find which fields are invalid for debugging
       const invalidFields = Object.keys(currentForm.controls)
         .filter(key => currentForm.get(key)?.invalid)
-        .map(key => key);
-      
-      console.log('Invalid fields:', invalidFields);
-      this.error = 'Please fill in all required fields correctly';
+        .map(key => this.getFieldLabel(this.currentSection, key));
+
+      const uniqueFields = Array.from(new Set(invalidFields));
+
+      console.log('❌ INVALID FIELDS:', uniqueFields);
+
+      if (uniqueFields.length > 0) {
+        const fieldList = uniqueFields.join(', ');
+        this.error = `Please complete the following required field${uniqueFields.length > 1 ? 's' : ''}: ${fieldList}`;
+      } else if (this.currentSection === 4) {
+        this.error = 'Please answer all Financial Background questions (select Yes or No for each)';
+      } else if (this.currentSection === 5) {
+        this.error = 'Please answer the Licensing question (select Yes or No)';
+      } else {
+        this.error = 'Please fill in all required fields before continuing';
+      }
+
       window.scrollTo(0, 0);
-      return;
+      return; // STOP HERE - do not proceed
     }
     
+    // Form is valid - proceed to next section
+    console.log('Section', this.currentSection, 'is VALID - moving to next');
     this.error = '';
     if (this.currentSection < this.totalSections) {
       this.currentSection++;
+      this.cdr.detectChanges();
       window.scrollTo(0, 0);
     }
   }
@@ -226,22 +369,57 @@ export class ApaApplyComponent implements OnInit {
   }
 
   submitApplication(): void {
-    // Validate all forms
-    const allForms = [this.section1Form, this.section2Form, this.section3Form, this.section4Form, this.section5Form];
+    this.logFormsSnapshot('on submit');
+
+    // Validate all forms and find first section with errors
+    const allForms: SectionInfo[] = [
+      { form: this.section1Form, section: 1, name: 'Personal Information' },
+      { form: this.section2Form, section: 2, name: 'Recruiting Information' },
+      { form: this.section3Form, section: 3, name: 'Compliance Questions' },
+      { form: this.section4Form, section: 4, name: 'Financial Background' },
+      { form: this.section5Form, section: 5, name: 'Licensing Information' }
+    ];
+    
+    let firstErrorSection: SectionInfo | null = null;
+    let firstSectionInvalidFields: string[] = [];
     let hasErrors = false;
     
-    allForms.forEach(form => {
-      if (form.invalid) {
-        Object.keys(form.controls).forEach(key => {
-          form.get(key)?.markAsTouched();
-        });
+    allForms.forEach(formObj => {
+      // Mark controls as touched before checking validity
+      Object.keys(formObj.form.controls).forEach(key => {
+        formObj.form.get(key)?.markAsTouched();
+      });
+      formObj.form.updateValueAndValidity();
+
+      if (formObj.form.invalid) {
         hasErrors = true;
+
+        // Track first section with errors
+        if (!firstErrorSection) {
+          firstErrorSection = formObj;
+
+          // Collect human-readable field labels for the error message
+          const invalidFields = Object.keys(formObj.form.controls)
+            .filter(key => formObj.form.get(key)?.invalid)
+            .map(key => this.getFieldLabel(formObj.section, key));
+
+          firstSectionInvalidFields = Array.from(new Set(invalidFields));
+
+          console.log(`Section ${formObj.section} (${formObj.name}) has invalid fields:`, firstSectionInvalidFields);
+        }
       }
     });
 
-    if (hasErrors) {
-      this.error = 'Please complete all required sections';
-      this.currentSection = 1; // Go back to first section with errors
+    if (hasErrors && firstErrorSection) {
+      const targetSection = firstErrorSection as SectionInfo;
+      if (firstSectionInvalidFields.length > 0) {
+        const fieldList = firstSectionInvalidFields.join(', ');
+        this.error = `Please complete the following required field${firstSectionInvalidFields.length > 1 ? 's' : ''}: ${fieldList}`;
+      } else {
+        this.error = `Please complete all required fields in ${targetSection.name}`;
+      }
+      this.currentSection = targetSection.section;
+      window.scrollTo(0, 0);
       return;
     }
 
@@ -249,6 +427,11 @@ export class ApaApplyComponent implements OnInit {
     this.error = '';
 
     const applicationData = this.buildApplicationData();
+    
+    // Debug: Log form values before submission
+    console.log('Section 4 Form Values:', this.section4Form.value);
+    console.log('Section 5 Form Values:', this.section5Form.value);
+    console.log('Application Data being submitted:', JSON.stringify(applicationData, null, 2));
 
     this.publicService.submitAPAApplication(applicationData).subscribe({
       next: (response) => {
@@ -303,7 +486,7 @@ export class ApaApplyComponent implements OnInit {
       recruitingInfo: {
         recruiterFullName: s2.recruiterFullName,
         recruiterAgentId: s2.recruiterAgentId,
-        recruiterContact: s2.recruiterContact,
+        recruiterContact: s2.recruiterEmail || s2.recruiterPhone,
         uplineLeaderName: s2.uplineLeaderName,
         teamName: s2.teamName,
         referralCode: this.referralCode

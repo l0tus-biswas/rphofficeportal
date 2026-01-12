@@ -65,4 +65,12 @@ export class PublicService {
   completePayment(applicationId: string, paymentData: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/complete-payment`, paymentData);
   }
+
+  resendDocuSign(applicationId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/resend-docusign`, {});
+  }
+
+  checkPendingApplication(email: string, referralCode: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/public/check-pending-application?email=${email}&ref=${referralCode}`);
+  }
 }

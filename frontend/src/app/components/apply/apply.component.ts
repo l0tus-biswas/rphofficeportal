@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicService } from '../../services/public.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
@@ -26,6 +26,10 @@ export class ApplyComponent implements OnInit {
   recruiterName = '';
   invalidReferral = false;
   branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  showInstructions = false;
+  docusignUrl = '';
+  isPendingSignature = false;
+  existingApplicationId = '';
   
   // For file uploads in section 3
   complianceFiles: Map<string, File> = new Map();
@@ -50,6 +54,17 @@ export class ApplyComponent implements OnInit {
     
     this.initializeForms();
     this.loadReferralInfo();
+    this.checkExistingApplication();
+  }
+
+  // Custom validator for boolean radio buttons (Yes/No)
+  private requiredBooleanValidator(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+    // Must be explicitly true or false, not null, undefined, or empty string
+    if (value !== true && value !== false) {
+      return { required: true };
+    }
+    return null;
   }
 
   initializeForms(): void {
@@ -103,16 +118,16 @@ export class ApplyComponent implements OnInit {
 
     // Section 4: Financial
     this.section4Form = this.formBuilder.group({
-      unsatisfiedJudgments: [null],
-      unsatisfiedLiens: [null],
-      bankruptcyFiled: [null],
+      unsatisfiedJudgments: [null, this.requiredBooleanValidator.bind(this)],
+      unsatisfiedLiens: [null, this.requiredBooleanValidator.bind(this)],
+      bankruptcyFiled: [null, this.requiredBooleanValidator.bind(this)],
       bankruptcyChapter: [''],
       bankruptcyStatus: ['']
     });
 
     // Section 5: Licensing
     this.section5Form = this.formBuilder.group({
-      currentlyLicensed: [null],
+      currentlyLicensed: [null, this.requiredBooleanValidator.bind(this)],
       licenseLife: [false],
       licenseHealth: [false],
       licenseOther: [false],
@@ -174,6 +189,28 @@ export class ApplyComponent implements OnInit {
     });
   }
 
+  checkExistingApplication(): void {
+    // Check if user has an existing application with pending signature
+    // Will be triggered when email is entered
+    this.section1Form.get('email')?.valueChanges.subscribe(email => {
+      if (email && email.includes('@') && this.referralCode) {
+        this.publicService.checkPendingApplication(email, this.referralCode).subscribe({
+          next: (response: any) => {
+            if (response.application && response.application.status === 'pending_signature') {
+              this.isPendingSignature = true;
+              this.existingApplicationId = response.application._id;
+              this.docusignUrl = response.application.docusignUrl || '';
+              console.log('Found pending signature application:', this.existingApplicationId);
+            }
+          },
+          error: (err) => {
+            console.log('No existing application found or error:', err);
+          }
+        });
+      }
+    });
+  }
+
   loadReferralInfo(): void {
     this.referralCode = this.route.snapshot.queryParams['ref'] || '';
     if (this.referralCode) {
@@ -215,6 +252,12 @@ export class ApplyComponent implements OnInit {
 
   nextSection(): void {
     const currentForm = this.getCurrentForm();
+    
+    console.log('=== NEXT SECTION CLICKED ===');
+    console.log('Current section:', this.currentSection);
+    console.log('Form value:', currentForm.value);
+    
+    this.logFormsSnapshot(`before navigating from section ${this.currentSection}`);
     
     // Mark all fields as touched to show validation errors
     Object.keys(currentForm.controls).forEach(key => currentForm.get(key)?.markAsTouched());
@@ -288,6 +331,15 @@ export class ApplyComponent implements OnInit {
     return fieldLabels[fieldName] || fieldName;
   }
 
+  private logFormsSnapshot(context: string): void {
+    console.log(`=== Form Snapshot: ${context} ===`);
+    console.log('Section 1 form values:', this.section1Form?.value);
+    console.log('Section 2 form values:', this.section2Form?.getRawValue());
+    console.log('Section 3 form values:', this.section3Form?.value);
+    console.log('Section 4 form values:', this.section4Form?.value);
+    console.log('Section 5 form values:', this.section5Form?.value);
+  }
+
   previousSection(): void {
     if (this.currentSection > 1) {
       this.currentSection--;
@@ -312,6 +364,8 @@ export class ApplyComponent implements OnInit {
   }
 
   submitApplication(): void {
+    this.logFormsSnapshot('on submit');
+    
     const allForms = [
       { form: this.section1Form, section: 1, name: 'Personal Information' },
       { form: this.section2Form, section: 2, name: 'Recruiting Information' },
@@ -357,8 +411,9 @@ export class ApplyComponent implements OnInit {
       next: (response) => {
         this.loading = false;
         if (response.docusignUrl) {
-          alert('Application submitted! Redirecting to DocuSign to sign the APA agreement...');
-          window.location.href = response.docusignUrl;
+          // Show instructions before redirecting
+          this.error = '';
+          this.showSigningInstructions(response.docusignUrl);
         } else {
           this.router.navigate(['/application-submitted'], { 
             queryParams: { applicationId: response.applicationId } 
@@ -446,5 +501,49 @@ export class ApplyComponent implements OnInit {
 
   get progressPercentage(): number {
     return (this.currentSection / this.totalSections) * 100;
+  }
+
+  showSigningInstructions(url: string): void {
+    this.docusignUrl = url;
+    this.showInstructions = true;
+    window.scrollTo(0, 0);
+  }
+
+  proceedToDocuSign(): void {
+    console.log('Proceeding to DocuSign URL:', this.docusignUrl);
+    if (this.docusignUrl) {
+      window.location.href = this.docusignUrl;
+    } else {
+      alert('DocuSign URL not available. Please contact support.');
+    }
+  }
+
+  resumeSigning(): void {
+    console.log('Resuming signing for application:', this.existingApplicationId);
+    if (this.docusignUrl) {
+      // If we have the URL, redirect directly
+      window.location.href = this.docusignUrl;
+    } else if (this.existingApplicationId) {
+      // Otherwise, request a new signing URL
+      this.loading = true;
+      this.publicService.resendDocuSign(this.existingApplicationId).subscribe({
+        next: (response: any) => {
+          this.loading = false;
+          console.log('DocuSign resend response:', response);
+          if (response.signingUrl) {
+            window.location.href = response.signingUrl;
+          } else {
+            this.error = 'Unable to generate signing link. Please contact support.';
+          }
+        },
+        error: (err) => {
+          this.loading = false;
+          console.error('Error resending DocuSign:', err);
+          this.error = 'Failed to generate signing link. Please try again or contact support.';
+        }
+      });
+    } else {
+      this.error = 'Application information not available. Please contact support.';
+    }
   }
 }
