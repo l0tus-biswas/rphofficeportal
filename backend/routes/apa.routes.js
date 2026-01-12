@@ -675,14 +675,37 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
 // Helper functions
 async function initiateDocuSign(application) {
   try {
-    // Use real DocuSign integration if configured
-    if (process.env.DOCUSIGN_INTEGRATION_KEY && process.env.DOCUSIGN_ACCOUNT_ID) {
+    // Check if DocuSign is fully configured
+    const hasIntegrationKey = !!process.env.DOCUSIGN_INTEGRATION_KEY;
+    const hasAccountId = !!process.env.DOCUSIGN_ACCOUNT_ID;
+    const hasUserId = !!process.env.DOCUSIGN_USER_ID;
+    const hasPrivateKey = !!(process.env.DOCUSIGN_PRIVATE_KEY || process.env.DOCUSIGN_PRIVATE_KEY_PATH);
+    const hasTemplateId = !!process.env.DOCUSIGN_TEMPLATE_ID;
+    
+    console.log('=== DocuSign Configuration Check ===');
+    console.log('Integration Key:', hasIntegrationKey ? 'SET' : 'MISSING');
+    console.log('Account ID:', hasAccountId ? 'SET' : 'MISSING');
+    console.log('User ID:', hasUserId ? 'SET' : 'MISSING');
+    console.log('Private Key:', hasPrivateKey ? 'SET' : 'MISSING');
+    console.log('Template ID:', hasTemplateId ? 'SET' : 'MISSING');
+    
+    // Use real DocuSign integration if ALL required variables are configured
+    if (hasIntegrationKey && hasAccountId && hasUserId && hasPrivateKey && hasTemplateId) {
+      console.log('✓ DocuSign fully configured - Creating real envelope');
       console.log('Creating DocuSign envelope for application:', application._id);
       const result = await createAPAEnvelope(application);
+      console.log('DocuSign envelope created successfully:', result.envelopeId);
       return result; // Returns { envelopeId, signingUrl, status }
     } else {
       // Fallback to mock for development
-      console.warn('DocuSign not configured - using mock signing page');
+      console.warn('⚠ DocuSign NOT fully configured - using mock signing page');
+      console.warn('Missing configuration(s):');
+      if (!hasIntegrationKey) console.warn('  - DOCUSIGN_INTEGRATION_KEY');
+      if (!hasAccountId) console.warn('  - DOCUSIGN_ACCOUNT_ID');
+      if (!hasUserId) console.warn('  - DOCUSIGN_USER_ID');
+      if (!hasPrivateKey) console.warn('  - DOCUSIGN_PRIVATE_KEY or DOCUSIGN_PRIVATE_KEY_PATH');
+      if (!hasTemplateId) console.warn('  - DOCUSIGN_TEMPLATE_ID');
+      
       const mockUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
       return {
         envelopeId: 'MOCK_' + Date.now(),
@@ -692,6 +715,7 @@ async function initiateDocuSign(application) {
     }
   } catch (error) {
     console.error('DocuSign initiation error:', error);
+    console.error('Error details:', error.response?.body || error.message);
     throw new Error('Failed to initiate document signing: ' + error.message);
   }
 }
