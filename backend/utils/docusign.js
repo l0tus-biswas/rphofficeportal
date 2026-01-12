@@ -195,7 +195,7 @@ async function createAPAEnvelope(application) {
     // Get recipient view (signing URL) for embedded signing
     // If you want email-based signing only, skip this part
     const viewRequest = new docusign.RecipientViewRequest();
-    const backendUrl = process.env.API_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
     viewRequest.returnUrl = `${backendUrl}/api/public/apa-application/${application._id}/docusign-return`;
     viewRequest.authenticationMethod = 'none';
     viewRequest.email = signer.email;

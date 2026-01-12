@@ -108,6 +108,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
         <div class="footer">
           <p>© 2025 ${branding.appName}. All rights reserved.</p>
           <p>If you have any questions, please contact our support team.</p>
+          <p><a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a></p>
         </div>
       </div>
     </body>
@@ -164,6 +165,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
         </div>
         <div class="footer">
           <p>© 2025 ${branding.appName}. All rights reserved.</p>
+          <p><a href="${process.env.APP_URL}" style="color: #2196F3; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a></p>
         </div>
       </div>
     </body>

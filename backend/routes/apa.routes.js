@@ -774,6 +774,12 @@ async function sendApplicationConfirmationEmail(application, docusignUrl) {
         <span style="color: #007bff; word-break: break-all;">${docusignUrl}</span></p>
         
         <p style="color: #666; font-size: 14px;">If you have any questions, please contact your recruiter.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+        <p style="text-align: center; color: #999; font-size: 12px;">
+          &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
+          <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
+        </p>
       </div>
     `
   });
@@ -798,6 +804,11 @@ async function sendPaymentLinkEmail(application) {
         <li>Pay the one-time onboarding fee (or use code LICENSED if already licensed)</li>
         <li>Set up recurring monthly CRM access fee ($25/month)</li>
       </ul>
+      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+      <p style="text-align: center; color: #999; font-size: 12px;">
+        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
+        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
+      </p>
     `
   });
 }
@@ -824,6 +835,11 @@ async function sendWelcomeEmail(user, password) {
         <li>Training materials</li>
         <li>Downline tracking</li>
       </ul>
+      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+      <p style="text-align: center; color: #999; font-size: 12px;">
+        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
+        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
+      </p>
     `
   });
 }
