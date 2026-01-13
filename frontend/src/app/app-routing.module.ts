@@ -32,11 +32,13 @@ import { AdminApaListComponent } from './components/admin/admin-apa-list/admin-a
 import { AdminApaDetailComponent } from './components/admin/admin-apa-detail/admin-apa-detail.component';
 import { TranslationComponent } from './components/user/translation.component';
 import { NotificationsComponent } from './components/user/notifications.component';
+import { ApplicationSuccessComponent } from './components/apply/application-success.component';
 
 const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   { path: 'apply', component: ApplyComponent },
+  { path: 'application-success', component: ApplicationSuccessComponent },
   { path: 'forgot-password', component: ForgotPasswordComponent },
   { path: 'reset-password', component: ResetPasswordComponent },
   { 

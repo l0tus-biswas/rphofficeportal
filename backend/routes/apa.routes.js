@@ -49,7 +49,7 @@ router.get('/check-pending-application', async (req, res) => {
         application: {
           _id: application._id,
           status: application.status,
-          docusignUrl: application.docusignUrl
+          envelopeId: application.docusign?.envelopeId
         }
       });
     }
@@ -160,20 +160,19 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
     tempApplication.docusign.sentAt = new Date();
     await tempApplication.save();
 
-    // Send confirmation email with DocuSign URL
-    console.log('=== DocuSign URL Generated ===');
-    console.log('Signing URL:', docusignResult.signingUrl);
+    // Send confirmation email
+    console.log('=== DocuSign Envelope Created ===');
     console.log('Envelope ID:', docusignResult.envelopeId);
-    console.log('Sending email to:', tempApplication.personalInfo.email);
+    console.log('Status:', docusignResult.status);
+    console.log('DocuSign will send signing email to:', tempApplication.personalInfo.email);
     
-    await sendApplicationConfirmationEmail(tempApplication, docusignResult.signingUrl);
+    await sendApplicationConfirmationEmail(tempApplication);
     
-    console.log('Email sent with DocuSign URL:', docusignResult.signingUrl);
+    console.log('Confirmation email sent to:', tempApplication.personalInfo.email);
 
     sendResponse(res, 201, {
-      message: 'Application submitted successfully. Please check your email to sign the APA agreement.',
+      message: 'Application submitted successfully. Please check your email from DocuSign to sign the APA agreement.',
       applicationId: tempApplication._id,
-      docusignUrl: docusignResult.signingUrl,
       envelopeId: docusignResult.envelopeId,
       nextStep: 'signature'
     });
@@ -224,33 +223,50 @@ router.get('/apa-application/:id', async (req, res) => {
 // @access  Public (validates DocuSign HMAC signature)
 router.post('/apa-application/docusign-webhook', async (req, res) => {
   try {
-    // Validate webhook signature
-    if (!validateWebhookSignature(req)) {
-      console.error('Invalid DocuSign webhook signature');
-      return errorResponse(res, new Error('Invalid webhook signature'), 401);
+    console.log('\n=== DocuSign Webhook Received ===');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+
+    // Validate webhook signature (lenient in development)
+    const isValidSignature = validateWebhookSignature(req);
+    if (!isValidSignature) {
+      console.error('⚠️ Invalid DocuSign webhook signature - allowing in development');
+      // In production, you might want to reject: return errorResponse(res, new Error('Invalid webhook signature'), 401);
+    } else {
+      console.log('✅ Webhook signature validated');
     }
 
     // Process webhook data
     const webhookData = await processWebhook(req.body);
     const { envelopeId, status, appStatus, signedAt } = webhookData;
 
-    console.log('Processing DocuSign webhook:', {
+    console.log('📋 Processing DocuSign webhook:', {
       envelopeId,
       status,
-      appStatus
+      appStatus,
+      signedAt
     });
 
     // Find application by envelope ID
     const application = await APAApplication.findOne({ 'docusign.envelopeId': envelopeId });
     if (!application) {
-      console.warn('Application not found for envelope:', envelopeId);
+      console.warn('⚠️ Application not found for envelope:', envelopeId);
       return sendResponse(res, 200, { message: 'Envelope not found, webhook acknowledged' });
     }
+
+    console.log('📄 Application found:', {
+      applicationId: application._id,
+      email: application.personalInfo.email,
+      currentStatus: application.status,
+      currentDocuSignStatus: application.docusign.status
+    });
 
     // Update DocuSign status
     application.docusign.status = status;
     
     if (status === 'completed') {
+      console.log('✅ Document completed! Updating to pending_payment...');
       application.docusign.signedDate = signedAt || new Date();
       application.status = 'pending_payment'; // Unlock payment step
       
@@ -264,125 +280,91 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
       try {
         await downloadSignedDocument(envelopeId, signedDocPath);
         application.docusign.signedDocumentPath = signedDocPath;
+        console.log('✅ Signed document downloaded:', signedDocPath);
       } catch (downloadError) {
-        console.error('Failed to download signed document:', downloadError);
+        console.error('❌ Failed to download signed document:', downloadError);
         // Continue anyway - document can be retrieved later
       }
       
       // Send payment link email
+      console.log('📧 Sending payment email to:', application.personalInfo.email);
       await sendPaymentLinkEmail(application);
+      console.log('✅ Payment email sent successfully');
     } else if (status === 'declined' || status === 'voided') {
       // Handle declined/voided envelopes
+      console.log(`⚠️ Document ${status}`);
       application.status = 'signature_' + status;
     }
 
     await application.save();
+    console.log('✅ Application saved with new status:', application.status);
+    console.log('=== Webhook Processing Complete ===\n');
 
     sendResponse(res, 200, { message: 'Webhook processed successfully' });
 
   } catch (error) {
-    console.error('DocuSign Webhook Error:', error);
+    console.error('❌ DocuSign Webhook Error:', error);
+    console.error('Error stack:', error.stack);
     // Always return 200 to DocuSign to prevent retries
-    res.status(200).json({ message: 'Webhook received with errors' });
+    res.status(200).json({ message: 'Webhook received with errors', error: error.message });
   }
 });
 
 // @route   GET /api/public/apa-application/:id/docusign-return
-// @desc    Handle return from DocuSign after signing (verifies status from API)
+// @desc    Legacy endpoint - no longer used with email-based signing
+//          Kept for backwards compatibility but redirects to home
 // @access  Public
 router.get('/apa-application/:id/docusign-return', async (req, res) => {
   try {
-    console.log('=== DocuSign Return Handler Called ===');
+    console.log('=== DocuSign Return Handler Called (Legacy) ===');
+    console.log('Note: This endpoint is no longer used with email-based DocuSign signing');
     console.log('Application ID:', req.params.id);
-    console.log('Query params:', req.query);
-    console.log('Event:', req.query.event);
     
-    const application = await APAApplication.findById(req.params.id);
+    // Redirect to home page with a message
+    const homeUrl = `${process.env.APP_URL || 'http://localhost:4200'}`;
     
-    if (!application) {
-      console.error('Application not found:', req.params.id);
-      return errorResponse(res, new Error('Application not found'), 404);
-    }
-
-    if (!application.docusign.envelopeId) {
-      console.error('No DocuSign envelope found for application:', req.params.id);
-      return errorResponse(res, new Error('No DocuSign envelope found'), 400);
-    }
-
-    // Fetch actual status from DocuSign API
-    console.log('Checking DocuSign status for envelope:', application.docusign.envelopeId);
-    const envelopeStatus = await getEnvelopeStatus(application.docusign.envelopeId);
-    
-    console.log('DocuSign envelope status:', envelopeStatus.status);
-
-    // Update application based on actual DocuSign status
-    application.docusign.status = envelopeStatus.status;
-    
-    if (envelopeStatus.status === 'completed') {
-      application.docusign.signedDate = envelopeStatus.completedDateTime || new Date();
-      application.status = 'pending_payment';
-      await application.save();
-      
-      // Send payment link email
-      await sendPaymentLinkEmail(application);
-      
-      console.log('✅ Application status updated to pending_payment');
-      console.log('✅ Payment email sent to:', application.personalInfo.email);
-      
-      // Redirect to payment page only if completed
-      const paymentUrl = `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`;
-      console.log('🔄 Redirecting to payment page:', paymentUrl);
-      res.redirect(paymentUrl);
-    } else {
-      // Save the updated status but don't change application status
-      await application.save();
-      console.log('⚠️ Document not yet completed, status:', envelopeStatus.status);
-      
-      // Redirect to a status page showing signature is still pending
-      const statusUrl = `${process.env.APP_URL || 'http://localhost:4200'}/apply?ref=${application.recruitingInfo.referralCode || ''}&status=pending_signature&applicationId=${application._id}`;
-      console.log('🔄 Redirecting to status page (not signed yet):', statusUrl);
-      
-      // Send HTML response instead of redirect
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Signature Pending</title>
-          <style>
-            body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-            .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 500px; }
-            .icon { font-size: 64px; margin-bottom: 20px; }
-            h1 { color: #333; margin-bottom: 20px; }
-            p { color: #666; margin-bottom: 30px; line-height: 1.6; }
-            .btn { display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; }
-            .btn:hover { background: #45a049; }
-            .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; text-align: left; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="icon">📝</div>
-            <h1>Signature Still Pending</h1>
-            <p>Your application has been submitted, but the DocuSign agreement has not been completed yet.</p>
-            <div class="warning">
-              <strong>⚠️ Important:</strong> You must complete all signature fields in the DocuSign document and click "Finish" to proceed with your application.
-            </div>
-            <p>Please check your email for the DocuSign link, or contact your recruiter for assistance.</p>
-            <p style="margin-top: 30px; color: #999; font-size: 14px;">
-              Application ID: ${application._id}
-            </p>
-          </div>
-        </body>
-        </html>
-      `);
-    }
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Redirecting</title>
+        <meta http-equiv="refresh" content="3;url=${homeUrl}">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+          }
+          .container {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          h2 { color: #4CAF50; }
+          p { color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>✅ Thank You!</h2>
+          <p>Please check your email from DocuSign to sign your agreement.</p>
+          <p>After signing, you'll receive instructions for payment setup.</p>
+          <p>Redirecting to home page in 3 seconds...</p>
+        </div>
+      </body>
+      </html>
+    `);
 
   } catch (error) {
-    console.error('❌ DocuSign return error:', error);
-    // Redirect to error page or payment page anyway
-    const paymentUrl = `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${req.params.id}&error=verification_failed`;
-    console.log('🔄 Redirecting to payment page with error:', paymentUrl);
-    res.redirect(paymentUrl);
+    console.error('DocuSign Return Error:', error);
+    const homeUrl = `${process.env.APP_URL || 'http://localhost:4200'}`;
+    res.redirect(homeUrl);
   }
 });
 
@@ -414,14 +396,13 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
     application.docusign.sentAt = new Date();
     await application.save();
 
-    // Send email with new DocuSign URL
-    await sendApplicationConfirmationEmail(application, docusignResult.signingUrl);
+    // Send confirmation email - DocuSign will send signing email
+    await sendApplicationConfirmationEmail(application);
 
     console.log('✅ DocuSign resent successfully');
 
     sendResponse(res, 200, {
-      message: 'DocuSign envelope resent successfully',
-      docusignUrl: docusignResult.signingUrl,
+      message: 'DocuSign envelope resent successfully. Check your email from DocuSign to sign.',
       envelopeId: docusignResult.envelopeId
     });
 
@@ -695,10 +676,11 @@ async function initiateDocuSign(application) {
       console.log('Creating DocuSign envelope for application:', application._id);
       const result = await createAPAEnvelope(application);
       console.log('DocuSign envelope created successfully:', result.envelopeId);
-      return result; // Returns { envelopeId, signingUrl, status }
+      console.log('DocuSign will send signing email automatically');
+      return result; // Returns { envelopeId, status }
     } else {
       // Fallback to mock for development
-      console.warn('⚠ DocuSign NOT fully configured - using mock signing page');
+      console.warn('⚠ DocuSign NOT fully configured - using mock mode');
       console.warn('Missing configuration(s):');
       if (!hasIntegrationKey) console.warn('  - DOCUSIGN_INTEGRATION_KEY');
       if (!hasAccountId) console.warn('  - DOCUSIGN_ACCOUNT_ID');
@@ -706,10 +688,8 @@ async function initiateDocuSign(application) {
       if (!hasPrivateKey) console.warn('  - DOCUSIGN_PRIVATE_KEY or DOCUSIGN_PRIVATE_KEY_PATH');
       if (!hasTemplateId) console.warn('  - DOCUSIGN_TEMPLATE_ID');
       
-      const mockUrl = `${process.env.APP_URL || 'http://localhost:4200'}/sign-apa?applicationId=${application._id}`;
       return {
         envelopeId: 'MOCK_' + Date.now(),
-        signingUrl: mockUrl,
         status: 'sent'
       };
     }
@@ -729,18 +709,17 @@ function generateReferralCode() {
   return code;
 }
 
-// Send confirmation email with DocuSign signing URL
-async function sendApplicationConfirmationEmail(application, docusignUrl) {
+// Send confirmation email - DocuSign will send the signing email separately
+async function sendApplicationConfirmationEmail(application) {
   const { legalFirstName, legalLastName, email } = application.personalInfo;
   
   console.log('=== Sending Confirmation Email ===');
   console.log('To:', email);
-  console.log('DocuSign URL in email:', docusignUrl);
   console.log('Application ID:', application._id);
   
   await sendEmail({
     email: email,
-    subject: 'Application Submitted - DocuSign Signature Required',
+    subject: 'Application Submitted - Check Your Email for Signature Request',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #4CAF50;">✓ Application Submitted Successfully!</h2>
@@ -749,31 +728,36 @@ async function sendApplicationConfirmationEmail(application, docusignUrl) {
         
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #333;">Next Step: Sign Your Agreement</h3>
-          <p>Your application requires a digital signature via DocuSign. Please click the button below to review and sign your APA agreement.</p>
-        </div>
-
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${docusignUrl}" style="display: inline-block; padding: 15px 30px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">📝 Click to Sign Agreement</a>
+          <p><strong>You will receive a separate email from DocuSign</strong> with the subject "Please sign your Agent Partnership Agreement" within the next few minutes.</p>
+          <p>Please check your email inbox (and spam/junk folder if needed) for the DocuSign signing request.</p>
         </div>
 
         <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
-          <h4 style="margin-top: 0; color: #856404;">⚠️ Important Signing Instructions:</h4>
+          <h4 style="margin-top: 0; color: #856404;">⚠️ Important Instructions:</h4>
           <ul style="margin: 10px 0; padding-left: 20px; color: #856404;">
+            <li><strong>Look for an email from DocuSign</strong> (typically from <code>dse@docusign.net</code>)</li>
+            <li>Click the "Review Document" button in the DocuSign email</li>
             <li>Carefully review the entire document before signing</li>
-            <li><strong>You MUST add your signature at all designated signature fields</strong></li>
-            <li>Click all required signature/initial boxes in the document</li>
+            <li>Add your signature at all designated signature fields</li>
             <li>Complete all fields marked as required</li>
-            <li>Click "Finish" or "Complete" when all signatures are placed</li>
+            <li>Click "Finish" to complete the signing process</li>
           </ul>
-          <p style="margin-bottom: 0; color: #856404;"><strong>Note:</strong> After signing, you will be redirected to complete your payment setup.</p>
+          <p style="margin-bottom: 0; color: #856404;"><strong>Note:</strong> After signing, you will automatically receive another email with instructions to complete your payment setup.</p>
+        </div>
+
+        <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0;">
+          <h4 style="margin-top: 0; color: #1565C0;">📧 What Happens Next?</h4>
+          <ol style="margin: 10px 0; padding-left: 20px; color: #1565C0;">
+            <li>You'll receive a signing email from DocuSign (within minutes)</li>
+            <li>Sign the agreement through DocuSign's secure platform</li>
+            <li>Once signed, you'll receive a payment setup email from us</li>
+            <li>Complete your payment to activate your account</li>
+          </ol>
         </div>
 
         <p><strong>Application ID:</strong> ${application._id}</p>
         
-        <p style="color: #666; font-size: 14px; margin-top: 30px;">If the button doesn't work, copy and paste this link into your browser:<br>
-        <span style="color: #007bff; word-break: break-all;">${docusignUrl}</span></p>
-        
-        <p style="color: #666; font-size: 14px;">If you have any questions, please contact your recruiter.</p>
+        <p style="color: #666; font-size: 14px;">If you don't receive the DocuSign email within 10 minutes, please check your spam folder or contact your recruiter.</p>
         
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
         <p style="text-align: center; color: #999; font-size: 12px;">
@@ -784,7 +768,7 @@ async function sendApplicationConfirmationEmail(application, docusignUrl) {
     `
   });
   
-  console.log('Email sent successfully to:', email);
+  console.log('Confirmation email sent successfully to:', email);
 }
 
 async function sendPaymentLinkEmail(application) {

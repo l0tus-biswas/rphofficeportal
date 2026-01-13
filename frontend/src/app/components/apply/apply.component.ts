@@ -410,15 +410,14 @@ export class ApplyComponent implements OnInit {
     this.publicService.submitAPAApplication(this.buildApplicationData()).subscribe({
       next: (response) => {
         this.loading = false;
-        if (response.docusignUrl) {
-          // Show instructions before redirecting
-          this.error = '';
-          this.showSigningInstructions(response.docusignUrl);
-        } else {
-          this.router.navigate(['/application-submitted'], { 
-            queryParams: { applicationId: response.applicationId } 
-          });
-        }
+        // Navigate to success page with applicant info
+        const applicantName = `${this.section1Form.value.legalFirstName} ${this.section1Form.value.legalLastName}`;
+        this.router.navigate(['/application-success'], { 
+          queryParams: { 
+            applicationId: response.applicationId,
+            name: applicantName
+          } 
+        });
       },
       error: (error) => {
         this.loading = false;

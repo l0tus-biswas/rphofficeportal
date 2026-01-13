@@ -155,8 +155,9 @@ async function authenticateWithJWT_legacy() {
 
 /**
  * Create and send DocuSign envelope for APA agreement
+ * Email will be sent automatically by DocuSign - no embedded signing
  * @param {Object} application - APAApplication document
- * @returns {Promise<Object>} Envelope details (envelopeId, signingUrl, status)
+ * @returns {Promise<Object>} Envelope details (envelopeId, status)
  */
 async function createAPAEnvelope(application) {
   try {
@@ -169,51 +170,35 @@ async function createAPAEnvelope(application) {
 
     // Create envelope definition
     const envelope = new docusign.EnvelopeDefinition();
-    envelope.emailSubject = 'Please sign the Agent Partnership Agreement';
+    envelope.emailSubject = 'Please sign your Agent Partnership Agreement';
+    envelope.emailBlurb = 'Please review and sign the Agent Partnership Agreement to continue with your application. Once signed, you will receive instructions for payment setup.';
     envelope.templateId = process.env.DOCUSIGN_TEMPLATE_ID; // APA template created in DocuSign
 
-    // Create signer
+    // Create signer for remote (email-based) signing
     const signer = new docusign.TemplateRole();
     signer.email = application.personalInfo.email;
     signer.name = `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`;
     signer.roleName = 'Applicant'; // Must match role name in DocuSign template
-    signer.clientUserId = application._id.toString(); // For embedded signing (optional)
+    // NOTE: No clientUserId - this enables remote signing via email
 
     // Add custom fields to pre-fill template
     signer.tabs = createSignerTabs(application);
 
     envelope.templateRoles = [signer];
-    envelope.status = 'sent'; // Send immediately
+    envelope.status = 'sent'; // Send immediately - DocuSign will email the signer
 
     // Create the envelope
     const results = await envelopesApi.createEnvelope(accountId, {
       envelopeDefinition: envelope
     });
 
-    console.log('DocuSign Envelope Created:', results.envelopeId);
-
-    // Get recipient view (signing URL) for embedded signing
-    // If you want email-based signing only, skip this part
-    const viewRequest = new docusign.RecipientViewRequest();
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
-    viewRequest.returnUrl = `${backendUrl}/public/apa-application/${application._id}/docusign-return`;
-    viewRequest.authenticationMethod = 'none';
-    viewRequest.email = signer.email;
-    viewRequest.userName = signer.name;
-    viewRequest.clientUserId = signer.clientUserId;
-
-    const viewResults = await envelopesApi.createRecipientView(accountId, results.envelopeId, {
-      recipientViewRequest: viewRequest
-    });
-
-    console.log('=== DocuSign Signing URL Created ===');
+    console.log('=== DocuSign Envelope Created & Email Sent ===');
     console.log('Envelope ID:', results.envelopeId);
-    console.log('Signing URL:', viewResults.url);
-    console.log('URL Length:', viewResults.url?.length);
+    console.log('Recipient Email:', signer.email);
+    console.log('Status: Email will be sent by DocuSign');
 
     return {
       envelopeId: results.envelopeId,
-      signingUrl: viewResults.url,
       status: 'sent'
     };
   } catch (error) {
