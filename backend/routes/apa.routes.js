@@ -183,6 +183,19 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
   }
 });
 
+// @route   GET /api/public/apa-application/docusign-webhook
+// @desc    Info page for webhook endpoint (for browser access)
+// @access  Public
+router.get('/apa-application/docusign-webhook', async (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'DocuSign webhook endpoint is active',
+    info: 'This is a POST endpoint for DocuSign webhooks. It should not be accessed directly via browser.',
+    status: 'Webhook endpoint is ready to receive events from DocuSign',
+    events: ['envelope-sent', 'envelope-delivered', 'envelope-completed', 'envelope-declined', 'envelope-voided']
+  });
+});
+
 // @route   POST /api/public/apa-application/docusign-webhook
 // @desc    DocuSign webhook - handle signature completion (global endpoint)
 // @access  Public (validates DocuSign HMAC signature)
