@@ -183,41 +183,6 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
   }
 });
 
-// @route   GET /api/public/apa-application/:id
-// @desc    Get APA application status
-// @access  Public
-router.get('/apa-application/:id', async (req, res) => {
-  try {
-    const application = await APAApplication.findById(req.params.id)
-      .select('-personalInfo.ssn -adminNotes'); // Exclude sensitive data
-
-    if (!application) {
-      return errorResponse(res, new Error('Application not found'), 404);
-    }
-
-    sendResponse(res, 200, {
-      application: {
-        id: application._id,
-        status: application.status,
-        personalInfo: {
-          name: `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`,
-          email: application.personalInfo.email
-        },
-        docusignStatus: application.docusign.status,
-        paymentStatus: {
-          onboardingFeePaid: application.payment.onboardingFeePaid,
-          monthlyFeeAuthorized: application.payment.monthlyFeeAuthorized
-        },
-        submittedAt: application.submittedAt,
-        completedAt: application.completedAt
-      }
-    });
-
-  } catch (error) {
-    errorResponse(res, error);
-  }
-});
-
 // @route   POST /api/public/apa-application/docusign-webhook
 // @desc    DocuSign webhook - handle signature completion (global endpoint)
 // @access  Public (validates DocuSign HMAC signature)
@@ -228,11 +193,10 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body:', JSON.stringify(req.body, null, 2));
 
-    // Validate webhook signature (lenient in development)
+    // Lenient signature validation - allow webhooks through even if signature validation fails
     const isValidSignature = validateWebhookSignature(req);
     if (!isValidSignature) {
-      console.error('⚠️ Invalid DocuSign webhook signature - allowing in development');
-      // In production, you might want to reject: return errorResponse(res, new Error('Invalid webhook signature'), 401);
+      console.warn('⚠️ Webhook signature validation failed or not provided - allowing anyway');
     } else {
       console.log('✅ Webhook signature validated');
     }
@@ -307,6 +271,41 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
     console.error('Error stack:', error.stack);
     // Always return 200 to DocuSign to prevent retries
     res.status(200).json({ message: 'Webhook received with errors', error: error.message });
+  }
+});
+
+// @route   GET /api/public/apa-application/:id
+// @desc    Get APA application status
+// @access  Public
+router.get('/apa-application/:id', async (req, res) => {
+  try {
+    const application = await APAApplication.findById(req.params.id)
+      .select('-personalInfo.ssn -adminNotes'); // Exclude sensitive data
+
+    if (!application) {
+      return errorResponse(res, new Error('Application not found'), 404);
+    }
+
+    sendResponse(res, 200, {
+      application: {
+        id: application._id,
+        status: application.status,
+        personalInfo: {
+          name: `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`,
+          email: application.personalInfo.email
+        },
+        docusignStatus: application.docusign.status,
+        paymentStatus: {
+          onboardingFeePaid: application.payment.onboardingFeePaid,
+          monthlyFeeAuthorized: application.payment.monthlyFeeAuthorized
+        },
+        submittedAt: application.submittedAt,
+        completedAt: application.completedAt
+      }
+    });
+
+  } catch (error) {
+    errorResponse(res, error);
   }
 });
 
