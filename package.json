@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Escape Recruiting Platform - Full Stack Application",
   "scripts": {
-    "start": "cd backend && node server.js",
+    "start": "node index.js",
     "backend": "cd backend && npm start",
     "frontend": "cd frontend && npm start",
     "install-all": "cd backend && npm install && cd frontend && npm install",
     "build": "cd frontend && npm run build --configuration=production",
-    "deploy": "npm run build && cd backend && node server.js",
+    "deploy": "npm run build && node index.js",
     "dev": "cd backend && npm run dev"
   },
   "keywords": [
@@ -19,6 +19,10 @@
   ],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }

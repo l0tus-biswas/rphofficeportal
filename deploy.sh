@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# Escape Recruiting Platform - AlmaLinux Deployment Script
-# Simple deployment for same-domain setup with Nginx + PM2
+# RHP Office Portal - Production Deployment Script
+# Deploys both frontend and backend using index.js
+# Supports PM2 process management
 
 echo "========================================="
-echo "Escape Recruiting Platform Deployment"
+echo "RHP Office Portal - Production Deployment"
 echo "========================================="
 echo ""
 
