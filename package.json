@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "description": "Escape Recruiting Platform - Full Stack Application",
   "scripts": {
-    "start": "node index.js",
+    "start": "cd backend && node server.js",
     "backend": "cd backend && npm start",
     "frontend": "cd frontend && npm start",
     "install-all": "cd backend && npm install && cd frontend && npm install",
     "build": "cd frontend && npm run build --configuration=production",
-    "deploy": "npm run build && node index.js",
+    "deploy": "npm run build && cd backend && node server.js",
     "dev": "cd backend && npm run dev"
   },
   "keywords": [
