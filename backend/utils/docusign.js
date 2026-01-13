@@ -522,40 +522,73 @@ async function processWebhook(webhookData) {
   try {
     // DocuSign sends XML by default, you may need to configure JSON in Connect settings
     const envelopeId = webhookData.envelopeId || webhookData.data?.envelopeId;
+    const event = webhookData.event;
     const status = webhookData.status || webhookData.data?.envelopeSummary?.status;
     const recipients = webhookData.recipients || webhookData.data?.envelopeSummary?.recipients;
 
     console.log('DocuSign Webhook Received:', {
+      event,
       envelopeId,
       status,
       recipientCount: recipients?.length
     });
 
-    // Map DocuSign status to our application status
+    // Map DocuSign event/status to our application status
     let appStatus = 'pending_signature';
     let signedAt = null;
+    let docuSignStatus = 'sent';
 
-    switch (status) {
-      case 'completed':
-        appStatus = 'pending_payment';
-        signedAt = new Date();
-        break;
-      case 'declined':
-        appStatus = 'declined';
-        break;
-      case 'voided':
-        appStatus = 'voided';
-        break;
-      case 'sent':
-        appStatus = 'pending_signature';
-        break;
-      default:
-        appStatus = 'pending_signature';
+    // Handle event-based webhooks (e.g., "envelope-completed", "envelope-sent")
+    if (event) {
+      switch (event) {
+        case 'envelope-completed':
+          docuSignStatus = 'completed';
+          appStatus = 'pending_payment';
+          signedAt = new Date();
+          break;
+        case 'envelope-declined':
+          docuSignStatus = 'declined';
+          appStatus = 'declined';
+          break;
+        case 'envelope-voided':
+          docuSignStatus = 'voided';
+          appStatus = 'voided';
+          break;
+        case 'envelope-sent':
+        case 'envelope-delivered':
+          docuSignStatus = 'sent';
+          appStatus = 'pending_signature';
+          break;
+        default:
+          docuSignStatus = 'sent';
+          appStatus = 'pending_signature';
+      }
+    }
+    // Handle status-based webhooks (legacy format)
+    else if (status) {
+      docuSignStatus = status;
+      switch (status) {
+        case 'completed':
+          appStatus = 'pending_payment';
+          signedAt = new Date();
+          break;
+        case 'declined':
+          appStatus = 'declined';
+          break;
+        case 'voided':
+          appStatus = 'voided';
+          break;
+        case 'sent':
+          appStatus = 'pending_signature';
+          break;
+        default:
+          appStatus = 'pending_signature';
+      }
     }
 
     return {
       envelopeId,
-      status,
+      status: docuSignStatus,
       appStatus,
       signedAt,
       recipients
