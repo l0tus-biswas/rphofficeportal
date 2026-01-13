@@ -66,6 +66,17 @@ export class PublicService {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/complete-payment`, paymentData);
   }
 
+  createCheckoutSession(applicationId: string, couponCode?: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application/create-checkout-session`, {
+      applicationId,
+      couponCode
+    });
+  }
+
+  verifyPayment(sessionId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/public/apa-application/verify-payment?session_id=${sessionId}`);
+  }
+
   resendDocuSign(applicationId: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/resend-docusign`, {});
   }

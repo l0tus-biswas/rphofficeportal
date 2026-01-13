@@ -178,7 +178,7 @@ async function createAPAEnvelope(application) {
     const signer = new docusign.TemplateRole();
     signer.email = application.personalInfo.email;
     signer.name = `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`;
-    signer.roleName = 'Applicant'; // Must match role name in DocuSign template
+    signer.roleName = 'agent'; // Must match role name in DocuSign template (NEW RHP APA AGREEMENT)
     // NOTE: No clientUserId - this enables remote signing via email
 
     // Add custom fields to pre-fill template
@@ -209,6 +209,11 @@ async function createAPAEnvelope(application) {
 
 /**
  * Create signer tabs to pre-fill template fields with application data
+ * NEW RHP APA AGREEMENT template has 3 text fields that need to be populated:
+ * 1. Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997 (page 1) - Agent full name
+ * 2. Text 712e194d-ccb6-425b-9a0d-85d0bce2684e (page 1) - Agent contact info
+ * 3. Text ab047008-8724-43f1-a3b4-c5daf1bb35c7 (page 24) - Printed name on signature page
+ * 
  * @param {Object} application - APAApplication document
  * @returns {Object} DocuSign tabs object
  */
@@ -216,169 +221,27 @@ function createSignerTabs(application) {
   const tabs = new docusign.Tabs();
   const textTabs = [];
 
-  // SECTION 1: PERSONAL INFORMATION
   const personalInfo = application.personalInfo || {};
   
-  // Name fields
-  textTabs.push(
-    createTextTab('applicant_first_name', personalInfo.legalFirstName || ''),
-    createTextTab('applicant_middle_name', personalInfo.legalMiddleName || ''),
-    createTextTab('applicant_last_name', personalInfo.legalLastName || ''),
-    createTextTab('applicant_full_name', 
-      `${personalInfo.legalFirstName || ''} ${personalInfo.legalMiddleName || ''} ${personalInfo.legalLastName || ''}`.replace(/\s+/g, ' ').trim()
-    )
-  );
-
-  // Demographics
-  textTabs.push(
-    createTextTab('applicant_gender', personalInfo.gender || ''),
-    createTextTab('applicant_dob', formatDate(personalInfo.dateOfBirth)),
-    createTextTab('applicant_ssn', personalInfo.ssn || '***-**-****')
-  );
-
-  // Contact Information
-  textTabs.push(
-    createTextTab('applicant_phone', personalInfo.mobilePhone || ''),
-    createTextTab('applicant_email', personalInfo.email || '')
-  );
-
-  // Home Address
-  if (personalInfo.homeAddress) {
-    textTabs.push(
-      createTextTab('home_street', personalInfo.homeAddress.street || ''),
-      createTextTab('home_city', personalInfo.homeAddress.city || ''),
-      createTextTab('home_state', personalInfo.homeAddress.state || ''),
-      createTextTab('home_zip', personalInfo.homeAddress.zipCode || ''),
-      createTextTab('home_address_full', formatAddressObject(personalInfo.homeAddress))
-    );
-  }
-
-  // Mailing Address (if different)
-  if (personalInfo.mailingAddress) {
-    textTabs.push(
-      createTextTab('mailing_street', personalInfo.mailingAddress.street || ''),
-      createTextTab('mailing_city', personalInfo.mailingAddress.city || ''),
-      createTextTab('mailing_state', personalInfo.mailingAddress.state || ''),
-      createTextTab('mailing_zip', personalInfo.mailingAddress.zipCode || ''),
-      createTextTab('mailing_address_full', formatAddressObject(personalInfo.mailingAddress))
-    );
-  }
-
-  // SECTION 2: RECRUITING INFORMATION
-  const recruitingInfo = application.recruitingInfo || {};
+  // Full name for the agent
+  const fullName = `${personalInfo.legalFirstName || ''} ${personalInfo.legalMiddleName || ''} ${personalInfo.legalLastName || ''}`.replace(/\s+/g, ' ').trim();
   
+  // Contact information (phone and email)
+  const contactInfo = `${personalInfo.mobilePhone || ''} | ${personalInfo.email || ''}`;
+
+  // Tab 1: Agent full name (page 1, first text field)
   textTabs.push(
-    createTextTab('recruiter_name', recruitingInfo.recruiterFullName || ''),
-    createTextTab('recruiter_agent_id', recruitingInfo.recruiterAgentId || ''),
-    createTextTab('recruiter_contact', recruitingInfo.recruiterContact || ''),
-    createTextTab('upline_leader', recruitingInfo.uplineLeaderName || ''),
-    createTextTab('team_name', recruitingInfo.teamName || ''),
-    createTextTab('referral_code', recruitingInfo.referralCode || '')
+    createTextTab('Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997', fullName)
   );
 
-  // SECTION 3: COMPLIANCE QUESTIONS
-  const compliance = application.complianceQuestions || {};
-  
-  // Previously Contracted with Other Company
-  if (compliance.previouslyContractedOther) {
-    textTabs.push(
-      createTextTab('prev_contracted_other', formatYesNo(compliance.previouslyContractedOther.answer)),
-      createTextTab('prev_contracted_other_explain', compliance.previouslyContractedOther.explanation || '')
-    );
-  }
-
-  // Felony Conviction
-  if (compliance.felonyConviction) {
-    textTabs.push(
-      createTextTab('felony_conviction', formatYesNo(compliance.felonyConviction.answer)),
-      createTextTab('felony_conviction_explain', compliance.felonyConviction.explanation || '')
-    );
-  }
-
-  // Misdemeanor Fraud
-  if (compliance.misdemeanorFraud) {
-    textTabs.push(
-      createTextTab('misdemeanor_fraud', formatYesNo(compliance.misdemeanorFraud.answer)),
-      createTextTab('misdemeanor_fraud_explain', compliance.misdemeanorFraud.explanation || '')
-    );
-  }
-
-  // Civil Action
-  if (compliance.civilAction) {
-    textTabs.push(
-      createTextTab('civil_action', formatYesNo(compliance.civilAction.answer)),
-      createTextTab('civil_action_explain', compliance.civilAction.explanation || '')
-    );
-  }
-
-  // License Denied/Revoked
-  if (compliance.licenseDenied) {
-    textTabs.push(
-      createTextTab('license_denied', formatYesNo(compliance.licenseDenied.answer)),
-      createTextTab('license_denied_explain', compliance.licenseDenied.explanation || '')
-    );
-  }
-
-  // Bond Issues
-  if (compliance.bondIssues) {
-    textTabs.push(
-      createTextTab('bond_issues', formatYesNo(compliance.bondIssues.answer)),
-      createTextTab('bond_issues_explain', compliance.bondIssues.explanation || '')
-    );
-  }
-
-  // SECTION 4: FINANCIAL BACKGROUND
-  const financial = application.financialBackground || {};
-  
+  // Tab 2: Agent contact information (page 1, second text field)
   textTabs.push(
-    createTextTab('unsatisfied_judgments', formatYesNo(financial.unsatisfiedJudgments)),
-    createTextTab('unsatisfied_liens', formatYesNo(financial.unsatisfiedLiens))
+    createTextTab('Text 712e194d-ccb6-425b-9a0d-85d0bce2684e', contactInfo)
   );
 
-  // Bankruptcy Information
-  if (financial.bankruptcy) {
-    textTabs.push(
-      createTextTab('bankruptcy_filed', formatYesNo(financial.bankruptcy.filed)),
-      createTextTab('bankruptcy_chapter', financial.bankruptcy.chapter || ''),
-      createTextTab('bankruptcy_status', financial.bankruptcy.status || '')
-    );
-  }
-
-  // SECTION 5: LICENSING STATUS
-  const licensing = application.licensingStatus || {};
-  
-  // Convert license_types array to comma-separated string
-  let licenseTypesStr = '';
-  if (licensing.licenseTypes) {
-    if (Array.isArray(licensing.licenseTypes)) {
-      licenseTypesStr = licensing.licenseTypes.join(', ');
-    } else {
-      licenseTypesStr = licensing.licenseTypes.toString();
-    }
-  }
-  
+  // Tab 3: Printed name on signature page (page 24)
   textTabs.push(
-    createTextTab('currently_licensed', formatYesNo(licensing.currentlyLicensed)),
-    createTextTab('license_types', licenseTypesStr),
-    createTextTab('license_number', licensing.licenseNumber || ''),
-    createTextTab('license_status', licensing.licenseStatus || '')
-  );
-
-  // States Licensed (array to comma-separated string)
-  let statesLicensedStr = '';
-  if (licensing.statesLicensed) {
-    if (Array.isArray(licensing.statesLicensed)) {
-      statesLicensedStr = licensing.statesLicensed.join(', ');
-    } else {
-      statesLicensedStr = licensing.statesLicensed.toString();
-    }
-  }
-  textTabs.push(createTextTab('states_licensed', statesLicensedStr));
-
-  // ADDITIONAL CONTRACT FIELDS
-  textTabs.push(
-    createTextTab('application_date', formatDate(new Date())),
-    createTextTab('application_id', application._id ? application._id.toString() : '')
+    createTextTab('Text ab047008-8724-43f1-a3b4-c5daf1bb35c7', fullName)
   );
 
   tabs.textTabs = textTabs;
@@ -387,13 +250,13 @@ function createSignerTabs(application) {
 }
 
 /**
- * Helper to create a text tab
+ * Helper to create a text tab with pre-filled value
  */
 function createTextTab(tabLabel, value) {
   const textTab = new docusign.Text();
   textTab.tabLabel = tabLabel;
   textTab.value = value || '';
-  textTab.locked = 'true'; // Make it read-only
+  textTab.locked = 'false'; // Allow editing during signing if needed
   return textTab;
 }
 

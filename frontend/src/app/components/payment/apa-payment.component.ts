@@ -21,10 +21,10 @@ export class ApaPaymentComponent implements OnInit {
   paymentForm!: FormGroup;
   branding: BrandingConfig = { appName: 'Escape', appLogo: null };
   
-  onboardingFee = 169;
+  setupFee = 179;
   monthlyFee = 25;
-  onboardingFeeWaived = false;
   couponApplied = false;
+  appliedCouponCode = '';
   
   applicantName = '';
   applicantEmail = '';
@@ -57,9 +57,6 @@ export class ApaPaymentComponent implements OnInit {
 
   initializeForm(): void {
     this.paymentForm = this.formBuilder.group({
-      cardNumber: ['4242424242424242', [Validators.required, Validators.pattern(/^\d{16}$/)]],
-      cardExpiry: ['12/25', [Validators.required, Validators.pattern(/^\d{2}\/\d{2}$/)]],
-      cardCvc: ['123', [Validators.required, Validators.pattern(/^\d{3,4}$/)]],
       couponCode: [''],
       authorizeMonthly: [false, Validators.requiredTrue]
     });
@@ -103,27 +100,27 @@ export class ApaPaymentComponent implements OnInit {
   }
 
   applyCoupon(): void {
-    const code = this.paymentForm.get('couponCode')?.value?.toUpperCase();
+    const code = this.paymentForm.get('couponCode')?.value?.trim().toUpperCase();
+    if (!code) return;
     
-    if (code === 'LICENSED') {
-      this.onboardingFeeWaived = true;
-      this.couponApplied = true;
-      this.onboardingFee = 0;
-    } else if (code) {
-      this.error = 'Invalid coupon code';
-      setTimeout(() => this.error = '', 3000);
-    }
+    // Simply mark as applied - Stripe will validate and apply discount
+    this.couponApplied = true;
+    this.appliedCouponCode = code;
+    this.paymentForm.get('couponCode')?.disable();
+    
+    // Show generic success message
+    this.error = '';
   }
 
   removeCoupon(): void {
     this.couponApplied = false;
-    this.onboardingFeeWaived = false;
-    this.onboardingFee = 169;
-    this.paymentForm.patchValue({ couponCode: '' });
+    this.appliedCouponCode = '';
+    this.paymentForm.get('couponCode')?.enable();
+    this.paymentForm.get('couponCode')?.setValue('');
   }
 
   get totalAmount(): number {
-    return this.onboardingFee + this.monthlyFee;
+    return this.setupFee + this.monthlyFee;
   }
 
   proceedToSign(): void {
@@ -150,57 +147,38 @@ export class ApaPaymentComponent implements OnInit {
   }
 
   submitPayment(): void {
-    if (this.paymentForm.invalid) {
-      Object.keys(this.paymentForm.controls).forEach(key => {
-        this.paymentForm.get(key)?.markAsTouched();
-      });
+    const authCheckbox = this.paymentForm.get('authorizeMonthly');
+    if (!authCheckbox?.value) {
+      authCheckbox?.markAsTouched();
+      this.error = 'Please authorize the monthly subscription to continue';
       return;
     }
 
     this.loading = true;
     this.error = '';
-    this.success = false;
 
-    console.log('=== Submitting Payment ===');
+    console.log('=== Creating Stripe Checkout Session ===');
     console.log('Application ID:', this.applicationId);
+    console.log('Coupon Code:', this.appliedCouponCode || 'None');
 
-    // Mock payment data
-    const paymentData = {
-      couponCode: this.couponApplied ? this.paymentForm.get('couponCode')?.value : null,
-      mockPayment: {
-        paymentIntentId: `pi_mock_${Date.now()}`,
-        amount: this.totalAmount * 100, // in cents
-        cardLast4: this.paymentForm.get('cardNumber')?.value.slice(-4)
-      }
-    };
-
-    console.log('Payment data:', paymentData);
-
-    this.publicService.completePayment(this.applicationId, paymentData).subscribe({
+    this.publicService.createCheckoutSession(this.applicationId, this.appliedCouponCode || undefined).subscribe({
       next: (response) => {
-        console.log('=== Payment Response Received ===');
-        console.log('Response:', response);
+        console.log('Checkout session created:', response);
         
-        this.loading = false;
-        this.success = true;
-        this.error = '';
-        
-        console.log('Success flag set to:', this.success);
-        console.log('Payment successful, will redirect to login in 5 seconds...');
-        
-        // Redirect to login after 5 seconds
-        setTimeout(() => {
-          console.log('Timeout triggered, navigating now...');
-          this.navigateToLogin();
-        }, 5000);
+        // Redirect to Stripe Checkout
+        if (response.url) {
+          window.location.href = response.url;
+        } else {
+          this.loading = false;
+          this.error = 'Failed to create checkout session';
+        }
       },
       error: (error) => {
-        console.error('=== Payment Error ===');
+        console.error('=== Checkout Session Error ===');
         console.error('Error details:', error);
         
         this.loading = false;
-        this.success = false;
-        this.error = error.error?.message || 'Payment failed. Please try again.';
+        this.error = error.error?.message || 'Failed to create payment session. Please try again.';
       }
     });
   }

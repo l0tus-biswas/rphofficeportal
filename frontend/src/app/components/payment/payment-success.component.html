@@ -1,0 +1,43 @@
+<div class="payment-success-container">
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-section">
+    <div class="spinner"></div>
+    <h2>Verifying your payment...</h2>
+    <p>Please wait while we process your payment and create your account.</p>
+  </div>
+
+  <!-- Success State -->
+  <div *ngIf="success && !loading" class="success-section">
+    <div class="success-icon">✓</div>
+    <h1>Payment Successful!</h1>
+    
+    <div class="success-message">
+      <p class="main-message">Thank you for your payment. Your transaction has been completed successfully.</p>
+      
+      <div class="account-info" *ngIf="accountCreated">
+        <h3>🎉 Account Created!</h3>
+        <p>Your account has been created and activated.</p>
+        <p class="email-info">
+          <strong>Email:</strong> {{ email }}
+        </p>
+        <div class="info-box">
+          <p><strong>Important:</strong> Login credentials have been sent to your email.</p>
+          <p>Please check your inbox (and spam folder) for your temporary password.</p>
+        </div>
+      </div>
+
+      <div class="redirect-info">
+        <p>Redirecting to login page in <strong>{{ redirectCountdown }}</strong> seconds...</p>
+        <button class="btn-primary" (click)="navigateToLogin()">Go to Login Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error && !loading" class="error-section">
+    <div class="error-icon">✗</div>
+    <h1>Payment Verification Failed</h1>
+    <p class="error-message">{{ error }}</p>
+    <button class="btn-secondary" routerLink="/apply">Return to Application</button>
+  </div>
+</div>

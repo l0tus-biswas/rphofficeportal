@@ -16,6 +16,10 @@ const {
   validateWebhookSignature,
   getTemplateFields
 } = require('../utils/docusign');
+const Coupon = require('../models/Coupon');
+const Payment = require('../models/Payment');
+const Subscription = require('../models/Subscription');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // TEST ROUTE - Get DocuSign template fields
 router.get('/test-template-fields', async (req, res) => {
@@ -284,6 +288,263 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
     console.error('Error stack:', error.stack);
     // Always return 200 to DocuSign to prevent retries
     res.status(200).json({ message: 'Webhook received with errors', error: error.message });
+  }
+});
+
+// @route   POST /api/public/apa-application/create-checkout-session
+// @desc    Create Stripe checkout session for APA payment
+// @access  Public
+router.post('/apa-application/create-checkout-session', async (req, res) => {
+  try {
+    const { applicationId, couponCode } = req.body;
+
+    if (!applicationId) {
+      return sendResponse(res, 400, { message: 'Application ID is required' });
+    }
+
+    // Find application
+    const application = await APAApplication.findById(applicationId);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'Application not found' });
+    }
+
+    // Check if application is ready for payment
+    if (application.status !== 'pending_payment') {
+      return sendResponse(res, 400, { 
+        message: `Application is not ready for payment. Current status: ${application.status}` 
+      });
+    }
+
+    // Check if payment already completed
+    if (application.payment && application.payment.paymentStatus === 'completed') {
+      return sendResponse(res, 400, { message: 'Payment already completed for this application' });
+    }
+
+    const setupFeePriceId = process.env.STRIPE_SETUP_FEE_PRICE_ID;
+    const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
+
+    if (!setupFeePriceId || !monthlyPriceId) {
+      return sendResponse(res, 500, { 
+        message: 'Stripe prices not configured. Please run setup-stripe-products.js script' 
+      });
+    }
+
+    // Build line items
+    const lineItems = [];
+    
+    // Add setup fee
+    lineItems.push({
+      price: setupFeePriceId,
+      quantity: 1
+    });
+
+    // Add monthly subscription
+    lineItems.push({
+      price: monthlyPriceId,
+      quantity: 1
+    });
+
+    // Create checkout session
+    const sessionParams = {
+      mode: 'subscription',
+      line_items: lineItems,
+      success_url: `${process.env.APP_URL || 'http://localhost:4200'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${applicationId}&canceled=true`,
+      client_reference_id: applicationId,
+      customer_email: application.personalInfo.email,
+      metadata: {
+        applicationId: applicationId,
+        applicantName: `${application.personalInfo.firstName} ${application.personalInfo.lastName}`,
+        applicantEmail: application.personalInfo.email,
+        referralCode: application.recruitingInfo.referralCode
+      },
+      subscription_data: {
+        metadata: {
+          applicationId: applicationId,
+          applicantEmail: application.personalInfo.email
+        }
+      },
+      billing_address_collection: 'required',
+      phone_number_collection: {
+        enabled: true
+      }
+    };
+
+    // Apply coupon if provided
+    if (couponCode) {
+      try {
+        // Validate coupon exists in Stripe
+        const stripeCoupon = await stripe.coupons.retrieve(couponCode.toUpperCase());
+        
+        if (stripeCoupon && stripeCoupon.valid) {
+          // Apply coupon to session
+          sessionParams.discounts = [{
+            coupon: couponCode.toUpperCase()
+          }];
+          
+          console.log(`✅ Coupon ${couponCode.toUpperCase()} applied to checkout session`);
+          
+          // Update database coupon record if exists
+          const coupon = await Coupon.findOne({ 
+            code: couponCode.toUpperCase(),
+            isActive: true
+          });
+          
+          if (coupon) {
+            coupon.usedCount += 1;
+            await coupon.save();
+          }
+          
+          // Store in application
+          if (!application.payment) {
+            application.payment = {};
+          }
+          application.payment.couponCode = couponCode.toUpperCase();
+          await application.save();
+        }
+      } catch (couponError) {
+        console.error('Coupon validation error:', couponError.message);
+        // Continue without coupon if invalid
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    sendResponse(res, 200, {
+      sessionId: session.id,
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error('Create checkout session error:', error);
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/public/apa-application/verify-payment
+// @desc    Verify Stripe payment and complete application
+// @access  Public
+router.get('/apa-application/verify-payment', async (req, res) => {
+  try {
+    const { session_id } = req.query;
+
+    if (!session_id) {
+      return sendResponse(res, 400, { message: 'Session ID is required' });
+    }
+
+    // Retrieve session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    if (!session) {
+      return sendResponse(res, 404, { message: 'Payment session not found' });
+    }
+
+    if (session.payment_status !== 'paid') {
+      return sendResponse(res, 400, { message: 'Payment not completed' });
+    }
+
+    const applicationId = session.client_reference_id;
+    if (!applicationId) {
+      return sendResponse(res, 400, { message: 'Application ID not found in session' });
+    }
+
+    // Find application
+    const application = await APAApplication.findById(applicationId);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'Application not found' });
+    }
+
+    // Check if already processed
+    if (application.status === 'completed') {
+      const existingUser = await User.findOne({ email: application.personalInfo.email });
+      return sendResponse(res, 200, {
+        success: true,
+        message: 'Payment already verified',
+        accountCreated: true,
+        email: existingUser?.email
+      });
+    }
+
+    // Update application status
+    application.status = 'completed';
+    application.completedAt = new Date();
+    
+    // Update payment info
+    application.payment.paymentStatus = 'completed';
+    application.payment.paymentIntentId = session.payment_intent;
+    application.payment.paidAt = new Date();
+    application.payment.amount = session.amount_total / 100;
+    
+    await application.save();
+
+    // Create payment record
+    const payment = new Payment({
+      user: null, // Will be updated after user creation
+      type: 'setup_fee',
+      amount: session.amount_total / 100,
+      status: 'completed',
+      stripePaymentIntentId: session.payment_intent,
+      stripeCustomerId: session.customer,
+      metadata: {
+        applicationId: applicationId,
+        sessionId: session.id
+      }
+    });
+    await payment.save();
+
+    // Create user account
+    const password = generatePassword();
+    const user = new User({
+      email: application.personalInfo.email,
+      password: password,
+      name: `${application.personalInfo.firstName} ${application.personalInfo.lastName}`,
+      role: 'agent',
+      isActive: true,
+      profile: {
+        firstName: application.personalInfo.firstName,
+        lastName: application.personalInfo.lastName,
+        phone: application.personalInfo.phone,
+        address: application.personalInfo.address,
+        city: application.personalInfo.city,
+        state: application.personalInfo.state,
+        zip: application.personalInfo.zip
+      },
+      recruitingInfo: {
+        recruiter: application.recruitingInfo.referralCode,
+        recruitedBy: application.recruitingInfo.referralCode
+      }
+    });
+
+    await user.save();
+
+    // Update payment record with user ID
+    payment.user = user._id;
+    await payment.save();
+
+    // Create subscription record
+    const subscription = new Subscription({
+      user: user._id,
+      stripeSubscriptionId: session.subscription,
+      stripeCustomerId: session.customer,
+      status: 'active',
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    });
+    await subscription.save();
+
+    // Send welcome email
+    await sendWelcomeEmail(user, password);
+
+    sendResponse(res, 200, {
+      success: true,
+      message: 'Payment verified and account created successfully',
+      accountCreated: true,
+      email: user.email
+    });
+
+  } catch (error) {
+    console.error('Verify payment error:', error);
+    errorResponse(res, error);
   }
 });
 
@@ -799,6 +1060,37 @@ async function sendPaymentLinkEmail(application) {
       <ul>
         <li>Pay the one-time onboarding fee (or use code LICENSED if already licensed)</li>
         <li>Set up recurring monthly CRM access fee ($25/month)</li>
+      </ul>
+      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+      <p style="text-align: center; color: #999; font-size: 12px;">
+        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
+        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
+      </p>
+    `
+  });
+}
+
+async function sendWelcomeEmail(user, password) {
+  const loginUrl = `${process.env.APP_URL || 'http://localhost:4200'}/login`;
+  
+  await sendEmail({
+    email: user.email,
+    subject: 'Welcome to RHP Office - Your Account is Ready!',
+    html: `
+      <h2>Welcome to RHP Office, ${user.name}!</h2>
+      <p>Your account has been successfully created and activated.</p>
+      <h3>Login Credentials:</h3>
+      <p><strong>Email:</strong> ${user.email}</p>
+      <p><strong>Temporary Password:</strong> ${password}</p>
+      <p><strong>Your Referral Code:</strong> ${user.referralCode}</p>
+      <p><a href="${loginUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Login to Your Account</a></p>
+      <p style="color: #d32f2f;"><strong>Important:</strong> Please change your password after your first login for security.</p>
+      <p>You can now access all features including:</p>
+      <ul>
+        <li>Dashboard and analytics</li>
+        <li>Lead management</li>
+        <li>Training materials</li>
+        <li>Downline tracking</li>
       </ul>
       <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
       <p style="text-align: center; color: #999; font-size: 12px;">
