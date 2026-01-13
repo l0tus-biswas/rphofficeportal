@@ -1,51 +1,60 @@
-# Escape - Recruiting Platform
+# RHP Office - Insurance Agent Recruiting Platform
 
 ## 📋 Project Overview
 
-Escape is a full-stack MERN (MongoDB, Express, React/Angular, Node.js) recruiting application with role-based authentication, onboarding document management, and genealogy tracking. The system allows agents to recruit new members through unique referral links and manages multi-step onboarding with document uploads.
+RHP Office is a comprehensive full-stack MERN (MongoDB, Express, Angular, Node.js) insurance agent recruiting and onboarding platform. The system features role-based authentication, APA (Agent Producer Agreement) application processing, DocuSign integration for e-signatures, Stripe payment processing, genealogy tracking, and complete agent management.
 
 ## 🚀 Features
 
 ### Core Features
-- **Role-Based Authentication**: Admin, Agent, and Recruit roles with JWT
-- **Public Recruiting Links**: Each agent has a unique referral link (e.g., `http://localhost:4200/apply?ref=AGT12345`)
-- **Multi-Step Onboarding**: 6-step document collection (W4, Driver License, SSN, Direct Deposit, Void Check, I9)
-- **Document Upload & Management**: PDF uploads with local storage per user
-- **Account Creation**: Deferred until after Direct Deposit step
-- **Genealogy Tree**: Maintains complete downline/hierarchy tracking with referrer information
+- **Role-Based Authentication**: Admin and Agent roles with JWT tokens
+- **Public Recruiting Links**: Each agent has a unique 5-character referral code (e.g., `/apply?ref=ADM2X`)
+- **APA Application**: 5-section comprehensive application form
+  - Personal Information (names, DOB, SSN, addresses)
+  - Recruiting Information (recruiter details, team info)
+  - Compliance Questions (background checks with conditional explanations)
+  - Financial Background (judgments, liens, bankruptcy history)
+  - Licensing Status (current licenses, states, numbers)
+- **DocuSign Integration**: Email-based remote signing for APA agreements
+- **Stripe Payment Processing**: One-time setup fee ($179) and monthly subscriptions ($25)
+- **Coupon System**: Discount codes for signup fees and subscriptions
+- **Genealogy Tree**: Complete downline/hierarchy tracking with referrer information
 - **Training Management**: Admin can upload and manage training materials
-- **Coupon System**: Admin can create and manage discount coupons
-- **User Management**: Admin can activate/deactivate users
+- **Branding Management**: Custom brand colors and styling per admin
+- **User Management**: Admin can activate/deactivate users and view statistics
 - **Profile Management**: Users can update their profiles
-- **Password Reset**: Secure forgot/reset password flow
-- **System Configuration**: Admin UI for managing environment variables
-- **Onboarding Review**: Admin can review and approve/reject submitted documents
+- **Password Reset**: Secure forgot/reset password flow with email
+
+### Application Workflow
+1. **Application Submission**: User fills 5-section APA form at `/apply?ref=XXXXX`
+2. **Success Page**: User sees confirmation with next steps
+3. **DocuSign Email**: User receives signing email from DocuSign
+4. **Document Signing**: User signs APA agreement via email link
+5. **Payment Email**: System auto-sends payment link after signing
+6. **Payment Setup**: User completes $179 setup fee and subscribes
+7. **Account Activation**: Admin reviews and activates account
 
 ### Role Permissions
 
 #### Admin
-- View full hierarchy (all agents and recruits)
+- View full hierarchy (all agents)
 - Manage all users (create, edit, activate/deactivate)
-- Review and manage onboarding documents (approve/reject)
+- Review APA applications
 - Upload and manage training materials
-- Create and manage discount coupons
-- Configure system settings via UI
-- Access all statistics
+- Create and manage discount coupons (setup fee & subscription)
+- Configure branding (colors, logo)
+- Access all statistics and analytics
+- View payment history
 
 #### Agent
-- Complete multi-step onboarding with document uploads
+- Submit APA application via referral link
+- Sign documents via DocuSign email
+- Complete payment setup (Stripe)
 - View their profile and update it
-- See first-level recruits (direct referrals)
-- View their complete downline tree with referrer information
+- See their complete downline tree
 - Access training materials
 - Get their unique referral link
-- View onboarding status
-- Upload/re-upload documents
-
-#### Recruit
-- View and update their profile
-- Access training materials
-- Change password
+- View recruiting statistics
 
 ## 🏗️ Architecture
 
@@ -101,15 +110,52 @@ cp .env.example .env
 
 Edit `.env` file with your configuration:
 ```env
+# Server Configuration
 PORT=5000
+NODE_ENV=development
+
+# MongoDB
 MONGODB_URI=mongodb://localhost:27017/rhpoffice
+
+# JWT Secret Keys
 JWT_SECRET=your-super-secret-jwt-key
 JWT_EXPIRE=7d
+JWT_REFRESH_SECRET=your-refresh-secret
+JWT_REFRESH_EXPIRE=30d
+
+# Email Configuration (SMTP)
 SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
+SMTP_PORT=465
 SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=your-email@gmail.com
+SMTP_FROM_NAME=RHP Office
+
+# Application URLs
 APP_URL=http://localhost:4200
+BACKEND_URL=http://localhost:5000
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_ONE_TIME_PRICE=17900  # $179 setup fee in cents
+STRIPE_MONTHLY_SUBSCRIPTION_PRICE=2500  # $25 monthly in cents
+
+# DocuSign Integration
+DOCUSIGN_INTEGRATION_KEY=your-integration-key
+DOCUSIGN_ACCOUNT_ID=your-account-id
+DOCUSIGN_USER_ID=your-user-id
+DOCUSIGN_PRIVATE_KEY_PATH=./config/docusign_private.key
+DOCUSIGN_BASE_PATH=https://demo.docusign.net/restapi
+DOCUSIGN_TEMPLATE_ID=your-template-id
+DOCUSIGN_WEBHOOK_SECRET=your-webhook-hmac-secret
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+AUTH_RATE_LIMIT_MAX=5
+APPLY_RATE_LIMIT_MAX=3
 ```
 
 4. **Start MongoDB**
@@ -194,12 +240,25 @@ Authorization: Bearer <token>
 ### Endpoints Overview
 
 #### Public Endpoints (No Auth Required)
-- `GET /api/public/apply?ref={code}` - Get agent info
-- `POST /api/public/apply?ref={code}` - Submit application
+- `POST /api/public/apa-application` - Submit APA application
+- `GET /api/public/apa-application/:id` - Get application by ID
+- `POST /api/public/apa-application/docusign-webhook` - DocuSign webhook
+- `GET /api/public/apa-application/docusign-webhook` - Webhook status info
 - `GET /api/public/verify-referral/:code` - Verify referral code
 - `POST /api/auth/login` - Login
 - `POST /api/auth/forgot-password` - Request password reset
 - `POST /api/auth/reset-password/:token` - Reset password
+
+#### Payment Endpoints
+- `POST /api/payment/create-checkout-session` - Create Stripe checkout
+- `POST /api/payment/webhook` - Stripe webhook
+- `GET /api/payment/verify/:applicationId` - Verify payment status
+
+#### APA Application Endpoints (Admin)
+- `GET /api/admin-apa/applications` - List all applications
+- `GET /api/admin-apa/applications/:id` - Get application details
+- `PUT /api/admin-apa/applications/:id/approve` - Approve application
+- `PUT /api/admin-apa/applications/:id/reject` - Reject application
 
 #### Agent Endpoints (Agent/Admin Auth Required)
 - `GET /api/agent/profile` - Get profile
@@ -229,6 +288,147 @@ Authorization: Bearer <token>
 - `POST /api/training/materials` - Create material (Admin)
 - `PUT /api/training/materials/:id` - Update material (Admin)
 - `DELETE /api/training/materials/:id` - Delete material (Admin)
+
+## 🔌 Third-Party Integrations
+
+### DocuSign Integration
+
+DocuSign handles the APA (Agent Producer Agreement) e-signature process.
+
+#### Setup Steps:
+
+1. **Create DocuSign Developer Account**
+   - Go to https://developers.docusign.com/
+   - Sign up for a free developer account
+   - You'll get a demo environment
+
+2. **Create Integration Key**
+   - Navigate to Settings → Apps and Keys
+   - Click "Add App and Integration Key"
+   - Save the Integration Key (this is `DOCUSIGN_INTEGRATION_KEY`)
+   - Save your Account ID and User ID
+
+3. **Generate RSA Key Pair**
+   ```bash
+   cd backend/config
+   openssl genrsa -out docusign_private.key 2048
+   openssl rsa -in docusign_private.key -pubout -out docusign_public.key
+   ```
+
+4. **Add Public Key to DocuSign**
+   - In DocuSign, go to your Integration Key
+   - Click "Add RSA Key Pair"
+   - Paste contents of `docusign_public.key`
+   - Save
+
+5. **Grant Consent**
+   - Use this URL (replace YOUR_INTEGRATION_KEY):
+   ```
+   https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=YOUR_INTEGRATION_KEY&redirect_uri=http://localhost:5000/callback
+   ```
+   - Visit in browser and click "Allow Access"
+
+6. **Create APA Template**
+   - Go to Templates in DocuSign
+   - Create new template
+   - Upload APA PDF document
+   - Add fields: recipient name, date, signature, etc.
+   - Map field names to match your form data
+   - Save template and copy Template ID
+
+7. **Configure Webhook (Connect)**
+   - Go to Settings → Connect → Custom
+   - Click "Add Configuration"
+   - Name: "RHP APA Webhook"
+   - URL: `https://your-domain.com/api/public/apa-application/docusign-webhook`
+   - Enable events: Envelope Sent, Envelope Completed, Envelope Declined, Envelope Voided
+   - Enable "Include HMAC Signature"
+   - Click "Manage Keys" to get the HMAC secret
+   - Save the secret as `DOCUSIGN_WEBHOOK_SECRET`
+
+#### How It Works:
+1. User submits APA application
+2. Backend creates DocuSign envelope using template
+3. DocuSign sends signing email to applicant
+4. User signs document via email link
+5. DocuSign webhook notifies backend on completion
+6. Backend updates application status to `pending_payment`
+7. Backend sends payment link email to user
+
+### Stripe Integration
+
+Stripe processes the one-time setup fee ($179) and monthly subscriptions ($25).
+
+#### Setup Steps:
+
+1. **Create Stripe Account**
+   - Go to https://stripe.com/
+   - Sign up for account
+   - Use test mode for development
+
+2. **Get API Keys**
+   - Go to Developers → API Keys
+   - Copy Secret Key (starts with `sk_test_`)
+   - Copy Publishable Key (starts with `pk_test_`)
+
+3. **Create Products & Prices**
+   ```bash
+   # One-time setup fee
+   - Product: "Agent Setup Fee"
+   - Price: $179 (one-time)
+   
+   # Monthly subscription
+   - Product: "Agent Monthly Subscription"
+   - Price: $25 (recurring monthly)
+   ```
+
+4. **Configure Webhook**
+   - Go to Developers → Webhooks
+   - Add endpoint: `https://your-domain.com/api/payment/webhook`
+   - Select events: 
+     - `checkout.session.completed`
+     - `invoice.paid`
+     - `customer.subscription.deleted`
+   - Copy webhook signing secret (starts with `whsec_`)
+
+5. **Update Environment Variables**
+   ```env
+   STRIPE_SECRET_KEY=sk_test_...
+   STRIPE_PUBLISHABLE_KEY=pk_test_...
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   ```
+
+#### How It Works:
+1. User completes DocuSign signing
+2. Backend sends payment link email
+3. User clicks link → redirected to payment page
+4. Frontend creates Stripe Checkout session
+5. User completes payment on Stripe's hosted page
+6. Stripe webhook notifies backend
+7. Backend updates user status to `active`
+8. User can now log in
+
+### Email Configuration (SMTP)
+
+The system sends transactional emails via SMTP.
+
+#### Gmail Setup:
+1. Enable 2-Factor Authentication on Gmail
+2. Go to Account → Security → App Passwords
+3. Generate new app password for "Mail"
+4. Use in `.env`:
+   ```env
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_USER=your-email@gmail.com
+   SMTP_PASSWORD=generated-app-password
+   ```
+
+#### Email Types:
+- **Application Confirmation**: Sent after APA submission
+- **Payment Link**: Sent after DocuSign completion  
+- **Welcome Email**: Sent after payment completion with login credentials
+- **Password Reset**: Sent with reset token link
 
 ## 🧪 Testing
 
@@ -380,7 +580,153 @@ Edit `environment.prod.ts` with production API URL
 
 ## 📊 Database Schema
 
+### APAApplication Collection
+```javascript
+{
+  _id: ObjectId,
+  personalInfo: {
+    firstName: String,
+    middleName: String,
+    lastName: String,
+    suffix: String,
+    dateOfBirth: Date,
+    ssn: String (encrypted),
+    phone: String,
+    email: String,
+    residentialAddress: { street, city, state, zip },
+    mailingAddress: { street, city, state, zip, sameAsResidential }
+  },
+  recruitingInfo: {
+    recruiterName: String,
+    referralCode: String,
+    teamName: String
+  },
+  complianceQuestions: {
+    criminalHistory: Boolean,
+    regulatoryAction: Boolean,
+    civilJudgment: Boolean,
+    bankruptcy: Boolean,
+    felonyConviction: Boolean,
+    bondDenial: Boolean,
+    explanations: { ... }
+  },
+  financialBackground: {
+    unsatisfiedJudgment: Boolean,
+    outstandingTaxLien: Boolean,
+    bankruptcy: Boolean,
+    bankruptcyDetails: { ... }
+  },
+  licensingStatus: {
+    currentlyLicensed: Boolean,
+    licenseStates: [String],
+    licenseNumbers: [String],
+    yearsExperience: String
+  },
+  docusign: {
+    envelopeId: String,
+    status: String (enum: sent, completed, declined, voided),
+    sentDate: Date,
+    signedDate: Date,
+    signedDocumentPath: String
+  },
+  payment: {
+    setupFeeAmount: Number (default: 179),
+    subscriptionFeeAmount: Number (default: 25),
+    couponCode: String,
+    discountAmount: Number,
+    stripeCustomerId: String,
+    stripePaymentIntentId: String,
+    stripeSubscriptionId: String,
+    paymentStatus: String (enum: pending, completed, failed),
+    authorizedAt: Date
+  },
+  status: String (enum: pending_signature, pending_payment, completed, declined, voided),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
 ### User Collection
+```javascript
+{
+  _id: ObjectId,
+  name: String,
+  email: String (unique),
+  phone: String,
+  password: String (hashed),
+  role: String (enum: admin, agent),
+  referralCode: String (unique, 5 chars like ADM2X, AGTH9),
+  referredBy: ObjectId (ref: User),
+  children: [ObjectId] (refs: User),
+  isActive: Boolean,
+  address: String,
+  city: String,
+  state: String,
+  zipCode: String,
+  apaApplicationId: ObjectId (ref: APAApplication),
+  metadata: Map,
+  createdAt: Date,
+  updatedAt: Date,
+  lastLogin: Date
+}
+```
+
+### Payment Collection
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (ref: User),
+  applicationId: ObjectId (ref: APAApplication),
+  type: String (enum: setup_fee, subscription),
+  amount: Number,
+  currency: String (default: USD),
+  status: String (enum: pending, succeeded, failed, refunded),
+  stripePaymentIntentId: String,
+  stripeSubscriptionId: String,
+  couponCode: String,
+  discountAmount: Number,
+  metadata: Map,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### Subscription Collection
+```javascript
+{
+  _id: ObjectId,
+  userId: ObjectId (ref: User),
+  stripeSubscriptionId: String,
+  stripePriceId: String,
+  status: String (enum: active, canceled, past_due, unpaid),
+  currentPeriodStart: Date,
+  currentPeriodEnd: Date,
+  cancelAtPeriodEnd: Boolean,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### Coupon Collection
+```javascript
+{
+  _id: ObjectId,
+  code: String (unique),
+  description: String,
+  discountType: String (enum: percentage, fixed),
+  discountValue: Number,
+  appliesTo: String (enum: setup_fee, subscription, both),
+  maxUses: Number,
+  usedCount: Number,
+  expiresAt: Date,
+  isActive: Boolean,
+  createdBy: ObjectId (ref: User),
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### TrainingMaterial Collection
 ```javascript
 {
   _id: ObjectId,
@@ -479,15 +825,81 @@ For issues and questions:
 
 ## 🎯 Roadmap
 
+- [x] APA application system with 5 sections
+- [x] DocuSign integration for e-signatures
+- [x] Stripe payment processing
+- [x] Coupon system for discounts
+- [x] Email-based remote signing
+- [x] Automated payment emails after signing
+- [x] Genealogy/downline tracking
+- [x] Branding management
 - [ ] Real-time notifications (Socket.io)
 - [ ] Advanced analytics dashboard
 - [ ] Mobile app (React Native)
 - [ ] Commission tracking
-- [ ] Document uploads
 - [ ] Video conferencing integration
 - [ ] Gamification features
 - [ ] Multi-language support
+- [ ] SMS notifications
 
 ---
 
-**Built with ❤️ using MEAN Stack**
+## 📜 Quick Reference
+
+### Useful Scripts
+
+```bash
+# Create admin user
+node backend/scripts/createAdmin.js
+
+# Create test users
+node backend/scripts/createTestUsers.js
+
+# Add referral codes to existing users
+node backend/scripts/addReferralCodes.js
+
+# Check database connectivity
+node backend/scripts/check-database.js
+
+# Seed branding data
+node backend/scripts/seed-branding.js
+
+# Verify DocuSign fields
+node backend/scripts/verify-docusign-fields.js
+```
+
+### Common Tasks
+
+**Start Development:**
+```bash
+# Terminal 1 - Backend
+cd backend && npm run dev
+
+# Terminal 2 - Frontend
+cd frontend && npm start
+```
+
+**Deploy to Production:**
+```bash
+# Commit changes
+git add .
+git commit -m "Your message"
+git push
+
+# On production server
+git pull
+pm2 restart all
+```
+
+**Check Logs:**
+```bash
+# Backend logs
+pm2 logs backend
+
+# Nginx logs
+tail -f /var/log/nginx/error.log
+```
+
+---
+
+**Built with ❤️ using MEAN Stack (MongoDB, Express, Angular, Node.js)**

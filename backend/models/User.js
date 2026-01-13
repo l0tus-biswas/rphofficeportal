@@ -200,7 +200,13 @@ userSchema.methods.generateReferralCode = function() {
   let prefix = 'AGT'; // Default for agents
   if (this.role === 'admin') prefix = 'ADM';
   
-  const random = crypto.randomBytes(4).toString('hex').toUpperCase();
+  // Generate 2 random alphanumeric characters (mix of letters and numbers) for total of 5
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars like 0, O, 1, I
+  let random = '';
+  for (let i = 0; i < 2; i++) {
+    random += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  
   return `${prefix}${random}`;
 };
 
