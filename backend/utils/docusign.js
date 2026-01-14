@@ -243,6 +243,9 @@ function createSignerTabs(application) {
   // Tab 1: Agent full name (page 1, first text field)
   const tab1 = new docusign.Text();
   tab1.tabLabel = 'fullnameagent';
+  tab1.tabId = 'c715c3a4-f34f-415f-b2f7-3e64c3ac7a5c';
+  tab1.documentId = '71378187';
+  tab1.pageNumber = '1';
   tab1.value = fullName;
   tab1.locked = 'false';
   tab1.required = 'true';
@@ -251,6 +254,9 @@ function createSignerTabs(application) {
   // Tab 2: Effective date of agreement (page 1)
   const tab2 = new docusign.Text();
   tab2.tabLabel = 'dateofagreement';
+  tab2.tabId = '5b3251dd-fd1d-4821-a8d1-41b10351ad8e';
+  tab2.documentId = '71378187';
+  tab2.pageNumber = '1';
   tab2.value = agreementDate;
   tab2.locked = 'false';
   tab2.required = 'true';
@@ -259,6 +265,9 @@ function createSignerTabs(application) {
   // Tab 3: Printed name on signature page (page 24)
   const tab3 = new docusign.Text();
   tab3.tabLabel = 'fullnameagent2';
+  tab3.tabId = '28a21053-9326-4fbc-987a-003b6fcf3093';
+  tab3.documentId = '71378187';
+  tab3.pageNumber = '24';
   tab3.value = fullName;
   tab3.locked = 'false';
   tab3.required = 'true';

@@ -23,7 +23,7 @@ async function testTemplateFields() {
       console.log('\nText Tabs:');
       if (signer.tabs?.textTabs?.length) {
         signer.tabs.textTabs.forEach((tab, idx) => {
-          console.log(`  ${idx + 1}. Label: "${tab.tabLabel}"`);
+          console.log(`  ${idx + 1}. Label: "${tab.tabLabel}" (tabId: ${tab.tabId})`);
           console.log(`     Page: ${tab.pageNumber}, Position: (${tab.xPosition}, ${tab.yPosition})`);
           console.log(`     Required: ${tab.required}, Locked: ${tab.locked}`);
           console.log('');
