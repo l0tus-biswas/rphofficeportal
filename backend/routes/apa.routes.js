@@ -492,26 +492,44 @@ const verifyPaymentHandler = async (req, res) => {
     });
     await payment.save();
 
+    // Prepare user details
+    const legalFirstName = application.personalInfo?.legalFirstName || application.personalInfo?.firstName || '';
+    const legalLastName = application.personalInfo?.legalLastName || application.personalInfo?.lastName || '';
+    const primaryPhone = application.personalInfo?.mobilePhone || application.personalInfo?.phone;
+    const homeAddress = application.personalInfo?.homeAddress || {};
+
+    if (!primaryPhone) {
+      return sendResponse(res, 400, { message: 'Application is missing a contact phone number' });
+    }
+
+    let referredById = null;
+    if (application.recruitingInfo?.referralCode) {
+      const referringUser = await User.findOne({
+        referralCode: application.recruitingInfo.referralCode,
+        isActive: true
+      }).select('_id');
+      if (referringUser) {
+        referredById = referringUser._id;
+      }
+    }
+
     // Create user account
     const password = generatePassword();
     const user = new User({
       email: application.personalInfo.email,
       password: password,
-      name: `${application.personalInfo.firstName} ${application.personalInfo.lastName}`,
+      name: `${legalFirstName} ${legalLastName}`.trim(),
+      phone: primaryPhone,
       role: 'agent',
       isActive: true,
-      profile: {
-        firstName: application.personalInfo.firstName,
-        lastName: application.personalInfo.lastName,
-        phone: application.personalInfo.phone,
-        address: application.personalInfo.address,
-        city: application.personalInfo.city,
-        state: application.personalInfo.state,
-        zip: application.personalInfo.zip
-      },
-      recruitingInfo: {
-        recruiter: application.recruitingInfo.referralCode,
-        recruitedBy: application.recruitingInfo.referralCode
+      referredBy: referredById,
+      address: homeAddress.street || application.personalInfo?.address,
+      city: homeAddress.city || application.personalInfo?.city,
+      state: homeAddress.state || application.personalInfo?.state,
+      zipCode: homeAddress.zipCode || application.personalInfo?.zip,
+      metadata: {
+        applicationId: application._id.toString(),
+        referralCode: application.recruitingInfo?.referralCode || ''
       }
     });
 
