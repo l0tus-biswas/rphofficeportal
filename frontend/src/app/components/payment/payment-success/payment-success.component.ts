@@ -11,9 +11,11 @@ import { OnboardingService } from '../../../services/onboarding.service';
 })
 export class PaymentSuccessComponent implements OnInit {
   paymentType = '';
+  isSetupFeePayment = false;
   redirecting = true;
   processing = false;
   error = '';
+  private readonly setupFeeType = 'setup_fee';
 
   constructor(
     private route: ActivatedRoute,
@@ -25,18 +27,19 @@ export class PaymentSuccessComponent implements OnInit {
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {
-      this.paymentType = params['type'] || 'one-time';
+      this.paymentType = params['type'] || this.setupFeeType;
+      this.isSetupFeePayment = this.paymentType === this.setupFeeType || this.paymentType === 'one-time';
       
       // Check if this is registration flow
       const pendingApplication = localStorage.getItem('pendingApplication');
       
-      if (this.paymentType === 'one-time' && pendingApplication) {
+      if (this.isSetupFeePayment && pendingApplication) {
         // Complete registration after payment
         this.completeRegistration();
       } else {
         // Regular payment success - redirect after 3 seconds
         setTimeout(() => {
-          if (this.paymentType === 'one-time') {
+          if (this.isSetupFeePayment) {
             this.router.navigate(['/subscription-payment']);
           } else {
             this.router.navigate(['/dashboard']);

@@ -27,6 +27,7 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
   
   paymentStatus: any = null;
   isRegistrationFlow = false;
+  private readonly setupFeeType = 'setup_fee';
 
   constructor(
     private paymentService: PaymentService,
@@ -40,7 +41,7 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     try {
-      console.log('=== ONE-TIME PAYMENT INIT ===');
+      console.log('=== SETUP FEE PAYMENT INIT ===');
       // Check if this is part of registration flow
       this.route.queryParams.subscribe(params => {
         this.isRegistrationFlow = params['source'] === 'registration';
@@ -74,11 +75,11 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
         this.paymentStatus = response;
         
         if (response.oneTimePaymentCompleted) {
-          console.log('One-time payment already completed, redirecting to subscription');
+          console.log('Setup fee already completed, redirecting to subscription');
           // Already paid, redirect to subscription
           this.router.navigate(['/subscription-payment']);
         } else {
-          console.log('One-time payment not completed, initializing payment');
+          console.log('Setup fee not completed, initializing payment');
           // Initialize payment
           this.initializePayment();
         }
@@ -120,7 +121,7 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
       } else {
         console.log('Creating authenticated payment intent');
         // Regular authenticated payment
-        this.paymentService.createOneTimePaymentIntent().subscribe({
+        this.paymentService.createSetupFeePaymentIntent().subscribe({
           next: async (response) => {
             console.log('Payment intent created:', response);
             await this.setupStripeElements(response.clientSecret, response.amount);
@@ -244,7 +245,7 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
         const result = await stripe!.confirmPayment({
           elements: elements!,
           confirmParams: {
-            return_url: `${environment.appUrl}/payment-success?type=one-time`,
+            return_url: `${environment.appUrl}/payment-success?type=${this.setupFeeType}`,
           },
         });
 

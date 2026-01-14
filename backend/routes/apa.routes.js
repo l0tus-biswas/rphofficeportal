@@ -850,7 +850,7 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
     const Payment = require('../models/Payment');
     await Payment.create({
       user: newUser._id,
-      type: 'one-time',
+      type: 'setup_fee',
       amount: onboardingFee * 100, // Convert to cents
       currency: 'usd',
       stripePaymentIntentId: application.payment.stripePaymentIntentId,
@@ -1064,7 +1064,7 @@ async function sendPaymentLinkEmail(application) {
       <p><a href="${paymentUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Complete Payment Setup</a></p>
       <p>This link will take you to a secure payment page where you can:</p>
       <ul>
-        <li>Pay the one-time onboarding fee (or use code LICENSED if already licensed)</li>
+        <li>Pay the setup fee (or use code LICENSED if already licensed)</li>
         <li>Set up recurring monthly CRM access fee ($25/month)</li>
       </ul>
       <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">

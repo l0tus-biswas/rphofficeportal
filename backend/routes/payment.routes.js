@@ -44,14 +44,14 @@ router.post('/create-customer', protect, async (req, res) => {
 });
 
 // @route   POST /api/payments/one-time-intent
-// @desc    Create payment intent for one-time $179 payment
+// @desc    Create payment intent for the $179 setup fee
 // @access  Private
 router.post('/one-time-intent', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
 
     if (user.oneTimePaymentCompleted) {
-      return sendResponse(res, 400, { message: 'One-time payment already completed' });
+      return sendResponse(res, 400, { message: 'Setup fee already completed' });
     }
 
     // Create customer if doesn't exist
@@ -75,7 +75,7 @@ router.post('/one-time-intent', protect, async (req, res) => {
       customerId,
       {
         userId: user._id.toString(),
-        type: 'one-time',
+        type: 'setup_fee',
         email: user.email
       }
     );
@@ -83,12 +83,12 @@ router.post('/one-time-intent', protect, async (req, res) => {
     // Create payment record
     await Payment.create({
       user: user._id,
-      type: 'one-time',
+      type: 'setup_fee',
       amount: amount,
       currency: 'usd',
       stripePaymentIntentId: paymentIntent.id,
       status: 'pending',
-      description: 'One-time registration fee'
+      description: 'Setup fee payment'
     });
 
     sendResponse(res, 200, {
@@ -108,7 +108,7 @@ router.post('/subscription-intent', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (!user.oneTimePaymentCompleted) {
-      return sendResponse(res, 400, { message: 'Please complete one-time payment first' });
+      return sendResponse(res, 400, { message: 'Please complete the setup fee payment first' });
     }
 
     if (user.stripeSubscriptionId) {
@@ -264,8 +264,9 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     payment.paidAt = new Date();
     await payment.save();
 
-    // If one-time payment, update user
-    if (payment.type === 'one-time') {
+    const isSetupFeePayment = payment.type === 'setup_fee' || payment.type === 'one-time';
+
+    if (isSetupFeePayment) {
       const user = await User.findById(payment.user);
       if (user) {
         user.oneTimePaymentCompleted = true;

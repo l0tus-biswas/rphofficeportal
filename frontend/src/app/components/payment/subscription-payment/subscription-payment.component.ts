@@ -40,7 +40,7 @@ export class SubscriptionPaymentComponent implements OnInit, OnDestroy {
         this.paymentStatus = response;
         
         if (!response.oneTimePaymentCompleted) {
-          // Must complete one-time payment first
+          // Must complete setup fee payment first
           this.router.navigate(['/one-time-payment']);
         } else if (response.subscriptionStatus === 'active') {
           // Already subscribed

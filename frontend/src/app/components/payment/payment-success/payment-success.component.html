@@ -8,8 +8,8 @@
         
         <h1 class="display-4 mb-3">Payment Successful!</h1>
         
-        <p class="lead mb-4" *ngIf="paymentType === 'one-time' && !processing">
-          Your one-time registration fee has been processed successfully.
+        <p class="lead mb-4" *ngIf="isSetupFeePayment && !processing">
+          Your setup fee payment has been processed successfully.
         </p>
         
         <p class="lead mb-4" *ngIf="processing">
@@ -27,7 +27,7 @@
         
         <div class="alert alert-info d-inline-block" *ngIf="!error">
           <i class="bi bi-clock-history me-2"></i>
-          <span *ngIf="paymentType === 'one-time' && !processing">
+          <span *ngIf="isSetupFeePayment && !processing">
             Redirecting to subscription setup...
           </span>
           <span *ngIf="processing">

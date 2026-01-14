@@ -54,7 +54,7 @@
               <label class="form-label">Type</label>
               <select class="form-select" [(ngModel)]="paymentFilters.type">
                 <option value="">All Types</option>
-                <option value="one-time">One-Time</option>
+                <option value="setup_fee">Setup Fee</option>
                 <option value="subscription">Subscription</option>
               </select>
             </div>
@@ -98,7 +98,15 @@
                 <tr *ngFor="let payment of payments">
                   <td>{{ formatDate(payment.createdAt) }}</td>
                   <td>{{ payment.user?.name || 'N/A' }}<br><small class="text-muted">{{ payment.user?.email }}</small></td>
-                  <td><span class="badge" [class.bg-primary]="payment.type === 'one-time'" [class.bg-info]="payment.type === 'subscription'">{{ payment.type | titlecase }}</span></td>
+                  <td>
+                    <span 
+                      class="badge"
+                      [class.bg-primary]="payment.type === 'setup_fee' || payment.type === 'one-time'"
+                      [class.bg-info]="payment.type === 'subscription'"
+                    >
+                      {{ (payment.type === 'setup_fee' || payment.type === 'one-time') ? 'Setup Fee' : (payment.type | titlecase) }}
+                    </span>
+                  </td>
                   <td>{{ formatAmount(payment.amount) }}</td>
                   <td><span [ngClass]="getStatusBadge(payment.status)">{{ payment.status | titlecase }}</span></td>
                   <td>{{ payment.description }}</td>
@@ -205,7 +213,7 @@
             </div>
             <div class="card-body" *ngIf="paymentSettings">
               <div class="mb-3">
-                <label class="form-label"><strong>One-Time Fee:</strong></label>
+                <label class="form-label"><strong>Setup Fee:</strong></label>
                 <p class="mb-0">{{ formatAmount(paymentSettings.oneTimePrice) }}</p>
               </div>
               <div class="mb-3">

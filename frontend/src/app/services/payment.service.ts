@@ -19,8 +19,8 @@ export class PaymentService {
     return { headers: this.authService.getAuthHeaders() };
   }
 
-  // One-time payment
-  createOneTimePaymentIntent(): Observable<any> {
+  // Setup fee payment
+  createSetupFeePaymentIntent(): Observable<any> {
     return this.http.post(`${this.apiUrl}/payments/one-time-intent`, {}, this.getHeaders());
   }
 

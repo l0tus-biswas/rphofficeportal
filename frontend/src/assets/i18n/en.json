@@ -260,7 +260,7 @@
   "PAYMENT": {
     "TITLE": "Payment",
     "SUBSCRIPTION": "Subscription",
-    "ONE_TIME": "One-Time Payment",
+    "ONE_TIME": "Setup Fee Payment",
     "AMOUNT": "Amount",
     "PAY_NOW": "Pay Now",
     "PAYMENT_HISTORY": "Payment History",

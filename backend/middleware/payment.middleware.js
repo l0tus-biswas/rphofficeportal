@@ -20,13 +20,13 @@ const requirePayment = async (req, res, next) => {
       return sendResponse(res, 401, { message: 'User not found' });
     }
 
-    // Check if one-time payment is completed
+    // Check if setup fee payment is completed
     if (!user.oneTimePaymentCompleted) {
       return sendResponse(res, 403, { 
-        message: 'One-time payment required',
+        message: 'Setup fee payment required',
         code: 'PAYMENT_REQUIRED',
         requiresPayment: true,
-        paymentType: 'one-time'
+        paymentType: 'setup_fee'
       });
     }
 
@@ -49,7 +49,7 @@ const requirePayment = async (req, res, next) => {
 };
 
 /**
- * Middleware to check only one-time payment (for accessing onboarding, etc.)
+ * Middleware to check only setup fee payment (for accessing onboarding, etc.)
  * CURRENTLY DISABLED - Payment checks are bypassed for all users
  */
 const requireOneTimePayment = async (req, res, next) => {
@@ -66,13 +66,13 @@ const requireOneTimePayment = async (req, res, next) => {
       return sendResponse(res, 401, { message: 'User not found' });
     }
 
-    // Check if one-time payment is completed
+    // Check if setup fee payment is completed
     if (!user.oneTimePaymentCompleted) {
       return sendResponse(res, 403, { 
-        message: 'One-time payment required',
+        message: 'Setup fee payment required',
         code: 'PAYMENT_REQUIRED',
         requiresPayment: true,
-        paymentType: 'one-time'
+        paymentType: 'setup_fee'
       });
     }
 

@@ -31,7 +31,7 @@
       <div class="col-md-4">
         <div class="card">
           <div class="card-body">
-            <h6 class="text-muted mb-2">One-Time Payment</h6>
+            <h6 class="text-muted mb-2">Setup Fee Payment</h6>
             <h4 class="mb-0" *ngIf="paymentStatus.oneTimePaymentCompleted">
               <i class="bi bi-check-circle-fill text-success me-2"></i>Paid
             </h4>
@@ -126,7 +126,7 @@
               <tr *ngFor="let payment of payments">
                 <td>{{ formatDate(payment.createdAt) }}</td>
                 <td>
-                  <span class="badge bg-primary" *ngIf="payment.type === 'one-time'">One-Time</span>
+                  <span class="badge bg-primary" *ngIf="payment.type === 'setup_fee' || payment.type === 'one-time'">Setup Fee</span>
                   <span class="badge bg-info" *ngIf="payment.type === 'subscription'">Subscription</span>
                 </td>
                 <td>{{ payment.description || 'Payment' }}</td>

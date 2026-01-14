@@ -3,12 +3,11 @@ const mongoose = require('mongoose');
 const paymentSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
   },
   type: {
     type: String,
-    enum: ['one-time', 'subscription'],
+    enum: ['subscription', 'setup_fee'],
     required: true
   },
   amount: {
@@ -29,7 +28,7 @@ const paymentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'succeeded', 'failed', 'refunded', 'canceled'],
+    enum: ['pending', 'succeeded', 'failed', 'refunded', 'canceled', 'completed'],
     default: 'pending'
   },
   description: {
@@ -49,6 +48,13 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Indexes
+paymentSchema.pre('validate', function(next) {
+  if (this.type === 'one-time') {
+    this.type = 'setup_fee';
+  }
+  next();
+});
+
 paymentSchema.index({ user: 1, createdAt: -1 });
 paymentSchema.index({ stripePaymentIntentId: 1 });
 paymentSchema.index({ stripeInvoiceId: 1 });

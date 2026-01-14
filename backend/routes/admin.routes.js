@@ -434,7 +434,7 @@ router.get('/payments', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
-    const type = req.query.type; // one-time or subscription
+    const type = req.query.type; // setup_fee or subscription
     const status = req.query.status;
     const userId = req.query.userId;
 
@@ -615,7 +615,7 @@ router.post('/subscriptions/:userId/cancel', logAction('CANCEL_SUBSCRIPTION'), a
 });
 
 // @route   GET /api/admin/payment-settings
-// @desc    Get payment settings (one-time fee, monthly fee)
+// @desc    Get payment settings (setup fee, monthly fee)
 // @access  Private (Admin only)
 router.get('/payment-settings', async (req, res) => {
   try {
