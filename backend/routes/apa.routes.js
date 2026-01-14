@@ -539,14 +539,50 @@ const verifyPaymentHandler = async (req, res) => {
     payment.user = user._id;
     await payment.save();
 
-    // Create subscription record
+    let subscriptionPriceId = process.env.STRIPE_MONTHLY_PRICE_ID || null;
+    let subscriptionAmount = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2500;
+    let subscriptionStart = new Date();
+    let subscriptionEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    let subscriptionStatus = 'active';
+
+    if (session.subscription) {
+      try {
+        const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+        subscriptionStatus = stripeSubscription.status || subscriptionStatus;
+        if (stripeSubscription.current_period_start) {
+          subscriptionStart = new Date(stripeSubscription.current_period_start * 1000);
+        }
+        if (stripeSubscription.current_period_end) {
+          subscriptionEnd = new Date(stripeSubscription.current_period_end * 1000);
+        }
+
+        const firstItem = stripeSubscription.items?.data?.[0];
+        if (firstItem?.price) {
+          subscriptionPriceId = firstItem.price.id || subscriptionPriceId;
+          if (typeof firstItem.price.unit_amount === 'number') {
+            subscriptionAmount = firstItem.price.unit_amount;
+          }
+        }
+      } catch (stripeError) {
+        console.error('Failed to retrieve Stripe subscription:', stripeError);
+      }
+    }
+
+    if (!subscriptionPriceId) {
+      return sendResponse(res, 500, { message: 'Unable to determine subscription price ID' });
+    }
+
     const subscription = new Subscription({
       user: user._id,
       stripeSubscriptionId: session.subscription,
       stripeCustomerId: session.customer,
-      status: 'active',
-      currentPeriodStart: new Date(),
-      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+      stripePriceId: subscriptionPriceId,
+      status: subscriptionStatus,
+      currentPeriodStart: subscriptionStart,
+      currentPeriodEnd: subscriptionEnd,
+      amount: subscriptionAmount,
+      currency: 'usd',
+      interval: 'month'
     });
     await subscription.save();
 
