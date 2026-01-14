@@ -421,19 +421,19 @@ router.post('/apa-application/create-checkout-session', async (req, res) => {
   }
 });
 
-// @route   GET /api/public/apa-application/verify-payment
-// @desc    Verify Stripe payment and complete application
-// @access  Public
-router.get('/apa-application/verify-payment', async (req, res) => {
+// Shared handler for payment verification (supports GET + POST)
+const verifyPaymentHandler = async (req, res) => {
   try {
-    const { session_id } = req.query;
+    const sessionId = req.body?.sessionId 
+      || req.body?.session_id 
+      || req.query?.session_id;
 
-    if (!session_id) {
+    if (!sessionId) {
       return sendResponse(res, 400, { message: 'Session ID is required' });
     }
 
     // Retrieve session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     if (!session) {
       return sendResponse(res, 404, { message: 'Payment session not found' });
@@ -546,7 +546,13 @@ router.get('/apa-application/verify-payment', async (req, res) => {
     console.error('Verify payment error:', error);
     errorResponse(res, error);
   }
-});
+};
+
+// @route   GET/POST /api/public/apa-application/verify-payment
+// @desc    Verify Stripe payment and complete application
+// @access  Public
+router.get('/apa-application/verify-payment', verifyPaymentHandler);
+router.post('/apa-application/verify-payment', verifyPaymentHandler);
 
 // @route   GET /api/public/apa-application/:id
 // @desc    Get APA application status

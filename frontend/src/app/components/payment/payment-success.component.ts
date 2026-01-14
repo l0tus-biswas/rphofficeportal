@@ -14,6 +14,7 @@ export class PaymentSuccessComponent implements OnInit {
   accountCreated = false;
   email = '';
   redirectCountdown = 5;
+  private readonly sessionParam = 'session_id';
 
   constructor(
     private route: ActivatedRoute,
@@ -22,7 +23,7 @@ export class PaymentSuccessComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    const sessionId = this.route.snapshot.queryParams['session_id'];
+    const sessionId = this.route.snapshot.queryParams[this.sessionParam];
     
     if (!sessionId) {
       this.error = 'Invalid payment session';
@@ -40,6 +41,7 @@ export class PaymentSuccessComponent implements OnInit {
         this.success = true;
         this.accountCreated = response.accountCreated;
         this.email = response.email;
+        this.stripSessionFromUrl();
         
         // Start countdown
         this.startRedirectCountdown();
@@ -47,7 +49,16 @@ export class PaymentSuccessComponent implements OnInit {
       error: (error) => {
         this.loading = false;
         this.error = error.error?.message || 'Failed to verify payment';
+        this.stripSessionFromUrl();
       }
+    });
+  }
+
+  private stripSessionFromUrl(): void {
+    this.router.navigate([], {
+      queryParams: { [this.sessionParam]: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
     });
   }
 
