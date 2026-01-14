@@ -1,6 +1,13 @@
 const docusign = require('docusign-esign');
 const fs = require('fs');
 const path = require('path');
+const dotenv = require('dotenv');
+
+// Ensure environment variables are available when this module is required directly
+const envPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
 
 /**
  * DocuSign Integration Utility
@@ -71,7 +78,7 @@ async function getTemplateFields() {
     const templateId = process.env.DOCUSIGN_TEMPLATE_ID;
 
     // Get template with recipients included
-    const template = await templatesApi.get(accountId, templateId, { include: 'recipients' });
+    const template = await templatesApi.get(accountId, templateId, { include: 'recipients,tabs' });
     
     console.log('\n=== DocuSign Template Field Names ===');
     
@@ -230,29 +237,28 @@ function createSignerTabs(application) {
   // Full name for the agent
   const fullName = `${personalInfo.legalFirstName || ''} ${personalInfo.legalMiddleName || ''} ${personalInfo.legalLastName || ''}`.replace(/\s+/g, ' ').trim();
   
-  // Contact information (phone and email)
-  const contactInfo = `${personalInfo.mobilePhone || ''} | ${personalInfo.email || ''}`;
+  // Effective date of agreement
+  const agreementDate = formatDate(new Date());
 
   // Tab 1: Agent full name (page 1, first text field)
-  // Using exact tabLabel from template
   const tab1 = new docusign.Text();
-  tab1.tabLabel = 'Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997';
+  tab1.tabLabel = 'fullnameagent';
   tab1.value = fullName;
   tab1.locked = 'false';
   tab1.required = 'true';
   textTabs.push(tab1);
 
-  // Tab 2: Agent contact information (page 1, second text field)
+  // Tab 2: Effective date of agreement (page 1)
   const tab2 = new docusign.Text();
-  tab2.tabLabel = 'Text 712e194d-ccb6-425b-9a0d-85d0bce2684e';
-  tab2.value = contactInfo;
+  tab2.tabLabel = 'dateofagreement';
+  tab2.value = agreementDate;
   tab2.locked = 'false';
   tab2.required = 'true';
   textTabs.push(tab2);
 
   // Tab 3: Printed name on signature page (page 24)
   const tab3 = new docusign.Text();
-  tab3.tabLabel = 'Text ab047008-8724-43f1-a3b4-c5daf1bb35c7';
+  tab3.tabLabel = 'fullnameagent2';
   tab3.value = fullName;
   tab3.locked = 'false';
   tab3.required = 'true';
