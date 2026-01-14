@@ -187,6 +187,13 @@ async function createAPAEnvelope(application) {
     envelope.templateRoles = [signer];
     envelope.status = 'sent'; // Send immediately - DocuSign will email the signer
 
+    console.log('=== Creating DocuSign Envelope ===');
+    console.log('Template ID:', process.env.DOCUSIGN_TEMPLATE_ID);
+    console.log('Role Name:', signer.roleName);
+    console.log('Signer:', signer.name, '-', signer.email);
+    console.log('Text Tabs Count:', signer.tabs?.textTabs?.length || 0);
+    console.log('==================================');
+
     // Create the envelope
     const results = await envelopesApi.createEnvelope(accountId, {
       envelopeDefinition: envelope
@@ -209,10 +216,7 @@ async function createAPAEnvelope(application) {
 
 /**
  * Create signer tabs to pre-fill template fields with application data
- * NEW RHP APA AGREEMENT template has 3 text fields that need to be populated:
- * 1. Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997 (page 1) - Agent full name
- * 2. Text 712e194d-ccb6-425b-9a0d-85d0bce2684e (page 1) - Agent contact info
- * 3. Text ab047008-8724-43f1-a3b4-c5daf1bb35c7 (page 24) - Printed name on signature page
+ * NEW RHP APA AGREEMENT template has 3 text fields that need to be populated
  * 
  * @param {Object} application - APAApplication document
  * @returns {Object} DocuSign tabs object
@@ -230,21 +234,37 @@ function createSignerTabs(application) {
   const contactInfo = `${personalInfo.mobilePhone || ''} | ${personalInfo.email || ''}`;
 
   // Tab 1: Agent full name (page 1, first text field)
-  textTabs.push(
-    createTextTab('Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997', fullName)
-  );
+  // Using exact tabLabel from template
+  const tab1 = new docusign.Text();
+  tab1.tabLabel = 'Text e1147488-a4b6-4c68-8f59-8ef3ec9f6997';
+  tab1.value = fullName;
+  tab1.locked = 'false';
+  tab1.required = 'true';
+  textTabs.push(tab1);
 
   // Tab 2: Agent contact information (page 1, second text field)
-  textTabs.push(
-    createTextTab('Text 712e194d-ccb6-425b-9a0d-85d0bce2684e', contactInfo)
-  );
+  const tab2 = new docusign.Text();
+  tab2.tabLabel = 'Text 712e194d-ccb6-425b-9a0d-85d0bce2684e';
+  tab2.value = contactInfo;
+  tab2.locked = 'false';
+  tab2.required = 'true';
+  textTabs.push(tab2);
 
   // Tab 3: Printed name on signature page (page 24)
-  textTabs.push(
-    createTextTab('Text ab047008-8724-43f1-a3b4-c5daf1bb35c7', fullName)
-  );
+  const tab3 = new docusign.Text();
+  tab3.tabLabel = 'Text ab047008-8724-43f1-a3b4-c5daf1bb35c7';
+  tab3.value = fullName;
+  tab3.locked = 'false';
+  tab3.required = 'true';
+  textTabs.push(tab3);
 
   tabs.textTabs = textTabs;
+
+  console.log('=== Created Text Tabs ===');
+  textTabs.forEach((tab, idx) => {
+    console.log(`Tab ${idx + 1}: ${tab.tabLabel} = "${tab.value}"`);
+  });
+  console.log('========================');
 
   return tabs;
 }
