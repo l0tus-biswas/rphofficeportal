@@ -6,6 +6,9 @@ const AuditLog = require('../models/AuditLog');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const APAApplication = require('../models/APAApplication');
+const Notification = require('../models/Notification');
+const LicensingProgress = require('../models/LicensingProgress');
+const ProductionSubmission = require('../models/ProductionSubmission');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -272,7 +275,7 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
 });
 
 // @route   DELETE /api/admin/users/:userId
-// @desc    Delete user (hard delete)
+// @desc    Delete user (hard delete) with all associated data
 // @access  Private (Admin only)
 router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
   try {
@@ -282,13 +285,76 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
-    // Delete all related records for this user
     const userId = req.params.userId;
+    const userEmail = user.email;
     
-    // Delete APAApplication records
-    await APAApplication.deleteMany({ userId: userId });
+    // Cancel Stripe subscription if exists
+    const subscription = await Subscription.findOne({ user: userId });
+    if (subscription?.stripeSubscriptionId) {
+      try {
+        await cancelSubscription(subscription.stripeSubscriptionId);
+        console.log(`Cancelled Stripe subscription for user ${userId}`);
+      } catch (stripeError) {
+        console.warn(`Failed to cancel Stripe subscription: ${stripeError.message}`);
+      }
+    }
     
-    // Delete Onboarding records
+    // Delete all related records for this user
+    
+    // Delete APAApplication records and associated files
+    const apaApplications = await APAApplication.find({ 
+      $or: [
+        { userId: userId },
+        { 'personalInfo.email': userEmail?.toLowerCase() }
+      ]
+    });
+    
+    for (const app of apaApplications) {
+      // Delete signed APA document if exists
+      if (app.docusign?.documentUrl) {
+        const docPath = path.join(__dirname, '..', app.docusign.documentUrl);
+        if (fs.existsSync(docPath)) {
+          try {
+            fs.unlinkSync(docPath);
+            console.log(`Deleted signed APA document: ${docPath}`);
+          } catch (fileErr) {
+            console.warn(`Failed to delete APA document: ${fileErr.message}`);
+          }
+        }
+      }
+      
+      // Delete compliance uploaded documents
+      const complianceFields = ['govtIdFront', 'govtIdBack', 'residencyProof', 'ssnProof', 'w9Form', 'directDepositForm'];
+      for (const field of complianceFields) {
+        if (app.complianceDocuments?.[field]?.documentUrl) {
+          const docPath = path.join(__dirname, '..', app.complianceDocuments[field].documentUrl);
+          if (fs.existsSync(docPath)) {
+            try {
+              fs.unlinkSync(docPath);
+            } catch (fileErr) {
+              console.warn(`Failed to delete compliance doc: ${fileErr.message}`);
+            }
+          }
+        }
+      }
+    }
+    await APAApplication.deleteMany({ 
+      $or: [
+        { userId: userId },
+        { 'personalInfo.email': userEmail?.toLowerCase() }
+      ]
+    });
+    
+    // Delete Onboarding records and associated files
+    const onboardingDir = path.join(ONBOARDING_ROOT, userId);
+    if (fs.existsSync(onboardingDir)) {
+      try {
+        fs.rmSync(onboardingDir, { recursive: true, force: true });
+        console.log(`Deleted onboarding files for user ${userId}`);
+      } catch (fileErr) {
+        console.warn(`Failed to delete onboarding files: ${fileErr.message}`);
+      }
+    }
     await Onboarding.deleteMany({ user: userId });
     
     // Delete Payment records
@@ -297,11 +363,29 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
     // Delete Subscription records
     await Subscription.deleteMany({ user: userId });
     
+    // Delete Notification records
+    await Notification.deleteMany({ user: userId });
+    
+    // Delete LicensingProgress records
+    await LicensingProgress.deleteMany({ user: userId });
+    
+    // Delete ProductionSubmission records
+    await ProductionSubmission.deleteMany({ agent: userId });
+    
+    // Delete AuditLog records for this user (optional - you may want to keep these for compliance)
+    // await AuditLog.deleteMany({ user: userId });
+    
     // Hard delete - permanently remove user
     await User.findByIdAndDelete(userId);
     
+    console.log(`User ${userId} (${userEmail}) and all associated data deleted successfully`);
+    
     sendResponse(res, 200, {
-      message: 'User and all related records deleted successfully'
+      message: 'User and all related records deleted successfully',
+      deletedItems: {
+        apaApplications: apaApplications.length,
+        user: 1
+      }
     });
   } catch (error) {
     errorResponse(res, error);
