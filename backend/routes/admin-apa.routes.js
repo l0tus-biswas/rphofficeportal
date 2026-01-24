@@ -75,8 +75,15 @@ router.get('/apa-applications/:id', async (req, res) => {
     if (!application) {
       return errorResponse(res, new Error('Application not found'), 404);
     }
+
+    // Build full document URL if signed document exists
+    const appData = application.toObject();
+    if (appData.docusign?.documentUrl) {
+      const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+      appData.docusign.documentUrl = `${baseUrl}${appData.docusign.documentUrl}`;
+    }
     
-    sendResponse(res, 200, { application });
+    sendResponse(res, 200, { application: appData });
     
   } catch (error) {
     errorResponse(res, error);

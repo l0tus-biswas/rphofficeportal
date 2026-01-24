@@ -52,7 +52,7 @@ async function setupStripeProducts() {
     // Create price for monthly subscription
     const subscriptionPrice = await stripe.prices.create({
       product: subscriptionProduct.id,
-      unit_amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2500, // $25
+      unit_amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000, // $20
       currency: 'usd',
       recurring: {
         interval: 'month',

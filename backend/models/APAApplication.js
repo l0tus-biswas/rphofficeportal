@@ -119,11 +119,11 @@ const apaApplicationSchema = new mongoose.Schema({
   
   // Payment Information
   payment: {
-    onboardingFeeAmount: { type: Number, default: 169 },
+    onboardingFeeAmount: { type: Number, default: 20 },
     onboardingFeePaid: { type: Boolean, default: false },
     onboardingFeeWaived: { type: Boolean, default: false },
     onboardingFeePaymentIntentId: String,
-    monthlyFeeAmount: { type: Number, default: 25 },
+    monthlyFeeAmount: { type: Number, default: 20 },
     monthlyFeeAuthorized: { type: Boolean, default: false },
     stripeCustomerId: String,
     stripePaymentMethodId: String,

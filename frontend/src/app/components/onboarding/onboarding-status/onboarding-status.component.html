@@ -49,6 +49,68 @@
       </div>
     </div>
 
+    <!-- DocuSign Status / Signed Agreement Preview -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <!-- Show signed document if available -->
+        <div class="card shadow-sm" *ngIf="application.docusign?.documentUrl">
+          <div class="card-header d-flex justify-content-between align-items-center bg-success text-white">
+            <h5 class="mb-0"><i class="bi bi-file-earmark-check me-2"></i>Signed APA Agreement</h5>
+            <a class="btn btn-light btn-sm" [href]="application.docusign.documentUrl" target="_blank" rel="noopener">
+              <i class="bi bi-download me-1"></i>Download PDF
+            </a>
+          </div>
+          <div class="card-body p-0">
+            <object [data]="application.docusign.documentUrl | safe:'resourceUrl'" 
+                    type="application/pdf" 
+                    class="w-100" 
+                    style="height: 600px;">
+              <div class="text-center py-5">
+                <i class="bi bi-file-earmark-pdf text-success" style="font-size: 4rem;"></i>
+                <p class="mt-3 mb-2">Your signed APA Agreement is ready.</p>
+                <a class="btn btn-primary" [href]="application.docusign.documentUrl" target="_blank" rel="noopener">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>View PDF
+                </a>
+              </div>
+            </object>
+          </div>
+        </div>
+
+        <!-- Show pending message if document not yet signed/downloaded -->
+        <div class="card shadow-sm" *ngIf="!application.docusign?.documentUrl && application.docusign">
+          <div class="card-header" [ngClass]="{
+            'bg-warning': application.docusign.status === 'sent' || application.docusign.status === 'delivered',
+            'bg-info text-white': application.docusign.status === 'draft',
+            'bg-success text-white': application.docusign.status === 'completed'
+          }">
+            <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>APA Agreement</h5>
+          </div>
+          <div class="card-body text-center py-4">
+            <div *ngIf="fetchingDocument">
+              <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <p class="mb-0">Fetching signed document from DocuSign...</p>
+            </div>
+            <div *ngIf="!fetchingDocument">
+              <i class="bi bi-hourglass-split text-warning" style="font-size: 3rem;" *ngIf="application.docusign.status !== 'completed'"></i>
+              <i class="bi bi-check-circle text-success" style="font-size: 3rem;" *ngIf="application.docusign.status === 'completed'"></i>
+              <p class="mt-3 mb-1 fw-bold">DocuSign Status: <span class="text-uppercase">{{ application.docusign.status }}</span></p>
+              <p class="text-muted mb-0" *ngIf="application.docusign.status === 'sent' || application.docusign.status === 'delivered'">
+                Please check your email to sign the agreement.
+              </p>
+              <p class="text-muted mb-2" *ngIf="application.docusign.status === 'completed'">
+                Document signed successfully.
+              </p>
+              <button class="btn btn-primary" *ngIf="application.docusign.status === 'completed'" (click)="fetchSignedDocument()">
+                <i class="bi bi-download me-1"></i>Fetch Signed PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Personal Information -->
     <div class="row mb-4">
       <div class="col-md-6">
@@ -57,43 +119,43 @@
             <h5 class="mb-0">Personal Information</h5>
           </div>
           <div class="card-body">
-            <table class="table table-sm mb-0">
+            <table class="table table-sm mb-0" *ngIf="application.personalInfo">
               <tr>
                 <th width="40%">Full Name:</th>
-                <td>{{ application.personalInfo.legalFirstName }} {{ application.personalInfo.legalMiddleName }} {{ application.personalInfo.legalLastName }}</td>
+                <td>{{ application.personalInfo?.legalFirstName }} {{ application.personalInfo?.legalMiddleName }} {{ application.personalInfo?.legalLastName }}</td>
               </tr>
               <tr>
                 <th>Gender:</th>
-                <td>{{ application.personalInfo.gender === 'M' ? 'Male' : 'Female' }}</td>
+                <td>{{ application.personalInfo?.gender === 'M' ? 'Male' : (application.personalInfo?.gender === 'F' ? 'Female' : 'N/A') }}</td>
               </tr>
               <tr>
                 <th>Date of Birth:</th>
-                <td>{{ application.personalInfo.dateOfBirth | date }}</td>
+                <td>{{ application.personalInfo?.dateOfBirth | date }}</td>
               </tr>
               <tr>
                 <th>SSN:</th>
-                <td>***-**-{{ application.personalInfo.ssn?.slice(-4) }}</td>
+                <td>***-**-{{ application.personalInfo?.ssn?.slice(-4) || '****' }}</td>
               </tr>
               <tr>
                 <th>Mobile Phone:</th>
-                <td>{{ application.personalInfo.mobilePhone }}</td>
+                <td>{{ application.personalInfo?.mobilePhone || 'N/A' }}</td>
               </tr>
               <tr>
                 <th>Email:</th>
-                <td>{{ application.personalInfo.email }}</td>
+                <td>{{ application.personalInfo?.email || 'N/A' }}</td>
               </tr>
-              <tr>
+              <tr *ngIf="application.personalInfo?.homeAddress">
                 <th>Home Address:</th>
                 <td>
-                  {{ application.personalInfo.homeAddress.street }}<br>
-                  {{ application.personalInfo.homeAddress.city }}, {{ application.personalInfo.homeAddress.state }} {{ application.personalInfo.homeAddress.zipCode }}
+                  {{ application.personalInfo?.homeAddress?.street }}<br>
+                  {{ application.personalInfo?.homeAddress?.city }}, {{ application.personalInfo?.homeAddress?.state }} {{ application.personalInfo?.homeAddress?.zipCode }}
                 </td>
               </tr>
-              <tr *ngIf="application.personalInfo.mailingAddress?.street">
+              <tr *ngIf="application.personalInfo?.mailingAddress?.street">
                 <th>Mailing Address:</th>
                 <td>
-                  {{ application.personalInfo.mailingAddress.street }}<br>
-                  {{ application.personalInfo.mailingAddress.city }}, {{ application.personalInfo.mailingAddress.state }} {{ application.personalInfo.mailingAddress.zipCode }}
+                  {{ application.personalInfo?.mailingAddress?.street }}<br>
+                  {{ application.personalInfo?.mailingAddress?.city }}, {{ application.personalInfo?.mailingAddress?.state }} {{ application.personalInfo?.mailingAddress?.zipCode }}
                 </td>
               </tr>
             </table>
@@ -108,32 +170,32 @@
             <h5 class="mb-0">Recruiting Information</h5>
           </div>
           <div class="card-body">
-            <table class="table table-sm mb-0">
-              <tr *ngIf="application.recruitingInfo.referralCode">
+            <table class="table table-sm mb-0" *ngIf="application.recruitingInfo">
+              <tr *ngIf="application.recruitingInfo?.referralCode">
                 <th width="40%">Referral Code:</th>
-                <td><code>{{ application.recruitingInfo.referralCode }}</code></td>
+                <td><code>{{ application.recruitingInfo?.referralCode }}</code></td>
               </tr>
-              <tr *ngIf="application.recruitingInfo.recruiterFullName">
+              <tr *ngIf="application.recruitingInfo?.recruiterFullName">
                 <th>Recruiter Name:</th>
-                <td>{{ application.recruitingInfo.recruiterFullName }}</td>
+                <td>{{ application.recruitingInfo?.recruiterFullName }}</td>
               </tr>
-              <tr *ngIf="application.recruitingInfo.recruiterAgentId">
+              <tr *ngIf="application.recruitingInfo?.recruiterAgentId">
                 <th>Recruiter Agent ID:</th>
-                <td><code>{{ application.recruitingInfo.recruiterAgentId }}</code></td>
+                <td><code>{{ application.recruitingInfo?.recruiterAgentId }}</code></td>
               </tr>
-              <tr *ngIf="application.recruitingInfo.recruiterContact">
+              <tr *ngIf="application.recruitingInfo?.recruiterContact">
                 <th>Recruiter Contact:</th>
-                <td>{{ application.recruitingInfo.recruiterContact }}</td>
+                <td>{{ application.recruitingInfo?.recruiterContact }}</td>
               </tr>
-              <tr *ngIf="application.recruitingInfo.uplineLeaderName">
+              <tr *ngIf="application.recruitingInfo?.uplineLeaderName">
                 <th>Upline Leader:</th>
-                <td>{{ application.recruitingInfo.uplineLeaderName }}</td>
+                <td>{{ application.recruitingInfo?.uplineLeaderName }}</td>
               </tr>
-              <tr *ngIf="application.recruitingInfo.teamName">
+              <tr *ngIf="application.recruitingInfo?.teamName">
                 <th>Team:</th>
-                <td>{{ application.recruitingInfo.teamName }}</td>
+                <td>{{ application.recruitingInfo?.teamName }}</td>
               </tr>
-              <tr *ngIf="!application.recruitingInfo.referralCode && !application.recruitingInfo.recruiterContact">
+              <tr *ngIf="!application.recruitingInfo?.referralCode && !application.recruitingInfo?.recruiterContact">
                 <td colspan="2" class="text-muted text-center">No recruiting information provided</td>
               </tr>
             </table>
@@ -143,7 +205,7 @@
     </div>
 
     <!-- Compliance Questions -->
-    <div class="row mb-4">
+    <div class="row mb-4" *ngIf="application.complianceQuestions">
       <div class="col-12">
         <div class="card">
           <div class="card-header">
@@ -159,17 +221,22 @@
                 { key: 'licenseDenied', label: 'Have you ever had any professional or business license (insurance or otherwise) denied, suspended, or revoked?' },
                 { key: 'bondIssues', label: 'Has a bonding company ever denied, paid out on, or revoked a surety bond for you?' }
               ]">
-                <div class="border rounded p-3">
+                <div class="border rounded p-3 h-100">
                   <strong class="d-block mb-2">{{ q.label }}</strong>
-                  <span class="badge" 
-                        [class.bg-success]="!application.complianceQuestions[q.key]?.answer" 
-                        [class.bg-warning]="application.complianceQuestions[q.key]?.answer">
-                    {{ application.complianceQuestions[q.key]?.answer ? 'YES' : 'NO' }}
-                  </span>
-                  <div *ngIf="application.complianceQuestions[q.key]?.answer && application.complianceQuestions[q.key]?.explanation" 
-                       class="mt-2 p-2 bg-light rounded">
-                    <small><strong>Explanation:</strong><br>{{ application.complianceQuestions[q.key]?.explanation }}</small>
-                  </div>
+                  <ng-container *ngIf="application.complianceQuestions[q.key] !== undefined; else noAnswer">
+                    <span class="badge" 
+                          [class.bg-success]="application.complianceQuestions[q.key]?.answer === false" 
+                          [class.bg-warning]="application.complianceQuestions[q.key]?.answer === true">
+                      {{ application.complianceQuestions[q.key]?.answer === true ? 'YES' : 'NO' }}
+                    </span>
+                    <div *ngIf="application.complianceQuestions[q.key]?.answer === true && application.complianceQuestions[q.key]?.explanation" 
+                         class="mt-2 p-2 bg-light rounded">
+                      <small><strong>Explanation:</strong><br>{{ application.complianceQuestions[q.key]?.explanation }}</small>
+                    </div>
+                  </ng-container>
+                  <ng-template #noAnswer>
+                    <span class="badge bg-secondary">Not Answered</span>
+                  </ng-template>
                 </div>
               </div>
             </div>
@@ -179,7 +246,7 @@
     </div>
 
     <!-- Financial Background -->
-    <div class="row mb-4">
+    <div class="row mb-4" *ngIf="application.financialBackground">
       <div class="col-12">
         <div class="card">
           <div class="card-header">
@@ -191,15 +258,15 @@
                 <div class="border rounded p-3">
                   <strong class="d-block mb-2">Do you have any unsatisfied judgments or liens against you?</strong>
                   <span class="badge" 
-                        [class.bg-success]="!application.financialBackground.unsatisfiedJudgments" 
-                        [class.bg-warning]="application.financialBackground.unsatisfiedJudgments">
-                    Judgments: {{ application.financialBackground.unsatisfiedJudgments ? 'YES' : 'NO' }}
+                        [class.bg-success]="application.financialBackground?.unsatisfiedJudgments === false" 
+                        [class.bg-warning]="application.financialBackground?.unsatisfiedJudgments === true">
+                    Judgments: {{ application.financialBackground?.unsatisfiedJudgments === true ? 'YES' : 'NO' }}
                   </span>
                   <br>
                   <span class="badge mt-2" 
-                        [class.bg-success]="!application.financialBackground.unsatisfiedLiens" 
-                        [class.bg-warning]="application.financialBackground.unsatisfiedLiens">
-                    Liens: {{ application.financialBackground.unsatisfiedLiens ? 'YES' : 'NO' }}
+                        [class.bg-success]="application.financialBackground?.unsatisfiedLiens === false" 
+                        [class.bg-warning]="application.financialBackground?.unsatisfiedLiens === true">
+                    Liens: {{ application.financialBackground?.unsatisfiedLiens === true ? 'YES' : 'NO' }}
                   </span>
                 </div>
               </div>
@@ -207,19 +274,19 @@
                 <div class="border rounded p-3">
                   <strong class="d-block mb-2">Have you ever filed for bankruptcy?</strong>
                   <span class="badge" 
-                        [class.bg-success]="!application.financialBackground.bankruptcy?.filed" 
-                        [class.bg-warning]="application.financialBackground.bankruptcy?.filed">
-                    {{ application.financialBackground.bankruptcy?.filed ? 'YES' : 'NO' }}
+                        [class.bg-success]="application.financialBackground?.bankruptcy?.filed === false" 
+                        [class.bg-warning]="application.financialBackground?.bankruptcy?.filed === true">
+                    {{ application.financialBackground?.bankruptcy?.filed === true ? 'YES' : 'NO' }}
                   </span>
-                  <div *ngIf="application.financialBackground.bankruptcy?.filed" class="mt-3">
+                  <div *ngIf="application.financialBackground?.bankruptcy?.filed === true" class="mt-3">
                     <div class="row">
                       <div class="col-6">
                         <small class="text-muted d-block">Chapter:</small>
-                        <strong>Chapter {{ application.financialBackground.bankruptcy?.chapter }}</strong>
+                        <strong>Chapter {{ application.financialBackground?.bankruptcy?.chapter || 'N/A' }}</strong>
                       </div>
                       <div class="col-6">
                         <small class="text-muted d-block">Status:</small>
-                        <strong>{{ application.financialBackground.bankruptcy?.status }}</strong>
+                        <strong>{{ application.financialBackground?.bankruptcy?.status || 'N/A' }}</strong>
                       </div>
                     </div>
                   </div>
@@ -232,7 +299,7 @@
     </div>
 
     <!-- Licensing Status -->
-    <div class="row mb-4">
+    <div class="row mb-4" *ngIf="application.licensingStatus">
       <div class="col-12">
         <div class="card">
           <div class="card-header">
@@ -242,62 +309,38 @@
             <div class="border rounded p-3">
               <strong class="d-block mb-2">Are you currently licensed to sell insurance products?</strong>
               <span class="badge" 
-                    [class.bg-success]="application.licensingStatus.currentlyLicensed" 
-                    [class.bg-secondary]="!application.licensingStatus.currentlyLicensed">
-                {{ application.licensingStatus.currentlyLicensed ? 'YES' : 'NO' }}
+                    [class.bg-success]="application.licensingStatus?.currentlyLicensed === true" 
+                    [class.bg-secondary]="application.licensingStatus?.currentlyLicensed !== true">
+                {{ application.licensingStatus?.currentlyLicensed === true ? 'YES' : 'NO' }}
               </span>
-              <div *ngIf="application.licensingStatus.currentlyLicensed" class="mt-3">
+              <div *ngIf="application.licensingStatus?.currentlyLicensed === true" class="mt-3">
                 <div class="row">
                   <div class="col-md-3 mb-2">
                     <small class="text-muted d-block">License Types:</small>
-                    <strong>{{ application.licensingStatus.licenseTypes?.join(', ') || 'N/A' }}</strong>
+                    <strong>{{ application.licensingStatus?.licenseTypes?.join(', ') || 'N/A' }}</strong>
                   </div>
                   <div class="col-md-3 mb-2">
                     <small class="text-muted d-block">States Licensed:</small>
-                    <strong>{{ application.licensingStatus.statesLicensed?.join(', ') || 'N/A' }}</strong>
+                    <strong>{{ application.licensingStatus?.statesLicensed?.join(', ') || 'N/A' }}</strong>
                   </div>
                   <div class="col-md-3 mb-2">
                     <small class="text-muted d-block">License Number:</small>
-                    <strong>{{ application.licensingStatus.licenseNumber || 'N/A' }}</strong>
+                    <strong>{{ application.licensingStatus?.licenseNumber || 'N/A' }}</strong>
                   </div>
                   <div class="col-md-3 mb-2">
                     <small class="text-muted d-block">License Status:</small>
-                    <strong>{{ application.licensingStatus.licenseStatus || 'N/A' }}</strong>
+                    <strong>{{ application.licensingStatus?.licenseStatus || 'N/A' }}</strong>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Payment Information -->
-    <div class="row mb-4" *ngIf="application.payment">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h5 class="mb-0">Payment Information</h5>
-          </div>
-          <div class="card-body">
-            <div class="row">
-              <div class="col-md-4">
-                <p class="mb-2"><strong>Onboarding Fee:</strong> 
-                  <span class="text-success fw-bold" *ngIf="application.payment.onboardingFeeWaived">WAIVED</span>
-                  <span *ngIf="!application.payment.onboardingFeeWaived">${{ application.payment.onboardingFeeAmount }}</span>
-                </p>
-              </div>
-              <div class="col-md-4">
-                <p class="mb-2"><strong>Monthly Fee:</strong> ${{ application.payment.monthlyFeeAmount }}</p>
-              </div>
-              <div class="col-md-4">
-                <p class="mb-2"><strong>Payment Status:</strong> 
-                  <span class="badge" 
-                        [class.bg-success]="application.payment.onboardingFeePaid" 
-                        [class.bg-warning]="!application.payment.onboardingFeePaid">
-                    {{ application.payment.onboardingFeePaid ? 'PAID' : 'PENDING' }}
-                  </span>
-                </p>
+                <!-- Show Other Description if License Type includes Other -->
+                <div class="row mt-2" *ngIf="application.licensingStatus?.licenseTypes?.includes('Other') && application.licensingStatus?.licenseOtherDescription">
+                  <div class="col-12">
+                    <small class="text-muted d-block">Other License Description:</small>
+                    <div class="p-2 bg-light rounded mt-1">
+                      <strong>{{ application.licensingStatus?.licenseOtherDescription }}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

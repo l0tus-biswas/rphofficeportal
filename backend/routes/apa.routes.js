@@ -267,6 +267,7 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
       try {
         await downloadSignedDocument(envelopeId, signedDocPath);
         application.docusign.signedDocumentPath = signedDocPath;
+        application.docusign.documentUrl = `/uploads/apa-signed/${application._id}_signed_apa.pdf`;
         console.log('✅ Signed document downloaded:', signedDocPath);
       } catch (downloadError) {
         console.error('❌ Failed to download signed document:', downloadError);
@@ -327,20 +328,43 @@ router.post('/apa-application/create-checkout-session', async (req, res) => {
     }
 
     const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
+    const monthlyAmountCents = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2000;
+    const subscriptionProductName = process.env.STRIPE_MONTHLY_PRODUCT_NAME || 'RHP Office CRM Subscription';
 
-    if (!monthlyPriceId) {
-      return sendResponse(res, 500, { 
-        message: 'Stripe monthly price not configured. Please run setup-stripe-products.js script' 
-      });
+    let validatedPriceId = null;
+    if (monthlyPriceId) {
+      try {
+        const stripePrice = await stripe.prices.retrieve(monthlyPriceId);
+        const priceMatchesAmount = typeof stripePrice.unit_amount === 'number'
+          ? stripePrice.unit_amount === monthlyAmountCents
+          : false;
+        const priceIsMonthly = stripePrice.recurring?.interval === 'month';
+
+        if (priceMatchesAmount && priceIsMonthly) {
+          validatedPriceId = stripePrice.id;
+        } else {
+          console.warn('[APA CHECKOUT] Stripe price mismatch detected. Expected amount', monthlyAmountCents, 'but received', stripePrice.unit_amount);
+        }
+      } catch (priceError) {
+        console.warn('[APA CHECKOUT] Unable to retrieve configured Stripe price. Falling back to inline price_data.', priceError.message);
+      }
     }
 
     // Build line items - only monthly subscription (no setup fee)
-    const lineItems = [
-      {
-        price: monthlyPriceId,
-        quantity: 1
-      }
-    ];
+    const lineItems = validatedPriceId
+      ? [{ price: validatedPriceId, quantity: 1 }]
+      : [{
+          price_data: {
+            currency: 'usd',
+            unit_amount: monthlyAmountCents,
+            recurring: { interval: 'month' },
+            product_data: {
+              name: subscriptionProductName,
+              description: 'Monthly access to RHP Office CRM'
+            }
+          },
+          quantity: 1
+        }];
 
     // Create checkout session
     const sessionParams = {
@@ -479,7 +503,7 @@ const verifyPaymentHandler = async (req, res) => {
     const payment = new Payment({
       user: null, // Will be updated after user creation
       type: 'setup_fee',
-      amount: session.amount_total / 100,
+      amount: session.amount_total, // store in cents to match other payment records
       status: 'completed',
       stripePaymentIntentId: session.payment_intent,
       stripeCustomerId: session.customer,
@@ -538,7 +562,7 @@ const verifyPaymentHandler = async (req, res) => {
     await payment.save();
 
     let subscriptionPriceId = process.env.STRIPE_MONTHLY_PRICE_ID || null;
-    let subscriptionAmount = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2500;
+    let subscriptionAmount = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2000;
     let subscriptionStart = new Date();
     let subscriptionEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     let subscriptionStatus = 'active';
@@ -567,7 +591,7 @@ const verifyPaymentHandler = async (req, res) => {
     }
 
     if (!subscriptionPriceId) {
-      return sendResponse(res, 500, { message: 'Unable to determine subscription price ID' });
+      subscriptionPriceId = `inline_price_${subscriptionAmount}`;
     }
 
     const subscription = new Subscription({
@@ -595,9 +619,26 @@ const verifyPaymentHandler = async (req, res) => {
     user.onboarding = onboarding._id;
     user.onboardingStatus = 'not-started';
 
+    // Update user payment/subscription tracking fields
+    user.stripeCustomerId = session.customer || user.stripeCustomerId;
+    user.stripeSubscriptionId = session.subscription || user.stripeSubscriptionId;
+    user.subscriptionStatus = subscriptionStatus || 'active';
+    user.subscriptionStartDate = subscriptionStart;
+    user.nextBillingDate = subscriptionEnd;
+    user.lastPaymentDate = new Date();
+    user.paymentAccessEnabled = true;
+    user.oneTimePaymentCompleted = true;
+    user.oneTimePaymentAmount = 0;
+    user.oneTimePaymentDate = user.oneTimePaymentDate || new Date();
+
     // Generate set-password token for immediate password setup
     const setPasswordToken = user.getResetPasswordToken();
     await user.save();
+
+    // Link application back to the created user for onboarding visibility
+    application.userId = user._id;
+    application.user = user._id;
+    await application.save();
 
     // Send welcome email with set-password link (backup)
     await sendWelcomeEmail(user, password, null, setPasswordToken);

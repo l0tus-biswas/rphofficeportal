@@ -621,7 +621,7 @@ router.get('/payment-settings', async (req, res) => {
   try {
     sendResponse(res, 200, {
       oneTimePrice: parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900,
-      monthlyPrice: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2500,
+      monthlyPrice: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
       monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || '',
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
     });

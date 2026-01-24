@@ -121,7 +121,7 @@ const userSchema = new mongoose.Schema({
   },
   oneTimePaymentAmount: {
     type: Number,
-    default: 17900 // $179 in cents
+    default: 0 // No setup fee in new onboarding flow
   },
   oneTimePaymentDate: Date,
   stripeCustomerId: {

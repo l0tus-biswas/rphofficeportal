@@ -6,6 +6,8 @@ import { BrandingService, BrandingConfig } from '../../services/branding.service
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
+declare const google: any;
+
 interface RecruiterSearchResult {
   id: string;
   name: string;
@@ -51,12 +53,27 @@ export class ApplyComponent implements OnInit, OnDestroy {
   
   // For file uploads in section 3
   complianceFiles: Map<string, File> = new Map();
+
+  // Language toggle
+  languages = [
+    { code: 'en', label: 'English' },
+    { code: 'es', label: 'Español' }
+  ];
+  currentLanguage = 'en';
+  private translationInitAttempts = 0;
   
   // US States
   states = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
   private readonly recruiterFieldKeys = ['recruiterFullName', 'recruiterAgentId', 'recruiterEmail', 'recruiterPhone'];
   private recruiterSearch$ = new Subject<string>();
   private subscriptions: Subscription[] = [];
+  readonly sectionMeta = [
+    { id: 1, label: 'Personal Info', icon: 'bi-person-badge' },
+    { id: 2, label: 'Recruiting', icon: 'bi-diagram-3' },
+    { id: 3, label: 'Compliance', icon: 'bi-shield-check' },
+    { id: 4, label: 'Financial', icon: 'bi-cash-coin' },
+    { id: 5, label: 'Licensing', icon: 'bi-award' }
+  ];
 
   constructor(
     private formBuilder: FormBuilder,
@@ -67,6 +84,9 @@ export class ApplyComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.currentLanguage = localStorage.getItem('selectedLanguage') || 'en';
+    this.initTranslationSupport();
+
     // Load branding
     this.branding = this.brandingService.getCurrentBranding();
     this.brandingService.branding$.subscribe(branding => {
@@ -693,7 +713,10 @@ export class ApplyComponent implements OnInit, OnDestroy {
   }
 
   private getSelectedReferralCode(): string {
-    const manualCode = this.normalizeReferralCode(this.section2Form?.get('recruiterAgentId')?.value);
+    // Use getRawValue to get the form value even when field is disabled (locked)
+    // Priority: form's recruiterAgentId (if filled) > URL referralCode
+    const formValues = this.section2Form?.getRawValue();
+    const manualCode = this.normalizeReferralCode(formValues?.recruiterAgentId);
     if (manualCode) {
       return manualCode;
     }
@@ -766,6 +789,77 @@ export class ApplyComponent implements OnInit, OnDestroy {
       });
     } else {
       this.error = 'Application information not available. Please contact support.';
+    }
+  }
+
+  changeLanguage(lang: string): void {
+    if (this.currentLanguage === lang) {
+      return;
+    }
+
+    this.currentLanguage = lang;
+    if (lang === 'en') {
+      localStorage.removeItem('selectedLanguage');
+    } else {
+      localStorage.setItem('selectedLanguage', lang);
+    }
+
+    this.triggerLanguageChange(lang);
+  }
+
+  isLanguageActive(lang: string): boolean {
+    return this.currentLanguage === lang;
+  }
+
+  private initTranslationSupport(): void {
+    const win = window as any;
+    if (win?._rhpGoogleTranslateInitialized) {
+      this.triggerLanguageChange(this.currentLanguage, true);
+      return;
+    }
+
+    const initialize = () => {
+      if (typeof google !== 'undefined' && google.translate) {
+        try {
+          let container = document.getElementById('google_translate_element_hidden');
+          if (!container) {
+            container = document.createElement('div');
+            container.id = 'google_translate_element_hidden';
+            container.style.display = 'none';
+            document.body.appendChild(container);
+          }
+
+          new google.translate.TranslateElement(
+            {
+              pageLanguage: 'en',
+              includedLanguages: this.languages.map(l => l.code).join(','),
+              autoDisplay: false
+            },
+            'google_translate_element_hidden'
+          );
+
+          win._rhpGoogleTranslateInitialized = true;
+          this.triggerLanguageChange(this.currentLanguage, true);
+        } catch (error) {
+          console.error('Google Translate initialization failed:', error);
+        }
+      } else if (this.translationInitAttempts < 20) {
+        this.translationInitAttempts += 1;
+        setTimeout(initialize, 300);
+      }
+    };
+
+    initialize();
+  }
+
+  private triggerLanguageChange(lang: string, silent = false, attempt = 0): void {
+    const selectElement = document.querySelector('.goog-te-combo') as HTMLSelectElement | null;
+
+    if (selectElement) {
+      selectElement.value = lang;
+      selectElement.dispatchEvent(new Event('change'));
+    } else if (attempt < 20) {
+      setTimeout(() => this.triggerLanguageChange(lang, silent, attempt + 1), 250);
     }
   }
 }

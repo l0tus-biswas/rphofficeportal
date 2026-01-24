@@ -101,7 +101,7 @@ router.post('/one-time-intent', protect, async (req, res) => {
 });
 
 // @route   POST /api/payments/subscription-intent
-// @desc    Create subscription for $25/month
+// @desc    Create subscription for $20/month
 // @access  Private
 router.post('/subscription-intent', protect, async (req, res) => {
   try {
@@ -143,7 +143,7 @@ router.post('/subscription-intent', protect, async (req, res) => {
       status: subscription.status,
       currentPeriodStart: new Date(subscription.current_period_start * 1000),
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2500,
+      amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
       currency: 'usd',
       interval: 'month'
     });
@@ -178,30 +178,35 @@ router.get('/status', protect, async (req, res) => {
     let subscriptionStatus = user.subscriptionStatus || 'none';
     let nextBillingDate = user.nextBillingDate;
     let subscriptionStartDate = user.subscriptionStartDate;
-    
-    if (user.stripeSubscriptionId) {
-      const subscription = await Subscription.findOne({ 
-        stripeSubscriptionId: user.stripeSubscriptionId 
-      });
-      
-      if (subscription) {
-        subscriptionDetails = subscription;
-        // Use Subscription model as source of truth, fall back to User fields
-        subscriptionStatus = subscription.status || subscriptionStatus;
-        nextBillingDate = subscription.currentPeriodEnd || nextBillingDate;
-        subscriptionStartDate = subscription.currentPeriodStart || subscriptionStartDate;
-      }
+
+    const subscriptionQuery = user.stripeSubscriptionId
+      ? { stripeSubscriptionId: user.stripeSubscriptionId }
+      : { user: user._id };
+
+    const subscription = await Subscription.findOne(subscriptionQuery).sort({ createdAt: -1 });
+
+    if (subscription) {
+      subscriptionDetails = subscription;
+      subscriptionStatus = subscription.status || subscriptionStatus;
+      nextBillingDate = subscription.currentPeriodEnd || nextBillingDate;
+      subscriptionStartDate = subscription.currentPeriodStart || subscriptionStartDate;
     }
 
+    const subscriptionActive = ['active', 'trialing'].includes(subscriptionStatus);
+    const derivedOneTimeCompleted = user.oneTimePaymentCompleted || subscriptionActive;
+    const derivedOneTimeAmount = typeof user.oneTimePaymentAmount === 'number'
+      ? user.oneTimePaymentAmount
+      : 0;
+
     sendResponse(res, 200, {
-      oneTimePaymentCompleted: user.oneTimePaymentCompleted,
-      oneTimePaymentAmount: user.oneTimePaymentAmount,
+      oneTimePaymentCompleted: derivedOneTimeCompleted,
+      oneTimePaymentAmount: derivedOneTimeAmount,
       oneTimePaymentDate: user.oneTimePaymentDate,
       subscriptionStatus: subscriptionStatus,
       subscriptionStartDate: subscriptionStartDate,
       nextBillingDate: nextBillingDate,
       lastPaymentDate: user.lastPaymentDate,
-      paymentAccessEnabled: user.paymentAccessEnabled,
+      paymentAccessEnabled: user.paymentAccessEnabled || subscriptionActive,
       subscription: subscriptionDetails
     });
   } catch (error) {

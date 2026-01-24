@@ -1,8 +1,62 @@
 <div class="apply-page">
-  <div class="container py-5">
-    <div class="row justify-content-center">
-      <div class="col-lg-10">
-        
+  <section class="apply-header">
+    <div class="container">
+      <div class="apply-header__inner">
+        <div class="apply-header__copy">
+          <p class="eyebrow"><i class="bi bi-file-earmark-check me-1"></i>Agent Producer Agreement</p>
+          <h1 class="mb-2">Start your journey with {{ branding.appName }}</h1>
+          <p class="text-muted mb-3">
+            Complete your application in about 10 minutes. Your progress saves automatically.
+          </p>
+          <div class="header-chips">
+            <span><i class="bi bi-shield-check me-1"></i>256-bit encryption</span>
+            <span><i class="bi bi-file-earmark-text me-1"></i>DocuSign certified</span>
+            <span><i class="bi bi-translate me-1"></i>Bilingual support</span>
+          </div>
+        </div>
+        <div class="apply-header__controls">
+          <div class="language-toggle mb-3">
+            <span class="text-uppercase small text-muted me-2">Language</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Language toggle">
+              <button type="button"
+                      class="btn"
+                      [ngClass]="isLanguageActive('en') ? 'btn-light active' : 'btn-outline-secondary'"
+                      (click)="changeLanguage('en')">
+                English
+              </button>
+              <button type="button"
+                      class="btn"
+                      [ngClass]="isLanguageActive('es') ? 'btn-light active' : 'btn-outline-secondary'"
+                      (click)="changeLanguage('es')">
+                Español
+              </button>
+            </div>
+          </div>
+          <div class="header-progress">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <small class="text-muted text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.05em;">Step</small>
+                <p class="mb-0 fw-bold" style="color: #1e293b;">{{ currentSection }} of {{ totalSections }}</p>
+              </div>
+              <div class="text-end">
+                <small class="text-muted text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.05em;">Complete</small>
+                <p class="mb-0 fw-bold" style="color: #6366f1;">{{ progressPercentage | number:'1.0-0' }}%</p>
+              </div>
+            </div>
+            <div class="progress progress-pill">
+              <div class="progress-bar bg-primary" role="progressbar" [style.width.%]="progressPercentage"></div>
+            </div>
+            <p class="text-muted text-center mt-2 mb-0" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>~{{ 10 - (currentSection * 2) }} min remaining</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="container pb-5">
+    <div class="row gy-4">
+      <div class="col-12 col-lg-8">
+
         <!-- Invalid Referral Code Message -->
         <div *ngIf="invalidReferral" class="card shadow border-0">
           <div class="card-body p-5 text-center">
@@ -70,17 +124,29 @@
         </div>
 
         <!-- APA Application Form -->
-        <div *ngIf="!invalidReferral && !showInstructions && !isPendingSignature" class="card shadow border-0">
-          <div class="card-body p-5">
+        <div *ngIf="!invalidReferral && !showInstructions && !isPendingSignature" class="card shadow border-0 section-card">
+          <div class="card-body p-4 p-lg-5">
             
             <!-- Header -->
-            <div class="text-center mb-4">
-              <h1 class="display-5 fw-bold text-primary">Join {{ branding.appName }}</h1>
-              <p class="lead text-muted">Agent Producer Agreement (APA) Application</p>
-              
-              <div *ngIf="recruiterName" class="alert alert-info">
-                <i class="bi bi-person-check-fill me-2"></i>
-                You've been referred by <strong>{{ recruiterName }}</strong>
+            <div class="form-header d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+              <div>
+                <span class="badge rounded-pill mb-2" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); font-size: 0.7rem; padding: 0.4rem 0.8rem;">Application</span>
+                <h2 class="mb-2">Let's get started</h2>
+                <p class="text-muted mb-0">Fill out each section—we'll guide you every step of the way.</p>
+              </div>
+              <div *ngIf="recruiterName" class="recruiter-pill">
+                <i class="bi bi-person-check-fill"></i>
+                Sponsored by <strong>{{ recruiterName }}</strong>
+              </div>
+            </div>
+
+            <!-- Step Tracker -->
+            <div class="step-tracker mb-4">
+              <div class="step-node" *ngFor="let section of sectionMeta" [class.active]="currentSection === section.id" [class.completed]="currentSection > section.id">
+                <div class="step-circle">
+                  <i class="bi" [ngClass]="section.icon"></i>
+                </div>
+                <small class="d-block mt-2">{{ section.label }}</small>
               </div>
             </div>
 
@@ -90,44 +156,10 @@
                 <small class="text-muted">Section {{ currentSection }} of {{ totalSections }}</small>
                 <small class="text-muted">{{ progressPercentage | number:'1.0-0' }}% Complete</small>
               </div>
-              <div class="progress" style="height: 10px;">
+              <div class="progress progress-pill">
                 <div class="progress-bar bg-primary" role="progressbar" [style.width.%]="progressPercentage"></div>
               </div>
             </div>
-
-            <!-- Section Tabs -->
-            <ul class="nav nav-pills nav-fill mb-4">
-              <li class="nav-item">
-                <button class="nav-link" [class.active]="currentSection === 1" [class.disabled]="currentSection < 1">
-                  <i class="bi bi-person-fill d-block"></i>
-                  <small>Personal Info</small>
-                </button>
-              </li>
-              <li class="nav-item">
-                <button class="nav-link" [class.active]="currentSection === 2" [class.disabled]="currentSection < 2">
-                  <i class="bi bi-people-fill d-block"></i>
-                  <small>Recruiting</small>
-                </button>
-              </li>
-              <li class="nav-item">
-                <button class="nav-link" [class.active]="currentSection === 3" [class.disabled]="currentSection < 3">
-                  <i class="bi bi-shield-check d-block"></i>
-                  <small>Compliance</small>
-                </button>
-              </li>
-              <li class="nav-item">
-                <button class="nav-link" [class.active]="currentSection === 4" [class.disabled]="currentSection < 4">
-                  <i class="bi bi-cash-stack d-block"></i>
-                  <small>Financial</small>
-                </button>
-              </li>
-              <li class="nav-item">
-                <button class="nav-link" [class.active]="currentSection === 5" [class.disabled]="currentSection < 5">
-                  <i class="bi bi-award-fill d-block"></i>
-                  <small>Licensing</small>
-                </button>
-              </li>
-            </ul>
 
             <!-- Error Message -->
             <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
@@ -732,6 +764,91 @@
           </div>
         </div>
 
+      </div>
+
+      <div class="col-12 col-lg-4">
+        <div class="card summary-card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                <p class="text-uppercase text-muted small mb-0" style="font-size: 0.65rem; letter-spacing: 0.1em;">Checklist</p>
+                <h6 class="mb-0 fw-bold">Your Progress</h6>
+              </div>
+              <span class="badge rounded-pill" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); font-size: 0.75rem;">{{ progressPercentage | number:'1.0-0' }}%</span>
+            </div>
+            <div class="progress progress-pill mb-4">
+              <div class="progress-bar bg-primary" role="progressbar" [style.width.%]="progressPercentage"></div>
+            </div>
+            <div class="summary-step" *ngFor="let section of sectionMeta" [class.active]="currentSection === section.id" [class.completed]="currentSection > section.id">
+              <div class="summary-icon">
+                <i class="bi" [ngClass]="section.icon"></i>
+              </div>
+              <div>
+                <p class="mb-0 fw-semibold">{{ section.label }}</p>
+                <small class="text-muted" *ngIf="currentSection === section.id">Currently entering this section</small>
+                <small class="text-muted" *ngIf="currentSection > section.id">Completed</small>
+                <small class="text-muted" *ngIf="currentSection < section.id">Coming up next</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card summary-card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <span style="width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); display: grid; place-items: center;"><i class="bi bi-lightbulb" style="color: #d97706;"></i></span>
+              <h6 class="mb-0 fw-bold">Need help?</h6>
+            </div>
+            <p class="text-muted small mb-3">Your data is encrypted and secure. Reach out anytime.</p>
+            <ul class="list-unstyled mb-0">
+              <li class="d-flex align-items-start mb-3">
+                <span class="support-icon" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);"><i class="bi bi-chat-dots" style="color: #2563eb;"></i></span>
+                <div>
+                  <p class="fw-semibold mb-0" style="font-size: 0.9rem;">Your Recruiter</p>
+                  <small class="text-muted" *ngIf="recruiterName">{{ recruiterName }} can help with questions.</small>
+                  <small class="text-muted" *ngIf="!recruiterName">Your sponsor is available for support.</small>
+                </div>
+              </li>
+              <li class="d-flex align-items-start mb-3">
+                <span class="support-icon" style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);"><i class="bi bi-envelope" style="color: #16a34a;"></i></span>
+                <div>
+                  <p class="fw-semibold mb-0" style="font-size: 0.9rem;">Success Team</p>
+                  <small class="text-muted">success&#64;rhpoffice.com</small>
+                </div>
+              </li>
+              <li class="d-flex align-items-start">
+                <span class="support-icon" style="background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%);"><i class="bi bi-shield-check" style="color: #9333ea;"></i></span>
+                <div>
+                  <p class="fw-semibold mb-0" style="font-size: 0.9rem;">DocuSign Secure</p>
+                  <small class="text-muted">Legal e-signatures with audit trail.</small>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card summary-card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <span style="width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); display: grid; place-items: center;"><i class="bi bi-pen" style="color: #ffffff;"></i></span>
+              <h6 class="mb-0 fw-bold">What's Next</h6>
+            </div>
+            <div class="p-3 rounded-3 mb-3" style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="background: #22c55e; font-size: 0.65rem;">1</span>
+                <small class="fw-semibold">Complete this form</small>
+              </div>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge" style="background: #6366f1; font-size: 0.65rem;">2</span>
+                <small class="fw-semibold">Sign via DocuSign</small>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge" style="background: #94a3b8; font-size: 0.65rem;">3</span>
+                <small class="text-muted">Setup $20/mo subscription</small>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
