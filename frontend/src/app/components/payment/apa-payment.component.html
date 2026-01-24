@@ -99,39 +99,24 @@
                   
                   <div class="d-flex justify-content-between mb-2">
                     <div>
-                      <strong>Agent Setup Fee</strong>
-                      <div class="text-muted small">One-time setup fee for new agents</div>
-                    </div>
-                    <span>${{ setupFee }}.00</span>
-                  </div>
-                  
-                  <div class="d-flex justify-content-between mb-2">
-                    <div>
-                      <strong>Agent Monthly Subscription</strong>
-                      <div class="text-muted small">Monthly subscription for active agents</div>
+                      <strong>RHP Office Monthly Subscription</strong>
+                      <div class="text-muted small">Access to CRM, training materials, and support</div>
                       <div class="text-muted small">Billed monthly</div>
                     </div>
-                    <span>${{ monthlyFee }}.00</span>
+                    <span>${{ monthlyFee }}.00/mo</span>
                   </div>
                   
                   <hr>
-                  
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Subtotal</span>
-                    <span>${{ totalAmount }}.00</span>
-                  </div>
                   
                   <div *ngIf="couponApplied" class="alert alert-info py-2 px-3 mt-2 mb-2">
                     <i class="bi bi-tag-fill me-2"></i>
                     Coupon <strong>{{ appliedCouponCode }}</strong> will be applied at checkout
                   </div>
                   
-                  <hr>
-                  
                   <div class="d-flex justify-content-between fw-bold h5">
                     <span>Total due today</span>
                     <span class="text-primary">
-                      <span *ngIf="!couponApplied">${{ totalAmount }}.00</span>
+                      <span *ngIf="!couponApplied">${{ monthlyFee }}.00</span>
                       <span *ngIf="couponApplied">Calculated at checkout</span>
                     </span>
                   </div>
@@ -183,11 +168,11 @@
                       formControlName="authorizeMonthly" 
                       id="authorize">
                     <label class="form-check-label" for="authorize">
-                      <strong>I authorize {{ branding.appName }} to charge my payment method</strong>
+                      <strong>I authorize RHP Office to charge my payment method</strong>
                     </label>
                   </div>
                   <p class="small text-muted mb-0 mt-2">
-                    I understand that I will be charged ${{ totalAmount }}.00 today and ${{ monthlyFee }}.00/month thereafter for continued CRM access. I can cancel anytime.
+                    I understand that I will be charged ${{ monthlyFee }}.00 today and ${{ monthlyFee }}.00/month thereafter for continued CRM access. I can cancel anytime.
                   </p>
                   <div *ngIf="paymentForm.get('authorizeMonthly')?.invalid && paymentForm.get('authorizeMonthly')?.touched" class="text-danger small mt-1">
                     You must authorize the recurring payment

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const APAApplication = require('../models/APAApplication');
 const User = require('../models/User');
+const Onboarding = require('../models/Onboarding');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -37,14 +38,17 @@ router.get('/test-template-fields', async (req, res) => {
 router.get('/check-pending-application', async (req, res) => {
   try {
     const { email, ref } = req.query;
+    const normalizedReferralCode = ((ref || '') + '').trim().toUpperCase();
 
-    if (!email || !ref) {
+    const normalizedEmail = ((email || '') + '').trim().toLowerCase();
+
+    if (!normalizedEmail || !normalizedReferralCode) {
       return res.json({ application: null });
     }
 
     const application = await APAApplication.findOne({ 
-      'personalInfo.email': email.toLowerCase(),
-      'recruitingInfo.referralCode': ref,
+      'personalInfo.email': normalizedEmail,
+      'recruitingInfo.referralCode': normalizedReferralCode,
       status: 'pending_signature'
     });
 
@@ -53,7 +57,8 @@ router.get('/check-pending-application', async (req, res) => {
         application: {
           _id: application._id,
           status: application.status,
-          envelopeId: application.docusign?.envelopeId
+          envelopeId: application.docusign?.envelopeId,
+          docusignStatus: application.docusign?.status || 'draft'
         }
       });
     }
@@ -135,7 +140,18 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
 
     const cleanedLicensingStatus = {
       ...licensingStatus,
-      licenseStatus: licensingStatus?.licenseStatus === '' ? null : licensingStatus?.licenseStatus
+      licenseStatus: licensingStatus?.licenseStatus === '' ? null : licensingStatus?.licenseStatus,
+      licenseOtherDescription: licensingStatus?.licenseOtherDescription?.trim() || undefined
+    };
+
+    const safeRecruitingInfo = recruitingInfo || {};
+    const normalizedReferralCode = ((safeRecruitingInfo.referralCode || safeRecruitingInfo.recruiterAgentId || '') + '').trim().toUpperCase();
+    const sanitizedRecruitingInfo = {
+      ...safeRecruitingInfo,
+      recruiterFullName: safeRecruitingInfo.recruiterFullName?.trim(),
+      recruiterAgentId: safeRecruitingInfo.recruiterAgentId?.trim()?.toUpperCase(),
+      recruiterContact: safeRecruitingInfo.recruiterContact?.trim(),
+      referralCode: normalizedReferralCode || undefined
     };
 
     // Prepare application data (but don't save yet)
@@ -144,41 +160,31 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
         ...personalInfo,
         email: personalInfo.email.toLowerCase()
       },
-      recruitingInfo,
+      recruitingInfo: sanitizedRecruitingInfo,
       complianceQuestions,
       financialBackground: cleanedFinancialBackground,
       licensingStatus: cleanedLicensingStatus,
       status: 'pending_signature',
-      submittedAt: new Date()
+      submittedAt: new Date(),
+      docusign: {
+        status: 'draft'
+      }
     };
 
-    // Create temporary application object for DocuSign envelope creation
-    const tempApplication = new APAApplication(applicationData);
-    
-    // Create real DocuSign envelope
-    const docusignResult = await initiateDocuSign(tempApplication);
+    const application = new APAApplication(applicationData);
+    await application.save();
 
-    // Now save the application with DocuSign info
-    tempApplication.docusign.envelopeId = docusignResult.envelopeId;
-    tempApplication.docusign.status = docusignResult.status;
-    tempApplication.docusign.sentAt = new Date();
-    await tempApplication.save();
+    console.log('Application saved. DocuSign launch is pending user confirmation.');
+    console.log('Applicant email on file:', application.personalInfo.email);
 
-    // Send confirmation email
-    console.log('=== DocuSign Envelope Created ===');
-    console.log('Envelope ID:', docusignResult.envelopeId);
-    console.log('Status:', docusignResult.status);
-    console.log('DocuSign will send signing email to:', tempApplication.personalInfo.email);
-    
-    await sendApplicationConfirmationEmail(tempApplication);
-    
-    console.log('Confirmation email sent to:', tempApplication.personalInfo.email);
+    await sendApplicationConfirmationEmail(application);
+    console.log('Confirmation email sent to:', application.personalInfo.email);
 
     sendResponse(res, 201, {
-      message: 'Application submitted successfully. Please check your email from DocuSign to sign the APA agreement.',
-      applicationId: tempApplication._id,
-      envelopeId: docusignResult.envelopeId,
-      nextStep: 'signature'
+      message: 'Application submitted successfully. Review the next screen to confirm the email and send your DocuSign packet.',
+      applicationId: application._id,
+      nextStep: 'signature',
+      docusignStatus: application.docusign?.status || 'draft'
     });
 
   } catch (error) {
@@ -320,29 +326,21 @@ router.post('/apa-application/create-checkout-session', async (req, res) => {
       return sendResponse(res, 400, { message: 'Payment already completed for this application' });
     }
 
-    const setupFeePriceId = process.env.STRIPE_SETUP_FEE_PRICE_ID;
     const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
 
-    if (!setupFeePriceId || !monthlyPriceId) {
+    if (!monthlyPriceId) {
       return sendResponse(res, 500, { 
-        message: 'Stripe prices not configured. Please run setup-stripe-products.js script' 
+        message: 'Stripe monthly price not configured. Please run setup-stripe-products.js script' 
       });
     }
 
-    // Build line items
-    const lineItems = [];
-    
-    // Add setup fee
-    lineItems.push({
-      price: setupFeePriceId,
-      quantity: 1
-    });
-
-    // Add monthly subscription
-    lineItems.push({
-      price: monthlyPriceId,
-      quantity: 1
-    });
+    // Build line items - only monthly subscription (no setup fee)
+    const lineItems = [
+      {
+        price: monthlyPriceId,
+        quantity: 1
+      }
+    ];
 
     // Create checkout session
     const sessionParams = {
@@ -586,14 +584,30 @@ const verifyPaymentHandler = async (req, res) => {
     });
     await subscription.save();
 
-    // Send welcome email
-    await sendWelcomeEmail(user, password);
+    // Create onboarding record for the new agent (so they appear in onboarding tab)
+    const onboarding = new Onboarding({
+      user: user._id,
+      status: 'not-started'
+    });
+    await onboarding.save();
+
+    // Update user with onboarding reference
+    user.onboarding = onboarding._id;
+    user.onboardingStatus = 'not-started';
+
+    // Generate set-password token for immediate password setup
+    const setPasswordToken = user.getResetPasswordToken();
+    await user.save();
+
+    // Send welcome email with set-password link (backup)
+    await sendWelcomeEmail(user, password, null, setPasswordToken);
 
     sendResponse(res, 200, {
       success: true,
       message: 'Payment verified and account created successfully',
       accountCreated: true,
-      email: user.email
+      email: user.email,
+      setPasswordToken: setPasswordToken // Token for immediate password setup
     });
 
   } catch (error) {
@@ -628,7 +642,12 @@ router.get('/apa-application/:id', async (req, res) => {
           name: `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`,
           email: application.personalInfo.email
         },
-        docusignStatus: application.docusign.status,
+        docusignStatus: application.docusign?.status || 'draft',
+        docusign: {
+          status: application.docusign?.status || 'draft',
+          envelopeId: application.docusign?.envelopeId || null,
+          sentAt: application.docusign?.sentAt || null
+        },
         paymentStatus: {
           onboardingFeePaid: application.payment.onboardingFeePaid,
           monthlyFeeAuthorized: application.payment.monthlyFeeAuthorized
@@ -701,6 +720,83 @@ router.get('/apa-application/:id/docusign-return', async (req, res) => {
   }
 });
 
+// @route   POST /api/public/apa-application/:id/send-docusign
+// @desc    Confirm email and send DocuSign envelope
+// @access  Public
+router.post('/apa-application/:id/send-docusign', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!normalizedEmail) {
+      return errorResponse(res, new Error('Email is required to send DocuSign'), 400);
+    }
+
+    if (!emailRegex.test(normalizedEmail)) {
+      return errorResponse(res, new Error('Please provide a valid email address'), 400);
+    }
+
+    const application = await APAApplication.findById(req.params.id);
+
+    if (!application) {
+      return errorResponse(res, new Error('Application not found'), 404);
+    }
+
+    if (application.status !== 'pending_signature') {
+      return errorResponse(res, new Error('Application is not ready for DocuSign'), 400);
+    }
+
+    if (application.docusign?.envelopeId && application.docusign?.status && application.docusign.status !== 'draft') {
+      return errorResponse(res, new Error('DocuSign envelope already sent. Use the resend option if needed.'), 400);
+    }
+
+    const conflictingApplication = await APAApplication.findOne({
+      _id: { $ne: application._id },
+      'personalInfo.email': normalizedEmail,
+      status: { $in: ['pending_signature', 'pending_payment', 'active'] }
+    });
+
+    if (conflictingApplication) {
+      return errorResponse(res, new Error('Another application already exists with this email'), 400);
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return errorResponse(res, new Error('An account already exists with this email'), 400);
+    }
+
+    application.personalInfo.email = normalizedEmail;
+
+    const docusignResult = await initiateDocuSign(application);
+
+    application.docusign.envelopeId = docusignResult.envelopeId;
+    application.docusign.status = docusignResult.status;
+    application.docusign.sentAt = new Date();
+    await application.save();
+
+    console.log('✅ DocuSign envelope sent:', {
+      applicationId: application._id,
+      envelopeId: application.docusign.envelopeId,
+      email: application.personalInfo.email
+    });
+
+    sendResponse(res, 200, {
+      message: 'DocuSign envelope sent successfully. Please check your email from DocuSign to sign the agreement.',
+      docusign: {
+        envelopeId: application.docusign.envelopeId,
+        status: application.docusign.status,
+        sentAt: application.docusign.sentAt
+      },
+      email: application.personalInfo.email
+    });
+
+  } catch (error) {
+    console.error('❌ Send DocuSign error:', error);
+    errorResponse(res, error);
+  }
+});
+
 // @route   POST /api/public/apa-application/:id/resend-docusign
 // @desc    Resend DocuSign envelope for an application
 // @access  Public (can also be called from admin)
@@ -761,16 +857,13 @@ router.get('/apa-application/:id/payment-page', async (req, res) => {
       return errorResponse(res, new Error('Application not ready for payment. Please complete DocuSign first.'), 403);
     }
 
-    // Check if licensed (waives onboarding fee)
-    const isLicensed = application.licensingStatus.currentlyLicensed;
-    const onboardingFee = isLicensed ? 0 : 169;
-
+    // No setup fee - subscription only at $20/mo
     sendResponse(res, 200, {
       ready: true,
       fees: {
-        onboardingFee: onboardingFee,
-        onboardingFeeWaived: isLicensed,
-        monthlyFee: 25
+        onboardingFee: 0,
+        onboardingFeeWaived: true,
+        monthlyFee: 20
       },
       application: {
         name: `${application.personalInfo?.legalFirstName} ${application.personalInfo?.legalLastName}`,
@@ -834,16 +927,10 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
       return errorResponse(res, new Error('Application is not pending payment'), 400);
     }
 
-    // Calculate fees
-    let onboardingFee = 169;
-    const monthlyFee = 25;
-    let onboardingFeeWaived = false;
-
-    // Check for license waiver or coupon
-    if (application.licensingStatus.currentlyLicensed || couponCode === 'LICENSED') {
-      onboardingFee = 0;
-      onboardingFeeWaived = true;
-    }
+    // No setup fee - subscription only at $20/mo
+    const onboardingFee = 0;
+    const monthlyFee = 20;
+    const onboardingFeeWaived = true;
 
     // Update payment info (mock)
     application.payment.onboardingFee = onboardingFee;
@@ -909,13 +996,13 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
       currency: 'usd',
       stripePaymentIntentId: application.payment.stripePaymentIntentId,
       status: 'succeeded',
-      description: onboardingFeeWaived ? 'APA Onboarding Fee (Waived - Licensed Agent)' : 'APA Onboarding Fee',
+      description: 'APA Application - No Setup Fee',
       paidAt: new Date(),
       metadata: {
         applicationId: application._id,
         source: 'apa_application',
-        feeWaived: onboardingFeeWaived,
-        originalAmount: 16900 // $169 in cents
+        feeWaived: true,
+        originalAmount: 0 // No setup fee
       }
     });
 
@@ -1052,7 +1139,7 @@ async function sendApplicationConfirmationEmail(application) {
   
   await sendEmail({
     email: email,
-    subject: 'Application Submitted - Check Your Email for Signature Request',
+    subject: 'Application Submitted - Review & Send Your Agreement',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #4CAF50;">✓ Application Submitted Successfully!</h2>
@@ -1060,28 +1147,16 @@ async function sendApplicationConfirmationEmail(application) {
         <p>Thank you for submitting your Agent Producer Agreement (APA) application.</p>
         
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Next Step: Sign Your Agreement</h3>
-          <p><strong>You will receive a separate email from DocuSign</strong> with the subject "Please sign your Agent Partnership Agreement" within the next few minutes.</p>
-          <p>Please check your email inbox (and spam/junk folder if needed) for the DocuSign signing request.</p>
-        </div>
-
-        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
-          <h4 style="margin-top: 0; color: #856404;">⚠️ Important Instructions:</h4>
-          <ul style="margin: 10px 0; padding-left: 20px; color: #856404;">
-            <li><strong>Look for an email from DocuSign</strong> (typically from <code>dse@docusign.net</code>)</li>
-            <li>Click the "Review Document" button in the DocuSign email</li>
-            <li>Carefully review the entire document before signing</li>
-            <li>Add your signature at all designated signature fields</li>
-            <li>Complete all fields marked as required</li>
-            <li>Click "Finish" to complete the signing process</li>
-          </ul>
-          <p style="margin-bottom: 0; color: #856404;"><strong>Note:</strong> After signing, you will automatically receive another email with instructions to complete your payment setup.</p>
+          <h3 style="margin-top: 0; color: #333;">Next Step: Launch Your DocuSign Packet</h3>
+          <p>On the confirmation page, you can <strong>verify or edit your signing email</strong> before sending the agreement.</p>
+          <p>Once you click <em>Send DocuSign</em>, the DocuSign email will arrive within minutes. If you already closed the page, simply return using your browser history or contact your recruiter for the link.</p>
         </div>
 
         <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0;">
           <h4 style="margin-top: 0; color: #1565C0;">📧 What Happens Next?</h4>
           <ol style="margin: 10px 0; padding-left: 20px; color: #1565C0;">
-            <li>You'll receive a signing email from DocuSign (within minutes)</li>
+            <li>Review the confirmation page and update the signing email if needed</li>
+            <li>Click <strong>Send DocuSign</strong> to trigger the agreement email</li>
             <li>Sign the agreement through DocuSign's secure platform</li>
             <li>Once signed, you'll receive a payment setup email from us</li>
             <li>Complete your payment to activate your account</li>
@@ -1090,7 +1165,7 @@ async function sendApplicationConfirmationEmail(application) {
 
         <p><strong>Application ID:</strong> ${application._id}</p>
         
-        <p style="color: #666; font-size: 14px;">If you don't receive the DocuSign email within 10 minutes, please check your spam folder or contact your recruiter.</p>
+        <p style="color: #666; font-size: 14px;">Need help or a fresh link? Please contact your recruiter and share your Application ID.</p>
         
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
         <p style="text-align: center; color: #999; font-size: 12px;">
@@ -1110,16 +1185,18 @@ async function sendPaymentLinkEmail(application) {
   
   await sendEmail({
     email: email,
-    subject: 'APA Agreement Signed - Complete Payment Setup',
+    subject: 'RHP Office - Complete Your Payment Setup',
     html: `
       <h2>Welcome aboard, ${legalFirstName}!</h2>
-      <p>Thank you for signing the Agent Partnership Agreement.</p>
+      <p>Thank you for signing the Agent Partnership Agreement with RHP Office.</p>
       <p>To complete your onboarding, please set up your payment information:</p>
       <p><a href="${paymentUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Complete Payment Setup</a></p>
-      <p>This link will take you to a secure payment page where you can:</p>
+      <p>Your subscription is only <strong>$20/month</strong> for full CRM access - no setup fee required!</p>
+      <p>After payment, you'll be able to:</p>
       <ul>
-        <li>Pay the setup fee (or use code LICENSED if already licensed)</li>
-        <li>Set up recurring monthly CRM access fee ($25/month)</li>
+        <li>Set your account password</li>
+        <li>Access all platform features</li>
+        <li>Start building your team</li>
       </ul>
       <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
       <p style="text-align: center; color: #999; font-size: 12px;">

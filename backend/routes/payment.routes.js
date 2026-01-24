@@ -44,7 +44,7 @@ router.post('/create-customer', protect, async (req, res) => {
 });
 
 // @route   POST /api/payments/one-time-intent
-// @desc    Create payment intent for the $179 setup fee
+// @desc    Create payment intent for setup fee (no longer used - kept for legacy)
 // @access  Private
 router.post('/one-time-intent', protect, async (req, res) => {
   try {
@@ -67,7 +67,7 @@ router.post('/one-time-intent', protect, async (req, res) => {
       await user.save();
     }
 
-    const amount = parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900; // $179
+    const amount = parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 2000; // $20 (subscription only)
 
     const paymentIntent = await createPaymentIntent(
       amount,

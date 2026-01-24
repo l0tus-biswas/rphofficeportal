@@ -19,10 +19,9 @@ export class ApaPaymentComponent implements OnInit {
   docusignUrl = '';
   
   paymentForm!: FormGroup;
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
   
-  setupFee = 179;
-  monthlyFee = 25;
+  monthlyFee = 20;
   couponApplied = false;
   appliedCouponCode = '';
   
@@ -120,7 +119,7 @@ export class ApaPaymentComponent implements OnInit {
   }
 
   get totalAmount(): number {
-    return this.setupFee + this.monthlyFee;
+    return this.monthlyFee;
   }
 
   proceedToSign(): void {

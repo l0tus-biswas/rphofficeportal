@@ -20,15 +20,20 @@
         <p class="email-info">
           <strong>Email:</strong> {{ email }}
         </p>
-        <div class="info-box">
+        <div class="info-box" *ngIf="setPasswordToken">
+          <p><strong>Next Step:</strong> Set your password to complete your account setup.</p>
+          <p>You'll be redirected to the password setup page automatically.</p>
+        </div>
+        <div class="info-box" *ngIf="!setPasswordToken">
           <p><strong>Important:</strong> Login credentials have been sent to your email.</p>
           <p>Please check your inbox (and spam folder) for your temporary password.</p>
         </div>
       </div>
 
       <div class="redirect-info">
-        <p>Redirecting to login page in <strong>{{ redirectCountdown }}</strong> seconds...</p>
-        <button class="btn-primary" (click)="navigateToLogin()">Go to Login Now</button>
+        <p>Redirecting to {{ setPasswordToken ? 'password setup' : 'login' }} page in <strong>{{ redirectCountdown }}</strong> seconds...</p>
+        <button class="btn-primary" (click)="navigateNext()">{{ setPasswordToken ? 'Set Password Now' : 'Go to Login Now' }}</button>
+        <button *ngIf="setPasswordToken" class="btn-secondary ms-2" (click)="navigateToLogin()">Skip to Login</button>
       </div>
     </div>
   </div>

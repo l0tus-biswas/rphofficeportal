@@ -177,8 +177,8 @@ async function createAPAEnvelope(application) {
 
     // Create envelope definition
     const envelope = new docusign.EnvelopeDefinition();
-    envelope.emailSubject = 'Please sign your Agent Partnership Agreement';
-    envelope.emailBlurb = 'Please review and sign the Agent Partnership Agreement to continue with your application. Once signed, you will receive instructions for payment setup.';
+    envelope.emailSubject = 'RHP Office - Please Sign Your Agent Partnership Agreement';
+    envelope.emailBlurb = 'Thank you for applying to RHP Office! Please review and sign your Agent Partnership Agreement to continue. Once signed, you will receive instructions for payment setup ($20/month subscription).';
     envelope.templateId = process.env.DOCUSIGN_TEMPLATE_ID; // APA template created in DocuSign
 
     // Create signer for remote (email-based) signing
@@ -247,7 +247,7 @@ function createSignerTabs(application) {
   tab1.documentId = '71378187';
   tab1.pageNumber = '1';
   tab1.value = fullName;
-  tab1.locked = 'false';
+  tab1.locked = 'true'; // Read-only - pre-filled from APA form
   tab1.required = 'true';
   textTabs.push(tab1);
 
@@ -258,7 +258,7 @@ function createSignerTabs(application) {
   tab2.documentId = '71378187';
   tab2.pageNumber = '1';
   tab2.value = agreementDate;
-  tab2.locked = 'false';
+  tab2.locked = 'true'; // Read-only - auto-generated date
   tab2.required = 'true';
   textTabs.push(tab2);
 
@@ -269,7 +269,7 @@ function createSignerTabs(application) {
   tab3.documentId = '71378187';
   tab3.pageNumber = '24';
   tab3.value = fullName;
-  tab3.locked = 'false';
+  tab3.locked = 'true'; // Read-only - pre-filled from APA form
   tab3.required = 'true';
   textTabs.push(tab3);
 

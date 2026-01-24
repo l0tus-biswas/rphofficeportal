@@ -1,15 +1,27 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicService } from '../../services/public.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+
+interface RecruiterSearchResult {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  referralCode: string;
+  role?: string;
+  level?: string;
+}
 
 @Component({
   selector: 'app-apply',
   templateUrl: './apply.component.html',
   styleUrls: ['./apply.component.css']
 })
-export class ApplyComponent implements OnInit {
+export class ApplyComponent implements OnInit, OnDestroy {
   currentSection = 1;
   totalSections = 5;
   
@@ -24,8 +36,14 @@ export class ApplyComponent implements OnInit {
   error = '';
   referralCode = '';
   recruiterName = '';
+  recruiterFieldsLocked = false;
+  recruiterLookupState: 'idle' | 'loading' | 'success' | 'error' = 'idle';
+  recruiterLookupMessage = '';
+  recruiterSearchResults: RecruiterSearchResult[] = [];
+  recruiterSearchLoading = false;
+  recruiterSearchError = '';
   invalidReferral = false;
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
   showInstructions = false;
   docusignUrl = '';
   isPendingSignature = false;
@@ -36,6 +54,9 @@ export class ApplyComponent implements OnInit {
   
   // US States
   states = ['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
+  private readonly recruiterFieldKeys = ['recruiterFullName', 'recruiterAgentId', 'recruiterEmail', 'recruiterPhone'];
+  private recruiterSearch$ = new Subject<string>();
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private formBuilder: FormBuilder,
@@ -55,6 +76,12 @@ export class ApplyComponent implements OnInit {
     this.initializeForms();
     this.loadReferralInfo();
     this.checkExistingApplication();
+    this.initRecruiterSearchStream();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.recruiterSearch$.complete();
   }
 
   // Custom validator for boolean radio buttons (Yes/No)
@@ -131,6 +158,7 @@ export class ApplyComponent implements OnInit {
       licenseLife: [false],
       licenseHealth: [false],
       licenseOther: [false],
+      licenseOtherDescription: [''],
       statesLicensed: [''],
       licenseNumber: [''],
       licenseStatus: ['']
@@ -187,28 +215,125 @@ export class ApplyComponent implements OnInit {
         control?.updateValueAndValidity();
       });
     });
+
+    const licenseOtherControl = this.section5Form.get('licenseOther');
+    const descriptionControl = this.section5Form.get('licenseOtherDescription');
+    const syncLicenseOtherValidation = (selectedOther: boolean) => {
+      if (selectedOther) {
+        descriptionControl?.setValidators([Validators.required, Validators.minLength(3)]);
+      } else {
+        descriptionControl?.clearValidators();
+        descriptionControl?.setValue('', { emitEvent: false });
+      }
+      descriptionControl?.updateValueAndValidity();
+    };
+    syncLicenseOtherValidation(!!licenseOtherControl?.value);
+    licenseOtherControl?.valueChanges.subscribe(selected => syncLicenseOtherValidation(!!selected));
   }
 
   checkExistingApplication(): void {
-    // Check if user has an existing application with pending signature
-    // Will be triggered when email is entered
-    this.section1Form.get('email')?.valueChanges.subscribe(email => {
-      if (email && email.includes('@') && this.referralCode) {
-        this.publicService.checkPendingApplication(email, this.referralCode).subscribe({
-          next: (response: any) => {
-            if (response.application && response.application.status === 'pending_signature') {
-              this.isPendingSignature = true;
-              this.existingApplicationId = response.application._id;
-              this.docusignUrl = response.application.docusignUrl || '';
-              console.log('Found pending signature application:', this.existingApplicationId);
-            }
-          },
-          error: (err) => {
-            console.log('No existing application found or error:', err);
-          }
-        });
+    const emailControl = this.section1Form.get('email');
+    if (!emailControl) {
+      return;
+    }
+
+    emailControl.valueChanges.subscribe(email => {
+      this.lookupPendingApplication(email);
+    });
+
+    this.section2Form.get('recruiterAgentId')?.valueChanges.subscribe(() => {
+      const currentEmail = emailControl.value;
+      this.lookupPendingApplication(currentEmail);
+    });
+  }
+
+  private lookupPendingApplication(email: string | null | undefined): void {
+    const normalizedEmail = (email || '').trim();
+    const referralCode = this.getSelectedReferralCode();
+    this.clearPendingSignatureState();
+
+    if (!normalizedEmail || !normalizedEmail.includes('@') || !referralCode) {
+      return;
+    }
+
+    this.publicService.checkPendingApplication(normalizedEmail, referralCode).subscribe({
+      next: (response: any) => {
+        if (response.application && response.application.status === 'pending_signature') {
+          this.isPendingSignature = true;
+          this.existingApplicationId = response.application._id;
+          this.docusignUrl = response.application.docusignUrl || '';
+          console.log('Found pending signature application:', this.existingApplicationId);
+        }
+      },
+      error: (err) => {
+        console.log('No existing application found or error:', err);
       }
     });
+  }
+
+  private clearPendingSignatureState(): void {
+    this.isPendingSignature = false;
+    this.existingApplicationId = '';
+    this.docusignUrl = '';
+  }
+
+  private initRecruiterSearchStream(): void {
+    const sub = this.recruiterSearch$
+      .pipe(debounceTime(300), distinctUntilChanged())
+      .subscribe(query => this.handleRecruiterSearch(query));
+    this.subscriptions.push(sub);
+  }
+
+  private handleRecruiterSearch(query: string): void {
+    if (this.recruiterFieldsLocked) {
+      this.clearRecruiterSearchState();
+      return;
+    }
+
+    const normalizedQuery = (query || '').trim();
+    if (normalizedQuery.length < 2) {
+      this.clearRecruiterSearchState();
+      return;
+    }
+
+    this.recruiterSearchLoading = true;
+    this.recruiterSearchError = '';
+
+    this.publicService.searchRecruiters(normalizedQuery).subscribe({
+      next: (response) => {
+        this.recruiterSearchLoading = false;
+        this.recruiterSearchResults = response.results || [];
+      },
+      error: () => {
+        this.recruiterSearchLoading = false;
+        this.recruiterSearchResults = [];
+        this.recruiterSearchError = 'Unable to search recruiters right now. Please try again.';
+      }
+    });
+  }
+
+  private clearRecruiterSearchState(): void {
+    this.recruiterSearchResults = [];
+    this.recruiterSearchLoading = false;
+    this.recruiterSearchError = '';
+  }
+
+  selectRecruiter(result: RecruiterSearchResult): void {
+    if (this.recruiterFieldsLocked) {
+      return;
+    }
+
+    this.section2Form.patchValue({
+      recruiterFullName: result.name,
+      recruiterAgentId: result.referralCode,
+      recruiterEmail: result.email || '',
+      recruiterPhone: result.phone || ''
+    });
+
+    this.recruiterLookupState = 'success';
+    this.recruiterLookupMessage = `Recruiter ${result.name} selected.`;
+    this.clearRecruiterSearchState();
+    this.lookupPendingApplication(this.section1Form.get('email')?.value);
   }
 
   loadReferralInfo(): void {
@@ -228,25 +353,24 @@ export class ApplyComponent implements OnInit {
               recruiterPhone: response.agent.phone || ''
             });
             
-            // Make fields read-only since they're auto-filled
-            this.section2Form.get('recruiterFullName')?.disable();
-            this.section2Form.get('recruiterAgentId')?.disable();
-            
-            // Disable email/phone if they have values
-            if (response.agent.email) {
-              this.section2Form.get('recruiterEmail')?.disable();
-            }
-            if (response.agent.phone) {
-              this.section2Form.get('recruiterPhone')?.disable();
-            }
+            this.setRecruiterFieldsLockedState(true);
+            this.recruiterLookupState = 'success';
+            this.recruiterLookupMessage = 'Recruiter info auto-filled from referral link.';
           } else {
             this.invalidReferral = true;
+            this.setRecruiterFieldsLockedState(false);
           }
         },
-        error: () => this.invalidReferral = true
+        error: () => {
+          this.invalidReferral = true;
+          this.setRecruiterFieldsLockedState(false);
+          this.recruiterLookupState = 'idle';
+          this.recruiterLookupMessage = '';
+        }
       });
     } else {
       this.invalidReferral = true;
+      this.setRecruiterFieldsLockedState(false);
     }
   }
 
@@ -433,11 +557,14 @@ export class ApplyComponent implements OnInit {
     const s3 = this.section3Form.value;
     const s4 = this.section4Form.value;
     const s5 = this.section5Form.value;
+    const selectedReferralCode = this.getSelectedReferralCode();
+    const normalizedRecruiterAgentId = this.normalizeReferralCode(s2.recruiterAgentId);
 
     const licenseTypes = [];
     if (s5.licenseLife) licenseTypes.push('Life');
     if (s5.licenseHealth) licenseTypes.push('Health');
     if (s5.licenseOther) licenseTypes.push('Other');
+    const licenseOtherDescription = s5.licenseOther ? (s5.licenseOtherDescription || '').trim() : '';
 
     return {
       personalInfo: {
@@ -464,12 +591,12 @@ export class ApplyComponent implements OnInit {
         previouslyContracted: s1.previouslyContracted
       },
       recruitingInfo: {
-        recruiterFullName: s2.recruiterFullName,
-        recruiterAgentId: s2.recruiterAgentId,
-        recruiterContact: s2.recruiterEmail || s2.recruiterPhone || '',
+        recruiterFullName: s2.recruiterFullName?.trim(),
+        recruiterAgentId: normalizedRecruiterAgentId,
+        recruiterContact: this.getRecruiterContactValue(s2),
         uplineLeaderName: s2.uplineLeaderName,
         teamName: s2.teamName,
-        referralCode: this.referralCode
+        referralCode: selectedReferralCode
       },
       complianceQuestions: {
         previouslyContractedOther: { answer: s3.previouslyContractedOther, explanation: s3.previouslyContractedOtherExplanation },
@@ -493,9 +620,105 @@ export class ApplyComponent implements OnInit {
         licenseTypes: licenseTypes,
         statesLicensed: s5.statesLicensed ? s5.statesLicensed.split(',').map((s: string) => s.trim()) : [],
         licenseNumber: s5.licenseNumber,
-        licenseStatus: s5.licenseStatus
+        licenseStatus: s5.licenseStatus,
+        licenseOtherDescription: licenseOtherDescription || undefined
       }
     };
+  }
+
+  unlockRecruiterFields(): void {
+    this.setRecruiterFieldsLockedState(false);
+    this.recruiterLookupState = 'idle';
+    this.recruiterLookupMessage = '';
+  }
+
+  onRecruiterAgentIdInput(): void {
+    this.recruiterLookupState = 'idle';
+    this.recruiterLookupMessage = '';
+    this.clearPendingSignatureState();
+  }
+
+  onRecruiterAgentIdBlur(): void {
+    const control = this.section2Form.get('recruiterAgentId');
+    if (!control) {
+      return;
+    }
+
+    const normalizedValue = this.normalizeReferralCode(control.value);
+    if (control.value !== normalizedValue) {
+      control.setValue(normalizedValue, { emitEvent: false });
+    }
+
+    if (!normalizedValue) {
+      return;
+    }
+
+    this.recruiterLookupState = 'loading';
+    this.recruiterLookupMessage = '';
+
+    this.publicService.verifyReferralCode(normalizedValue).subscribe({
+      next: (response) => {
+        this.recruiterLookupState = 'success';
+        this.recruiterLookupMessage = `Recruiter ${response.agent.name} selected.`;
+        this.section2Form.patchValue({
+          recruiterFullName: response.agent.name,
+          recruiterEmail: response.agent.email || '',
+          recruiterPhone: response.agent.phone || ''
+        });
+      },
+      error: () => {
+        this.recruiterLookupState = 'error';
+        this.recruiterLookupMessage = 'Recruiter not found. Please verify the ID.';
+      }
+    });
+  }
+
+  private getRecruiterContactValue(section2: any): string {
+    const email = section2.recruiterEmail?.trim();
+    const phone = section2.recruiterPhone?.trim();
+    if (email) {
+      return email;
+    }
+    if (phone) {
+      return phone;
+    }
+    return '';
+  }
+
+  private normalizeReferralCode(value: string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+    return value.toString().trim().toUpperCase();
+  }
+
+  private getSelectedReferralCode(): string {
+    const manualCode = this.normalizeReferralCode(this.section2Form?.get('recruiterAgentId')?.value);
+    if (manualCode) {
+      return manualCode;
+    }
+    return this.normalizeReferralCode(this.referralCode);
+  }
+
+  private setRecruiterFieldsLockedState(locked: boolean): void {
+    this.recruiterFieldsLocked = locked;
+    if (!this.section2Form) {
+      return;
+    }
+    if (locked) {
+      this.clearRecruiterSearchState();
+    }
+    this.recruiterFieldKeys.forEach(field => {
+      const control = this.section2Form.get(field);
+      if (!control) {
+        return;
+      }
+      if (locked) {
+        control.disable({ emitEvent: false });
+      } else {
+        control.enable({ emitEvent: false });
+      }
+    });
   }
 
   get progressPercentage(): number {

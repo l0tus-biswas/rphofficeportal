@@ -25,7 +25,7 @@ export class BrandingComponent implements OnInit {
   loadBranding(): void {
     this.brandingService.getBranding().subscribe({
       next: (response) => {
-        this.appName = response.appName || 'Escape';
+        this.appName = response.appName || 'RHP Office';
         if (response.appLogo) {
           this.appLogo = `${environment.baseUrl}${response.appLogo}`;
         }

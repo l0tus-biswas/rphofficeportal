@@ -276,6 +276,16 @@
             <div *ngIf="currentSection === 2" [formGroup]="section2Form">
               <h3 class="mb-4">Recruiting Information</h3>
               
+              <div class="alert alert-info d-flex align-items-center justify-content-between" *ngIf="recruiterFieldsLocked">
+                <div class="me-3">
+                  <i class="bi bi-lock-fill me-2"></i>
+                  Recruiter details are locked to the referral link. Unlock to assign a different recruiter.
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" (click)="unlockRecruiterFields()">
+                  <i class="bi bi-unlock me-1"></i>Unlock
+                </button>
+              </div>
+              
               <div class="row g-3">
                 <div class="col-md-6">
                   <label class="form-label">Recruiter Full Name <span class="text-danger">*</span></label>
@@ -289,11 +299,46 @@
                 <div class="col-md-6">
                   <label class="form-label">Recruiter Agent ID</label>
                   <input type="text" class="form-control" formControlName="recruiterAgentId"
+                         (input)="onRecruiterAgentIdInput()"
+                         (blur)="onRecruiterAgentIdBlur()"
                          [attr.readonly]="section2Form.get('recruiterAgentId')?.disabled ? true : null"
                          placeholder="Optional">
                   <small class="text-muted" *ngIf="section2Form.get('recruiterAgentId')?.disabled">
                     <i class="bi bi-lock me-1"></i>Auto-filled from referral code
                   </small>
+                  <div class="form-text text-muted" *ngIf="recruiterLookupState === 'loading'">
+                    Looking up recruiter details...
+                  </div>
+                  <div class="form-text text-success" *ngIf="recruiterLookupState === 'success' && recruiterLookupMessage">
+                    {{ recruiterLookupMessage }}
+                  </div>
+                  <div class="form-text text-danger" *ngIf="recruiterLookupState === 'error'">
+                    {{ recruiterLookupMessage }}
+                  </div>
+                  <div class="mt-2" *ngIf="!recruiterFieldsLocked && recruiterSearchResults.length">
+                    <div class="list-group shadow-sm recruiter-search-results">
+                      <button type="button"
+                              class="list-group-item list-group-item-action"
+                              *ngFor="let recruiter of recruiterSearchResults"
+                              (click)="selectRecruiter(recruiter)">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <span class="fw-semibold">{{ recruiter.name }}</span>
+                          <small class="text-muted">{{ recruiter.referralCode }}</small>
+                        </div>
+                        <div class="text-muted small">
+                          <span *ngIf="recruiter.email">{{ recruiter.email }}</span>
+                          <span *ngIf="recruiter.email && recruiter.phone"> • </span>
+                          <span *ngIf="recruiter.phone">{{ recruiter.phone }}</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="text-muted small mt-1" *ngIf="recruiterSearchLoading">
+                    <span class="spinner-border spinner-border-sm me-1"></span>Searching recruiters...
+                  </div>
+                  <div class="text-danger small mt-1" *ngIf="recruiterSearchError">
+                    {{ recruiterSearchError }}
+                  </div>
                 </div>
                 
                 <div class="col-md-6">
@@ -567,6 +612,13 @@
                         <div class="form-check">
                           <input class="form-check-input" type="checkbox" formControlName="licenseOther" id="licOther">
                           <label class="form-check-label" for="licOther">Other</label>
+                        </div>
+                        <div class="mt-3" *ngIf="section5Form.get('licenseOther')?.value">
+                          <label class="form-label">Describe other license <span class="text-danger">*</span></label>
+                          <textarea class="form-control" formControlName="licenseOtherDescription" rows="3" placeholder="e.g., Real Estate"></textarea>
+                          <div class="text-danger small" *ngIf="section5Form.get('licenseOtherDescription')?.invalid && section5Form.get('licenseOtherDescription')?.touched">
+                            Please describe the other license (minimum 3 characters).
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -12,7 +12,7 @@ declare var google: any;
   styleUrls: ['./navbar.component.css']
 })
 export class NavbarComponent implements OnInit, OnDestroy {
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
   private brandingSubscription?: Subscription;
   private unreadCountSubscription?: Subscription;
   unreadCount: number = 0;

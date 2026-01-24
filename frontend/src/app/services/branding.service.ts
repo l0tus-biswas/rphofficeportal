@@ -16,7 +16,7 @@ export class BrandingService {
   private apiUrl = `${environment.apiUrl}/admin/config`;
   private publicApiUrl = `${environment.apiUrl}/public`;
   private brandingSubject = new BehaviorSubject<BrandingConfig>({
-    appName: 'Escape',
+    appName: 'RHP Office',
     appLogo: null
   });
   
@@ -30,7 +30,7 @@ export class BrandingService {
     this.http.get<any>(`${this.publicApiUrl}/branding`).subscribe({
       next: (response) => {
         this.brandingSubject.next({
-          appName: response.appName || 'Escape',
+          appName: response.appName || 'RHP Office',
           appLogo: response.appLogo ? `${environment.apiUrl.replace('/api', '')}${response.appLogo}` : null
         });
       },

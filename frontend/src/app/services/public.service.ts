@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ApplyFormData } from '../models/user.model';
@@ -83,7 +83,16 @@ export class PublicService {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/resend-docusign`, {});
   }
 
+  launchDocuSign(applicationId: string, email: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/send-docusign`, { email });
+  }
+
   checkPendingApplication(email: string, referralCode: string): Observable<any> {
     return this.http.get(`${this.apiUrl}/public/check-pending-application?email=${email}&ref=${referralCode}`);
+  }
+
+  searchRecruiters(query: string): Observable<any> {
+    const params = new HttpParams().set('q', query);
+    return this.http.get(`${this.apiUrl}/public/recruiters/search`, { params });
   }
 }

@@ -10,8 +10,8 @@ import { filter } from 'rxjs/operators';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit {
-  title = 'Escape - Recruiting Platform';
-  private currentBrandingName = 'Escape';
+  title = 'RHP Office - Recruiting Platform';
+  private currentBrandingName = 'RHP Office';
 
   constructor(
     private titleService: Title,

@@ -16,7 +16,7 @@ export class SignApaComponent implements OnInit {
   signed = false;
   agreeToTerms = false;
   agreeToElectronic = false;
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
 
   constructor(
     private route: ActivatedRoute,

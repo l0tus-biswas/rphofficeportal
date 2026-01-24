@@ -19,7 +19,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   showReferrerModal = false;
   licensingProgress: LicensingProgress | null = null;
   loadingLicensing = false;
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
   daysRemaining: number = 0;
   private timerInterval: any;
 

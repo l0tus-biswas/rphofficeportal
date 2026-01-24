@@ -56,9 +56,12 @@ exports.sendEmail = async (options) => {
 };
 
 // Welcome email template
-exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
+exports.sendWelcomeEmail = async (user, password, referredByAgent, setPasswordToken = null) => {
   const branding = await getBranding();
   const loginUrl = `${process.env.APP_URL}/login`;
+  const setPasswordUrl = setPasswordToken 
+    ? `${process.env.APP_URL}/reset-password?token=${setPasswordToken}` 
+    : null;
   
   const html = `
     <!DOCTYPE html>
@@ -72,6 +75,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
         .content { padding: 20px; background-color: #f9f9f9; }
         .credentials { background-color: #fff; padding: 15px; border-left: 4px solid #4CAF50; margin: 20px 0; }
         .button { display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
+        .button-secondary { display: inline-block; padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; margin-left: 10px; }
         .footer { text-align: center; padding: 20px; font-size: 12px; color: #777; }
       </style>
     </head>
@@ -87,19 +91,27 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent) => {
           
           ${referredByAgent ? `<p>You were referred by: <strong>${referredByAgent.name}</strong></p>` : ''}
           
+          ${setPasswordUrl ? `
+          <div class="credentials">
+            <h3>Set Your Password</h3>
+            <p>Click the button below to create your own password:</p>
+            <a href="${setPasswordUrl}" class="button">Set My Password</a>
+            <p style="margin-top: 15px; font-size: 12px; color: #666;">This link expires in 10 minutes. After setting your password, you can log in anytime.</p>
+          </div>
+          ` : `
           <div class="credentials">
             <h3>Your Login Credentials:</h3>
             <p><strong>Email:</strong> ${user.email}</p>
             <p><strong>Temporary Password:</strong> ${password}</p>
           </div>
-          
           <p><strong>Important:</strong> Please change your password after logging in for the first time.</p>
+          `}
           
-          <a href="${loginUrl}" class="button">Login Now</a>
+          <a href="${loginUrl}" class="button${setPasswordUrl ? '-secondary' : ''}">Login Now</a>
           
           <h3>Next Steps:</h3>
           <ul>
-            <li>Log in to your account</li>
+            <li>${setPasswordUrl ? 'Set your password using the link above' : 'Log in to your account'}</li>
             <li>Complete your profile</li>
             <li>Access training materials</li>
             <li>Start building your team</li>

@@ -13,6 +13,7 @@ export class PaymentSuccessComponent implements OnInit {
   success = false;
   accountCreated = false;
   email = '';
+  setPasswordToken = '';
   redirectCountdown = 5;
   private readonly sessionParam = 'session_id';
 
@@ -41,6 +42,7 @@ export class PaymentSuccessComponent implements OnInit {
         this.success = true;
         this.accountCreated = response.accountCreated;
         this.email = response.email;
+        this.setPasswordToken = response.setPasswordToken || '';
         this.stripSessionFromUrl();
         
         // Start countdown
@@ -68,9 +70,24 @@ export class PaymentSuccessComponent implements OnInit {
       
       if (this.redirectCountdown <= 0) {
         clearInterval(interval);
-        this.navigateToLogin();
+        this.navigateNext();
       }
     }, 1000);
+  }
+
+  navigateNext(): void {
+    // If we have a set-password token, go to password setup; otherwise login
+    if (this.setPasswordToken) {
+      this.router.navigate(['/reset-password'], {
+        queryParams: { token: this.setPasswordToken }
+      });
+    } else {
+      this.router.navigate(['/login'], {
+        queryParams: { 
+          message: 'Account created successfully. Check your email for login credentials.' 
+        }
+      });
+    }
   }
 
   navigateToLogin(): void {

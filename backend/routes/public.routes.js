@@ -8,6 +8,8 @@ const { sendWelcomeEmail } = require('../utils/email');
 const { generatePassword, sendResponse, errorResponse } = require('../utils/helpers');
 const { createPaymentIntent } = require('../utils/stripe');
 
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // @route   GET /api/public/branding
 // @desc    Get branding configuration (public)
 // @access  Public
@@ -205,6 +207,52 @@ router.post('/registration-payment-intent', async (req, res) => {
     sendResponse(res, 200, {
       clientSecret: paymentIntent.client_secret,
       amount: amount
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/public/recruiters/search
+// @desc    Search recruiters by name, email, phone, or referral code
+// @access  Public
+router.get('/recruiters/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const query = (q || '').trim();
+
+    if (query.length < 2) {
+      return sendResponse(res, 400, { message: 'Search term must be at least 2 characters' });
+    }
+
+    const regex = new RegExp(escapeRegex(query), 'i');
+    const referralRegex = new RegExp('^' + escapeRegex(query), 'i');
+
+    const recruiters = await User.find({
+      isActive: true,
+      role: { $in: ['agent', 'admin'] },
+      $or: [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { referralCode: referralRegex }
+      ]
+    })
+      .select('name email phone referralCode role level')
+      .sort({ name: 1 })
+      .limit(10)
+      .lean();
+
+    sendResponse(res, 200, {
+      results: recruiters.map(user => ({
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        referralCode: user.referralCode,
+        role: user.role,
+        level: user.level
+      }))
     });
   } catch (error) {
     errorResponse(res, error);

@@ -14,7 +14,7 @@ export class LoginComponent implements OnInit {
   loading = false;
   error = '';
   returnUrl = '/dashboard';
-  branding: BrandingConfig = { appName: 'Escape', appLogo: null };
+  branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
 
   constructor(
     private formBuilder: FormBuilder,

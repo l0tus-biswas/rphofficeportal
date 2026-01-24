@@ -100,13 +100,18 @@ const apaApplicationSchema = new mongoose.Schema({
     licenseTypes: [{ type: String, enum: ['Life', 'Health', 'Life & Health', 'Other'] }],
     statesLicensed: [String],
     licenseNumber: String,
-    licenseStatus: { type: String, enum: ['Active', 'Inactive', 'Pending Renewal', 'Expired', null] }
+    licenseStatus: { type: String, enum: ['Active', 'Inactive', 'Pending Renewal', 'Expired', null] },
+    licenseOtherDescription: String
   },
   
   // DocuSign Integration
   docusign: {
     envelopeId: String,
-    status: { type: String, enum: ['sent', 'delivered', 'signed', 'completed', 'declined', 'voided'], default: 'sent' },
+    status: { 
+      type: String, 
+      enum: ['draft', 'sent', 'delivered', 'signed', 'completed', 'declined', 'voided'], 
+      default: 'draft' 
+    },
     sentAt: Date,
     signedAt: Date,
     documentUrl: String
