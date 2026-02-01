@@ -409,3 +409,155 @@
     top: 1rem;
   }
 }
+
+/* Mobile Responsive Enhancements */
+@media (max-width: 575.98px) {
+  .apply-page {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+  }
+  
+  .apply-header {
+    padding: 1.25rem 0;
+    margin-bottom: 1.5rem;
+    border-radius: 16px;
+  }
+  
+  .apply-header__copy h1 {
+    font-size: 1.5rem;
+  }
+  
+  .eyebrow {
+    font-size: 0.65rem;
+  }
+  
+  .header-chips {
+    gap: 0.4rem;
+  }
+  
+  .header-chips span {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.75rem;
+  }
+  
+  .apply-header__controls {
+    min-width: 100%;
+  }
+  
+  .header-progress {
+    padding: 1rem;
+    border-radius: 16px;
+  }
+  
+  .language-toggle {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .language-toggle .btn-group {
+    width: 100%;
+  }
+  
+  .language-toggle .btn {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .card,
+  .section-card,
+  .summary-card,
+  .help-card,
+  .doc-card {
+    border-radius: 16px;
+  }
+  
+  .form-header h2 {
+    font-size: 1.35rem;
+  }
+  
+  .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .btn-group {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-group > .btn {
+    border-radius: 8px !important;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Tablet Responsive Enhancements */
+@media (min-width: 576px) and (max-width: 991.98px) {
+  .apply-page {
+    padding-top: 1.5rem;
+    padding-bottom: 3rem;
+  }
+  
+  .apply-header {
+    padding: 1.75rem 0;
+    margin-bottom: 2rem;
+    border-radius: 20px;
+  }
+  
+  .apply-header__copy h1 {
+    font-size: 1.65rem;
+  }
+  
+  .apply-header__controls {
+    min-width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .language-toggle {
+    flex: 1;
+  }
+  
+  .header-progress {
+    flex: 2;
+    padding: 1rem 1.25rem;
+  }
+  
+  .card,
+  .section-card,
+  .summary-card {
+    border-radius: 20px;
+  }
+}
+
+/* Improve form fields on mobile */
+@media (max-width: 767.98px) {
+  .form-control,
+  .form-select {
+    font-size: 16px; /* Prevents iOS zoom */
+    padding: 0.75rem;
+  }
+  
+  .form-check-input {
+    width: 1.25em;
+    height: 1.25em;
+  }
+  
+  .form-check-label {
+    padding-left: 0.5rem;
+  }
+  
+  /* Stack buttons vertically on mobile */
+  .d-flex.gap-2,
+  .d-flex.gap-3 {
+    flex-direction: column;
+  }
+  
+  .d-flex.gap-2 > .btn,
+  .d-flex.gap-3 > .btn {
+    width: 100%;
+  }
+}

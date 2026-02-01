@@ -161,7 +161,7 @@ router.get('/:agentId', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    const licensingProgress = await LicensingProgress.findOne({ agent: req.params.agentId })
+    let licensingProgress = await LicensingProgress.findOne({ agent: req.params.agentId })
       .populate('agent', 'name email phone')
       .populate('lastUpdatedBy', 'name')
       .populate('checklist.preLicenseCourse.documents.uploadedBy', 'name')
@@ -171,7 +171,30 @@ router.get('/:agentId', authenticate, async (req, res) => {
       .populate('checklist.stateAppointment.documents.uploadedBy', 'name');
     
     if (!licensingProgress) {
-      return res.status(404).json({ message: 'Licensing progress not found' });
+      // Auto-create licensing progress if agent exists
+      const agent = await User.findById(req.params.agentId);
+      if (!agent || agent.role !== 'agent') {
+        return res.status(404).json({ message: 'Agent not found' });
+      }
+      
+      // Create with default 30-day deadline
+      const enrollmentDate = agent.createdAt || new Date();
+      const licensingDeadline = new Date(enrollmentDate);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
+      
+      licensingProgress = new LicensingProgress({
+        agent: req.params.agentId,
+        enrollmentDate,
+        licensingDeadline,
+        lastUpdatedBy: req.user._id
+      });
+      
+      await licensingProgress.save();
+      
+      // Populate after save
+      licensingProgress = await LicensingProgress.findById(licensingProgress._id)
+        .populate('agent', 'name email phone')
+        .populate('lastUpdatedBy', 'name');
     }
     
     res.json(licensingProgress);

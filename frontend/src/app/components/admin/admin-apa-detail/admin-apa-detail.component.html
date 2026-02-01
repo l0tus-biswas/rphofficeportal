@@ -135,6 +135,14 @@
                 {{ application.personalInfo.mailingAddress.city }}, {{ application.personalInfo.mailingAddress.state }} {{ application.personalInfo.mailingAddress.zipCode }}
               </td>
             </tr>
+            <tr>
+              <th>Previously Contracted with RHP:</th>
+              <td>
+                <span class="badge" [ngClass]="application.personalInfo.previouslyContracted ? 'bg-warning' : 'bg-secondary'">
+                  {{ application.personalInfo.previouslyContracted ? 'Yes' : 'No' }}
+                </span>
+              </td>
+            </tr>
           </table>
         </div>
       </div>

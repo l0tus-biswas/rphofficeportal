@@ -67,7 +67,7 @@ async function authenticateWithJWT() {
  * Get template fields from DocuSign (for debugging/verification)
  * @returns {Promise<Object>} Template details with all fields
  */
-async function getTemplateFields() {
+async function getTemplateFields(templateIdOverride = null) {
   try {
     const accessToken = await authenticateWithJWT();
     const apiClient = getDocuSignClient();
@@ -75,7 +75,7 @@ async function getTemplateFields() {
 
     const templatesApi = new docusign.TemplatesApi(apiClient);
     const accountId = process.env.DOCUSIGN_ACCOUNT_ID;
-    const templateId = process.env.DOCUSIGN_TEMPLATE_ID;
+    const templateId = templateIdOverride || process.env.DOCUSIGN_TEMPLATE_ID;
 
     // Get template with recipients included
     const template = await templatesApi.get(accountId, templateId, { include: 'recipients,tabs' });
@@ -223,7 +223,7 @@ async function createAPAEnvelope(application) {
 
 /**
  * Create signer tabs to pre-fill template fields with application data
- * NEW RHP APA AGREEMENT template has 3 text fields that need to be populated
+ * Maps all fields from APAApplication model to the new DocuSign template
  * 
  * @param {Object} application - APAApplication document
  * @returns {Object} DocuSign tabs object
@@ -231,55 +231,179 @@ async function createAPAEnvelope(application) {
 function createSignerTabs(application) {
   const tabs = new docusign.Tabs();
   const textTabs = [];
+  const checkboxTabs = [];
 
   const personalInfo = application.personalInfo || {};
+  const recruitingInfo = application.recruitingInfo || {};
+  const complianceQuestions = application.complianceQuestions || {};
+  const financialBackground = application.financialBackground || {};
+  const licensingStatus = application.licensingStatus || {};
   
-  // Full name for the agent
-  const fullName = `${personalInfo.legalFirstName || ''} ${personalInfo.legalMiddleName || ''} ${personalInfo.legalLastName || ''}`.replace(/\s+/g, ' ').trim();
+  // Helper function to add text tab
+  const addTextTab = (tabLabel, value, locked = true) => {
+    if (value !== undefined && value !== null) {
+      const tab = new docusign.Text();
+      tab.tabLabel = tabLabel;
+      tab.value = String(value);
+      tab.locked = locked ? 'true' : 'false';
+      textTabs.push(tab);
+    }
+  };
+
+  // Helper function to add checkbox tab
+  const addCheckboxTab = (tabLabel, selected) => {
+    const tab = new docusign.Checkbox();
+    tab.tabLabel = tabLabel;
+    tab.selected = selected ? 'true' : 'false';
+    checkboxTabs.push(tab);
+  };
+
+  // ===== TEXT FIELDS =====
   
-  // Effective date of agreement
-  const agreementDate = formatDate(new Date());
+  // Personal Information
+  addTextTab('resident_state', personalInfo.homeAddress?.state || '');
+  addTextTab('firstName', personalInfo.legalFirstName || '');
+  addTextTab('middleName', personalInfo.legalMiddleName || '');
+  addTextTab('lastName', personalInfo.legalLastName || '');
+  addTextTab('dateOfBirth', formatDate(personalInfo.dateOfBirth));
+  addTextTab('socialSecurityNumber', personalInfo.ssn || '');
+  addTextTab('mobileNumber', personalInfo.mobilePhone || '');
+  addTextTab('emailAddress', personalInfo.email || '');
+  addTextTab('streetAddress', personalInfo.homeAddress?.street || '');
+  addTextTab('city', personalInfo.homeAddress?.city || '');
+  addTextTab('state', personalInfo.homeAddress?.state || '');
+  addTextTab('zipcode', personalInfo.homeAddress?.zipCode || '');
 
-  // Tab 1: Agent full name (page 1, first text field)
-  const tab1 = new docusign.Text();
-  tab1.tabLabel = 'fullnameagent';
-  tab1.tabId = 'c715c3a4-f34f-415f-b2f7-3e64c3ac7a5c';
-  tab1.documentId = '71378187';
-  tab1.pageNumber = '1';
-  tab1.value = fullName;
-  tab1.locked = 'true'; // Read-only - pre-filled from APA form
-  tab1.required = 'true';
-  textTabs.push(tab1);
+  // Recruiting Information
+  addTextTab('recruiterFullName', recruitingInfo.recruiterFullName || '');
+  addTextTab('recruiterAgentId', recruitingInfo.recruiterAgentId || '');
+  addTextTab('recruiterEmail', recruitingInfo.recruiterContact || '');
+  addTextTab('recruiterPhone', recruitingInfo.recruiterContact || '');
+  addTextTab('uplineLeaderName', recruitingInfo.uplineLeaderName || '');
+  addTextTab('teamName', recruitingInfo.teamName || '');
 
-  // Tab 2: Effective date of agreement (page 1)
-  const tab2 = new docusign.Text();
-  tab2.tabLabel = 'dateofagreement';
-  tab2.tabId = '5b3251dd-fd1d-4821-a8d1-41b10351ad8e';
-  tab2.documentId = '71378187';
-  tab2.pageNumber = '1';
-  tab2.value = agreementDate;
-  tab2.locked = 'true'; // Read-only - auto-generated date
-  tab2.required = 'true';
-  textTabs.push(tab2);
+  // Compliance Questions - Descriptions (only if answer is Yes)
+  addTextTab('previouslyContractedYesDescribe', 
+    complianceQuestions.previouslyContractedOther?.answer ? (complianceQuestions.previouslyContractedOther?.explanation || '') : '');
+  addTextTab('convictedOfFelonyYesDescribe', 
+    complianceQuestions.felonyConviction?.answer ? (complianceQuestions.felonyConviction?.explanation || '') : '');
+  addTextTab('convictedOfFraudYesDescribe', 
+    complianceQuestions.misdemeanorFraud?.answer ? (complianceQuestions.misdemeanorFraud?.explanation || '') : '');
+  addTextTab('subjectToCivilActionYesDescribe', 
+    complianceQuestions.civilAction?.answer ? (complianceQuestions.civilAction?.explanation || '') : '');
+  addTextTab('insuranceLicenseYesDescribe', 
+    complianceQuestions.licenseDenied?.answer ? (complianceQuestions.licenseDenied?.explanation || '') : '');
+  addTextTab('difficultyObtainingYesDescribe', 
+    complianceQuestions.bondIssues?.answer ? (complianceQuestions.bondIssues?.explanation || '') : '');
 
-  // Tab 3: Printed name on signature page (page 24)
-  const tab3 = new docusign.Text();
-  tab3.tabLabel = 'fullnameagent2';
-  tab3.tabId = '28a21053-9326-4fbc-987a-003b6fcf3093';
-  tab3.documentId = '71378187';
-  tab3.pageNumber = '24';
-  tab3.value = fullName;
-  tab3.locked = 'true'; // Read-only - pre-filled from APA form
-  tab3.required = 'true';
-  textTabs.push(tab3);
+  // Financial Background - Descriptions
+  addTextTab('unsatisfiedJudgmentDescribe', 
+    financialBackground.unsatisfiedJudgments ? 'Yes, see explanation' : '');
+  addTextTab('unsatisfiedTaxLiensYesDescribe', 
+    financialBackground.unsatisfiedLiens ? 'Yes, see explanation' : '');
+  addTextTab('oweInsuranceCompanyYesDescribe', '');
+
+  // Licensing Information
+  addTextTab('licenseTypeOtherDescribe', licensingStatus.licenseOtherDescription || '');
+  addTextTab('stateLicensedIn', 
+    licensingStatus.statesLicensed ? licensingStatus.statesLicensed.join(', ') : '');
+  addTextTab('primaryLicenseNumber', licensingStatus.licenseNumber || '');
+  
+  // Agreement Date
+  addTextTab('dateOfAgreement', formatDate(new Date()));
+
+  // ===== CHECKBOX FIELDS =====
+  
+  // Gender
+  addCheckboxTab('genderMale', personalInfo.gender === 'M');
+  addCheckboxTab('genderFemale', personalInfo.gender === 'F');
+  addCheckboxTab('genderOther', personalInfo.gender === 'Other');
+
+  // Mailing Address Different
+  const hasMailingAddress = personalInfo.mailingAddress?.street || 
+                           personalInfo.mailingAddress?.city || 
+                           personalInfo.mailingAddress?.state || 
+                           personalInfo.mailingAddress?.zipCode;
+  addCheckboxTab('mailingAddressDifferentFromHomeAddress', !!hasMailingAddress);
+
+  // Previously Contracted with RHP Office (Section 1 checkbox)
+  addCheckboxTab('previouslyContracted', personalInfo.previouslyContracted === true);
+
+  // Previously Contracted with OTHER companies (Section 3 compliance question)
+  addCheckboxTab('previouslyContractedYes', complianceQuestions.previouslyContractedOther?.answer === true);
+  addCheckboxTab('previouslyContractedNo', complianceQuestions.previouslyContractedOther?.answer === false);
+
+  // Felony Conviction
+  addCheckboxTab('convictedOfFelonyYes', complianceQuestions.felonyConviction?.answer === true);
+  addCheckboxTab('convictedOfFelonyNo', complianceQuestions.felonyConviction?.answer === false);
+
+  // Fraud Conviction
+  addCheckboxTab('convictedOfFraudYes', complianceQuestions.misdemeanorFraud?.answer === true);
+  addCheckboxTab('convictedOfFraudNo', complianceQuestions.misdemeanorFraud?.answer === false);
+
+  // Civil Action
+  addCheckboxTab('subjectToCivilActionYes', complianceQuestions.civilAction?.answer === true);
+  addCheckboxTab('subjectToCivilActionNo', complianceQuestions.civilAction?.answer === false);
+
+  // Insurance License Denied/Revoked
+  addCheckboxTab('insuranceLicenseYes', complianceQuestions.licenseDenied?.answer === true);
+  addCheckboxTab('insuranceLicenseNo', complianceQuestions.licenseDenied?.answer === false);
+
+  // Difficulty Obtaining Bond
+  addCheckboxTab('difficultyObtainingYes', complianceQuestions.bondIssues?.answer === true);
+  addCheckboxTab('difficultyObtainingNo', complianceQuestions.bondIssues?.answer === false);
+
+  // Unsatisfied Judgments
+  addCheckboxTab('unsatisfiedJudgmentYes', financialBackground.unsatisfiedJudgments === true);
+  addCheckboxTab('unsatisfiedJudgmentNo', financialBackground.unsatisfiedJudgments === false);
+
+  // Unsatisfied Tax Liens
+  addCheckboxTab('unsatisfiedTaxLiensYes', financialBackground.unsatisfiedLiens === true);
+  addCheckboxTab('unsatisfiedTaxLiensNo', financialBackground.unsatisfiedLiens === false);
+
+  // Owe Insurance Company (placeholder - not in current model)
+  addCheckboxTab('oweInsuranceCompanyYes', false);
+  addCheckboxTab('oweInsuranceCompanyNo', true);
+
+  // Bankruptcy
+  addCheckboxTab('filedForBankruptcyYes', financialBackground.bankruptcy?.filed === true);
+  addCheckboxTab('filedForBankruptcyNo', financialBackground.bankruptcy?.filed === false);
+  
+  // Bankruptcy Chapter (only if filed)
+  if (financialBackground.bankruptcy?.filed) {
+    addCheckboxTab('filedForBankruptcyYesLeftChapter7', financialBackground.bankruptcy?.chapter === '7');
+    addCheckboxTab('filedForBankruptcyYesLeftChapter11', financialBackground.bankruptcy?.chapter === '11');
+    addCheckboxTab('filedForBankruptcyYesLeftChapter13', financialBackground.bankruptcy?.chapter === '13');
+    
+    // Bankruptcy Status
+    addCheckboxTab('filedForBankruptcyYesRightDischarged', financialBackground.bankruptcy?.status === 'Discharged');
+    addCheckboxTab('filedForBankruptcyYesRightOpenPending', financialBackground.bankruptcy?.status === 'Open');
+    addCheckboxTab('filedForBankruptcyYesDismissed', financialBackground.bankruptcy?.status === 'Dismissed');
+  }
+
+  // Currently Licensed
+  addCheckboxTab('currentlyLicensedToSellInsuranceYes', licensingStatus.currentlyLicensed === true);
+  addCheckboxTab('currentlyLicensedToSellInsuranceNo', licensingStatus.currentlyLicensed === false);
+
+  // License Types
+  const licenseTypes = licensingStatus.licenseTypes || [];
+  addCheckboxTab('licenseTypeLifeInsurance', licenseTypes.includes('Life'));
+  addCheckboxTab('licenseTypeHealthInsurance', licenseTypes.includes('Health'));
+  addCheckboxTab('licenseTypeLifeHealthInsurance', licenseTypes.includes('Life & Health'));
+  addCheckboxTab('licenseTypeOther', licenseTypes.includes('Other'));
+
+  // License Status
+  addCheckboxTab('licenseStatusActive', licensingStatus.licenseStatus === 'Active');
+  addCheckboxTab('licenseStatusInactive', licensingStatus.licenseStatus === 'Inactive');
+  addCheckboxTab('licenseStatusPending', licensingStatus.licenseStatus === 'Pending Renewal' || licensingStatus.licenseStatus === 'Pending');
 
   tabs.textTabs = textTabs;
+  tabs.checkboxTabs = checkboxTabs;
 
-  console.log('=== Created Text Tabs ===');
-  textTabs.forEach((tab, idx) => {
-    console.log(`Tab ${idx + 1}: ${tab.tabLabel} = "${tab.value}"`);
-  });
-  console.log('========================');
+  console.log('=== Created Tabs for DocuSign ===');
+  console.log(`Text Tabs: ${textTabs.length}`);
+  console.log(`Checkbox Tabs: ${checkboxTabs.length}`);
+  console.log('================================');
 
   return tabs;
 }

@@ -82,7 +82,18 @@ app.use((err, req, res, next) => {
 
 // Send all other non-API requests to Angular app (SPA fallback)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/rhpoffice-frontend/index.html'));
+  const indexPath = path.join(__dirname, '../frontend/dist/rhpoffice-frontend/index.html');
+  
+  // Check if frontend is built
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(503).json({
+      success: false,
+      message: 'Frontend not built. Please run: cd frontend && npm run build',
+      error: 'Frontend build not found'
+    });
+  }
 });
 
 const PORT = process.env.PORT || 5000;

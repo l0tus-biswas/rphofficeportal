@@ -1,11 +1,11 @@
-<nav class="navbar navbar-expand-lg navbar-dark sticky-top" *ngIf="authService.isLoggedIn()">
-  <div class="container-fluid px-3 px-lg-4">
+<nav class="navbar navbar-expand-xl navbar-dark sticky-top" *ngIf="authService.isLoggedIn()">
+  <div class="container-fluid px-2 px-md-3 px-lg-4">
     <a class="navbar-brand fw-bold d-flex align-items-center" routerLink="/dashboard">
       <div class="brand-icon" *ngIf="!branding.appLogo">
         <i class="bi bi-building-fill"></i>
       </div>
       <img *ngIf="branding.appLogo" [src]="branding.appLogo" alt="Logo" class="brand-logo">
-      <span class="brand-text ms-2">{{ branding.appName }}</span>
+      <span class="brand-text ms-2 d-none d-sm-inline">{{ branding.appName }}</span>
     </a>
     
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
@@ -14,58 +14,58 @@
     </button>
     
     <div class="collapse navbar-collapse" id="navbarNav">
-      <ul class="navbar-nav ms-auto align-items-lg-center">
+      <ul class="navbar-nav ms-auto align-items-xl-center">
         <li class="nav-item">
-          <a class="nav-link px-lg-3" routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+          <a class="nav-link px-xl-3" routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
             <i class="bi bi-speedometer2 me-2"></i>
             <span>Dashboard</span>
           </a>
         </li>
         
         <li class="nav-item" *ngIf="authService.isAgent()">
-          <a class="nav-link px-lg-3" routerLink="/recruits" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/recruits" routerLinkActive="active">
             <i class="bi bi-people me-2"></i>
             <span>Recruits</span>
           </a>
         </li>
         
         <li class="nav-item" *ngIf="authService.isAgent()">
-          <a class="nav-link px-lg-3" routerLink="/downline" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/downline" routerLinkActive="active">
             <i class="bi bi-diagram-3 me-2"></i>
             <span>Downline</span>
           </a>
         </li>
         
         <li class="nav-item">
-          <a class="nav-link px-lg-3" routerLink="/onboarding" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/onboarding" routerLinkActive="active">
             <i class="bi bi-file-earmark-check me-2"></i>
             <span>Onboarding</span>
           </a>
         </li>
         
         <li class="nav-item">
-          <a class="nav-link px-lg-3" routerLink="/training" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/training" routerLinkActive="active">
             <i class="bi bi-book me-2"></i>
             <span>Training</span>
           </a>
         </li>
         
         <li class="nav-item">
-          <a class="nav-link px-lg-3" routerLink="/licensing" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/licensing" routerLinkActive="active">
             <i class="bi bi-award me-2"></i>
             <span>Licensing</span>
           </a>
         </li>
         
         <li class="nav-item">
-          <a class="nav-link px-lg-3" routerLink="/production" routerLinkActive="active">
+          <a class="nav-link px-xl-3" routerLink="/production" routerLinkActive="active">
             <i class="bi bi-graph-up me-2"></i>
             <span>Production</span>
           </a>
         </li>
         
         <li class="nav-item dropdown" *ngIf="authService.isAdmin()">
-          <a class="nav-link dropdown-toggle px-lg-3" href="#" id="adminDropdown" role="button" 
+          <a class="nav-link dropdown-toggle px-xl-3" href="#" id="adminDropdown" role="button" 
              data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-gear-fill me-2"></i>
             <span>Admin</span>
@@ -120,8 +120,8 @@
           </ul>
         </li>
         
-        <li class="nav-item ms-lg-2">
-          <div class="user-badge d-flex align-items-center">
+        <li class="nav-item ms-xl-2">
+          <div class="user-badge d-flex align-items-center py-2 py-xl-0">
             <span class="badge role-badge me-2" [class.bg-danger]="currentUser?.role === 'admin'" 
                   [class.bg-success]="currentUser?.role === 'agent'">
               {{ currentUser?.role | uppercase }}
@@ -130,20 +130,20 @@
         </li>
         
         <!-- Notifications -->
-        <li class="nav-item ms-lg-2">
+        <li class="nav-item ms-xl-2">
           <a class="nav-link position-relative notification-bell" routerLink="/notifications">
             <i class="bi bi-bell-fill fs-5"></i>
             <span *ngIf="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
           </a>
         </li>
         
-        <li class="nav-item dropdown ms-lg-2">
-          <a class="nav-link dropdown-toggle user-dropdown px-lg-3" href="#" id="userDropdown" role="button" 
+        <li class="nav-item dropdown ms-xl-2">
+          <a class="nav-link dropdown-toggle user-dropdown px-2 px-xl-3" href="#" id="userDropdown" role="button" 
              data-bs-toggle="dropdown" aria-expanded="false">
             <div class="user-avatar">
               <i class="bi bi-person-circle"></i>
             </div>
-            <span class="user-name ms-2">{{ currentUser?.name }}</span>
+            <span class="user-name ms-2 d-none d-md-inline">{{ currentUser?.name }}</span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end shadow-lg animate-dropdown user-menu">
             <li class="dropdown-header">

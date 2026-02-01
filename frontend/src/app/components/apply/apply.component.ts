@@ -177,6 +177,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
       currentlyLicensed: [null, this.requiredBooleanValidator.bind(this)],
       licenseLife: [false],
       licenseHealth: [false],
+      licenseLifeHealth: [false],
       licenseOther: [false],
       licenseOtherDescription: [''],
       statesLicensed: [''],
@@ -583,6 +584,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
     const licenseTypes = [];
     if (s5.licenseLife) licenseTypes.push('Life');
     if (s5.licenseHealth) licenseTypes.push('Health');
+    if (s5.licenseLifeHealth) licenseTypes.push('Life & Health');
     if (s5.licenseOther) licenseTypes.push('Other');
     const licenseOtherDescription = s5.licenseOther ? (s5.licenseOtherDescription || '').trim() : '';
 

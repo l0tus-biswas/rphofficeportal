@@ -13,6 +13,21 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.welcome-header h3 {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.welcome-header .d-flex {
+  gap: 1rem;
+}
+
+.welcome-header .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Referral Card */
 .referral-card {
   background: white;
@@ -103,5 +118,180 @@
   }
   .stat-card h2 {
     font-size: 2rem;
+  }
+}
+
+/* Enhanced Mobile Responsive */
+@media (max-width: 575.98px) {
+  .dashboard-container {
+    padding: 0;
+  }
+  
+  .container-fluid {
+    padding: 0.75rem !important;
+  }
+  
+  .welcome-header {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem !important;
+  }
+  
+  .welcome-header h3 {
+    font-size: 1.35rem;
+  }
+  
+  .welcome-header p {
+    font-size: 0.85rem;
+  }
+  
+  .badge {
+    font-size: 0.75rem !important;
+    padding: 0.35rem 0.7rem !important;
+  }
+  
+  .stat-card {
+    margin-bottom: 1rem;
+    border-radius: 6px;
+  }
+  
+  .stat-card h2 {
+    font-size: 1.75rem;
+  }
+  
+  .stat-card .card-body {
+    padding: 1rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.5rem;
+    right: 10px;
+    bottom: 10px;
+  }
+  
+  .action-card,
+  .tips-card,
+  .referral-card {
+    border-radius: 6px;
+    margin-bottom: 1rem;
+  }
+  
+  .action-card .card-body,
+  .tips-card .card-body,
+  .referral-card .card-body {
+    padding: 1rem;
+  }
+  
+  .btn {
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+  }
+  
+  /* Stack flex items vertically on mobile */
+  .d-flex.justify-content-between {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 1rem;
+  }
+  
+  .d-flex.justify-content-between > div {
+    width: 100%;
+  }
+  
+  .text-end {
+    text-align: left !important;
+  }
+}
+
+/* Tablet Responsive (iPad) */
+@media (min-width: 576px) and (max-width: 991.98px) {
+  .container-fluid {
+    padding: 1.5rem !important;
+  }
+  
+  .welcome-header {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem !important;
+  }
+  
+  .welcome-header h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .welcome-header p {
+    font-size: 0.9rem;
+  }
+  
+  .welcome-header .badge {
+    font-size: 0.85rem !important;
+    padding: 0.4rem 0.8rem !important;
+  }
+  
+  .welcome-header .d-flex {
+    gap: 0.75rem;
+  }
+  
+  .stat-card h2 {
+    font-size: 2.25rem;
+  }
+  
+  .stat-card,
+  .action-card,
+  .tips-card,
+  .referral-card {
+    margin-bottom: 1.25rem;
+  }
+  
+  /* Better column spacing for tablets */
+  .row.mb-4 {
+    margin-bottom: 1.5rem !important;
+  }
+  
+  /* Ensure proper wrapping */
+  .d-flex.flex-wrap {
+    gap: 0.75rem;
+  }
+}
+
+/* iPad Pro and large tablets (1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .dashboard-container {
+    padding: 0;
+  }
+  
+  .container-fluid {
+    padding: 1.25rem !important;
+  }
+  
+  .welcome-header {
+    padding: 1.5rem;
+  }
+  
+  .welcome-header h3 {
+    font-size: 1.5rem;
+  }
+  
+  .welcome-header .btn-sm {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+  }
+  
+  /* Ensure badges don't overflow */
+  .welcome-header .badge {
+    font-size: 0.85rem !important;
+    padding: 0.4rem 0.8rem !important;
+    white-space: nowrap;
+  }
+}
+
+/* Large tablets and small desktops */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .stat-card h2 {
+    font-size: 2.25rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.75rem;
   }
 }

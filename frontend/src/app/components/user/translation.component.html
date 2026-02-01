@@ -20,6 +20,13 @@
             <div class="alert alert-success">
               <i class="bi bi-check-circle me-2"></i>
               <strong>{{ getCurrentLanguageName() }}</strong>
+              <small class="d-block mt-1 text-muted">
+                Language Code: <code>{{ currentLanguage }}</code>
+              </small>
+            </div>
+            <div class="alert alert-info" *ngIf="currentLanguage !== 'en'">
+              <i class="bi bi-info-circle me-2"></i>
+              Click on a language card below to switch languages. The page will reload to apply the translation.
             </div>
           </div>
 
