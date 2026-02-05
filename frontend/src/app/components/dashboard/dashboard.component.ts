@@ -55,6 +55,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.licensingService.getLicensingProgress(this.user._id).subscribe({
       next: (progress) => {
         this.licensingProgress = progress;
+        console.log('Licensing Progress loaded:', progress);
+        console.log('License Types:', progress.licenseTypes);
+        console.log('Has existing license?', this.hasExistingLicense());
         this.loadingLicensing = false;
         this.startDaysRemainingTimer();
       },
@@ -66,7 +69,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   startDaysRemainingTimer(): void {
-    if (!this.licensingProgress?.licensingDeadline || this.licensingProgress?.isLicensed) {
+    // Don't show timer if user is already licensed (answered "Yes" and selected any license type)
+    if (!this.licensingProgress?.licensingDeadline || 
+        this.licensingProgress?.isLicensed ||
+        this.hasExistingLicense()) {
       this.daysRemaining = 0;
       return;
     }
@@ -81,7 +87,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   calculateDaysRemaining(): void {
-    if (!this.licensingProgress?.licensingDeadline || this.licensingProgress?.isLicensed) {
+    if (!this.licensingProgress?.licensingDeadline || 
+        this.licensingProgress?.isLicensed ||
+        this.hasExistingLicense()) {
       this.daysRemaining = 0;
       return;
     }
@@ -92,6 +100,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     this.daysRemaining = diffDays > 0 ? diffDays : 0;
+  }
+
+  hasExistingLicense(): boolean {
+    // If user answered "Yes" to currently licensed and selected any license type, hide timer
+    return (this.licensingProgress?.licenseTypes?.length || 0) > 0;
   }
 
   ngOnDestroy(): void {

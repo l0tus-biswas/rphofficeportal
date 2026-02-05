@@ -86,7 +86,9 @@ const apaApplicationSchema = new mongoose.Schema({
   // SECTION 4: Financial Background
   financialBackground: {
     unsatisfiedJudgments: { type: Boolean, required: true },
+    unsatisfiedJudgmentsExplanation: String,
     unsatisfiedLiens: { type: Boolean, required: true },
+    unsatisfiedLiensExplanation: String,
     bankruptcy: {
       filed: { type: Boolean, required: true },
       chapter: { type: String, enum: ['7', '11', '13', null] },

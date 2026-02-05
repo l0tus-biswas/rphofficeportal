@@ -265,17 +265,28 @@
               <div class="col-md-12 mb-3">
                 <div class="border rounded p-3">
                   <strong class="d-block mb-2">Do you have any unsatisfied judgments or liens against you?</strong>
-                  <span class="badge" 
-                        [class.bg-success]="application.financialBackground?.unsatisfiedJudgments === false" 
-                        [class.bg-warning]="application.financialBackground?.unsatisfiedJudgments === true">
-                    Judgments: {{ application.financialBackground?.unsatisfiedJudgments === true ? 'YES' : 'NO' }}
-                  </span>
-                  <br>
-                  <span class="badge mt-2" 
-                        [class.bg-success]="application.financialBackground?.unsatisfiedLiens === false" 
-                        [class.bg-warning]="application.financialBackground?.unsatisfiedLiens === true">
-                    Liens: {{ application.financialBackground?.unsatisfiedLiens === true ? 'YES' : 'NO' }}
-                  </span>
+                  <div class="mb-2">
+                    <span class="badge" 
+                          [class.bg-success]="application.financialBackground?.unsatisfiedJudgments === false" 
+                          [class.bg-warning]="application.financialBackground?.unsatisfiedJudgments === true">
+                      Judgments: {{ application.financialBackground?.unsatisfiedJudgments === true ? 'YES' : 'NO' }}
+                    </span>
+                    <div *ngIf="application.financialBackground?.unsatisfiedJudgments && application.financialBackground?.unsatisfiedJudgmentsExplanation" class="mt-2 p-2 bg-light rounded">
+                      <small class="text-muted d-block">Explanation:</small>
+                      <small>{{ application.financialBackground.unsatisfiedJudgmentsExplanation }}</small>
+                    </div>
+                  </div>
+                  <div>
+                    <span class="badge" 
+                          [class.bg-success]="application.financialBackground?.unsatisfiedLiens === false" 
+                          [class.bg-warning]="application.financialBackground?.unsatisfiedLiens === true">
+                      Liens: {{ application.financialBackground?.unsatisfiedLiens === true ? 'YES' : 'NO' }}
+                    </span>
+                    <div *ngIf="application.financialBackground?.unsatisfiedLiens && application.financialBackground?.unsatisfiedLiensExplanation" class="mt-2 p-2 bg-light rounded">
+                      <small class="text-muted d-block">Explanation:</small>
+                      <small>{{ application.financialBackground.unsatisfiedLiensExplanation }}</small>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="col-md-12 mb-3">

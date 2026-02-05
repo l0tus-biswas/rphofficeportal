@@ -32,7 +32,7 @@
       </div>
       
       <!-- Licensing Countdown Timer (Agent Only) -->
-      <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress && !licensingProgress.isLicensed">
+      <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress && !licensingProgress.isLicensed && daysRemaining > 0">
         <div class="col-12">
           <div class="card border-warning shadow-sm">
             <div class="card-body">

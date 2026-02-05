@@ -105,7 +105,9 @@ export class ApaApplyComponent implements OnInit {
     // Section 4: Financial
     this.section4Form = this.formBuilder.group({
       unsatisfiedJudgments: [null, this.requiredBooleanValidator.bind(this)],
+      unsatisfiedJudgmentsExplanation: [''],
       unsatisfiedLiens: [null, this.requiredBooleanValidator.bind(this)],
+      unsatisfiedLiensExplanation: [''],
       bankruptcyFiled: [null, this.requiredBooleanValidator.bind(this)],
       bankruptcyChapter: [''],
       bankruptcyStatus: ['']
@@ -146,6 +148,28 @@ export class ApaApplyComponent implements OnInit {
         }
         control?.updateValueAndValidity();
       });
+    });
+
+    // Dynamic validation for unsatisfied judgments explanation
+    this.section4Form.get('unsatisfiedJudgments')?.valueChanges.subscribe(hasJudgments => {
+      const explanationControl = this.section4Form.get('unsatisfiedJudgmentsExplanation');
+      if (hasJudgments) {
+        explanationControl?.setValidators([Validators.required, Validators.minLength(10)]);
+      } else {
+        explanationControl?.clearValidators();
+      }
+      explanationControl?.updateValueAndValidity();
+    });
+
+    // Dynamic validation for unsatisfied liens explanation
+    this.section4Form.get('unsatisfiedLiens')?.valueChanges.subscribe(hasLiens => {
+      const explanationControl = this.section4Form.get('unsatisfiedLiensExplanation');
+      if (hasLiens) {
+        explanationControl?.setValidators([Validators.required, Validators.minLength(10)]);
+      } else {
+        explanationControl?.clearValidators();
+      }
+      explanationControl?.updateValueAndValidity();
     });
 
     // Dynamic validation for licensing
@@ -361,6 +385,28 @@ export class ApaApplyComponent implements OnInit {
     }
   }
 
+  onLicenseTypeChange(event: any): void {
+    const licenseTypesArray = this.section5Form.get('licenseTypes') as FormArray;
+    const value = event.target.value;
+    
+    if (event.target.checked) {
+      // Add the license type if checked
+      if (!licenseTypesArray.value.includes(value)) {
+        licenseTypesArray.push(this.formBuilder.control(value));
+      }
+    } else {
+      // Remove the license type if unchecked
+      const index = licenseTypesArray.value.indexOf(value);
+      if (index >= 0) {
+        licenseTypesArray.removeAt(index);
+      }
+    }
+    
+    // Trigger validation
+    licenseTypesArray.markAsTouched();
+    licenseTypesArray.updateValueAndValidity();
+  }
+
   onFileSelected(question: string, event: any): void {
     const file = event.target.files[0];
     if (file) {
@@ -519,7 +565,9 @@ export class ApaApplyComponent implements OnInit {
       },
       financialBackground: {
         unsatisfiedJudgments: s4.unsatisfiedJudgments,
+        unsatisfiedJudgmentsExplanation: s4.unsatisfiedJudgmentsExplanation,
         unsatisfiedLiens: s4.unsatisfiedLiens,
+        unsatisfiedLiensExplanation: s4.unsatisfiedLiensExplanation,
         bankruptcy: {
           filed: s4.bankruptcyFiled,
           chapter: s4.bankruptcyChapter,

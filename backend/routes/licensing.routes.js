@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const LicensingProgress = require('../models/LicensingProgress');
 const User = require('../models/User');
+const APAApplication = require('../models/APAApplication');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const multer = require('multer');
 const path = require('path');
@@ -197,7 +198,41 @@ router.get('/:agentId', authenticate, async (req, res) => {
         .populate('lastUpdatedBy', 'name');
     }
     
-    res.json(licensingProgress);
+    // Get license types from APAApplication if it exists
+    const apaApplication = await APAApplication.findOne({ user: req.params.agentId });
+    let licenseTypes = apaApplication?.licensingStatus?.licenseTypes || [];
+    let isCurrentlyLicensed = apaApplication?.licensingStatus?.currentlyLicensed || false;
+    
+    // Also check the agent's metadata for license information
+    const agent = await User.findById(req.params.agentId);
+    if (licenseTypes.length === 0 && agent?.metadata) {
+      // Check if license info is stored in metadata
+      const metadataLicenseTypes = agent.metadata.get('licenseTypes');
+      if (metadataLicenseTypes) {
+        try {
+          licenseTypes = JSON.parse(metadataLicenseTypes);
+        } catch (e) {
+          // If it's already an array or string, use it directly
+          licenseTypes = Array.isArray(metadataLicenseTypes) ? metadataLicenseTypes : [metadataLicenseTypes];
+        }
+      }
+      
+      const metadataCurrentlyLicensed = agent.metadata.get('currentlyLicensed');
+      if (metadataCurrentlyLicensed) {
+        isCurrentlyLicensed = metadataCurrentlyLicensed === 'true' || metadataCurrentlyLicensed === true;
+      }
+    }
+    
+    console.log(`License info for user ${req.params.agentId}:`);
+    console.log('- Currently Licensed:', isCurrentlyLicensed);
+    console.log('- License Types:', licenseTypes);
+    
+    // Add license types to the response
+    const responseData = licensingProgress.toObject();
+    // Only include license types if user said they're currently licensed
+    responseData.licenseTypes = isCurrentlyLicensed ? licenseTypes : [];
+    
+    res.json(responseData);
   } catch (error) {
     console.error('Error fetching licensing progress:', error);
     res.status(500).json({ message: 'Server error', error: error.message });

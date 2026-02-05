@@ -298,9 +298,9 @@ function createSignerTabs(application) {
 
   // Financial Background - Descriptions
   addTextTab('unsatisfiedJudgmentDescribe', 
-    financialBackground.unsatisfiedJudgments ? 'Yes, see explanation' : '');
+    financialBackground.unsatisfiedJudgmentsExplanation || '');
   addTextTab('unsatisfiedTaxLiensYesDescribe', 
-    financialBackground.unsatisfiedLiens ? 'Yes, see explanation' : '');
+    financialBackground.unsatisfiedLiensExplanation || '');
   addTextTab('oweInsuranceCompanyYesDescribe', '');
 
   // Licensing Information

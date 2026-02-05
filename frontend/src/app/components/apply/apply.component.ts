@@ -821,7 +821,10 @@ export class ApplyComponent implements OnInit, OnDestroy {
     }
 
     const initialize = () => {
-      if (typeof google !== 'undefined' && google.translate) {
+      // Check if both google and TranslateElement are available
+      if (typeof google !== 'undefined' && 
+          google.translate && 
+          typeof google.translate.TranslateElement === 'function') {
         try {
           let container = document.getElementById('google_translate_element_hidden');
           if (!container) {
@@ -847,6 +850,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
         }
       } else if (this.translationInitAttempts < 20) {
         this.translationInitAttempts += 1;
+        console.log(`Google Translate not ready, attempt ${this.translationInitAttempts}/20`);
         setTimeout(initialize, 300);
       }
     };

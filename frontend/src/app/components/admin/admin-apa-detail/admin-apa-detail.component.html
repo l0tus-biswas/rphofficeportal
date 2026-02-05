@@ -227,13 +227,24 @@
             <div class="col-md-4 mb-3">
               <div class="border rounded p-3">
                 <strong class="d-block mb-2">Do you have any unsatisfied judgments or liens against you?</strong>
-                <span class="badge" [class.bg-success]="!application.financialBackground.unsatisfiedJudgments" [class.bg-warning]="application.financialBackground.unsatisfiedJudgments">
-                  Judgments: {{ application.financialBackground.unsatisfiedJudgments ? 'YES' : 'NO' }}
-                </span>
-                <br>
-                <span class="badge mt-2" [class.bg-success]="!application.financialBackground.unsatisfiedLiens" [class.bg-warning]="application.financialBackground.unsatisfiedLiens">
-                  Liens: {{ application.financialBackground.unsatisfiedLiens ? 'YES' : 'NO' }}
-                </span>
+                <div class="mb-2">
+                  <span class="badge" [class.bg-success]="!application.financialBackground.unsatisfiedJudgments" [class.bg-warning]="application.financialBackground.unsatisfiedJudgments">
+                    Judgments: {{ application.financialBackground.unsatisfiedJudgments ? 'YES' : 'NO' }}
+                  </span>
+                  <div *ngIf="application.financialBackground.unsatisfiedJudgments && application.financialBackground.unsatisfiedJudgmentsExplanation" class="mt-2 p-2 bg-light rounded">
+                    <small class="text-muted d-block">Explanation:</small>
+                    <small>{{ application.financialBackground.unsatisfiedJudgmentsExplanation }}</small>
+                  </div>
+                </div>
+                <div>
+                  <span class="badge" [class.bg-success]="!application.financialBackground.unsatisfiedLiens" [class.bg-warning]="application.financialBackground.unsatisfiedLiens">
+                    Liens: {{ application.financialBackground.unsatisfiedLiens ? 'YES' : 'NO' }}
+                  </span>
+                  <div *ngIf="application.financialBackground.unsatisfiedLiens && application.financialBackground.unsatisfiedLiensExplanation" class="mt-2 p-2 bg-light rounded">
+                    <small class="text-muted d-block">Explanation:</small>
+                    <small>{{ application.financialBackground.unsatisfiedLiensExplanation }}</small>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="col-md-8 mb-3">

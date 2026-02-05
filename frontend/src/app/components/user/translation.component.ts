@@ -30,19 +30,33 @@ export class TranslationComponent implements OnInit {
     // Initialize Google Translate
     this.initGoogleTranslate();
     
-    // Apply saved language immediately using cookies
+    // Only apply saved language if not already translated
     if (savedLang && savedLang !== 'en') {
-      console.log('Applying saved language via cookies:', savedLang);
-      this.applyLanguageViaCookie(savedLang);
+      console.log('Checking if page needs translation for:', savedLang);
       
-      // If page hasn't translated yet, reload it
+      // Check if page is already translated
       setTimeout(() => {
         const isTranslated = document.querySelector('.translated-ltr, .translated-rtl, body.translated-ltr, body.translated-rtl');
-        if (!isTranslated && savedLang !== 'en') {
-          console.log('Page not translated, reloading...');
-          window.location.reload();
+        const currentCookie = document.cookie.split('; ').find(row => row.startsWith('googtrans='));
+        
+        console.log('Is translated:', !!isTranslated);
+        console.log('Current googtrans cookie:', currentCookie);
+        
+        // Only apply if not already translated and no cookie set
+        if (!isTranslated && !currentCookie) {
+          console.log('Page not translated, applying saved language via cookies:', savedLang);
+          this.applyLanguageViaCookie(savedLang);
+          
+          // Give it more time to translate
+          setTimeout(() => {
+            const stillNotTranslated = !document.querySelector('.translated-ltr, .translated-rtl, body.translated-ltr, body.translated-rtl');
+            if (stillNotTranslated && savedLang !== 'en') {
+              console.log('Page still not translated after cookie set, reloading...');
+              window.location.reload();
+            }
+          }, 2000);
         }
-      }, 2000);
+      }, 1000);
     }
   }
 
@@ -80,8 +94,16 @@ export class TranslationComponent implements OnInit {
       return;
     }
 
+    let attempts = 0;
+    const maxAttempts = 20;
+
     const checkAndInit = () => {
-      if (typeof google !== 'undefined' && google.translate) {
+      attempts++;
+      
+      // Check if both google and TranslateElement are available
+      if (typeof google !== 'undefined' && 
+          google.translate && 
+          typeof google.translate.TranslateElement === 'function') {
         try {
           // Create a hidden element for Google Translate
           const div = document.createElement('div');
@@ -102,8 +124,11 @@ export class TranslationComponent implements OnInit {
         } catch (error) {
           console.error('Error initializing Google Translate:', error);
         }
-      } else {
+      } else if (attempts < maxAttempts) {
+        console.log(`Google Translate not ready, attempt ${attempts}/${maxAttempts}`);
         setTimeout(checkAndInit, 500);
+      } else {
+        console.error('Google Translate failed to load after', maxAttempts, 'attempts');
       }
     };
 
@@ -119,51 +144,72 @@ export class TranslationComponent implements OnInit {
     localStorage.setItem('selectedLanguage', langCode);
     console.log('Updated localStorage selectedLanguage to:', langCode);
 
-    // Clear all existing Google Translate cookies first
-    const clearCookies = () => {
-      const domain = window.location.hostname;
-      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${domain}`;
-      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${domain}`;
-    };
+    // Get domain variations for cookie clearing
+    const hostname = window.location.hostname;
+    const domains = [
+      '', // no domain
+      hostname,
+      `.${hostname}`
+    ];
 
-    clearCookies();
+    // Clear all existing Google Translate cookies thoroughly
+    const expireDate = 'Thu, 01 Jan 1970 00:00:00 UTC';
+    domains.forEach(domain => {
+      const domainStr = domain ? `; domain=${domain}` : '';
+      document.cookie = `googtrans=; expires=${expireDate}; path=/${domainStr}`;
+      document.cookie = `googtrans=; expires=${expireDate}; path=/; SameSite=None; Secure${domainStr}`;
+    });
+
     console.log('Cleared existing cookies');
 
-    // Set new language cookie
-    if (langCode !== 'en') {
-      const cookieValue = `/en/${langCode}`;
-      const expires = new Date();
-      expires.setTime(expires.getTime() + (365 * 24 * 60 * 60 * 1000));
-      const domain = window.location.hostname;
-      
-      document.cookie = `googtrans=${cookieValue}; expires=${expires.toUTCString()}; path=/`;
-      document.cookie = `googtrans=${cookieValue}; expires=${expires.toUTCString()}; path=/; domain=${domain}`;
-      document.cookie = `googtrans=${cookieValue}; expires=${expires.toUTCString()}; path=/; domain=.${domain}`;
-      
-      console.log('Set new cookies for language:', langCode);
-      console.log('Cookie value:', cookieValue);
-    } else {
-      console.log('Resetting to English (clearing all cookies)');
-    }
-    
-    console.log('Current cookies:', document.cookie);
-
-    // Also try to trigger via select element
-    const selectElement = document.querySelector('.goog-te-combo') as HTMLSelectElement;
-    if (selectElement) {
-      console.log('Found Google Translate select, setting value to:', langCode);
-      selectElement.value = langCode;
-      selectElement.dispatchEvent(new Event('change', { bubbles: true }));
-    } else {
-      console.log('Google Translate select element not found');
-    }
-
-    // Force reload to apply the translation
-    console.log('Reloading page to apply translation...');
+    // Small delay to ensure cookies are cleared before setting new ones
     setTimeout(() => {
-      window.location.reload();
-    }, 100);
+      // Set new language cookie
+      if (langCode !== 'en') {
+        const cookieValue = `/en/${langCode}`;
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (365 * 24 * 60 * 60 * 1000));
+        
+        domains.forEach(domain => {
+          const domainStr = domain ? `; domain=${domain}` : '';
+          document.cookie = `googtrans=${cookieValue}; expires=${expires.toUTCString()}; path=/${domainStr}`;
+        });
+        
+        console.log('Set new cookies for language:', langCode);
+        console.log('Cookie value:', cookieValue);
+      } else {
+        console.log('Resetting to English (clearing all cookies)');
+      }
+      
+      console.log('Current cookies:', document.cookie);
+
+      // Try to trigger via select element without reload first
+      const selectElement = document.querySelector('.goog-te-combo') as HTMLSelectElement;
+      if (selectElement) {
+        console.log('Found Google Translate select, setting value to:', langCode);
+        selectElement.value = langCode;
+        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        // Wait a bit to see if translation happens automatically
+        setTimeout(() => {
+          const isTranslated = document.querySelector('.translated-ltr, .translated-rtl, body.translated-ltr, body.translated-rtl');
+          if (!isTranslated && langCode !== 'en') {
+            console.log('Translation did not occur automatically, reloading page...');
+            window.location.reload();
+          } else if (langCode === 'en') {
+            // For English, always reload to clear translation
+            console.log('Reloading to restore English...');
+            window.location.reload();
+          }
+        }, 500);
+      } else {
+        console.log('Google Translate select element not found, reloading page...');
+        // If select not found, reload immediately
+        setTimeout(() => {
+          window.location.reload();
+        }, 200);
+      }
+    }, 50);
   }
 
   resetToEnglish(): void {
@@ -171,15 +217,22 @@ export class TranslationComponent implements OnInit {
     this.currentLanguage = 'en';
     localStorage.setItem('selectedLanguage', 'en');
     
-    // Clear all Google Translate cookies
-    const domain = window.location.hostname;
-    document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${domain}`;
-    document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${domain}`;
+    // Clear all Google Translate cookies with all domain variations
+    const hostname = window.location.hostname;
+    const domains = ['', hostname, `.${hostname}`];
+    const expireDate = 'Thu, 01 Jan 1970 00:00:00 UTC';
+    
+    domains.forEach(domain => {
+      const domainStr = domain ? `; domain=${domain}` : '';
+      document.cookie = `googtrans=; expires=${expireDate}; path=/${domainStr}`;
+      document.cookie = `googtrans=; expires=${expireDate}; path=/; SameSite=None; Secure${domainStr}`;
+    });
     
     console.log('Cookies cleared, reloading page');
     
     // Reload to show original English content
-    window.location.reload();
+    setTimeout(() => {
+      window.location.reload();
+    }, 200);
   }
 }

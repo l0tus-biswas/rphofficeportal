@@ -126,7 +126,7 @@
               <tr *ngFor="let payment of payments">
                 <td>{{ formatDate(payment.createdAt) }}</td>
                 <td>
-                  <span class="badge bg-primary" *ngIf="payment.type === 'setup_fee' || payment.type === 'one-time'">Setup Fee</span>
+                  <span class="badge bg-primary" *ngIf="payment.type === 'setup_fee' || payment.type === 'one-time'">RHP Online</span>
                   <span class="badge bg-info" *ngIf="payment.type === 'subscription'">Subscription</span>
                 </td>
                 <td>{{ payment.description || 'Payment' }}</td>

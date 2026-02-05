@@ -10,6 +10,7 @@ export interface LicensingProgress {
   licensingDeadline: Date;
   licenseObtainedDate?: Date;
   isLicensed: boolean;
+  licenseTypes?: string[];
   daysRemaining?: number;
   completionPercentage?: number;
   checklist: {
