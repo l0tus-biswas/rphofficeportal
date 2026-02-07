@@ -587,4 +587,24 @@ export class ApaApplyComponent implements OnInit {
   get progressPercentage(): number {
     return (this.currentSection / this.totalSections) * 100;
   }
+
+  showJudgmentsExplanation(): boolean {
+    const value = this.section4Form.get('unsatisfiedJudgments')?.value;
+    return value === true || value === 'true';
+  }
+
+  showLiensExplanation(): boolean {
+    const value = this.section4Form.get('unsatisfiedLiens')?.value;
+    return value === true || value === 'true';
+  }
+
+  onJudgmentsChange(value: boolean): void {
+    this.section4Form.patchValue({ unsatisfiedJudgments: value });
+    this.cdr.detectChanges();
+  }
+
+  onLiensChange(value: boolean): void {
+    this.section4Form.patchValue({ unsatisfiedLiens: value });
+    this.cdr.detectChanges();
+  }
 }

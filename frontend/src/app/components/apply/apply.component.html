@@ -540,6 +540,11 @@
                           <label class="form-check-label" for="judgNo">No</label>
                         </div>
                       </div>
+                      <div *ngIf="section4Form.get('unsatisfiedJudgments')?.value === true" class="mt-3">
+                        <label class="form-label">Please explain <span class="text-danger">*</span></label>
+                        <textarea class="form-control" formControlName="unsatisfiedJudgmentsExplanation" rows="3" 
+                                  placeholder="Provide details about the unsatisfied judgments"></textarea>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -557,6 +562,11 @@
                           <input class="form-check-input" type="radio" formControlName="unsatisfiedLiens" [value]="false" id="lienNo">
                           <label class="form-check-label" for="lienNo">No</label>
                         </div>
+                      </div>
+                      <div *ngIf="section4Form.get('unsatisfiedLiens')?.value === true" class="mt-3">
+                        <label class="form-label">Please explain <span class="text-danger">*</span></label>
+                        <textarea class="form-control" formControlName="unsatisfiedLiensExplanation" rows="3" 
+                                  placeholder="Provide details about the unsatisfied tax liens"></textarea>
                       </div>
                     </div>
                   </div>

@@ -441,18 +441,20 @@
       <label class="form-label fw-bold">Do you have any unsatisfied judgments? <span class="text-danger">*</span></label>
       <div class="form-check">
         <input type="radio" class="form-check-input" name="unsatisfiedJudgments" [value]="true" formControlName="unsatisfiedJudgments" id="judgmentsYes"
+               (change)="onJudgmentsChange(true)"
                [class.is-invalid]="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
         <label class="form-check-label" for="judgmentsYes">Yes</label>
       </div>
       <div class="form-check">
         <input type="radio" class="form-check-input" name="unsatisfiedJudgments" [value]="false" formControlName="unsatisfiedJudgments" id="judgmentsNo"
+               (change)="onJudgmentsChange(false)"
                [class.is-invalid]="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
         <label class="form-check-label" for="judgmentsNo">No</label>
       </div>
       <div class="text-danger small mt-2" *ngIf="section4Form.get('unsatisfiedJudgments')?.invalid && section4Form.get('unsatisfiedJudgments')?.touched">
         <i class="bi bi-exclamation-circle me-1"></i><strong>Required</strong> - Please select Yes or No
       </div>
-      <div *ngIf="section4Form.get('unsatisfiedJudgments')?.value === true" class="ms-4 mt-3">
+      <div *ngIf="showJudgmentsExplanation()" class="ms-4 mt-3">
         <label class="form-label">Please explain <span class="text-danger">*</span></label>
         <textarea class="form-control" formControlName="unsatisfiedJudgmentsExplanation" rows="3" 
                   placeholder="Provide details about the unsatisfied judgments"
@@ -465,18 +467,20 @@
       <label class="form-label fw-bold">Do you have any unsatisfied tax liens? <span class="text-danger">*</span></label>
       <div class="form-check">
         <input type="radio" class="form-check-input" name="unsatisfiedLiens" [value]="true" formControlName="unsatisfiedLiens" id="liensYes"
+               (change)="onLiensChange(true)"
                [class.is-invalid]="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
         <label class="form-check-label" for="liensYes">Yes</label>
       </div>
       <div class="form-check">
         <input type="radio" class="form-check-input" name="unsatisfiedLiens" [value]="false" formControlName="unsatisfiedLiens" id="liensNo"
+               (change)="onLiensChange(false)"
                [class.is-invalid]="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
         <label class="form-check-label" for="liensNo">No</label>
       </div>
       <div class="text-danger small mt-2" *ngIf="section4Form.get('unsatisfiedLiens')?.invalid && section4Form.get('unsatisfiedLiens')?.touched">
         <i class="bi bi-exclamation-circle me-1"></i><strong>Required</strong> - Please select Yes or No
       </div>
-      <div *ngIf="section4Form.get('unsatisfiedLiens')?.value === true" class="ms-4 mt-3">
+      <div *ngIf="showLiensExplanation()" class="ms-4 mt-3">
         <label class="form-label">Please explain <span class="text-danger">*</span></label>
         <textarea class="form-control" formControlName="unsatisfiedLiensExplanation" rows="3" 
                   placeholder="Provide details about the unsatisfied tax liens"
