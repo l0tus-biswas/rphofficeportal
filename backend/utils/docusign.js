@@ -177,9 +177,20 @@ async function createAPAEnvelope(application) {
 
     // Create envelope definition
     const envelope = new docusign.EnvelopeDefinition();
-    envelope.emailSubject = 'RHP Office - Please Sign Your Agent Partnership Agreement';
-    envelope.emailBlurb = 'Thank you for applying to RHP Office! Please review and sign your Agent Partnership Agreement to continue. Once signed, you will receive instructions for payment setup ($20/month subscription).';
+    
+    // Use recruiter name in email subject and sender if available
+    const recruiterName = application.recruitingInfo?.recruiterFullName || 'RHP Office';
+    envelope.emailSubject = `${recruiterName} via RHP Office - Please Sign Your Agent Partnership Agreement`;
+    envelope.emailBlurb = `Thank you for applying to RHP Office! ${recruiterName} has invited you to join the team. Please review and sign your Agent Partnership Agreement to continue. Once signed, you will receive instructions for payment setup ($20/month subscription).`;
     envelope.templateId = process.env.DOCUSIGN_TEMPLATE_ID; // APA template created in DocuSign
+    
+    // Set custom sender name and email in notification
+    const emailNotification = new docusign.EmailSettings();
+    // Use recruiter's email if available, otherwise fallback to default
+    const recruiterEmail = application.recruitingInfo?.recruiterContact || process.env.DOCUSIGN_REPLY_EMAIL || 'Rhpinsurance@gmail.com';
+    emailNotification.replyEmailAddressOverride = recruiterEmail;
+    emailNotification.replyEmailNameOverride = recruiterName;
+    envelope.emailSettings = emailNotification;
 
     // Create signer for remote (email-based) signing
     const signer = new docusign.TemplateRole();

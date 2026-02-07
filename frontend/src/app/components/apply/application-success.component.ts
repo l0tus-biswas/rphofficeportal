@@ -88,6 +88,20 @@ import { PublicService } from '../../services/public.service';
             <div class="status-banner error" *ngIf="sendError">
               {{ sendError }}
             </div>
+            
+            <!-- Payment Button - Show after DocuSign is sent -->
+            <div class="payment-section" *ngIf="hasSentDocuSign">
+              <button 
+                class="btn-payment" 
+                type="button"
+                (click)="goToPayment()"
+              >
+                💳 Complete Payment ($20/month)
+              </button>
+              <p class="payment-note">
+                <strong>Important:</strong> Please sign the APA agreement in your email first, then complete the payment to activate your account.
+              </p>
+            </div>
           </div>
 
           <div class="timeline-box">
@@ -334,6 +348,48 @@ import { PublicService } from '../../services/public.service';
       background: #fef2f2;
       color: #b91c1c;
       border: 1px solid #fecaca;
+    }
+
+    .payment-section {
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 2px solid #e5e7eb;
+    }
+
+    .btn-payment {
+      width: 100%;
+      padding: 1.25rem 2rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #10b981, #059669);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+      margin-bottom: 1rem;
+    }
+
+    .btn-payment:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-payment:active {
+      transform: translateY(0);
+    }
+
+    .payment-note {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.875rem;
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .payment-note strong {
+      color: #dc2626;
     }
 
     .timeline-box {
@@ -693,5 +749,13 @@ export class ApplicationSuccessComponent implements OnInit {
 
   goToHome(): void {
     this.router.navigate(['/']);
+  }
+
+  goToPayment(): void {
+    if (this.applicationId) {
+      this.router.navigate(['/apa-payment'], {
+        queryParams: { applicationId: this.applicationId }
+      });
+    }
   }
 }
