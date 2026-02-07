@@ -48,19 +48,6 @@
                   After signing, you will be redirected back to this payment page.
                 </p>
               </div>
-
-              <button 
-                type="button" 
-                class="btn btn-warning btn-lg mt-4"
-                (click)="proceedToSign()"
-                [disabled]="loading">
-                <span *ngIf="!loading">
-                  <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
-                </span>
-                <span *ngIf="loading">
-                  <span class="spinner-border spinner-border-sm me-2"></span>Loading...
-                </span>
-              </button>
               
               <p class="text-muted small mt-3">Application ID: {{ applicationId }}</p>
             </div>
