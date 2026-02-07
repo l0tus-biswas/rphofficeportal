@@ -180,17 +180,17 @@ async function createAPAEnvelope(application) {
     
     // Use recruiter name in email subject and sender if available
     const recruiterName = application.recruitingInfo?.recruiterFullName || 'RHP Office';
+    const recruiterEmail = application.recruitingInfo?.recruiterContact || process.env.DOCUSIGN_REPLY_EMAIL || 'Rhpinsurance@gmail.com';
+    
+    console.log('=== Recruiter Information ===');
+    console.log('Full recruitingInfo:', JSON.stringify(application.recruitingInfo, null, 2));
+    console.log('Recruiter Name:', recruiterName);
+    console.log('Recruiter Email:', recruiterEmail);
+    console.log('===========================');
+    
     envelope.emailSubject = `${recruiterName} via RHP Office - Please Sign Your Agent Partnership Agreement`;
     envelope.emailBlurb = `Thank you for applying to RHP Office! ${recruiterName} has invited you to join the team. Please review and sign your Agent Partnership Agreement to continue. Once signed, you will receive instructions for payment setup ($20/month subscription).`;
     envelope.templateId = process.env.DOCUSIGN_TEMPLATE_ID; // APA template created in DocuSign
-    
-    // Set custom sender name and email in notification
-    const emailNotification = new docusign.EmailSettings();
-    // Use recruiter's email if available, otherwise fallback to default
-    const recruiterEmail = application.recruitingInfo?.recruiterContact || process.env.DOCUSIGN_REPLY_EMAIL || 'Rhpinsurance@gmail.com';
-    emailNotification.replyEmailAddressOverride = recruiterEmail;
-    emailNotification.replyEmailNameOverride = recruiterName;
-    envelope.emailSettings = emailNotification;
 
     // Create signer for remote (email-based) signing
     const signer = new docusign.TemplateRole();
@@ -210,7 +210,7 @@ async function createAPAEnvelope(application) {
     signer.tabs = createSignerTabs(application);
 
     envelope.templateRoles = [signer];
-    envelope.status = 'sent'; // Send immediately - DocuSign will email the signer
+    envelope.status = 'created'; // Create as draft first, then send after updating email settings
 
     console.log('=== Creating DocuSign Envelope ===');
     console.log('Template ID:', process.env.DOCUSIGN_TEMPLATE_ID);
@@ -219,36 +219,50 @@ async function createAPAEnvelope(application) {
     console.log('Text Tabs Count:', signer.tabs?.textTabs?.length || 0);
     console.log('==================================');
 
-    // Create the envelope
+    // Create the envelope (as draft)
     const results = await envelopesApi.createEnvelope(accountId, {
       envelopeDefinition: envelope
     });
 
-    console.log('=== DocuSign Envelope Created ===');
+    console.log('=== DocuSign Envelope Created (Draft) ===');
     console.log('Envelope ID:', results.envelopeId);
 
-    // Update email settings after envelope creation using separate API call
+    // Update email settings before sending
     // This is the proper way to set reply-to override per DocuSign documentation
     try {
       const emailSettings = new docusign.EmailSettings();
       emailSettings.replyEmailAddressOverride = recruiterEmail;
       emailSettings.replyEmailNameOverride = recruiterName;
       
-      await envelopesApi.updateEmailSettings(accountId, results.envelopeId, {
+      console.log('=== Attempting to Update Email Settings ===');
+      console.log('Setting replyEmailAddressOverride to:', recruiterEmail);
+      console.log('Setting replyEmailNameOverride to:', recruiterName);
+      
+      const updateResult = await envelopesApi.updateEmailSettings(accountId, results.envelopeId, {
         emailSettings: emailSettings
       });
       
-      console.log('=== Email Settings Updated ===');
+      console.log('=== Email Settings Update Response ===');
+      console.log('Update Result:', JSON.stringify(updateResult, null, 2));
       console.log('Reply-To Email:', recruiterEmail);
       console.log('Reply-To Name:', recruiterName);
+      console.log('====================================');
     } catch (emailError) {
-      console.warn('Could not update email settings (may require account feature):', emailError.message);
-      // Don't fail the entire operation if email settings update fails
+      console.error('=== Email Settings Update Failed ===');
+      console.error('Error:', emailError.message);
+      console.error('Error Response:', emailError.response?.body);
+      console.error('====================================');
+      // Continue anyway - the envelope will still be sent
     }
+
+    // Now send the envelope
+    await envelopesApi.update(accountId, results.envelopeId, {
+      envelope: { status: 'sent' }
+    });
 
     console.log('=== Envelope Sent ===');
     console.log('Recipient Email:', signer.email);
-    console.log('Status: Email will be sent by DocuSign');
+    console.log('Status: Email sent by DocuSign');
 
     return {
       envelopeId: results.envelopeId,
