@@ -44,11 +44,11 @@
                   <p class="text-muted mb-0 small">{{ "Complete your licensing requirements" }}</p>
                 </div>
                 <div class="text-end">
-                  <h2 class="mb-0" [class]="getDaysRemainingColor(daysRemaining)">
+                  <h2 class="mb-0 text-danger">
                     <i class="bi bi-clock-fill"></i>
-                    {{ daysRemaining }} {{ "days remaining" }}
+                    {{ daysRemaining }} <span class="text-danger">days remaining</span>
                   </h2>
-                  <small class="text-muted">{{ "Remaining" }}</small>
+                  <small class="text-danger">Remaining</small>
                 </div>
               </div>
               <div class="row mt-3">

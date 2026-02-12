@@ -245,8 +245,8 @@
                 <div class="col-md-3">
                   <label class="form-label">State <span class="text-danger">*</span></label>
                   <select class="form-select" formControlName="homeState">
-                    <option value="">Select</option>
-                    <option *ngFor="let state of states" [value]="state">{{ state }}</option>
+                    <option value="">Select State</option>
+                    <option *ngFor="let state of states" [value]="state.code">{{ state.name }}</option>
                   </select>
                 </div>
                 
@@ -282,8 +282,8 @@
                   <div class="col-md-3">
                     <label class="form-label">State <span class="text-danger">*</span></label>
                     <select class="form-select" formControlName="mailingState">
-                      <option value="">Select</option>
-                      <option *ngFor="let state of states" [value]="state">{{ state }}</option>
+                      <option value="">Select State</option>
+                      <option *ngFor="let state of states" [value]="state.code">{{ state.name }}</option>
                     </select>
                   </div>
                   

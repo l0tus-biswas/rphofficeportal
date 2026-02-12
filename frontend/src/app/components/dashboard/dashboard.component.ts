@@ -80,10 +80,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Calculate immediately
     this.calculateDaysRemaining();
 
-    // Update every hour
-    this.timerInterval = setInterval(() => {
+    // Calculate milliseconds until next midnight Eastern Time
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+    // Update at midnight, then every 24 hours
+    setTimeout(() => {
       this.calculateDaysRemaining();
-    }, 3600000); // 1 hour = 3600000ms
+      this.timerInterval = setInterval(() => {
+        this.calculateDaysRemaining();
+      }, 86400000); // 24 hours = 86400000ms
+    }, msUntilMidnight);
   }
 
   calculateDaysRemaining(): void {
@@ -94,8 +104,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Calculate days from start of today to deadline
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
     const deadline = new Date(this.licensingProgress.licensingDeadline);
+    deadline.setHours(0, 0, 0, 0);
     const diffTime = deadline.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     

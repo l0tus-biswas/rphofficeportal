@@ -7,6 +7,9 @@ const path = require('path');
 const { protect: authMiddleware } = require('./middleware/auth.middleware');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// Set timezone to Eastern Time (America/New_York)
+process.env.TZ = 'America/New_York';
+
 const app = express();
 
 // Trust proxy - necessary for getting real IP behind reverse proxy
