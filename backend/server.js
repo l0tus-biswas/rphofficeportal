@@ -60,6 +60,7 @@ app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/admin', require('./routes/admin-apa.routes')); // Admin APA management
 app.use('/api/admin/coupons', require('./routes/coupon.routes'));
 app.use('/api/admin/config', require('./routes/config.routes'));
+app.use('/api/admin/products', require('./routes/admin-products.routes'));
 app.use('/api/training', require('./routes/training.routes'));
 app.use('/api/payments', require('./routes/payment.routes'));
 app.use('/api/user', require('./routes/user.routes'));
@@ -67,6 +68,11 @@ app.use('/api/licensing', require('./routes/licensing.routes'));
 app.use('/api/production', require('./routes/production.routes'));
 app.use('/api/notifications', authMiddleware, require('./routes/notification.routes'));
 app.use('/api/carriers', require('./routes/carrier.routes'));
+app.use('/api/commission-statements', require('./routes/commission-statements.routes'));
+app.use('/api/onboarding-hub', require('./routes/onboarding-hub.routes'));
+app.use('/api', require('./routes/aca.routes'));
+app.use('/api/business-cards', require('./routes/business-cards.routes'));
+app.use('/api/promotion', require('./routes/promotion.routes'));
 
 // Health check
 app.get('/health', (req, res) => {

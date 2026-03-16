@@ -10,10 +10,11 @@ export interface ProductionSubmission {
   clientName: string;
   productSold: string;
   productOtherDescription?: string;
+  productCategory?: 'Life Insurance' | 'Health Insurance' | 'Medicare' | 'Supplemental Insurance' | 'Retirement / Annuities' | 'Property & Casualty - Personal' | 'Property & Casualty - Commercial';
   carrier: any;
   premiumAmount: number;
   notes?: string;
-  status: 'submitted' | 'pending' | 'approved' | 'rejected' | 'paid';
+  status: 'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled';
   reviewedBy?: any;
   reviewedAt?: Date;
   reviewNotes?: string;
@@ -57,21 +58,128 @@ export interface ProductionStats {
 }
 
 export const PRODUCT_TYPES = [
+  // Life Insurance
+  'Term Life Insurance',
+  'Whole Life Insurance',
+  'Universal Life (UL)',
+  'Indexed Universal Life (IUL)',
+  'Final Expense / Burial Insurance',
+  // Supplemental Insurance
   'Accident Insurance',
   'Cancer Insurance',
-  'Critical Illness',
-  'Dental / Vision / Hearing',
-  'Disability',
-  'Final Expense',
+  'Critical Illness Insurance',
+  'Dental Insurance',
+  'Vision Insurance',
   'Hospital Indemnity',
-  'Life Insurance – Term',
-  'Life Insurance – IUL',
-  'Life Insurance – Whole Life',
-  'Life Insurance – VUL',
-  'Long Term Care',
+  'Short-Term Disability Insurance',
+  'Long-Term Disability Insurance',
+  'Long-Term Care Insurance',
+  // Medicare
   'Medicare Advantage',
+  'Medicare Supplement (Medigap)',
+  'Medicare Part D (Prescription Drug Plan)',
+  // Health Insurance
+  'ACA Marketplace Health Insurance',
+  'Private Health Insurance',
+  'Short-Term Health Insurance',
+  // Retirement / Annuities
+  'Fixed Annuities',
+  'Indexed Annuities',
+  // Property & Casualty - Personal
+  'Auto Insurance',
+  'Homeowners Insurance',
+  'Renters Insurance',
+  'Landlord Insurance',
+  'Motorcycle Insurance',
+  'RV Insurance',
+  'Boat / Watercraft Insurance',
+  'Umbrella Insurance',
+  // Property & Casualty - Commercial
+  'General Liability Insurance',
+  "Workers' Compensation Insurance",
+  'Commercial Property Insurance',
+  'Commercial Auto Insurance',
+  "Business Owner's Policy (BOP)",
+  'Professional Liability Insurance',
+  // Other
   'Other'
 ];
+
+export const STATUS_VALUES: Array<'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled'> = [
+  'Submitted',
+  'Pending',
+  'In Force',
+  'Lapsed',
+  'Cancelled'
+];
+
+export type ProductCategory =
+  | 'Life Insurance'
+  | 'Health Insurance'
+  | 'Medicare'
+  | 'Supplemental Insurance'
+  | 'Retirement / Annuities'
+  | 'Property & Casualty - Personal'
+  | 'Property & Casualty - Commercial';
+
+export const PRODUCT_CATEGORY_MAP: Record<string, ProductCategory> = {
+  // Medicare
+  'Medicare Advantage':                    'Medicare',
+  'Medicare Supplement (Medigap)':         'Medicare',
+  'Medicare Part D (Prescription Drug Plan)': 'Medicare',
+  // Health Insurance
+  'ACA Marketplace Health Insurance':      'Health Insurance',
+  'Private Health Insurance':              'Health Insurance',
+  'Short-Term Health Insurance':           'Health Insurance',
+  // Life Insurance
+  'Term Life Insurance':                   'Life Insurance',
+  'Whole Life Insurance':                  'Life Insurance',
+  'Universal Life (UL)':                   'Life Insurance',
+  'Indexed Universal Life (IUL)':          'Life Insurance',
+  'Final Expense / Burial Insurance':      'Life Insurance',
+  // Legacy names
+  'Life Insurance \u2013 Term':            'Life Insurance',
+  'Life Insurance \u2013 IUL':             'Life Insurance',
+  'Life Insurance \u2013 Whole Life':      'Life Insurance',
+  'Life Insurance \u2013 VUL':             'Life Insurance',
+  'Final Expense':                         'Life Insurance',
+  // Supplemental Insurance
+  'Accident Insurance':                    'Supplemental Insurance',
+  'Cancer Insurance':                      'Supplemental Insurance',
+  'Critical Illness Insurance':            'Supplemental Insurance',
+  'Dental Insurance':                      'Supplemental Insurance',
+  'Vision Insurance':                      'Supplemental Insurance',
+  'Hospital Indemnity':                    'Supplemental Insurance',
+  'Short-Term Disability Insurance':       'Supplemental Insurance',
+  'Long-Term Disability Insurance':        'Supplemental Insurance',
+  'Long-Term Care Insurance':              'Supplemental Insurance',
+  // Legacy names
+  'Critical Illness':                      'Supplemental Insurance',
+  'Dental / Vision / Hearing':             'Supplemental Insurance',
+  'Disability':                            'Supplemental Insurance',
+  'Long Term Care':                        'Supplemental Insurance',
+  // Retirement / Annuities
+  'Fixed Annuities':                       'Retirement / Annuities',
+  'Indexed Annuities':                     'Retirement / Annuities',
+  // Property & Casualty - Personal
+  'Auto Insurance':                        'Property & Casualty - Personal',
+  'Homeowners Insurance':                  'Property & Casualty - Personal',
+  'Renters Insurance':                     'Property & Casualty - Personal',
+  'Landlord Insurance':                    'Property & Casualty - Personal',
+  'Motorcycle Insurance':                  'Property & Casualty - Personal',
+  'RV Insurance':                          'Property & Casualty - Personal',
+  'Boat / Watercraft Insurance':           'Property & Casualty - Personal',
+  'Umbrella Insurance':                    'Property & Casualty - Personal',
+  // Property & Casualty - Commercial
+  'General Liability Insurance':           'Property & Casualty - Commercial',
+  "Workers' Compensation Insurance":       'Property & Casualty - Commercial',
+  'Commercial Property Insurance':         'Property & Casualty - Commercial',
+  'Commercial Auto Insurance':             'Property & Casualty - Commercial',
+  "Business Owner's Policy (BOP)":         'Property & Casualty - Commercial',
+  'Professional Liability Insurance':      'Property & Casualty - Commercial',
+  // Other defaults to Life Insurance
+  'Other':                                 'Life Insurance',
+};
 
 @Injectable({
   providedIn: 'root'
@@ -140,5 +248,18 @@ export class ProductionService {
     if (filters?.endDate) params = params.set('endDate', filters.endDate);
     
     return this.http.get<ProductionStats>(`${this.apiUrl}/stats/summary`, { params });
+  }
+
+  // Export production data as CSV blob
+  exportProductionCsv(filters?: ProductionFilters): Observable<Blob> {
+    let params = new HttpParams();
+    if (filters?.agentId) params = params.set('agentId', filters.agentId);
+    if (filters?.productSold) params = params.set('productSold', filters.productSold);
+    if (filters?.carrier) params = params.set('carrier', filters.carrier);
+    if (filters?.status) params = params.set('status', filters.status);
+    if (filters?.startDate) params = params.set('startDate', filters.startDate);
+    if (filters?.endDate) params = params.set('endDate', filters.endDate);
+
+    return this.http.get(`${this.apiUrl}/export`, { params, responseType: 'blob' });
   }
 }

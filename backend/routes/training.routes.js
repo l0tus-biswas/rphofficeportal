@@ -1,10 +1,41 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs').promises;
+const multer = require('multer');
 const TrainingMaterial = require('../models/TrainingMaterial');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
+
+// Configure multer for training PDF uploads
+const pdfStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads/training-pdfs');
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `training-pdf-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadPdf = multer({
+  storage: pdfStorage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  fileFilter: (req, file, cb) => {
+    if (path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf') {
+      return cb(null, true);
+    }
+    cb(new Error('Only PDF files are allowed'));
+  }
+});
 
 // @route   GET /api/training/materials
 // @desc    Get all training materials (filtered by access level)
@@ -131,6 +162,68 @@ router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), lo
       message: 'Training material updated successfully',
       material
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/training/materials/:id/pdf
+// @desc    Upload or replace PDF attachment for a training material
+// @access  Private (Admin only)
+router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRAINING_PDF'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No PDF file uploaded' });
+    }
+
+    const material = await TrainingMaterial.findById(req.params.id);
+    if (!material) {
+      return sendResponse(res, 404, { message: 'Training material not found' });
+    }
+
+    // Delete old PDF file if it exists
+    if (material.pdfAttachment?.filePath) {
+      const oldPath = path.join(__dirname, '..', material.pdfAttachment.filePath);
+      try { await fs.unlink(oldPath); } catch (_) { /* ignore if not found */ }
+    }
+
+    material.pdfAttachment = {
+      fileName: req.file.originalname,
+      filePath: `/uploads/training-pdfs/${req.file.filename}`,
+      uploadedAt: new Date()
+    };
+
+    await material.save();
+
+    sendResponse(res, 200, {
+      message: 'PDF uploaded successfully',
+      pdfAttachment: material.pdfAttachment,
+      material
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/training/materials/:id/pdf
+// @desc    Remove PDF attachment from training material
+// @access  Private (Admin only)
+router.delete('/materials/:id/pdf', logAction('DELETE_TRAINING_PDF'), async (req, res) => {
+  try {
+    const material = await TrainingMaterial.findById(req.params.id);
+    if (!material) {
+      return sendResponse(res, 404, { message: 'Training material not found' });
+    }
+
+    if (material.pdfAttachment?.filePath) {
+      const filePath = path.join(__dirname, '..', material.pdfAttachment.filePath);
+      try { await fs.unlink(filePath); } catch (_) { /* ignore */ }
+    }
+
+    material.pdfAttachment = undefined;
+    await material.save();
+
+    sendResponse(res, 200, { message: 'PDF attachment removed successfully' });
   } catch (error) {
     errorResponse(res, error);
   }

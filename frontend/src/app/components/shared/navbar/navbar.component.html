@@ -63,6 +63,34 @@
             <span>Production</span>
           </a>
         </li>
+
+        <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+          <a class="nav-link px-xl-3" routerLink="/carriers" routerLinkActive="active">
+            <i class="bi bi-building-fill me-2"></i>
+            <span>Carriers</span>
+          </a>
+        </li>
+
+        <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+          <a class="nav-link px-xl-3" routerLink="/commissions" routerLinkActive="active">
+            <i class="bi bi-cash-coin me-2"></i>
+            <span>My Commissions</span>
+          </a>
+        </li>
+
+        <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+          <a class="nav-link px-xl-3" routerLink="/onboarding-hub" routerLinkActive="active">
+            <i class="bi bi-folder2-open me-2"></i>
+            <span>Document Hub</span>
+          </a>
+        </li>
+
+        <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+          <a class="nav-link px-xl-3" routerLink="/business-cards" routerLinkActive="active">
+            <i class="bi bi-card-heading me-2"></i>
+            <span>Business Cards</span>
+          </a>
+        </li>
         
         <li class="nav-item dropdown" *ngIf="authService.isAdmin()">
           <a class="nav-link dropdown-toggle px-xl-3" href="#" id="adminDropdown" role="button" 
@@ -93,7 +121,12 @@
             </li>
             <li>
               <a class="dropdown-item" routerLink="/admin/training">
-                <i class="bi bi-book me-2"></i>Training Management
+                <i class="bi bi-mortarboard-fill me-2"></i>Training Management
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/products">
+                <i class="bi bi-box-seam-fill me-2"></i>Product Management
               </a>
             </li>
             <li>
@@ -104,6 +137,36 @@
             <li>
               <a class="dropdown-item" routerLink="/admin/carriers">
                 <i class="bi bi-building me-2"></i>Carrier Management
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/carrier-appointments">
+                <i class="bi bi-award-fill me-2"></i>Carrier Appointments
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/commission-statements">
+                <i class="bi bi-receipt me-2"></i>Commission Statements
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/onboarding-doc-types">
+                <i class="bi bi-folder-check me-2"></i>Onboarding Doc Types
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/aca-management">
+                <i class="bi bi-people-fill me-2"></i>ACA Management
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/vistaprint-config">
+                <i class="bi bi-card-heading me-2"></i>Vistaprint Config
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" routerLink="/admin/promotion-levels">
+                <i class="bi bi-bar-chart-steps me-2"></i>Promotion Levels
               </a>
             </li>
             <li><hr class="dropdown-divider"></li>

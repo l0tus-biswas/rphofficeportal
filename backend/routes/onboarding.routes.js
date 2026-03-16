@@ -5,6 +5,7 @@ const fs = require('fs');
 const router = express.Router();
 
 const Onboarding = require('../models/Onboarding');
+const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { onboardingUpload, ONBOARDING_FIELDS } = require('../middleware/onboardingUpload.middleware');
@@ -131,6 +132,15 @@ const handleUploadForUser = async (req, res, targetUserId) => {
 
     await onboarding.save();
     await syncUserWithOnboarding(targetUserId, onboarding);
+
+    // Notify the user whose onboarding documents were uploaded
+    Notification.createNotification({
+      userId: targetUserId,
+      type: 'onboarding_submitted',
+      title: 'Onboarding Documents Uploaded',
+      message: `${updatedSteps.length} onboarding document(s) uploaded and are now pending review.`,
+      link: '/onboarding'
+    }, false).catch(() => {});
 
     return sendResponse(res, 200, {
       message: 'Documents uploaded successfully.',
@@ -328,6 +338,21 @@ router.patch('/users/:userId/steps/:step/status', authorize('admin'), async (req
 
     await onboarding.save();
     await syncUserWithOnboarding(userId, onboarding);
+
+    // Notify the agent about their step status change
+    const stepLabel = STEP_LABELS[step] || step;
+    const statusMessages = {
+      approved: `Your ${stepLabel} document has been approved.`,
+      rejected: `Your ${stepLabel} document was rejected. ${comment ? 'Note: ' + comment : 'Please re-upload.'}`,
+      pending: `Your ${stepLabel} document is under review.`
+    };
+    Notification.createNotification({
+      userId: onboarding.user,
+      type: 'onboarding_step_updated',
+      title: `Onboarding: ${stepLabel} ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+      message: statusMessages[status] || `Your ${stepLabel} status was updated to: ${status}`,
+      link: '/onboarding'
+    }, false).catch(() => {});
 
     sendResponse(res, 200, {
       message: `${STEP_LABELS[step]} updated successfully.`,

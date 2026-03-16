@@ -1,0 +1,25 @@
+/* ACA Tracker widget */
+.display-6 {
+  font-size: 1.6rem;
+}
+
+.stat-card {
+  background: #fafbfc;
+  transition: box-shadow 0.15s ease;
+}
+
+.stat-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-sublabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}

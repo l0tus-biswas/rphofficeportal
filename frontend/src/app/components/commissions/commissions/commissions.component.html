@@ -1,0 +1,84 @@
+
+<div class="container-fluid py-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h2 class="mb-0"><i class="bi bi-cash-coin me-2"></i>My Commission Statements</h2>
+      <p class="text-muted">View and download your commission statements by pay period.</p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label">Carrier</label>
+          <input type="text" class="form-control" [(ngModel)]="filterCarrier" placeholder="Filter by carrier name">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">From</label>
+          <input type="date" class="form-control" [(ngModel)]="filterFrom">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">To</label>
+          <input type="date" class="form-control" [(ngModel)]="filterTo">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-primary flex-fill" (click)="applyFilters()">
+            <i class="bi bi-funnel me-1"></i>Filter
+          </button>
+          <button class="btn btn-outline-secondary" (click)="clearFilters()">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+  </div>
+
+  <!-- Statements -->
+  <div *ngIf="!loading">
+    <div *ngIf="statements.length === 0" class="text-center py-5">
+      <i class="bi bi-inbox display-1 text-muted"></i>
+      <p class="mt-3 text-muted">No commission statements found.</p>
+    </div>
+
+    <div class="card" *ngIf="statements.length > 0">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Pay Period</th>
+                <th>Carrier</th>
+                <th>File</th>
+                <th>Uploaded</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let stmt of statements">
+                <td><strong>{{ stmt.payPeriod | date:'mediumDate' }}</strong></td>
+                <td>{{ stmt.carrier }}</td>
+                <td><small class="text-muted">{{ stmt.originalFileName || 'statement.pdf' }}</small></td>
+                <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
+                <td>
+                  <button class="btn btn-outline-primary btn-sm" (click)="downloadStatement(stmt)">
+                    <i class="bi bi-download me-1"></i>Download
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

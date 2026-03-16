@@ -38,6 +38,7 @@ import { AdminPaymentManagementComponent } from './components/admin/admin-paymen
 import { LicensingComponent } from './components/licensing/licensing.component';
 import { ProductionComponent } from './components/production/production.component';
 import { CarriersComponent } from './components/admin/carriers/carriers.component';
+import { ProductManagementComponent } from './components/admin/product-management/product-management.component';
 import { BrandingComponent } from './components/admin/branding/branding.component';
 import { SignApaComponent } from './components/sign-apa/sign-apa.component';
 import { ApaPaymentComponent } from './components/payment/apa-payment.component';
@@ -45,6 +46,20 @@ import { AdminApaListComponent } from './components/admin/admin-apa-list/admin-a
 import { AdminApaDetailComponent } from './components/admin/admin-apa-detail/admin-apa-detail.component';
 import { TranslationComponent } from './components/user/translation.component';
 import { NotificationsComponent } from './components/user/notifications.component';
+import { ApplicationSuccessComponent } from './components/apply/application-success.component';
+import { AgentCarriersComponent } from './components/carriers/agent-carriers/agent-carriers.component';
+import { CarrierAppointmentsComponent } from './components/admin/carrier-appointments/carrier-appointments.component';
+import { CommissionsComponent } from './components/commissions/commissions/commissions.component';
+import { CommissionStatementsComponent } from './components/admin/commission-statements/commission-statements.component';
+import { OnboardingHubComponent } from './components/onboarding/onboarding-hub/onboarding-hub.component';
+import { NextStepsChecklistComponent } from './components/dashboard/next-steps-checklist/next-steps-checklist.component';
+import { OnboardingDocTypesComponent } from './components/admin/onboarding-doc-types/onboarding-doc-types.component';
+import { AcaTrackerComponent } from './components/dashboard/aca-tracker/aca-tracker.component';
+import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
+import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
+import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
+import { PromotionTrackerComponent } from './components/dashboard/promotion-tracker/promotion-tracker.component';
+import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
@@ -79,6 +94,7 @@ import { SafePipe } from './pipes/safe.pipe';
     LicensingComponent,
     ProductionComponent,
     CarriersComponent,
+    ProductManagementComponent,
     BrandingComponent,
     SignApaComponent,
     ApaPaymentComponent,
@@ -86,7 +102,20 @@ import { SafePipe } from './pipes/safe.pipe';
     AdminApaDetailComponent,
     TranslationComponent,
     NotificationsComponent,
-    SafePipe
+    SafePipe,
+    AgentCarriersComponent,
+    CarrierAppointmentsComponent,
+    CommissionsComponent,
+    CommissionStatementsComponent,
+    OnboardingHubComponent,
+    NextStepsChecklistComponent,
+    OnboardingDocTypesComponent,
+    AcaTrackerComponent,
+    AcaManagementComponent,
+    BusinessCardsComponent,
+    VistaprintConfigComponent,
+    PromotionTrackerComponent,
+    PromotionLevelsComponent
   ],
   imports: [
     BrowserModule,
@@ -95,7 +124,8 @@ import { SafePipe } from './pipes/safe.pipe';
     HttpClientModule,
     FormsModule,
     DragDropModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    ApplicationSuccessComponent
   ],
   providers: [
     {

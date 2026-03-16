@@ -1,0 +1,1271 @@
+Okay, so phase three, we don't have to really promotion tracking counts only.
+I'm just trying to see what's up to go over ACA Medicare, I was just working on the document
+up until we got on the phone ACA Medicare, I tried but do not count.
+Okay, so what we'll go through this.
+So all right, so if we go to 1.1 promotion progress license agents only on the dashboard,
+I want to show two different arrows like bars and I'll show you what they look like.
+I'll give you an example, this is it right here.
+This is like an idea of what they look like.
+If you look on the left hand side, we don't have to have like all that other stuff around it,
+but on the left hand side, because my agents will be one of two agents.
+They'll either be producer agents or they'll either be builder agents.
+This is in Spanish, is it in Spanish?
+Yeah, it's in Spanish.
+So I know the Spanish, but so the agent will either be a producer or a builder.
+Producer just means that they sell life insurance or health insurance so they sell.
+Builder means that they recruit other agents and they sell.
+So those are just the two different routes.
+Now they could get promoted, they could be on the producer side and be doing their numbers
+and get promoted, but let's just say they start recruiting agents, they could be on the builders
+and like use that too.
+So they could be either one at any time, if that makes sense.
+So basically, I want to have that on the dashboard itself.
+I know we have some things on the dashboard now, maybe that could be above it,
+and those things can be below it.
+And so both arrows are, they only show production that is in force.
+So I give it, and it's only for life insurance and supplemental.
+So let me go in here to our HP office real quick and show you what I mean by that.
+So here under the production tab, the status, I updated the statuses inside of the
+document, just to change a little bit of these.
+Instead of approved or instead of like paid, it'll be in force.
+Once something is in force, it should show up on here on the dashboard in those two arrows.
+Basically, what the arrows are for a news is just so the person knows where they're at
+and where they need to be for the next promotion.
+So to give you a quick, just kind of like an example here.
+So we look at, let's just say the person is, we're not going to use these promotion levels.
+I'm going to give, I'm going to send you another document with the names of the levels
+and what's needed for each one, but just an example.
+If the person is a financial associate, here they need to do $5,000 in premium
+in life insurance for them to move up to senior financial associate.
+So let's just say they're at 2000.
+So technically, they would be like halfway up that bar, like maybe have a little line,
+say, hey, you're halfway up this bar, and you only need 2000 more to get to senior financial
+associate, if that makes sense.
+Go ahead, sorry.
+Yeah, I understand, I understood that.
+And now on the right side, so on the right side is the builder side.
+So if you notice here, to get to a financial associate,
+it's a different tracking.
+So it's like over here, it was 5,000 in 30 days.
+Over here, it's 10,000 in three months.
+It'll say three months, it's two months.
+So it should have some type of filter at the top, where I could like say,
+in the last 30 days, in the last 60 days, like for each one kind of deal.
+And then, for example, here, now it has, hey, 30,000 in premium within a two-month period,
+so 60 days, period rolling, it doesn't have to be like from the first of the 31st,
+just 30 days, any 30 days, or 60 days in this case, plus four agents that are active.
+So maybe on the left side of this bar is how many agents are active on your team,
+writing premium, I don't know if you could track that, and then how much premium your team has,
+how much production. The only stuff that's being tracked on these two bars, though,
+is life insurance and supplemental. So when I say that inside of life insurance and supplemental,
+are these things here? So if we go to product,
+really every single one of those counts for that, except for Medicare Advantage.
+So Medicare Advantage does not count.
+Also, we have to add in there something called ACA, which is just another name for health insurance.
+That does not count, but it's just something that we're tracking.
+Can we make this tab where I can edit it myself, the product where I can add in different
+products and stuff like that, is that a possibility?
+The product to be selected for the KPA for that bug you are seeing?
+Yeah, let's say I add some new products to the company, or I want to make an adjustment
+to the drop-down menu here. Can I change? Are you able to put it to where I can add in a new product
+myself? Yeah, that can be done because you can see that that's the same case in the carrier,
+which I've given to you. You can add your own carrier also. So we can give that functionality
+also to you in the product. Okay, where do I add my own carrier? I think I just don't remember.
+I've sent in one of the videos. I think it's an admin.
+An admin? Okay. Oh, carrier management. Okay. Yeah. Okay, cool. Yeah, that's great.
+Oh, yeah, yeah, you're right. Okay, perfect. Yeah, thank you. Awesome.
+Okay. Yeah, so if we could add that in for the product, maybe product management as well.
+Okay, and let's go back to this here, then.
+Okay, so then both arrows just support a rolling time frame selection. We already talked about that.
+Like if it's if I want to filter it by 60 days, 30 days, 40, you know, whatever the case is.
+So these 30 days, 60 days will be the last 30 days or it should be from the time this
+joined the platform. That's a good question. So it'll just be from the last 30 days.
+So what should automatically pop up as the last 30 days? But I should be able to filter it or the
+agent should be able to filter it, you know, by whatever the last 15 days or whatever the case is.
+It wasn't that good. I'm sorry. Then I will have to give them two date fields, you know, from this day
+to this day, that will be a custom field that you know, how about how about you do this? Could it be
+instead of giving them like a custom, it could just be like a drop down menu with this as 30 days,
+60 days, 90 days, 120 just like every 30 day period, you know, yeah. So it will be 30, 16,
+91, 21, 50, 180, 210. But what's within the maximum range? 12 months. So you can just do one month,
+two months, three months, four months, five months like that. Yeah, yeah, that will be good.
+Okay, perfect. That's that's great. Okay. Okay. Now another tracker that I want to,
+um, oh, I'm sorry. So on the producer tracker, just to just going to a little bit of detail here,
+obviously, like I just told you, only the enforced premium counts, because just so you get an idea,
+and maybe you already know, so forgive me if I'm telling you something that you already understand.
+It's just for clarity. So when an agent goes and sells a life insurance policy or a final
+expense policy or whatever the case is, what happens is that that policy is sold, but it's not active
+yet. So the way that they get promoted within the company is that the, the policies have to be
+active. So what we call enforce, so enforce means they're active. And really this is, I think this
+is missing a hyphen here. No, that's fine. Inforce. So enforce. And once it's enforced, then they can
+pop up on the trackers on the dashboard, you know, um, that's that'll be like the trigger. Now,
+um, I have to get you the levels, just the names, you know, so like I said, I'll get you those levels.
+Let me see displays, current level, next level, oh, and X and Y progress. So I don't know if you
+understand the like displays, current level, where they're at, their next level, where, you know,
+the next promotion is, et cetera, et cetera, excuse the ACA and Medicare. I already, um, we talked
+about that. And then arrow B, which is the builder track. Um, so here we're using two different
+things we're tracking, not just premium enforce, but also agents as well, um, that they have that are,
+these are agents that are licensed. Um, so not, not non-licensed agents, only agents that are
+licensed. Are we able to track it a new to where, because it has to be agents that are actually
+selling. So not just licensed agents that aren't doing anything. So are we able to track it like if
+agents that have sold in the, like if I put a filter of 60 days, and then it comes up with like
+four agents or five agents that have sold a policy, at least one policy, but basically agents that
+have logged in the production that they've sold at least one policy in the last 60 days. Does that
+make sense? Um, agents have sold a policy. Yeah, I'm thinking, but agents have sold a policy. How
+will the system will understand right now, which I have developed for you? Okay, great question.
+So give an example. So I have, let's just say I'm an agent, normal agent, and I have 10 people
+under me, but only three people have sold. And the way that you know that they've sold is because
+they've gone into the production tab, and they've logged in, you know, a, um, a sale, and they'll
+put the submission date here. So when we filter on the dashboard last 30 days, you know, it'll take
+it off of basically here. If I have two agents on my team that's sold in the last 30 days,
+it'll see it from the production tab. So it means that yes, so it means that the new product
+submission is the sale, which you're seeing. Yeah. Um, after, after it shows, enforce on the status
+here. Okay, it has to be always, always, always has to be enforced. And so if I have 10 agents who
+submitted things, but none of it is enforced, then it doesn't count. Okay, yeah, in that case,
+that can be fabulous. Okay, awesome. Great stuff. By the way, how do you switch this status here?
+Because I don't see a spot for it. Do you know? Yes, go on actions on this pencil button.
+Yeah, that's what I did. Okay, I think it's not on the product submissions.
+Uh, you are on the admin admin part, or you're on the, okay, it's your admin panel.
+Yeah, I think product submission is still one excellent. I gave it an option in the system.
+Uh, okay, I made a video on that. I don't remember exactly. No worries. Could we make it to where
+because if an agent is going in here and, and, and, and, um, like working in this tab,
+can we just make it to where it's, you know, you can, like a little, little, uh, space here,
+where it says, you know, they can choose submitted or whatever the case is.
+It, oh, you know what? Let me, cause I, like this, like, can we make it like where they can, uh,
+when I go to the new submission, we're a drop down menu that where we can pick the status.
+In there? Yeah, what will be those status fields?
+Yeah, so I have it here in the document. It'll be here in a few minutes.
+Okay, okay, yeah, we can do it. Okay, perfect. Um, okay, so here it is just more clarity on the
+B site producing agent. Um, like, it's only an agent with at least one in force case in the time frame.
+Okay, um, left side, um, on the left side of that bar, on the, you know, arrow B, is agents progress,
+um, the right side, you know, X like is like where they're at, why is where they want to be,
+or they need to be for the next promotion. Right side is premium progress, um, X and Y.
+Um, okay, the rolling windows, um, each promotion level may use a different only windows. So,
+like I said, 30s, you know, one, two, month, three months kind of thing. Um, default time frame is
+stored per promotion level. Yeah, so it means that I have to make another tap for this right for
+the KPI. I like something like dashboard or KPI track. I think the thing that I want them to see
+when they log into this is that I want them to see like that. You can leave it. Yeah, yeah,
+because I really want them to be focused on producing, on production. So I just want them to see
+that like right away. Okay, you know, um, and then below that, we can have like, you know, this stuff
+here, like everything else here, you know, they can just scroll down for that basically. Um, I think
+it, sorry, go ahead. Okay, okay, I got it. Um, I think it's also in the, in the document, you see how
+down here is this training management. Mm-hmm. If you could just add like a little, you know,
+you did a little logo here for these, you know, um, and this one doesn't have one. If you could just
+add something in there, no big deal, just like, you know, just, just so it's like even. Yeah, sure,
+sure, sure. All right. I don't know how I missed it. Uh, no, it's a lot, bro. So it's a lot. So you're
+good. Um, okay. All right. So then the other tracker that we want to have, um, similar to that one
+and even on the dashboard as well is the, uh, ACA tracker. Mm-hmm. So ACA is another big business for
+us, but it's, it's, it's, um, it's, uh, uh, seasonal really more than anything, but so just
+so I want to add like another maybe like some type of, I don't know if it needs to be an arrow,
+but it needs to be something that is visible, um, to then maybe under those two arrows, kind of thing.
+Um, and if you have a different opinion or something that looks better, let me know please, but
+basically ACA for us in Newsh is just health insurance. Yeah, but I cannot guarantee that I can
+provide you the exact arrow that you showed to me. Okay. The figure might. No, no, that's fine.
+Yeah, no, the arrow can be like a different arrow, you know, it can be a different, it doesn't
+have to be that exact same arrow. Yeah. No, it just make it look cool. Just make it look nice.
+That's it. Oh, I don't really, it doesn't matter, but there. Yeah. Um, for the ACA though, I,
+so the way that I work in Newsh is, so an agent, so let's just say there's an agent on the team,
+and they have 200 health insurance clients, right? Awesome. Well, they're going to get paid for
+the 200, but I have a promotion tier that once the person gets to a thousand, I'll pay them like, and
+once the person gets to a thousand on their team, not them personally, like on their team,
+if they have a thousand clients, um, means they didn't have to sit down with them, I'll give them an
+extra dollar for those thousand clients every month. Okay. If they get to 2000 clients on their team,
+I'll give them an extra $2 every month. If they get to 3000 and above, I'll give them $3 every
+month. You know, so all it basically is, it's just a tracker that says, this is how many clients
+you have on your team now, in total between everybody, between all your agents. This is your next
+tier, a thousand, once they're at a thousand, maybe they're at 1100, your next tier is 2000, your
+next tier now street. So it's just something to keep it in their face of like, hey, you know, get to
+this and then have a little multiple next to it. So if they're at a thousand, they're next multiple
+it's times two. They use a 2000 times two dollars. Um, so maybe on there, it could be like, um,
+okay. So, uh, this 1000, this is for a single person or, for example, if they're a whole team,
+yeah, I'm on the team, well, the whole team. Yeah. Yeah. Okay. Yeah. So there you can include
+theirs plus their whole team. Yeah. Okay. Yeah. So maybe it could be work at the, in that tracking
+or whatever, it could be like receive an extra thousand dollars monthly if you get to a thousand.
+On the 2000, it's $4,000 extra monthly. And on the 3000, it's $9,000 monthly. So maybe something
+that it could be said like that. So they see in their brain like, you know, I need to get to a
+$4,000 extra a month in commission. Um, that kind of thing. This is all new stuff. None of them are
+there yet because again, it's a new company. It's in the beginning phases. Um, but yeah. Um, also,
+like some little disclosure there, subject to monthly verification by carrier because some of these
+guys might put something in the system, but it's really not, that's really not it, you know. Um,
+and I think somewhere on here, a new, I put, um, like maybe at the end of each month,
+what I will do is I'll go into like my system where I have access to everybody's stuff.
+I'll download a file, a CSV file and Excel file. Okay. And I want to be able to go into RHPD,
+like for the ACA clients, for example, and I want to be able to upload that file. And for that,
+for that to be filled, like, for example, if I upload that for, let's just say Maria. So
+I upload that file there for Maria. And I say, Hey, Maria, you know, like she can click on it to
+actually see how many, you know, clients she has currently. Does that make sense? Yeah.
+Okay. And but Maria might have a team. So I might need to, yeah, I just, yeah. So I'll create
+that CSV. I just want to be able to upload it if that's, you know, that's possible.
+Okay. Promotion rules of admin can edit promotion level names. So if we do that, we're like,
+if I give you, like, because I, I want to be able to promote people in the system,
+I don't remember if I can do that now. I think you told me I could. I just don't remember.
+Which one? To be able to promote somebody. So let's just say they, they, they hit their numbers
+that they get promoted to the next, to the next level. Does that make sense? Yes, that will be under
+your user management. User management. Okay. Okay. From here, you can put, you can click on that
+trophy button over here. On the trophy button. Yeah. Okay. Yes. Okay. I got it. Got it. Got it. Got it.
+Okay. One, two, three, four, five, six. Okay. You know what? We can use senior associate,
+fifth manager, senior manager division executive, we can use these, these work for that bar that I'm
+talking about. In the dashboard, these, these will be fine. Give it to me in the hierarchy level
+from top to bottom. Yeah. This is it. This is, this is it right here. Talk to bottom. I mean,
+from the associate, that's the bottom. Yeah. So see, associate, senior associate, because that's
+one, two, three, four, five, six, seven. Yeah. That's perfect. So associate is the bottom most and
+national executive is the top most. Yes, sir. Exactly. Okay. Yeah. That's perfect. We can go with that.
+Anush, can you make it to where when they hit their numbers, it automatically promotes them in the
+system. If I tell you, this is the, you know, this is the number that they have to hit for this
+level. There's a number that have to hit for this level. Can you, you know, because it's going to
+be tracking it in the dashboard anyway with the errors. In that case, you know, what happens,
+technically, I'm going to tell you how this happens that we have to run the job on the server.
+And it is, it's going to be like a handshake protocol where every day the job and
+behalf of time, it's going to check that, okay, what is the status of the performance of the client
+and when they hit that number on that particular day, it's going to promote them. I'm not saying
+that we can't do it. I'm saying that. Okay. Yes, it's going to take a little bit time.
+Well, how about this? Instead of maybe we don't work on that right now for phase three, but can we
+have it? Because I just don't want to delay everything, you know, and I don't want it to cost
+me too much. Like a fortune either because, but how about this? How about we just make it to where
+it just notifies me when somebody hits a promotion level? Is that cool? Like sends me in or like,
+if somebody hits their, you know, their promotion, like, like, if I tell you, these are the numbers.
+Like on the dashboard, if somebody hits, if, because on the dashboard, if they're supposed to hit
+5,000 and they hit, like, we're in note of, like, it gives me a notification saying, hey, promote
+so and so. Is that a thing or is that kind of the same thing? Again, it's kind of same thing only.
+You know, if you know that hitting the number, we can automatically promote them. There's no
+point of giving you an notification. You might get a notification for just cross-taking whether
+everything is good or not, but that's what I want. Yeah. Yeah. Let me think on it. I'll see if I can
+get a walk around on that. Okay. So how would you link? So if I give you the the numbers, right?
+Because we were talking about the dashboard earlier. And if we have the arrows, for example, on the
+dashboard, how would you make it to where, because I would obviously have to give you these numbers,
+like, hey, 5,000, 30,000, 50,000, etc.
+I don't know. I forgot. I was trying to ask you here trying to figure it out.
+Okay. I'll let you work on it. No worries. They are entering the amount, right? When you're
+saying they're adding the production products, they're entering the amount in the system, right?
+They are entering the windows selling the products. So what I'll do is we are going to make a database
+for that and for individual person with the help of their unique ID, which they are getting.
+We are going to make a database and keep the record that this person has made this much
+sold in this much amount of time. That's how, at the back and technically, we are going to keep
+it track. Okay. Okay. Can we make it to where all of these things that they upload are downloadable,
+where I can download CSV files and stuff like that? We're not really. What kind of information do you
+want to download? Just like, for example, on the production tab, if they say, you know, like,
+whatever is there, you know, like to fill it, you know, where I can just download the information
+like the agent client product carrier. Yeah. Yeah. Okay. Okay. I'll make that.
+Okay. Okay. Perfect. All righty. And then we already talked about this, but it was just making
+the product types editable by, for me, to where I can like add in their like, you know, other
+products and stuff like that. Yeah. And then maybe like, yeah, that's good. I mean,
+can edit product this. We talked about that. Status is submitted pending. Oh, these are the
+statuses. So, um, adding those in there. Mm-hmm. For the, okay. Okay.
+Only enforce, don't search for motion. Yes. Yeah. Required fields, um, in there as well,
+this is under, this is all under the, uh, are we talking about what are we talking about here?
+Is this about the form production? Sorry. Is this about the form that it quite feels or
+that's something else? No, this is on the production tracking. So it's,
+um, I don't know what it's on. It's, oh, so here. So let me, let me just
+in production, yeah. So if I go to new submission, it's just to have those,
+like those be the actual, um, uh, things there, like the fields. Okay. Okay. Any sense?
+Yes. I don't know if you could make this, uh, uh, yeah, if we can make it editable as well,
+I don't know. Oh, yeah. I think is that what we just talked about? I'm drawing that right now.
+Okay. Perfect. Yeah. You told me about making the product feel editable for you. You could say
+that you can have products. Okay. Awesome. Um, filters by date, range, category, carrier status.
+I think you already have that. Upline, okay. Upline visibility rules. So,
+so if, so I get, if in other companies all the time, if somebody is, let's just say, for example,
+their commission level is 80% and they recruited somebody who is at 70 and now that person moves
+up to 80, they usually can't see each other's production. But I want it to be here where they
+can actually see the production if they ever recruited that person. Does that make sense?
+Upline can view, don't mind which is godless of time.
+I'll give you an example. Let me go onto this website so you understand what I'm saying. This
+is a company I used to work for, but I still have access to their stuff. Okay. So the title for this
+person, for example, um, is, let me see, I can rep profile where you got this wrong one. Rep profile.
+So the title for this person is representative, right? So if this person is representative
+and they have another representative, they wouldn't be able to see their like numbers. Like,
+they wouldn't be able to like go on there and see how many clients that person has and stuff like
+that. But I wanted to be like, if this person recruited me, that person can always see my numbers.
+Okay. So it's like the downlink that down person who is at the lower level can see the upper levels
+data. No, the upper level can see the lower levels data. Yeah, that will be done. The upper levels
+okay. That's that makes sense. Okay. I don't need them to be able so important because of
+because of legalities. I don't want them to be able to necessarily see their client list or
+anything like that, but just their production. Like, how much premium, you know, like who they
+like, who they recruited, they can be able to see who they recruited. That's important. Um,
+and how much premium they have. Just not the client's names. Um, but how much premium they have,
+yes. Okay. Are you know what? Um, even though. Yeah, that's fine. Let's do it like that. Just
+just who they recruited, but not the client information. Like, if they want to pull a report for the
+next the last 30 days of their whole entire team, you know, to see what the production was. How
+many recruits, how many. Um, and there's what's the difference between the recruit tab and the
+downline tab? What, what, what is the, I want to understand that. Do you remember? Yeah,
+downline tab is just showing you the hierarchy. Uh, it's just going to give you some more information
+like total members active and active and those kind of stuff. Recruits is again the same thing.
+But yeah, the recruits is just the same thing. It's going to give you exact information,
+but you have recruited by yourself as going to show in the recruits.
+Downline is going to show you the, uh, information of all the people who are under your recruits also.
+Okay. A large recruit, a large recruited four person, but of those four person,
+if they recruited three or four more, you are not going to see that because these are your
+recruits only. Now, downline shows you all the recruits, recruits of your recruits also.
+Okay. So you're saying the down, the recruits tab is a personal me, the recruits I have personally.
+Yes. And then the downline is my entire hierarchy. Yes.
+Okay. Yeah, you see, you can see the knowledge is having all of these.
+Yeah. Can you make it to where, let me show you this here. So if I go here to, um,
+um, geez, I haven't used this in a while now. You're on a blank. So if, if I go here to, um,
+uh, dashboard, where's my dashboard, dashboard, dashboard, um, recruit manager.
+So you see here how it says personal and base shop. Could we make it, uh, kind of like that.
+We're like, if we click personal, I can just see my personal ones. If I click, uh,
+uh, base shop, I can see, um, or just downline or it doesn't have to say
+base shop, but it can say downline and I can see the downline rather than making it two different
+tabs, or do you just recommend just leaving it like that to just not make it difficult for now?
+We just leave it. Just leave it. It's fine. It's just leave it. Yeah. Uh, we don't need to,
+we don't need to complicate our life. All right. Um, almost done, man. This is two pages.
+So we're here. Okay. So all right. If downline for most of the same level, uh,
+upline still retains visibility. So we talked about that. Um, uh, oh, so me as the admin,
+I can move agents from team to team is, uh, is that a, uh, not a possibility?
+Uh, between, uh, admin again, move agents between teams. You mean to say you are going to change
+their down, uh, downline history from one agent to another? Yeah. Because so some agents,
+I give you an example, like I have an agent now who I gave, so this agent Janice and I gave
+her another agent because I didn't want to work with that agent. I just didn't want to deal with it.
+But if I see that Janice is not working well with that agent, I want to be able to move her
+somewhere else. Okay. Yes. Okay. Um, I, we talked about this already. The CSV upload that I can
+upload, um, you know, like a CSV file so that agent actually knows what the real numbers are in case,
+you know, a client can't hold or whatever the case is, you know, um, commission statements,
+like a statement vote. If we could just, I was thinking if we add a commissions tab, um,
+in the commissions tab, let me see if it's in here. I guess not.
+Um, I think, so I want to add a commissions tab basically where I can just upload because I'm
+going to be paying them. So I want to be able to upload like PDFs of, so let's just say a company
+called Trans America, sent me a statement to pay them. So I upload that statement for that week
+into that tab, basically, if that makes sense. Um, so I, and I'll put the carrier name,
+and so we'll be able to, I want to be able to filter like my carrier and by week or by date,
+or whatever the case is. If that's, you know, can we do that? Um, you are going to upload the PDF,
+but yeah, but uh, you want me to extract the information from the PDF for that?
+Uh, no, I don't think so. It's just, no, it's just so the agent can go in there and just,
+so when they get paid on Friday, just for example, they can go in and see why they got paid or they
+got paid. So I just upload a statement. It's just a spot where they can, like, give you an example
+of it. Um, it does not have to look like this, but this is just an example.
+Okay. So just an example here. Um, so
+okay. Instead of having it like this, like this is the commission or whatever the case is,
+right? Uh, they don't need to have this. They can just, it can just be like a link to a PDF for
+they open it up, you know, and where we can switch it by date. That's it. Okay. This needs to be made,
+and that's going to be done. Okay. Okay. It doesn't, like I said, it doesn't need to have all this.
+I just, just where they can, just like a bank state, like when you're on the bank, when you go and
+you click on a different date and it shows a state, that's it. That's it. That's all right.
+Um, okay. Uh, onboarding.
+This one is the biggest tab probably that we just need to adjust some things. So on the onboarding
+tab right now, um, I think it's, this is more going to be like a document hub where we just put
+documents in there for the people. So, um, which I think is what you already had in mind.
+So like, I know right now what shows up in the onboarding, for example, is like the PD,
+like it's the APA agreement, the, the full agreement. If we can just have that show up as, um,
+like, um, like a PDF rather than like, you know what I'm saying? Like, like just a link where they can
+click and it opens up a PDF. Is that possible? The PDF is they have signed. I want to look clean.
+Sorry. The PDF or the APA agreement is they have signed. You know what that is? Yeah, the one they signed.
+Uh, yes, we can attach the item in the, the help of the signed API. Okay. I'll try to do that.
+We can just give them a link. They can see the link that they have signed this document or we can
+attach as an item under that particular agent's login. Yeah. Yeah. Basically what I wanted to kind of
+look like is like, and again, if you have a simpler way of doing something, just let me know, right?
+You know more about this idea. But, um, just it basically just where it's like, so I'll give you an
+example. They're going to have, this is a CMS certificate, right? So I just want it to be a
+place where they can click on, okay, this is your document, how this or it has a little square or
+something and, um, so, uh, it's not there now, but you see how down here, you have like, um,
+like these little squares, training materials, but maybe it has a little square that says,
+API agreement. Boom. They click on it. Um, CMS certificate, which is needs to be uploaded as well.
+They click on it. ENO insurance. Uh, they click on it. W nine, a hit, like they click on it. You know
+what I'm saying? Um, but it needs to be able to be uploaded. These things, like these other things
+CMS certificate, you know, insurance, W nine, a hit, uh, agent and admin upload access. You know,
+so the agent can upload it or the admin, like I can upload it or I can assign another admin
+in there as well. Um, yeah, agent agent will be the itself or, uh, the uplink.
+The upline, um, so the uplines should be able to add it and the agent as well, but the agent,
+like, for example, the agent shouldn't be able to like delete the APA for like, you shouldn't be able
+to like, uh, you know, like like the APA should not be able to be edited or deleted or anything
+like that by the agent, but they should be able to add and delete CMS, you know, uh, insurance.
+So for the APA, for the APA, we can give the link and for CMS and EU and all those things,
+we can just give them an upload and download facility. Perfect. Okay. Cool. That's cool. Um,
+can we make this section where I can edit it? Like if I want to add more things to be uploaded,
+okay. Okay. Yes. Perfect. Awesome. Um, and then like, I want to have on the dashboard itself,
+it doesn't say it, um, but on dashboard, like a little next steps checklist for the person.
+Like, let me show you what I mean by that. So if I go to this website here,
+um, okay, if you look on the right hand side, I have like, when I first got in here,
+it used to say like, your next steps, right? And it would say like W9 that the CMS certificate,
+you know, these little things, right? So, um, if I can add something like that to the dashboard,
+before, this is only like for people who like are basically what's for unlicensed people,
+like their next step would literally just be to get licensed, you know, that's it. Okay.
+Um, if they're licensed, then it would be like, hey, next step upload, you know,
+submit W9 and direct deposit, which they're all going to ask you, I have QuickBooks. Could there
+be a link that we put on there where they just click it and then they just submit their W9 and
+direct deposit? Because with two quick books, two quick books, exactly. I mean, you are,
+you want to integrate the QuickBooks with the website, right? Yeah. Yeah. Uh-huh. Is that possible?
+Uh, all right. Let me show you what the QuickBooks looks like real quick on. Yeah. I know.
+Oh, you know, okay. Yeah. I have one QuickBooks, but uh, for just making the invoices,
+creating the invoices, it's just like a bookkeeper. So, okay. What I mean is they just have to be
+added as contractors. Um, I think there's like, let me just see real quick, because I believe I
+can just create a link to add it in. Maybe I can just create a link to add it in there really quick.
+Um, let me just double check.
+Okay.
+Okay.
+Sorry, it's colourless.
+Thaith.
+I have no clue in which it seems we're pretty fast.
+It seems faster.
+Yeah, it's fast.
+Okay.
+I don't know.
+All right.
+So if I go in here, I think it's okay.
+All apps, accounting and no expenses and bills, contractors.
+Here it is.
+Okay.
+So contractors.
+Where you at?
+Okay.
+So these are the contractors, right?
+So far anyway.
+Your browser seemed to be zoomed.
+Okay.
+So if I want to add a contractor, I could just put their name here
+and email and they don't send them out an email with the information.
+But as the company gets bigger, like, it just becomes difficult to do this.
+So let me show you how this other company does it.
+So this other company has it here where you go my info, right?
+And then.
+This is my mom.
+So you go in my info and then.
+You go to.
+Not this is just as non-security is direct deposit by just, you know,
+direct deposit.
+And then the info goes there.
+Okay.
+You know.
+So I don't know if we can do something similar.
+I don't care how it works.
+Just as long as like it gets.
+If it could get linked to QuickBooks and they could come up in here for me.
+You know.
+So we just want them to get added as a contractor and tools, right?
+That's it.
+W nine and direct deposit.
+So I'll I care about there.
+Okay.
+Okay.
+W nine will be a form, right?
+They'll address that file.
+I think.
+Yeah.
+So when you, for example, if I put a contractor,
+it'll automatically send it to them.
+And the W nine is how they pay.
+So I as an employer or if I'm providing any type of commission or any payment to them,
+they have to fill W nine.
+That's what we report to the IRS for them to pay taxes.
+Yeah.
+Okay.
+Okay.
+Okay.
+Inside.
+So the next.
+So that these are just the steps for them.
+Like, okay, if they uploaded their you know insurance, submit W nine and direct deposit.
+And then they have to request carry appointments, which then takes us to the carrier management tab.
+But.
+And then have like a little progress bar, you know, or whatever you want to put there.
+So it shows their progress or something that stands out for them.
+Carrier management on the carrier tab.
+So.
+I have three different sections of products that we sell.
+There's life and supplemental.
+And then there's ACA, which is really health insurance.
+And then there's Medicare, which is another form of health insurance.
+So in the care tab, if we just have like three sections, right, that says life and supplemental,
+ACA and Medicare, and they can toggle between them.
+And once they talk between them, just to have like an edible, editable carrier section.
+And I cannot enter the instructions and the notes, but like, like basically.
+These people will be requesting contracts one of two ways.
+For the life and supplemental.
+Because the thing is that each, each carrier has a, or each company carrier has a different form of requesting contracts.
+So there might just be a link for them, right?
+Or there might be like, it says, hey, email our HP insurance and Gmail requesting this contract.
+And then it'll be sent out, you know, kind of thing.
+So if we get at something like that in there.
+I don't know if that's clear enough for me.
+Yeah, carriers, you can already edit.
+I showed you that you can go and carry management at the carrier.
+I didn't understand about the dog.
+How are you going to use that?
+Let me give you an example. Let me just draw it up.
+So my idea was this, right?
+And so it's kind of like, okay, so like have three little sections.
+One says Medicare.
+One says ACA and the other one says life and supplemental.
+Okay.
+And then once they click on this one, it'll take them to those carriers.
+Right?
+Okay.
+And then once they click on this one, it'll take them to a list of carriers as well.
+And then this one, a list of carriers as well.
+I just have to give you that list of carriers.
+Or truthfully, if we could do this, like you can make the section where I can edit it, right?
+What you already have done.
+I can add carriers to each one of these sections.
+And then I need to be able to just like a little note section that I can add in myself next to the carrier,
+where I can either put a link for them to get contracted with that carrier or I put a set of instructions for them.
+And then if on there, it can have after another set, like of saying, okay, now this is what,
+so like a section that after they ask for those contracts or what to expect section.
+And I can fill that in.
+You know?
+Okay.
+Okay.
+I got it.
+Yeah.
+So basically carriers are going to get divided into three categories.
+And after that, each category is going to have their own set of categories.
+Yeah.
+Let's just, yeah, just tell me, let me know the fields, which all you want in the carriers.
+Okay.
+Let me write that down here, a stuff that I need to get to you, because I wrote a little section here.
+Fields of carriers per product type.
+Okay.
+Cool.
+So for the carrier fields, these are the fields.
+Oh, this is important.
+So carrier name, their status with that carrier, like, for example, we put in here, like,
+like requested contract,
+pending,
+requested contract and appointed basically.
+That's it.
+Those are the two.
+Okay.
+And that, and that status.
+Okay.
+And then the dates, like that automatically, you can see the date when they requested it, some notes.
+And this is something called a factor.
+This is important.
+So for each carrier that is, so this is not a shoot.
+This is life and health only related.
+And all I need is a text box.
+So.
+Just really easy.
+So this is something that I'll do.
+I'll go in there and do so basically.
+Let me give you a simple example.
+And I know you got to go to sleep, brother.
+So we're almost done.
+So let's say I'm in the life and health side.
+And I have trans America.
+I have American amicable and I have whatever GTL, right?
+My handwriting is terrible.
+But okay.
+With GTL, maybe the factor that they're going to, I'm sorry, with trans America, maybe the factor they'll get paid is 80%.
+So I need to be able to put in there and go 80.
+What that means is when an agent calculates their commission, they say, well, okay.
+Boy, it was the policy cost $2,000 a year times 80%.
+That's a $1,600.
+It'll get paid times blah, blah, blah, blah.
+But I need to be able to put into the factor.
+So with American amicable, the factor might be 90%.
+Would GTL might be 75%.
+Does that make sense?
+Yep.
+Okay.
+So I just need to go in there and be able to put that as a really important part of the page there for inside that favorite thing.
+Okay.
+So that's good for.
+We kind of talked about this.
+We just did talk about it actually in the so instructions basically for the life and supplemental.
+I just need to be able to add in there like if they click on a carrier, I can have a link.
+You know, if they if if if it's ACA, like I can, it's just something that I could put instructions for them, you know, and I can put those myself for Medicare.
+You know, instructions as well.
+So in the Medicare tab, you know, you can you can put this under the training management tab.
+If you want.
+You already have that.
+Okay, but this wasn't the carrier management.
+What do you what do you mean?
+Sorry.
+So what do you mean?
+I mean, these are just the instructions about how they are going to use the portal, right?
+No.
+So this is for the carriers themselves.
+So I give you an example.
+For life and supplemental, they have to click they're going to be able to click a link on sometimes sometimes.
+And it'll take them to something called sure LC.
+And they'll fill out their contracts there.
+For some of these carriers, they will not be able to do that.
+They'll have to send me an email.
+And then I'll respond, you know.
+So for ACA.
+See, you know, it's it's a different.
+Like each the thing is that we basically is running three businesses inside of one.
+Because there's three different product types.
+I don't know if that makes sense.
+Is that, you know.
+Or not really.
+That's okay.
+We can do that.
+That's nothing more like that.
+In the carriers part, we need to add these instructions, right?
+Right.
+So let's just say the person clicks on.
+So they say, okay.
+They click on life.
+Life and supplement.
+All right.
+Boom.
+So now they click on that.
+Huh?
+Yes.
+Okay.
+They click on that.
+And then a bunch of carriers come up.
+Right.
+That they can request.
+And the first one that they're requesting is trans-America.
+Okay.
+So here, you know, there's going to be the factor, the blah, blah, blah.
+But I'm going to say, okay.
+To request trans-America, you have to click.
+Link.
+Right.
+And then I click.
+They click the link.
+Then I'm going to put in there.
+So at this.
+These feels going to be.
+I need to be able to edit them.
+Right.
+And.
+And also the factor for trans-America needs to be 80%.
+Just for example.
+You know.
+And I can be able to put that in there as well.
+And then.
+Let me go back to the thing we're talking about here.
+But then they click on another one.
+They click on.
+And then there's a lot of micro-economic, which is for example.
+And I'm like, hey, for this company.
+You need to email.
+Blank, blank, blank at,
+to request.
+You know.
+And then I have.
+So I'm going to have a set of instructions down here after.
+Like, like, what to, or what to expect.
+Call it.
+What to expect.
+You know, here as well.
+Aside here from the factor.
+Also, the dummy sense.
+Okay.
+Okay, I'll make that.
+Okay.
+Okay, let's go back to training tab.
+So in the training tab, I mean, you pretty much already have this probably, but make it
+at, you know, where it's edible, it's edible categories.
+I think right now, yeah, training management.
+I think you already have that there, where if I want to add in another category, I think
+you have add material and then category.
+So if I could be able to change these categories, I can give you a list of categories, to be
+honest.
+Okay.
+Yeah.
+So let me just add that.
+Yeah.
+I'm saying that if you're going to, if you want to access too much of things for the
+admin editable part, then we need to make another console for admin to edit the website,
+right?
+Sarah, Sarah, Sarah, again, I'm saying, if you want to make the website too much editable
+like product also you want to add or carriers or whatever, so then in that case, we need
+to make another portal to make changes to your this current one to the website.
+So that's portal is going to be the remote control and this is going to be the website,
+but it's just going to make the work complicated.
+Okay, let's try to make it as least complicated as we can so we can finish.
+And look, if there's some things that right now, we just don't do just to get the portal
+up and running.
+That's okay too.
+You just let me know, hey, in our hey, let's just do this one like after, you know, and
+let's finish phase three, that's fine.
+You know, but yeah, so just you analyze it, you let me know that way we can move on with
+it.
+Okay, so almost the last thing here, we're done there, okay, videos, can the videos be played
+inside the platform, like in the training management tab, like if I upload a video of
+me, like let's say I, I don't know, if I, I don't know what you recommend that I video
+it with, like I have an app called loom LOM, but I use, you know, I don't know, it could
+just be a link, I guess, but like, because I want to provide like videos for them to watch
+and stuff like that.
+And then I want to be able to provide like at the bottom of it, attach a PDF with maybe
+some notes for them.
+You can also put, if you're going to put videos on YouTube, we can make that YouTube bar
+just running on the website.
+Okay, however you think there, because I am going to start making videos soon to be able
+to upload, but I want to also be able to upload PDFs.
+I just don't want my videos like to be public on YouTube for other people to see.
+Okay.
+You know what I'm saying?
+So that's why like I have loom, loom is cool because it's an internal platform for
+me, and I just can send out a link to somebody, but I can also put it, you know, if you have
+a spot for a link up here and then we can put in a frame and then play the loom video
+over this.
+That's perfect.
+Okay.
+Okay.
+Cool.
+Notifications.
+I wanted to send like for people who are unlicensed, like a daily email notification to
+unlicensed agents with the remaining days.
+So that every single day they remind that you have this amount of days before, even though
+they have that count down, but you know, I think like there's like, I don't know if it's
+free or not, but I know there's MailChimp and other stuff that we can do for this or you
+let me know.
+What do we think?
+And if we can't do it right now, it doesn't matter.
+That's fine.
+Yeah, because you need to get one service, you know, right now the emails are not getting
+sent from rhpoffice.com.
+That's something else.
+I didn't really understand that a new, I'm sorry, I just didn't get what you were trying
+to tell me there.
+So right now the emails are being sent from rhp.
+What are they being sent?
+How are they doing?
+That is getting sent from my alias name, Lotus one now.
+Okay.
+Yeah.
+So to change that, we need transactional email services.
+So that transactional email services are provided by send grid or by news mail.
+What happens is that when you sign up for news mail, then you need to add your email from
+which you want to send these transactional emails.
+Okay.
+Now your emails will be sent from your email, but the service which will be used, now these
+service will be used for sending a personal email, so that's going to be that thing.
+So it'll be sent, so I got the first part, it'll be sent from my email.
+That's what it will appear for them.
+But then what was the second part, it'll be, but it won't, what?
+It will be sent from the service like send grade or news mail.
+Okay.
+That's the thing, because Gmail isn't providing the direct email thing.
+Either you go for the Z here, then put the emails over there and, yeah, so these services
+enter there, where we can use your email address to send the emails and bulk or for a single
+transactional email, single email is called transactional email.
+Okay.
+Okay.
+Got it.
+Do you recommend that I get like a URL?
+So it actually says at rhpoffice.com, you know, you recommend I do that or you already
+have a domain, right?
+RSP office.
+Okay.
+So can I create an email with that?
+Can I, can I, uh, your, your RSP office is hosted on hosting, right?
+I believe so, yeah.
+Yeah.
+So I mean to say that you can get, you already have an email address like RSP office,
+or if you want to send it from hosting or also even that, even for that case, these services
+are just providing us the email address, but to actually send it via API.
+So many services that don't provide the APIs.
+So what we do is then we use the third party services like news mail or like send grid
+to send the emails.
+Okay.
+Okay.
+Okay.
+Is that something that you can just set up for me and I can just go in there and pay it
+or whatever?
+Yeah.
+Sure.
+Okay.
+Okay.
+Yeah.
+Yeah.
+You're just, you're just much better at it.
+Yeah.
+Okay.
+Yeah.
+Perfect.
+Yeah.
+And if we could set it up as like, um, uh, contracting at rhpoffice.com or something like
+that, you know?
+Okay.
+Contact at the rate.
+I'll ask you off.
+Contracting.
+Like, uh, contracting because it's going to be for, um, it's going to be for like recruiting,
+right?
+Basically that they're going to begin these emails.
+But do you have, do you have this email with you contracting at the rate because you need,
+I'm not purchasing any new, uh, email.
+I'm just using one, uh, existing particular email to send the emails.
+Okay.
+But how do I create that emails that I'm saying is that through Hostinger?
+Yeah.
+You can play it on the Hostinger or you can play it on Gmail.
+Like you did for rhp office.
+But I won't be able to, if I do it on Gmail, I won't say, it'll say add gmail.com.
+But if I wanted to say at rhpoffice.com.
+Yeah.
+That you can do on Hostinger.
+Okay.
+I'm saying, are you able to do that?
+Yeah.
+Yeah.
+Yeah.
+Because you have access to my hosting journal and stuff.
+Yes.
+Yes.
+Okay.
+Okay.
+Please.
+And just just put it as contracting at rhpoffice.com.
+That's.
+Okay.
+That's, um, please.
+Okay.
+We're about to finish right here.
+So, um, I already asked you this.
+Um, how can I been upload training content?
+Um, that's, you know, we already talked about that.
+Oh, um, how does licensing progress?
+Oh, shoot.
+We didn't talk about the licensing tab.
+Damn.
+That's important.
+Um, oh, but it's, it's done here.
+Okay.
+How can admin, uh, no, how does licensing progress work?
+So I know you have like a little licensing progress for the agents.
+It doesn't show for me on the dashboard.
+But I know there's like a bar, a little bar across here that you have for licensing progress.
+I guess.
+Um, do you know what, do you know what I'm talking about or no?
+Um, I'm not able to understand.
+Okay.
+Um.
+If I log out.
+I don't like out.
+Well, where's the log out button?
+Go to the admin over there.
+Yeah, that's what I'm click out here.
+Yeah.
+Yeah.
+Okay.
+Yes.
+Okay.
+And if I log in as.
+Oh, shoot.
+I don't remember what.
+Well, I don't remember the other login information that I had, to be honest, but.
+Um, if you log in as an agent, like as a new agent.
+You'll notice that there's like a little bar that looks like this.
+It's like a little long bar, a little like rectangle bar.
+And you have on there, like at the top of it, like licensing progress or something like that.
+Okay.
+Progress.
+Yeah.
+Yeah.
+Yeah.
+And, um, I was just wondering how, like, how was that measured?
+Because in the licensing tab, but we have currently.
+This isn't an important tab for the agents to be able to track their other agents.
+If they're not licensed.
+Um,
+So I wanted to like add some stuff to this.
+I really just wanted to like connect it to exam effects, because that's where they're beginning their license through.
+Uh, I don't know.
+I know that they have an API that we can use.
+Um, we'll go ahead.
+We'll wait for a second, but, um.
+Okay.
+You know what?
+Let's just.
+We already talked about that.
+Let me just put this here so we'll just talk about it now.
+Okay.
+Um, so.
+With the licensing tab.
+I want to be able to track.
+So this is good right here.
+Right.
+But like, there are steps that these people need to have done.
+And I don't, I guess, Chad, you did it and include it here.
+But like, for example,
+um, you know, first thing they need to have done is, uh, they need a schedule exam.
+Right.
+Um, next thing they need to have done is, uh,
+you've had something on here though.
+I know I saw it.
+Like, maybe it's for the agent.
+It was just as it like exam attempts.
+Like you had something on here.
+I understand.
+What you are saying.
+You are saying about the licensing.
+So the, uh, agent.
+Let's say who's on the downline.
+They are going to have that bar.
+That bar is.
+Yeah.
+Perfect.
+Okay.
+Here it is.
+I'm sorry.
+I just didn't click on it.
+Um, okay.
+Okay.
+Great.
+So this is awesome.
+This is phenomenal.
+Now, are we able to integrate this with exam effects?
+So exam effects is where this person will study.
+So it's required for them to study on exam effects.
+Or any other website, basically, to then go take the state license.
+So if I log into my exam, exam effects, let me show you.
+Um, as a manager, because I have the manager portal.
+Um,
+Okay, log in.
+And I am manager.
+And.
+One sec.
+Okay.
+Okay.
+So if you look here,
+I can see that there's one person in here, right?
+But I can see on here.
+This person's name.
+I don't know if I click on it.
+What happens?
+Okay.
+So I can see on here the person's name.
+And all of these things that they've done.
+Basically, um, chapter one, chapter two.
+I can, I can pretty much see everything.
+And if I go here, I can like.
+I can go in here and see.
+You know.
+Like their progress.
+You know.
+So can we keep the licensing tab or this?
+This is perfect the way it is, right?
+Um, but.
+Um, can we.
+Like integrate it with exam effects.
+But in what way?
+What do you want with the exam.
+What's your.
+So this same and this same analytic.
+Here.
+Can we just add it below, below what you have already?
+No.
+See, we can have this because exam effects is putting it on their own dashboard.
+I can try the API, whatever information they want to give.
+But if you want to show it in this way.
+It will be not exactly the same way.
+But I need to check what, what, what is there in their API?
+What all they can give us?
+Let me show you, um, over here in this old company.
+Let me see how they have it just so you get, get an idea.
+Because I know they have exam effects as well.
+Um, it's not it.
+Yeah, I need to check the exam effects API.
+If you are giving the information, yes, we can display it.
+Maybe the UI might be different for the thing that.
+Okay.
+So check this out.
+This is the way that they.
+Okay.
+So this is an example of how they have it, right?
+They show up here.
+So you see how they have it.
+Let me see if I can.
+Yeah, that's pretty much it.
+Um, they have theirs like exam effects like they took the pre licensing activity.
+Register a 10 complete and then like that kind of stuff there.
+You know, I don't know if that's possible.
+If not for now, it's fine.
+We can integrate it because I know they have an API, but, um,
+you just let me know what can be done there, you know?
+Yeah, I'll check the API first.
+Just provide me the logins of exam effects.
+Uh, yeah, let me just put it here real quick.
+So, uh, the person who is going to give the exam effects exam.
+So they're going to log in from their login account or your login account.
+Say it again.
+I'm saying that, for example, if somebody is going to give an exam on exam effects,
+then that person is only able to see if they're analytics right.
+So I wanted to be to where it's a tracking of their team.
+So, for example,
+if, if, uh,
+if Janice has Maria and Carlos under her that she can see their information.
+Yeah, because that's the whole point of it.
+I don't understand, but for example, for example, not hired me.
+Okay. Yeah.
+I am, I am having my own exam effects account.
+So what I'll do is I'll just you say,
+tell me that okay, go on and take that exam.
+I'm going to just create an account on exam effects.
+Then I'm going to log in my exam effects, give the exam.
+So the analytics will be shown to me only right in my dashboard.
+How will be shown to you?
+In exam effects, I'm talking about.
+Well,
+I was hoping that you could like extract the information with the master log in,
+which is mine, right?
+Is there any way which by which you are adding the people in your team in exam effects also,
+just like we are doing over here.
+So,
+in exam effects,
+what I can do.
+Um,
+I'm going to give you one minute to use the bathroom,
+and I'm going to answer this question.
+Okay. One second.
+I'll be right.
+One second.
+You
+You
+You
+You
+You
+You
+You're able to add inside of exam effects, managers, as many as I want, like hierarchy type.
+But I believe I have to reach out to them to do that.
+I think that it lets me necessarily do that in the system.
+If does that answer the question?
+Uh,
+or not?
+A little bit.
+Exam effects to.
+Okay.
+See, I'm just saying that.
+If somebody.
+You are giving me your credentials, but let's say you have 10 downline agents and the 11th one is going to take the exam effects exam.
+From your login, how will I track his or hers?
+Okay.
+Like, how do you know who's under who kind of thing?
+Yeah.
+I mean, who's under who?
+And, uh,
+and is your account will be the master account?
+Maybe from your account, only they are going to take the exam.
+So this is for them to study, right?
+The actual exam, they have to go to a location and take it.
+Uh, no, but.
+Okay.
+I'm, but I think I know what I think I know what you're asking, but so what I was thinking was.
+Like, how do you know who's under who and stuff like that?
+But I was thinking that you could see if, because the, they'll be recruited inside of our HP office first.
+So you'll see who recruited them.
+So then if you can associate the name.
+Exam effects, then with our HP office, and then you can manage it that way.
+I don't know if that makes sense.
+Here, right now, as on your screen, it says that select the manager below to manage their hierarchy.
+And, uh, right now, not 100.
+Oh, you are over here, right?
+So I can add a manager there.
+Yeah, yeah.
+I'm just saying that for example, if not hired me and I'm just going to take exam effects exam over here.
+So are you going to add me and exam effects also.
+As as your down line and your account.
+Every single person, every single person that gets recruited inside of the company will go into exam effects.
+If they're not licensed.
+Under me.
+Under.
+Okay.
+So I'm.
+Yeah.
+So you are saying that under your credentials of exam effects, I can find all the.
+Yeah, everybody.
+Yeah.
+Okay.
+Exactly.
+Okay.
+Okay.
+Okay.
+Okay.
+Okay.
+Okay.
+That was what I was asked.
+Yeah.
+Exactly.
+Because what will happen is so two scenarios, either they're licensed and they don't need exam effects, or they're not licensed.
+And they'll be made sometimes, sometimes the person is already getting a license with another company.
+So they won't go through my exam effects.
+And that's okay because we're not tracking at that point.
+But if they go into my exam effects, that means that they're in our company and everybody will be under me.
+Yeah.
+Yeah.
+Yeah.
+Yeah.
+All right.
+I put the information there.
+Okay.
+The logging credentials here.
+Okay.
+That's cool.
+Okay.
+One note of as an admin, I know there's a notifications tab up here.
+Let me cancel somebody's up.
+Okay.
+There's a notification stuff up here.
+What kind of notifications am I receiving?
+Do you know?
+They are simple and pretty basic like somebody is added or somebody status has been made and.
+Okay.
+Yeah.
+Very pretty basic.
+I haven't added much of the things notifications for now.
+Okay.
+All right.
+So we can just add some stuff in there.
+Whatever you think is important.
+Like I said, like if somebody hits a promotion level or something like that, if we didn't somehow do that.
+Yes.
+Um, who can I put who can change production statuses?
+We already talked about that about being able to change the production status and the thing.
+So we don't need to talk about that.
+Oh, coupon flexibility and striped link.
+So for the coupon.
+I know here you have like a tab record.
+This is coupon management.
+Mm hmm.
+Right.
+So let's say I create a coupon, right?
+Mm hmm.
+So I say in it.
+And because the only thing that they're paying for on our site is 20 to 20 dollars.
+So if I say I'm going to give a discount this month for $10 or if I want to give it for free, I would just go in here and create a coupon.
+Mm hmm.
+Basically, and that's it.
+And it would automatically be linked to stripe or how does that work?
+Yeah, that that's going to be automatically linked to your stripe.
+If you're going to give a coupon, yeah, if you're going to give a coupon over there.
+So it's, uh, it's going to see that how much amount is needs to be deducted.
+So that's going to be a zero.
+That's going to be a free for them.
+Okay.
+And, and, um, the applicable roles here, admin and agent, um, what was that exactly?
+Uh, I think you mentioned about this.
+Whether.
+Oh, only I can do it or the ad or the agent can do it.
+Is that it?
+Uh,
+Yeah, it was, yeah, I remember now, it was that this particular person will be only able to give the coupons.
+Whether it's going to be this coupon is a agent can give it or only admin.
+Only knowledge can give it to these coupons.
+Now, for example, for example, if not wants to give this to his down line.
+Okay.
+So you are an.
+Direct down.
+Okay.
+Yeah.
+If any agent wants to do this, so agent can also distribute these coupons.
+He agent can also see all these coupons in their account.
+If you are going to choose agent also.
+Okay.
+Okay.
+Cool.
+Got it.
+Um, all right.
+And then.
+Coupon code percentage or I can do fixed amount.
+Perfect.
+Okay.
+This looks good.
+Um, cool.
+All right.
+Does applying retain.
+Yeah, we talked about that retaining visibility quick books.
+We talked about that.
+Oh, um, last thing here business card, um, ordering.
+Um, I wanted to link this with like Vista print.
+Have you ever heard of Vista print?
+You were saying like the mailing services.
+Yeah, Vista print does like a.
+So like.
+Let me show you.
+Let me show you what I mean real quick to just so we have clarity on it.
+So if I go here and this, this is all companies will work for.
+Um, primarily.
+Right.
+And I go to.
+Uh, company store.
+Right.
+And company store.
+There's a bunch of things here, right?
+But like, uh, let's just say business cards.
+I want to have like a format like this where I say customize me.
+Right.
+But there's already fields here.
+Like they can't really do.
+Much different than what's already on there.
+So, um.
+And then they can order through here.
+And it costs them $25 for 250.
+But I can.
+I get a partnership with Vista print because they have a corporate partnership.
+Somewhere on here that I already saw.
+Um, I'm bass ambassador program or something like that right here.
+So.
+I don't know.
+But if I could, because I can, I want to have like a company store.
+But really business cards for now.
+So they can go on there and click and order business cards through my site.
+But it's linked to Vista print because they, they can, you know,
+it won't have Vista prints logo or whatever.
+Um, are we able to do that too?
+Uh, does the service provide API?
+I need to check that first.
+Yeah, yeah, it does.
+It does.
+Yeah, I believe so.
+Yeah.
+Yeah, so in that way, then, then can be done.
+Okay.
+Okay.
+Yeah.
+I wanted to show you real quick, but.
+For careers now.
+I think it's reseller program, I believe.
+And if I want to see how it works, no, join now.
+So yeah, so I would just pay like this.
+Um, let me just quickly.
+This is like 50 seconds.
+I don't know if you want to.
+Pro advantage by Vista print is a wholesale program for designers, artists,
+and other creative purpose artists, and other creative professionals who sell custom printed products.
+We've probably been.
+It's easy to add your designs to hundreds of items and shift directly to customers.
+Here's how it works.
+First, sell through your preferred sales channel, setting your own prices.
+After you make a sale, place your customer's order on our site.
+We'll print and ship the final product to your customer no matter where in the world they live,
+an unbranded packaging.
+So they won't see the price you paid or where it came from.
+With a premium subscription, you'll earn additional savings for your business.
+Receive up to 40% off products and free shipping on orders over $60.
+Plus, you'll get exclusive access to other Vista services and our customer care team.
+Get started today.
+May suns.
+Yeah.
+Okay.
+Okay.
+And that's pretty much it, man.
+I think I need to provide you the promotional level names and requirements.
+I want to give you a new logo because our logo sucks.
+And the business template.
+And then I don't think I really need to give you these because that doesn't.
+Yeah.
+Oh, there's one more thing that I need to add in there, which is under the ACA tab.
+Under the ACA tab, like, I need to add steps, right?
+Of what they need to do to get with ACA, which I think we already talked about that, but.
+What to expect.
+Yeah.
+And, but, but I need to have like steps and then what to expect comes after that.
+Um, I didn't have step.
+I needed to put like a link in there so they can be linked to my, when they go to sell health insurance, they can be linked to me.
+But, um, if you could some type of editable thing there.
+And, um, uh, damn.
+I lost the document.
+Okay.
+There it is.
+And then final carrier list per category.
+We have that CSV.
+We talked about, yeah, four monthly verified totals.
+Um, so I don't need to provide the format for that.
+That's not needed.
+Uh, I don't need to get this in there.
+And I think that's it.
+Right.
+Is there anything else in here provide to you?
+Yeah, that's it for now.
+Uh, see, I will not work on the whole document first, because there are so many phases in this one.
+Actually, which I can see.
+So I'll be contacting you again.
+Again, if I have some kind of questions and I'll just start with the from top to bottom of the document.
+And then I'll let you my progress, whatever I've made.
+Right.
+Okay.
+Okay.

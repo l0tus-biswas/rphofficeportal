@@ -1,0 +1,193 @@
+<div class="row mb-4">
+  <div class="col-12">
+    <!-- Loading state -->
+    <div *ngIf="loading" class="card shadow-sm">
+      <div class="card-body text-center py-4">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        <span class="text-muted">Loading ACA client tracker...</span>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div *ngIf="!loading && error" class="alert alert-warning d-flex align-items-center" role="alert">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- No data state -->
+    <div *ngIf="!loading && !error && data && !data.hasData" class="card shadow-sm border-0">
+      <div class="card-body text-center py-4">
+        <i class="bi bi-bar-chart-line display-6 text-muted"></i>
+        <p class="text-muted mt-2 mb-0">ACA client volume data has not been uploaded yet.</p>
+        <p class="text-muted small">Check back after your upline admin uploads the monthly CSV.</p>
+      </div>
+    </div>
+
+    <!-- Main tracker card -->
+    <div *ngIf="!loading && !error && data && data.hasData" class="card shadow-sm border-0">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+        <div>
+          <h5 class="mb-0 fw-semibold">
+            <i class="bi bi-people-fill me-2 text-primary"></i>ACA Client Volume Tracker
+          </h5>
+          <small class="text-muted">Reported vs Verified &mdash; {{ batchDisplay }}</small>
+        </div>
+        <span class="badge bg-{{ tierColor }} fs-6 px-3 py-2">{{ data.currentTierLabel }}</span>
+      </div>
+
+      <div class="card-body">
+
+        <!-- ── Three Reported vs Verified stat cards ── -->
+        <div class="row g-3 mb-4">
+
+          <!-- ACA Members -->
+          <div class="col-12 col-md-4">
+            <div class="stat-card rounded p-3 border">
+              <div class="stat-label text-muted small fw-semibold mb-2">
+                <i class="bi bi-people me-1"></i>ACA Members
+              </div>
+              <div class="d-flex justify-content-between align-items-end">
+                <div class="text-center flex-fill">
+                  <div class="fs-5 fw-bold text-muted">{{ data.reportedClientCount | number }}</div>
+                  <div class="stat-sublabel text-muted">Reported</div>
+                </div>
+                <div class="text-center px-2">
+                  <i class="bi bi-arrow-right text-muted"></i>
+                </div>
+                <div class="text-center flex-fill">
+                  <div class="fs-5 fw-bold text-{{ compareColor(data.reportedClientCount, data.verifiedClientCount) }}">
+                    {{ data.verifiedClientCount | number }}
+                  </div>
+                  <div class="stat-sublabel text-muted">Verified</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- In Force Premium -->
+          <div class="col-12 col-md-4">
+            <div class="stat-card rounded p-3 border">
+              <div class="stat-label text-muted small fw-semibold mb-2">
+                <i class="bi bi-currency-dollar me-1"></i>In Force Premium
+              </div>
+              <div class="d-flex justify-content-between align-items-end">
+                <div class="text-center flex-fill">
+                  <div class="fs-5 fw-bold text-muted">{{ formatCurrency(data.reportedPremium) }}</div>
+                  <div class="stat-sublabel text-muted">Reported</div>
+                </div>
+                <div class="text-center px-2">
+                  <i class="bi bi-arrow-right text-muted"></i>
+                </div>
+                <div class="text-center flex-fill">
+                  <ng-container *ngIf="data.verifiedPremium > 0; else noPremium">
+                    <div class="fs-5 fw-bold text-{{ compareColor(data.reportedPremium, data.verifiedPremium) }}">
+                      {{ formatCurrency(data.verifiedPremium) }}
+                    </div>
+                  </ng-container>
+                  <ng-template #noPremium>
+                    <div class="fs-5 fw-bold text-muted">—</div>
+                  </ng-template>
+                  <div class="stat-sublabel text-muted">Verified</div>
+                </div>
+              </div>
+              <div class="text-muted mt-2" style="font-size: 0.7rem;">
+                <i class="bi bi-info-circle me-1"></i>Verified premium not captured in monthly CSV upload.
+              </div>
+            </div>
+          </div>
+
+          <!-- Producing Agents -->
+          <div class="col-12 col-md-4">
+            <div class="stat-card rounded p-3 border">
+              <div class="stat-label text-muted small fw-semibold mb-2">
+                <i class="bi bi-person-check me-1"></i>Producing Agents
+              </div>
+              <div class="d-flex justify-content-between align-items-end">
+                <div class="text-center flex-fill">
+                  <div class="fs-5 fw-bold text-muted">{{ data.reportedProducingAgents | number }}</div>
+                  <div class="stat-sublabel text-muted">Reported</div>
+                </div>
+                <div class="text-center px-2">
+                  <i class="bi bi-arrow-right text-muted"></i>
+                </div>
+                <div class="text-center flex-fill">
+                  <div class="fs-5 fw-bold text-{{ compareColor(data.reportedProducingAgents, data.verifiedProducingAgents) }}">
+                    {{ data.verifiedProducingAgents | number }}
+                  </div>
+                  <div class="stat-sublabel text-muted">Verified</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── Tier & Bonus row ── -->
+        <div class="row g-3 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="text-center p-3 rounded bg-light">
+              <div class="display-6 fw-bold text-{{ tierColor }}">{{ data.currentTierLabel }}</div>
+              <div class="small text-muted mt-1">Current Tier</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center p-3 rounded bg-light">
+              <div class="display-6 fw-bold text-success">${{ data.bonusRate }}<span class="fs-6 fw-normal">/client</span></div>
+              <div class="small text-muted mt-1">Bonus Rate</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center p-3 rounded bg-light">
+              <div class="display-6 fw-bold text-success">{{ bonusFormatted }}</div>
+              <div class="small text-muted mt-1">Monthly Bonus</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-center p-3 rounded bg-light">
+              <div class="display-6 fw-bold text-primary">{{ data.verifiedClientCount | number }}</div>
+              <div class="small text-muted mt-1">Verified Clients</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tier progress bar -->
+        <div class="mb-2 d-flex justify-content-between small text-muted">
+          <span>{{ data.tierThreshold | number }} clients ({{ data.currentTierLabel }})</span>
+          <span *ngIf="data.currentTier < 3">{{ data.nextTierThreshold | number }} clients (Tier {{ data.currentTier + 1 }})</span>
+          <span *ngIf="data.currentTier >= 3">Maximum tier reached!</span>
+        </div>
+        <div class="progress mb-3" style="height: 18px;">
+          <div
+            class="progress-bar bg-{{ tierColor }} progress-bar-striped progress-bar-animated"
+            role="progressbar"
+            [style.width.%]="data.progressPercent"
+            [attr.aria-valuenow]="data.progressPercent"
+            aria-valuemin="0"
+            aria-valuemax="100">
+            {{ data.progressPercent }}%
+          </div>
+        </div>
+
+        <!-- Next tier callout -->
+        <div *ngIf="data.currentTier < 3" class="alert alert-info py-2 mb-0 d-flex align-items-center">
+          <i class="bi bi-arrow-up-circle me-2"></i>
+          <span>
+            <strong>{{ (data.nextTierThreshold - data.verifiedClientCount) | number }}</strong> more verified clients needed to reach
+            <strong>Tier {{ data.currentTier + 1 }}</strong>
+            (${{ data.currentTier + 1 }}/client/month).
+          </span>
+        </div>
+
+        <div *ngIf="data.currentTier >= 3" class="alert alert-success py-2 mb-0 d-flex align-items-center">
+          <i class="bi bi-trophy-fill me-2"></i>
+          <span>You've reached <strong>Tier 3</strong> &mdash; the highest bonus level at $3/client/month!</span>
+        </div>
+      </div>
+
+      <div class="card-footer bg-white border-top-0 text-muted small d-flex justify-content-between">
+        <span><i class="bi bi-calendar3 me-1"></i>Verified data: {{ batchDisplay }}</span>
+        <span class="fst-italic">Verified totals are updated monthly from carrier data.</span>
+      </div>
+    </div>
+  </div>
+</div>

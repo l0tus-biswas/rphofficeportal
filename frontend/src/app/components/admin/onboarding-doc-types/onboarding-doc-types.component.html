@@ -1,0 +1,163 @@
+
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-0"><i class="bi bi-folder2-fill me-2"></i>Onboarding Document Types</h2>
+      <small class="text-muted">Manage the document types agents need to upload during onboarding.</small>
+    </div>
+    <button class="btn btn-primary" (click)="openNew()">
+      <i class="bi bi-plus-circle me-1"></i>Add Doc Type
+    </button>
+  </div>
+
+  <!-- Alerts -->
+  <div class="alert alert-success alert-dismissible fade show" *ngIf="success" role="alert">
+    <i class="bi bi-check-circle me-2"></i>{{ success }}
+    <button type="button" class="btn-close" (click)="success=''"></button>
+  </div>
+  <div class="alert alert-danger alert-dismissible fade show" *ngIf="error && !showForm" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    <button type="button" class="btn-close" (click)="error=''"></button>
+  </div>
+
+  <!-- Form Panel -->
+  <div *ngIf="showForm" class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+      {{ editMode ? 'Edit Document Type' : 'Add New Document Type' }}
+    </div>
+    <div class="card-body">
+      <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" [(ngModel)]="form.name" placeholder="e.g. E&O Insurance">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">Sort Order</label>
+          <input type="number" class="form-control" [(ngModel)]="form.sortOrder" min="0">
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">Description</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="form.description" placeholder="Brief explanation shown to agents"></textarea>
+        </div>
+        <div class="col-12">
+          <div class="row g-3">
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="form.required" id="cbRequired">
+                <label class="form-check-label" for="cbRequired">Required</label>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="form.agentCanUpload" id="cbCanUpload">
+                <label class="form-check-label" for="cbCanUpload">Agent Can Upload</label>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="form.agentCanDelete" id="cbCanDelete">
+                <label class="form-check-label" for="cbCanDelete">Agent Can Delete</label>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="form.isReadOnlyLink" id="cbReadOnly">
+                <label class="form-check-label" for="cbReadOnly">Read-Only Link (e.g. APA Agreement)</label>
+              </div>
+            </div>
+            <div class="col-auto" *ngIf="editMode">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="form.isActive" id="cbActive">
+                <label class="form-check-label" for="cbActive">Active</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary" (click)="save()" [disabled]="saving">
+          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+          {{ editMode ? 'Save Changes' : 'Create' }}
+        </button>
+        <button class="btn btn-outline-secondary" (click)="closeForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Doc Types Table -->
+  <div class="card">
+    <div class="card-body">
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+
+      <div *ngIf="!loading && docTypes.length === 0" class="text-center py-5">
+        <i class="bi bi-folder2-open display-1 text-muted"></i>
+        <p class="mt-3 text-muted">No document types configured. <a (click)="openNew()" class="text-primary cursor-pointer">Add one</a>.</p>
+      </div>
+
+      <div *ngIf="!loading && docTypes.length > 0" class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Description</th>
+              <th class="text-center">Required</th>
+              <th class="text-center">Agent Upload</th>
+              <th class="text-center">Agent Delete</th>
+              <th class="text-center">Read-Only Link</th>
+              <th class="text-center">Active</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let dt of docTypes" [class.table-secondary]="!dt.isActive">
+              <td class="text-muted">{{ dt.sortOrder }}</td>
+              <td><strong>{{ dt.name }}</strong></td>
+              <td><small class="text-muted">{{ dt.description || '—' }}</small></td>
+              <td class="text-center">
+                <i class="bi" [class.bi-check-circle-fill]="dt.required" [class.text-success]="dt.required"
+                   [class.bi-x-circle]="!dt.required" [class.text-muted]="!dt.required"></i>
+              </td>
+              <td class="text-center">
+                <i class="bi" [class.bi-check-circle-fill]="dt.agentCanUpload" [class.text-success]="dt.agentCanUpload"
+                   [class.bi-x-circle]="!dt.agentCanUpload" [class.text-muted]="!dt.agentCanUpload"></i>
+              </td>
+              <td class="text-center">
+                <i class="bi" [class.bi-check-circle-fill]="dt.agentCanDelete" [class.text-success]="dt.agentCanDelete"
+                   [class.bi-x-circle]="!dt.agentCanDelete" [class.text-muted]="!dt.agentCanDelete"></i>
+              </td>
+              <td class="text-center">
+                <span *ngIf="dt.isReadOnlyLink" class="badge bg-info text-dark">Yes</span>
+                <span *ngIf="!dt.isReadOnlyLink" class="badge bg-light text-muted">No</span>
+              </td>
+              <td class="text-center">
+                <span class="badge" [class.bg-success]="dt.isActive" [class.bg-secondary]="!dt.isActive">
+                  {{ dt.isActive ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+              <td>
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-outline-primary" (click)="openEdit(dt)" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                  <button class="btn" (click)="toggleActive(dt)"
+                    [class.btn-outline-warning]="dt.isActive"
+                    [class.btn-outline-success]="!dt.isActive"
+                    [title]="dt.isActive ? 'Deactivate' : 'Activate'">
+                    <i class="bi" [class.bi-eye-slash]="dt.isActive" [class.bi-eye]="!dt.isActive"></i>
+                  </button>
+                  <button class="btn btn-outline-danger" (click)="deleteDocType(dt)" title="Delete permanently">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

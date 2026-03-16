@@ -1,1 +1,8 @@
-/* App Component Styles */
+/* App Component Styles */.app-shell {
+  display: flex;
+}
+
+.app-content {
+  min-height: 100vh;
+  background: #f4f6fb;
+}

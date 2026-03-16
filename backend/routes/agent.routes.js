@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
+const AgentCarrierStatus = require('../models/AgentCarrierStatus');
+const OnboardingDocument = require('../models/OnboardingDocument');
+const OnboardingDocType = require('../models/OnboardingDocType');
+const SystemConfig = require('../models/SystemConfig');
 
 // All routes require authentication as agent or admin
 router.use(protect);
@@ -44,6 +49,14 @@ router.put('/profile', validateRequest(schemas.updateProfile), logAction('UPDATE
     
     user.updatedBy = req.user._id;
     await user.save();
+
+    Notification.createNotification({
+      userId: req.user._id,
+      type: 'profile_updated',
+      title: 'Profile Updated',
+      message: 'Your profile information was updated successfully.',
+      link: '/profile'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: 'Profile updated successfully',
@@ -70,6 +83,14 @@ router.post('/change-password', validateRequest(schemas.changePassword), logActi
     
     user.password = newPassword;
     await user.save();
+
+    Notification.createNotification({
+      userId: req.user._id,
+      type: 'password_changed',
+      title: 'Password Changed',
+      message: 'Your password was changed successfully. If you did not do this, contact support immediately.',
+      link: '/profile'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: 'Password changed successfully'
@@ -248,6 +269,86 @@ router.get('/referral-link', async (req, res) => {
       referralCode: user.referralCode,
       referralLink
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/agent/dashboard/checklist
+// @desc    Get personalised Next Steps checklist for dashboard
+// @access  Private (Agent/Admin)
+router.get('/dashboard/checklist', async (req, res) => {
+  try {
+    const agent = await User.findById(req.user._id).select('isLicensed');
+    const isLicensed = agent ? agent.isLicensed : false;
+
+    // Fetch QuickBooks invite URL from SystemConfig
+    let quickbooksUrl = '#';
+    try {
+      const cfg = await SystemConfig.findOne({ key: 'quickbooksInviteUrl' });
+      if (cfg) quickbooksUrl = cfg.value;
+    } catch (e) { /* ignore */ }
+
+    if (!isLicensed) {
+      return sendResponse(res, 200, {
+        checklist: [
+          { label: 'Get your insurance license', completed: false, link: null },
+          { label: 'Study on ExamFX', completed: false, link: 'https://www.examfx.com' }
+        ]
+      });
+    }
+
+    // For licensed agents: check onboarding documents
+    const docTypeNames = ['W-9', 'Direct Deposit', "E&O Insurance", 'CMS Certificate'];
+    const docTypes = await OnboardingDocType.find({ name: { $in: docTypeNames }, isActive: true }).select('_id name');
+    const docTypeMap = {};
+    docTypes.forEach(dt => { docTypeMap[dt.name] = dt._id; });
+
+    // Fetch uploaded (non-deleted) documents for the agent for these doc types
+    const uploadedDocs = await OnboardingDocument.find({
+      agent: req.user._id,
+      docType: { $in: Object.values(docTypeMap) },
+      deletedAt: null
+    }).select('docType');
+
+    const uploadedDocTypeIds = new Set(uploadedDocs.map(d => d.docType.toString()));
+
+    const hasCarrierRequest = await AgentCarrierStatus.exists({ agent: req.user._id });
+
+    const checklist = [
+      {
+        label: 'Upload W-9',
+        completed: docTypeMap['W-9'] ? uploadedDocTypeIds.has(docTypeMap['W-9'].toString()) : false,
+        link: '/onboarding-hub'
+      },
+      {
+        label: 'Upload Direct Deposit',
+        completed: docTypeMap['Direct Deposit'] ? uploadedDocTypeIds.has(docTypeMap['Direct Deposit'].toString()) : false,
+        link: '/onboarding-hub'
+      },
+      {
+        label: 'Upload E&O Insurance',
+        completed: docTypeMap['E&O Insurance'] ? uploadedDocTypeIds.has(docTypeMap['E&O Insurance'].toString()) : false,
+        link: '/onboarding-hub'
+      },
+      {
+        label: 'Upload CMS Certificate',
+        completed: docTypeMap['CMS Certificate'] ? uploadedDocTypeIds.has(docTypeMap['CMS Certificate'].toString()) : false,
+        link: '/onboarding-hub'
+      },
+      {
+        label: 'Request Carrier Appointments',
+        completed: !!hasCarrierRequest,
+        link: '/carriers'
+      },
+      {
+        label: 'Complete W-9 / Direct Deposit via QuickBooks',
+        completed: false, // static — admin confirms externally
+        link: quickbooksUrl
+      }
+    ];
+
+    sendResponse(res, 200, { checklist });
   } catch (error) {
     errorResponse(res, error);
   }

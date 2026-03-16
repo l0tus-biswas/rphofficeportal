@@ -1,4 +1,19 @@
-<div class="sidebar p-3">
+<div class="sidebar d-flex flex-column" *ngIf="authService.isLoggedIn()">
+
+  <!-- Brand logo -->
+  <div class="sidebar-brand p-3 d-flex align-items-center">
+    <div class="brand-icon me-2" *ngIf="!branding.appLogo || logoFailed">
+      <i class="bi bi-building-fill"></i>
+    </div>
+    <img *ngIf="branding.appLogo && !logoFailed" [src]="branding.appLogo" alt="Logo" class="brand-logo me-2"
+         (error)="logoFailed = true">
+    <span class="brand-name fw-bold">{{ branding.appName }}</span>
+  </div>
+
+  <hr class="my-0 border-secondary">
+
+  <!-- Scrollable nav links -->
+  <div class="sidebar-nav flex-grow-1 overflow-auto p-2">
   <ul class="nav flex-column">
     <li class="nav-item">
       <a class="nav-link" routerLink="/dashboard" routerLinkActive="active">
@@ -29,10 +44,58 @@
         <i class="bi bi-book me-2"></i>Training Materials
       </a>
     </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/licensing" routerLinkActive="active">
+        <i class="bi bi-award me-2"></i>Licensing
+      </a>
+    </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/production" routerLinkActive="active">
+        <i class="bi bi-graph-up me-2"></i>Production
+      </a>
+    </li>
+    
+    <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+      <a class="nav-link" routerLink="/carriers" routerLinkActive="active">
+        <i class="bi bi-building-fill me-2"></i>Carriers
+      </a>
+    </li>
+
+    <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+      <a class="nav-link" routerLink="/commissions" routerLinkActive="active">
+        <i class="bi bi-cash-coin me-2"></i>My Commissions
+      </a>
+    </li>
+
+    <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+      <a class="nav-link" routerLink="/onboarding-hub" routerLinkActive="active">
+        <i class="bi bi-folder2-open me-2"></i>Document Hub
+      </a>
+    </li>
+
+    <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+      <a class="nav-link" routerLink="/business-cards" routerLinkActive="active">
+        <i class="bi bi-card-heading me-2"></i>Business Cards
+      </a>
+    </li>
     
     <li class="nav-item">
       <a class="nav-link" routerLink="/profile" routerLinkActive="active">
         <i class="bi bi-person me-2"></i>My Profile
+      </a>
+    </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/transactions" routerLinkActive="active">
+        <i class="bi bi-credit-card me-2"></i>Billing
+      </a>
+    </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/translation" routerLinkActive="active">
+        <i class="bi bi-translate me-2"></i>Translation
       </a>
     </li>
     
@@ -57,16 +120,52 @@
           <i class="bi bi-diagram-3-fill me-2"></i>Full Hierarchy
         </a>
       </li>
-      
+
       <li class="nav-item">
-        <a class="nav-link" routerLink="/admin/training" routerLinkActive="active">
-          <i class="bi bi-file-earmark-text me-2"></i>Training Management
+        <a class="nav-link" routerLink="/admin/apa-applications" routerLinkActive="active">
+          <i class="bi bi-file-earmark-check me-2"></i>APA Applications
         </a>
       </li>
       
       <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/training" routerLinkActive="active">
+          <i class="bi bi-mortarboard-fill me-2"></i>Training Management
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/products" routerLinkActive="active">
+          <i class="bi bi-box-seam-fill me-2"></i>Product Management
+        </a>
+      </li>
+
+      <li class="nav-item">
         <a class="nav-link" routerLink="/admin/coupons" routerLinkActive="active">
           <i class="bi bi-ticket-perforated-fill me-2"></i>Coupon Management
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/carriers" routerLinkActive="active">
+          <i class="bi bi-building-fill me-2"></i>Carrier Management
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/carrier-appointments" routerLinkActive="active">
+          <i class="bi bi-award-fill me-2"></i>Carrier Appointments
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/commission-statements" routerLinkActive="active">
+          <i class="bi bi-receipt me-2"></i>Commission Statements
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/onboarding-doc-types" routerLinkActive="active">
+          <i class="bi bi-folder-check me-2"></i>Onboarding Doc Types
         </a>
       </li>
       
@@ -75,10 +174,58 @@
       </li>
       
       <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/aca-management" routerLinkActive="active">
+          <i class="bi bi-people-fill me-2"></i>ACA Management
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/vistaprint-config" routerLinkActive="active">
+          <i class="bi bi-card-heading me-2"></i>Vistaprint Config
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/promotion-levels" routerLinkActive="active">
+          <i class="bi bi-bar-chart-steps me-2"></i>Promotion Levels
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/branding" routerLinkActive="active">
+          <i class="bi bi-paint-brush me-2"></i>Branding
+        </a>
+      </li>
+
+      <li class="nav-item">
         <a class="nav-link" routerLink="/admin/config" routerLinkActive="active">
           <i class="bi bi-gear-fill me-2"></i>System Configuration
         </a>
       </li>
-    </div>
+    </div><!-- /admin section -->
   </ul>
-</div>
+  </div><!-- /sidebar-nav -->
+
+  <hr class="my-0">
+
+  <!-- User footer -->
+  <div class="sidebar-footer p-3">
+    <div class="d-flex align-items-center">
+      <i class="bi bi-person-circle fs-4 me-2"></i>
+      <div class="flex-grow-1 overflow-hidden">
+        <div class="fw-semibold text-truncate small">{{ currentUser?.name }}</div>
+        <div class="text-truncate" style="font-size:0.7rem;opacity:0.7">{{ currentUser?.email }}</div>
+      </div>
+      <div class="d-flex gap-2 align-items-center ms-2">
+        <a routerLink="/notifications" class="sidebar-icon-btn position-relative" title="Notifications">
+          <i class="bi bi-bell-fill"></i>
+          <span *ngIf="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+        </a>
+        <button class="sidebar-icon-btn" (click)="logout()" title="Logout">
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /sidebar -->

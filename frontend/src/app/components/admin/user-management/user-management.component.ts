@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { AdminService } from '../../../services/admin.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-user-management',
@@ -24,12 +26,21 @@ export class UserManagementComponent implements OnInit {
   roleFilter = 'all';
   statusFilter = 'all';
   
-  // Modal
+  // Edit Modal
   selectedUser: any = null;
   showEditModal = false;
   editForm: any = {};
 
-  constructor(private adminService: AdminService) { }
+  // Transfer Modal
+  showTransferModal = false;
+  transferUser: any = null;
+  transferNewUplineId = '';
+  transferSearchTerm = '';
+  transferring = false;
+  eligibleUplines: any[] = [];
+  filteredUplines: any[] = [];
+
+  constructor(private adminService: AdminService, private http: HttpClient) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -250,6 +261,50 @@ export class UserManagementComponent implements OnInit {
           modal.remove();
         }
       });
+    });
+  }
+
+  openTransferModal(user: any): void {
+    this.transferUser = user;
+    this.transferNewUplineId = '';
+    this.transferSearchTerm = '';
+    // Allow any active user (agent or admin) except the agent being transferred as the new upline
+    this.eligibleUplines = this.users.filter(u => u._id !== user._id && u.isActive);
+    this.filteredUplines = [...this.eligibleUplines];
+    this.showTransferModal = true;
+  }
+
+  closeTransferModal(): void {
+    this.showTransferModal = false;
+    this.transferUser = null;
+    this.transferNewUplineId = '';
+  }
+
+  filterUplines(): void {
+    const term = this.transferSearchTerm.toLowerCase();
+    this.filteredUplines = this.eligibleUplines.filter(u =>
+      !term || u.name?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term)
+    );
+  }
+
+  confirmTransfer(): void {
+    if (!this.transferUser || !this.transferNewUplineId) return;
+    const newUpline = this.users.find(u => u._id === this.transferNewUplineId);
+    if (!confirm(`Transfer ${this.transferUser.name} to upline ${newUpline?.name}?`)) return;
+
+    this.transferring = true;
+    this.http.put(`${environment.apiUrl}/admin/users/${this.transferUser._id}/transfer`, { newUplineId: this.transferNewUplineId }).subscribe({
+      next: () => {
+        this.success = `${this.transferUser.name} successfully transferred to ${newUpline?.name}`;
+        this.closeTransferModal();
+        this.loadUsers();
+        this.transferring = false;
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to transfer agent';
+        this.transferring = false;
+      }
     });
   }
 

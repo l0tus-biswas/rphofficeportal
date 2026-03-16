@@ -1,0 +1,169 @@
+
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-4">
+    <i class="bi bi-folder2-open fs-3 text-primary me-2"></i>
+    <div>
+      <h4 class="mb-0 fw-bold">Document Hub</h4>
+      <small class="text-muted">Upload and manage your required onboarding documents</small>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div *ngIf="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+    <button type="button" class="btn-close" (click)="error=''"></button>
+  </div>
+  <div *ngIf="success" class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+    <button type="button" class="btn-close" (click)="success=''"></button>
+  </div>
+
+  <!-- Progress bar -->
+  <div *ngIf="!loading && docCards.length > 0" class="card border-0 shadow-sm mb-4 bg-light">
+    <div class="card-body py-3 px-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold text-dark">Onboarding Progress</span>
+        <span class="text-muted small">{{ completedRequiredCount }} of {{ requiredCount }} required documents</span>
+      </div>
+      <div class="progress" style="height: 10px;">
+        <div class="progress-bar bg-success" role="progressbar"
+             [style.width.%]="requiredCount > 0 ? (completedRequiredCount / requiredCount) * 100 : 0"
+             [attr.aria-valuenow]="completedRequiredCount"
+             aria-valuemin="0" [attr.aria-valuemax]="requiredCount">
+        </div>
+      </div>
+      <div *ngIf="completedRequiredCount === requiredCount && requiredCount > 0" class="mt-2 text-success small fw-semibold">
+        <i class="bi bi-check-circle-fill me-1"></i>All required documents submitted!
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="text-muted mt-2">Loading document hub...</p>
+  </div>
+
+  <!-- Document Cards -->
+  <div *ngIf="!loading" class="row g-4">
+    <div *ngFor="let card of docCards" class="col-12 col-md-6 col-lg-4">
+      <div class="card h-100 border-0 shadow-sm"
+           [class.border-start]="true"
+           [class.border-4]="true"
+           [class.border-success]="card.document"
+           [class.border-warning]="!card.document && card.docType.required"
+           [class.border-secondary]="!card.document && !card.docType.required">
+        <div class="card-body d-flex flex-column">
+
+          <!-- Header -->
+          <div class="d-flex align-items-start justify-content-between mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi fs-4"
+                 [class.bi-file-check-fill]="card.document"
+                 [class.text-success]="card.document"
+                 [class.bi-file-earmark-text]="!card.document"
+                 [class.text-muted]="!card.document"></i>
+              <h6 class="mb-0 fw-semibold">{{ card.docType.name }}</h6>
+            </div>
+            <span *ngIf="card.docType.required" class="badge bg-warning text-dark">Required</span>
+            <span *ngIf="!card.docType.required" class="badge bg-light text-muted">Optional</span>
+          </div>
+
+          <!-- Description -->
+          <p *ngIf="card.docType.description" class="text-muted small mb-2">{{ card.docType.description }}</p>
+
+          <!-- Current document status -->
+          <div *ngIf="card.document" class="mb-3">
+            <div class="d-flex align-items-center gap-2 p-2 bg-success bg-opacity-10 rounded">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <div class="overflow-hidden">
+                <div class="small fw-semibold text-success">Submitted</div>
+                <div class="small text-muted text-truncate" *ngIf="card.document.originalFileName">
+                  {{ card.document.originalFileName }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="!card.document" class="mb-3">
+            <div class="d-flex align-items-center gap-2 p-2 bg-light rounded">
+              <i class="bi bi-clock text-muted"></i>
+              <span class="small text-muted">Not yet submitted</span>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="mt-auto">
+
+            <!-- APA Agreement — read-only external link -->
+            <div *ngIf="card.docType.isReadOnlyLink && card.document?.externalLink">
+              <a [href]="card.document!.externalLink" target="_blank" class="btn btn-outline-primary btn-sm w-100">
+                <i class="bi bi-box-arrow-up-right me-1"></i>View APA Agreement
+              </a>
+            </div>
+            <div *ngIf="card.docType.isReadOnlyLink && !card.document?.externalLink" class="text-center text-muted small py-2">
+              <i class="bi bi-info-circle me-1"></i>Link will appear when generated by admin
+            </div>
+
+            <!-- Uploadable document -->
+            <div *ngIf="!card.docType.isReadOnlyLink && card.docType.agentCanUpload">
+              <!-- Download existing -->
+              <a *ngIf="card.document?._id"
+                 [href]="getFileUrl(card.document!.filePath!)"
+                 target="_blank"
+                 class="btn btn-outline-success btn-sm w-100 mb-2">
+                <i class="bi bi-download me-1"></i>Download Current
+              </a>
+
+              <!-- Upload / Replace -->
+              <div class="mb-2">
+                <input type="file" class="form-control form-control-sm"
+                       accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                       (change)="onFileSelected($event, card.docType._id!)"
+                       [id]="'file-' + card.docType._id">
+                <small class="text-muted">PDF, image, or doc file</small>
+              </div>
+              <button class="btn btn-primary btn-sm w-100"
+                      [disabled]="!selectedFiles[card.docType._id!] || uploadingDocTypeId === card.docType._id"
+                      (click)="uploadDocument(card.docType)">
+                <span *ngIf="uploadingDocTypeId === card.docType._id" class="spinner-border spinner-border-sm me-1"></span>
+                <i *ngIf="uploadingDocTypeId !== card.docType._id" class="bi bi-upload me-1"></i>
+                {{ card.document ? 'Replace Document' : 'Upload Document' }}
+              </button>
+
+              <!-- Delete -->
+              <button *ngIf="card.document && card.docType.agentCanDelete"
+                      class="btn btn-outline-danger btn-sm w-100 mt-2"
+                      [disabled]="deletingDocId === card.document._id"
+                      (click)="deleteDocument(card)">
+                <span *ngIf="deletingDocId === card.document._id" class="spinner-border spinner-border-sm me-1"></span>
+                <i *ngIf="deletingDocId !== card.document._id" class="bi bi-trash me-1"></i>
+                Remove
+              </button>
+            </div>
+
+            <!-- View only (no upload) -->
+            <div *ngIf="!card.docType.isReadOnlyLink && !card.docType.agentCanUpload && card.document?.filePath">
+              <a [href]="getFileUrl(card.document!.filePath!)" target="_blank"
+                 class="btn btn-outline-secondary btn-sm w-100">
+                <i class="bi bi-eye me-1"></i>View Document
+              </a>
+            </div>
+            <div *ngIf="!card.docType.isReadOnlyLink && !card.docType.agentCanUpload && !card.document" class="text-center text-muted small py-2">
+              <i class="bi bi-info-circle me-1"></i>Uploaded by admin
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div *ngIf="!loading && docCards.length === 0" class="text-center py-5">
+    <i class="bi bi-folder2-open fs-1 text-muted"></i>
+    <p class="text-muted mt-2">No document types configured yet.</p>
+  </div>
+</div>

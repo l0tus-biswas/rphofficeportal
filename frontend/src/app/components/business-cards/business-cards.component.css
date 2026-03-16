@@ -1,0 +1,57 @@
+.business-cards-page {
+  min-height: calc(100vh - 70px);
+  background-color: #f8f9fa;
+}
+
+.page-header {
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 1rem;
+}
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.template-card {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.template-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+.card-img-wrapper {
+  height: 240px;
+  overflow: hidden;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.template-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.preview-placeholder {
+  width: 100%;
+}
+
+.disclaimer-box .alert {
+  border-radius: 10px;
+}
+
+.bg-light-info {
+  background-color: #f0f7ff !important;
+}
+
+@media (max-width: 575px) {
+  .card-img-wrapper {
+    height: 200px;
+  }
+}

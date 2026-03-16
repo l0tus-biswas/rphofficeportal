@@ -138,6 +138,15 @@ router.post('/users', validateRequest(schemas.createUser), logAction('CREATE_USE
     } catch (emailError) {
       console.error('Email failed:', emailError);
     }
+
+    // Notify the new user
+    Notification.createNotification({
+      userId: newUser._id,
+      type: 'user_created',
+      title: 'Welcome to ' + (process.env.APP_NAME || 'RHP Office'),
+      message: `Your account has been created by an administrator. Welcome, ${newUser.name}!`,
+      link: '/dashboard'
+    }, false).catch(() => {});
     
     sendResponse(res, 201, {
       message: 'User created successfully',
@@ -192,6 +201,14 @@ router.put('/users/:userId/activate', logAction('ACTIVATE_USER'), async (req, re
     user.isActive = true;
     user.updatedBy = req.user._id;
     await user.save();
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'user_activated',
+      title: 'Account Activated',
+      message: 'Your account has been activated by an administrator. You now have full access.',
+      link: '/dashboard'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: 'User activated successfully',
@@ -216,6 +233,14 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
     user.isActive = false;
     user.updatedBy = req.user._id;
     await user.save();
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'user_deactivated',
+      title: 'Account Deactivated',
+      message: 'Your account has been deactivated by an administrator. Please contact support if you have questions.',
+      link: '/dashboard'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: 'User deactivated successfully',
@@ -264,6 +289,14 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
     user.promotedAt = Date.now();
     user.promotedBy = req.user._id;
     await user.save();
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'user_promoted',
+      title: 'Level Updated',
+      message: `Your agent level has been changed from "${oldLevel}" to "${level}" by an administrator.`,
+      link: '/profile'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: `Agent level changed from ${oldLevel} to ${level}`,
@@ -364,7 +397,7 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
     await Subscription.deleteMany({ user: userId });
     
     // Delete Notification records
-    await Notification.deleteMany({ user: userId });
+    await Notification.deleteMany({ userId: userId });
     
     // Delete LicensingProgress records
     await LicensingProgress.deleteMany({ user: userId });
@@ -708,6 +741,64 @@ router.get('/payment-settings', async (req, res) => {
       monthlyPrice: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
       monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || '',
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/users/:userId/transfer
+// @desc    Transfer an agent to a new upline (recruiter)
+// @access  Private (Admin only)
+router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, res) => {
+  try {
+    const { newUplineId } = req.body;
+
+    if (!newUplineId) {
+      return sendResponse(res, 400, { message: 'newUplineId is required' });
+    }
+
+    const agent = await User.findById(req.params.userId);
+    if (!agent) return sendResponse(res, 404, { message: 'Agent not found' });
+
+    if (agent._id.toString() === newUplineId) {
+      return sendResponse(res, 400, { message: 'Agent cannot be transferred to themselves' });
+    }
+
+    const newUpline = await User.findById(newUplineId);
+    if (!newUpline) return sendResponse(res, 404, { message: 'New upline user not found' });
+
+    const oldUplineId = agent.referredBy ? agent.referredBy.toString() : null;
+
+    // 1. Remove agent from old upline's children array
+    if (oldUplineId) {
+      await User.findByIdAndUpdate(oldUplineId, {
+        $pull: { children: agent._id }
+      });
+    }
+
+    // 2. Add agent to new upline's children array
+    await User.findByIdAndUpdate(newUplineId, {
+      $addToSet: { children: agent._id }
+    });
+
+    // 3. Update agent's referredBy
+    agent.referredBy = newUplineId;
+    await agent.save();
+
+    Notification.createNotification({
+      userId: agent._id,
+      type: 'user_transferred',
+      title: 'Upline Transfer',
+      message: `Your upline has been changed to ${newUpline.name} by an administrator.`,
+      link: '/profile'
+    }, false).catch(() => {});
+
+    // Audit logging handled by logAction('TRANSFER_AGENT') middleware on this route
+
+    sendResponse(res, 200, {
+      message: `${agent.name} transferred to ${newUpline.name} successfully`,
+      agent: await User.findById(agent._id).select('-password').populate('referredBy', 'name email')
     });
   } catch (error) {
     errorResponse(res, error);

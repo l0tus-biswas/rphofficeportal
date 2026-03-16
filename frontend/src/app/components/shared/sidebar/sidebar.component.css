@@ -1,5 +1,141 @@
+:host {
+  display: contents;
+}
+
 .sidebar {
-  min-height: calc(100vh - 56px);
-  background-color: #fff;
-  border-right: 1px solid #e0e0e0;
+  width: 240px;
+  min-width: 240px;
+  min-height: 100vh;
+  background: #1a1f2e;
+  color: #c9d1e0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Brand */
+.sidebar-brand {
+  background: #151929;
+  min-height: 60px;
+}
+
+.brand-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
+.brand-name {
+  color: #fff;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  background: #4f6ef7;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Nav area */
+.sidebar-nav {
+  height: 0; /* flex-grow overrides this */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.nav-link {
+  color: #b0b8cc;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+
+.nav-link.active {
+  background: #4f6ef7;
+  color: #fff;
+  font-weight: 600;
+}
+
+.text-muted {
+  color: #6c7a96 !important;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-left: 0.75rem;
+}
+
+hr {
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Footer */
+.sidebar-footer {
+  background: #151929;
+  color: #c9d1e0;
+}
+
+.sidebar-icon-btn {
+  background: transparent;
+  border: none;
+  color: #b0b8cc;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 1rem;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-icon-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #dc3545;
+  color: #fff;
+  border-radius: 50px;
+  font-size: 0.6rem;
+  padding: 1px 4px;
+  font-weight: 700;
+  line-height: 1.2;
 }

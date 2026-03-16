@@ -1,4 +1,3 @@
-<app-navbar></app-navbar>
 
 <div class="container-fluid">
   <div class="row">
@@ -74,6 +73,7 @@
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Upline</th>
                   <th>Referral Code</th>
                   <th>Status</th>
                   <th>Joined</th>
@@ -104,6 +104,16 @@
                     </small>
                   </td>
                   <td>
+                    <ng-container *ngIf="user.role === 'agent'">
+                      <span *ngIf="user.referredBy?.name" class="d-flex align-items-center gap-1">
+                        <i class="bi bi-person-up text-muted"></i>
+                        <small>{{ user.referredBy.name }}</small>
+                      </span>
+                      <span *ngIf="!user.referredBy?.name" class="text-muted small">—</span>
+                    </ng-container>
+                    <span *ngIf="user.role !== 'agent'" class="text-muted small">—</span>
+                  </td>
+                  <td>
                     <code *ngIf="user.referralCode" class="bg-light p-1 rounded">{{ user.referralCode }}</code>
                     <span *ngIf="!user.referralCode" class="text-muted">-</span>
                   </td>
@@ -131,6 +141,12 @@
                         (click)="toggleUserStatus(user)" 
                         [title]="user.isActive ? 'Deactivate' : 'Activate'">
                         <i class="bi" [ngClass]="user.isActive ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                      </button>
+                      <button *ngIf="user.role === 'agent'"
+                        class="btn btn-outline-secondary"
+                        (click)="openTransferModal(user)"
+                        title="Transfer to different upline">
+                        <i class="bi bi-arrows-move"></i>
                       </button>
                       <button class="btn btn-outline-danger" (click)="deleteUser(user)" title="Delete">
                         <i class="bi bi-trash"></i>
@@ -235,3 +251,70 @@
   </div>
 </div>
 <div class="modal-backdrop fade" [class.show]="showEditModal" *ngIf="showEditModal"></div>
+
+<!-- Transfer Agent Modal -->
+<div class="modal fade show" [class.d-block]="showTransferModal" tabindex="-1" *ngIf="showTransferModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-arrows-move me-2"></i>Transfer Agent Upline
+        </h5>
+        <button type="button" class="btn-close" (click)="closeTransferModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-light border mb-3 py-2 px-3">
+          <div class="small text-muted mb-1">Transferring agent:</div>
+          <div class="fw-bold">{{ transferUser?.name }}</div>
+          <div class="small mt-2 text-muted">Current upline:</div>
+          <div class="fw-semibold" *ngIf="transferUser?.referredBy?.name">
+            <i class="bi bi-person-up me-1 text-primary"></i>{{ transferUser.referredBy.name }}
+            <small class="text-muted">({{ transferUser.referredBy.email }})</small>
+          </div>
+          <div class="text-muted small fst-italic" *ngIf="!transferUser?.referredBy?.name">No current upline assigned</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Select new upline</label>
+          <input type="text" class="form-control" placeholder="Name or email..."
+                 [(ngModel)]="transferSearchTerm" (ngModelChange)="filterUplines()">
+        </div>
+
+        <div class="list-group" style="max-height: 280px; overflow-y: auto;">
+          <button *ngFor="let u of filteredUplines"
+                  type="button"
+                  class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                  [class.active]="transferNewUplineId === u._id"
+                  (click)="transferNewUplineId = u._id">
+            <i class="bi bi-person-circle fs-5"></i>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">{{ u.name }}
+                <span class="badge ms-1 text-capitalize"
+                  [class.bg-primary]="u.role === 'agent'"
+                  [class.bg-danger]="u.role === 'admin'"
+                  [class.bg-secondary]="u.role !== 'agent' && u.role !== 'admin'"
+                  style="font-size:0.65rem">{{ u.role }}</span>
+              </div>
+              <small [class.text-light]="transferNewUplineId === u._id" [class.text-muted]="transferNewUplineId !== u._id">{{ u.email }}</small>
+            </div>
+            <span *ngIf="transferNewUplineId === u._id" class="badge bg-white text-primary">Selected</span>
+          </button>
+          <div *ngIf="filteredUplines.length === 0" class="list-group-item text-muted text-center py-3">
+            No agents match your search
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeTransferModal()">Cancel</button>
+        <button type="button" class="btn btn-primary"
+                [disabled]="!transferNewUplineId || transferring"
+                (click)="confirmTransfer()">
+          <span *ngIf="transferring" class="spinner-border spinner-border-sm me-1"></span>
+          <i *ngIf="!transferring" class="bi bi-arrows-move me-1"></i>
+          Confirm Transfer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade show" *ngIf="showTransferModal"></div>

@@ -28,9 +28,9 @@ export class NotificationsComponent implements OnInit {
     this.loading = true;
     this.notificationService.getNotifications(this.page, 20, this.showUnreadOnly).subscribe({
       next: (response) => {
-        this.notifications = response?.data?.notifications || [];
-        this.totalPages = response?.data?.pagination?.pages || 1;
-        this.unreadCount = response?.data?.unreadCount || 0;
+        this.notifications = response?.notifications ?? response?.data?.notifications ?? [];
+        this.totalPages = response?.pagination?.pages ?? response?.data?.pagination?.pages ?? 1;
+        this.unreadCount = response?.unreadCount ?? response?.data?.unreadCount ?? 0;
         this.loading = false;
       },
       error: (error) => {
@@ -123,28 +123,82 @@ export class NotificationsComponent implements OnInit {
 
   getNotificationIcon(type: string): string {
     const icons: any = {
-      'recruit_added': 'bi-person-plus-fill',
-      'downline_recruit': 'bi-people-fill',
-      'payment_completed': 'bi-check-circle-fill',
-      'payment_failed': 'bi-x-circle-fill',
-      'apa_approved': 'bi-check-circle-fill',
-      'apa_rejected': 'bi-x-circle-fill',
-      'onboarding_approved': 'bi-check-circle-fill',
-      'onboarding_rejected': 'bi-x-circle-fill',
-      'license_submitted': 'bi-file-earmark-text-fill',
-      'license_approved': 'bi-award-fill',
-      'production_submitted': 'bi-graph-up-arrow',
-      'training_completed': 'bi-mortarboard-fill',
-      'system_announcement': 'bi-megaphone-fill'
+      // Activity
+      'login':                  'bi-box-arrow-in-right',
+      'profile_updated':        'bi-person-check-fill',
+      'password_changed':       'bi-shield-lock-fill',
+      'password_reset':         'bi-key-fill',
+      // Recruitment
+      'recruit_added':          'bi-person-plus-fill',
+      'downline_recruit':       'bi-people-fill',
+      // Payments
+      'payment_completed':      'bi-check-circle-fill',
+      'payment_failed':         'bi-x-circle-fill',
+      'subscription_updated':   'bi-arrow-repeat',
+      'subscription_canceled':  'bi-slash-circle-fill',
+      // APA
+      'apa_submitted':          'bi-file-earmark-arrow-up-fill',
+      'apa_approved':           'bi-patch-check-fill',
+      'apa_rejected':           'bi-patch-exclamation-fill',
+      // Onboarding
+      'onboarding_submitted':   'bi-cloud-upload-fill',
+      'onboarding_step_updated':'bi-file-earmark-text-fill',
+      'onboarding_approved':    'bi-check-circle-fill',
+      'onboarding_rejected':    'bi-x-circle-fill',
+      // Licensing
+      'license_submitted':      'bi-file-earmark-text-fill',
+      'license_approved':       'bi-award-fill',
+      // Production
+      'production_submitted':   'bi-graph-up-arrow',
+      'production_reviewed':    'bi-clipboard-check-fill',
+      // Training
+      'training_completed':     'bi-mortarboard-fill',
+      // Admin actions
+      'user_created':           'bi-person-fill-add',
+      'user_activated':         'bi-person-check-fill',
+      'user_deactivated':       'bi-person-fill-slash',
+      'user_promoted':          'bi-trophy-fill',
+      'user_transferred':       'bi-arrow-left-right',
+      // Misc
+      'system_announcement':    'bi-megaphone-fill',
+      'promotion_eligible':     'bi-star-fill'
     };
     return icons[type] || 'bi-bell-fill';
   }
 
   getNotificationColor(type: string): string {
-    if (type.includes('approved') || type.includes('completed')) return 'success';
-    if (type.includes('rejected') || type.includes('failed')) return 'danger';
-    if (type.includes('recruit') || type.includes('downline')) return 'primary';
-    return 'info';
+    const colorMap: any = {
+      'login':                  'secondary',
+      'profile_updated':        'info',
+      'password_changed':       'warning',
+      'password_reset':         'warning',
+      'recruit_added':          'primary',
+      'downline_recruit':       'primary',
+      'payment_completed':      'success',
+      'payment_failed':         'danger',
+      'subscription_updated':   'info',
+      'subscription_canceled':  'danger',
+      'apa_submitted':          'info',
+      'apa_approved':           'success',
+      'apa_rejected':           'danger',
+      'onboarding_submitted':   'info',
+      'onboarding_step_updated':'warning',
+      'onboarding_approved':    'success',
+      'onboarding_rejected':    'danger',
+      'license_submitted':      'info',
+      'license_approved':       'success',
+      'production_submitted':   'primary',
+      'production_reviewed':    'success',
+      'training_completed':     'success',
+      'user_created':           'primary',
+      'user_activated':         'success',
+      'user_deactivated':       'danger',
+      'user_promoted':          'warning',
+      'user_transferred':       'info',
+      'system_announcement':    'dark',
+      'promotion_eligible':     'warning'
+    };
+    return colorMap[type] || 'info';
   }
 
   getTimeAgo(date: string): string {

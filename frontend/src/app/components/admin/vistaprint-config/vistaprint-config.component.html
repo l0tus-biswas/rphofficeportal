@@ -1,0 +1,200 @@
+
+<div class="vistaprint-config-page py-4">
+  <div class="container">
+
+    <!-- Page Header -->
+    <div class="page-header mb-4">
+      <h2 class="page-title mb-1">
+        <i class="bi bi-card-heading me-2 text-primary"></i>
+        Vistaprint Configuration
+      </h2>
+      <p class="text-muted mb-0">
+        Manage business card template links and preview images for the agent portal.
+      </p>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3 text-muted">Loading configuration...</p>
+    </div>
+
+    <!-- Global Error -->
+    <div *ngIf="!loading && error" class="alert alert-danger d-flex align-items-center mb-4">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+    </div>
+
+    <div *ngIf="!loading" class="row g-4">
+
+      <!-- ── URL / Affiliate Configuration Card ── -->
+      <div class="col-12 col-lg-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-semibold">
+              <i class="bi bi-link-45deg me-2 text-primary"></i>
+              Order Links & Affiliate Settings
+            </h5>
+          </div>
+          <div class="card-body p-4">
+
+            <!-- Success Message -->
+            <div *ngIf="successMessage" class="alert alert-success d-flex align-items-center">
+              <i class="bi bi-check-circle-fill me-2"></i>{{ successMessage }}
+            </div>
+
+            <!-- English URL -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <span class="badge bg-primary me-2">EN</span>English Template URL
+              </label>
+              <input
+                type="url"
+                class="form-control"
+                [(ngModel)]="englishUrl"
+                placeholder="https://www.vistaprint.com/...">
+              <div class="form-text">
+                Full Vistaprint product URL for the English business card template
+                (include any affiliate parameters).
+              </div>
+            </div>
+
+            <!-- Spanish URL -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <span class="badge bg-success me-2">ES</span>Spanish Template URL
+              </label>
+              <input
+                type="url"
+                class="form-control"
+                [(ngModel)]="spanishUrl"
+                placeholder="https://www.vistaprint.com/...">
+              <div class="form-text">
+                Full Vistaprint product URL for the Spanish business card template
+                (include any affiliate parameters).
+              </div>
+            </div>
+
+            <!-- Affiliate ID -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-tag me-1"></i>Affiliate ID
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                [(ngModel)]="affiliateId"
+                placeholder="e.g. rhp-affiliate-001">
+              <div class="form-text">
+                Your Vistaprint affiliate tracking ID (obtain from the Vistaprint affiliate dashboard).
+                Account: Rhpinsurance&#64;gmail.com
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div class="d-flex justify-content-end">
+              <button
+                class="btn btn-primary px-4"
+                (click)="saveConfig()"
+                [disabled]="saving">
+                <span *ngIf="saving" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                <i *ngIf="!saving" class="bi bi-floppy-fill me-2"></i>
+                {{ saving ? 'Saving…' : 'Save Configuration' }}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Preview Image Uploads ── -->
+      <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-semibold">
+              <i class="bi bi-image me-2 text-primary"></i>
+              Template Previews
+            </h5>
+          </div>
+          <div class="card-body p-4">
+
+            <!-- English Preview -->
+            <div class="preview-section mb-4">
+              <p class="fw-semibold text-primary mb-2">
+                <span class="badge bg-primary me-1">EN</span> English Preview
+              </p>
+
+              <div class="preview-thumb-wrapper mb-2">
+                <img
+                  *ngIf="config?.englishPreview"
+                  [src]="getPreviewUrl(config!.englishPreview)"
+                  class="img-fluid rounded border preview-thumb"
+                  alt="English Preview">
+                <div *ngIf="!config?.englishPreview" class="preview-empty rounded border d-flex align-items-center justify-content-center text-muted">
+                  <div class="text-center p-3">
+                    <i class="bi bi-image-fill display-6 opacity-40"></i>
+                    <p class="small mb-0 mt-1">No preview</p>
+                  </div>
+                </div>
+              </div>
+
+              <div *ngIf="uploadSuccessEnglish" class="alert alert-success alert-sm py-1 px-2 mb-2 small">
+                <i class="bi bi-check-circle me-1"></i>{{ uploadSuccessEnglish }}
+              </div>
+              <div *ngIf="uploadErrorEnglish" class="alert alert-danger alert-sm py-1 px-2 mb-2 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ uploadErrorEnglish }}
+              </div>
+
+              <label class="btn btn-outline-primary btn-sm w-100" [class.disabled]="uploadingEnglish">
+                <span *ngIf="uploadingEnglish" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <i *ngIf="!uploadingEnglish" class="bi bi-upload me-1"></i>
+                {{ uploadingEnglish ? 'Uploading…' : 'Upload English Preview' }}
+                <input type="file" accept="image/*" class="d-none" (change)="uploadPreview($event, 'english')" [disabled]="uploadingEnglish">
+              </label>
+            </div>
+
+            <hr>
+
+            <!-- Spanish Preview -->
+            <div class="preview-section">
+              <p class="fw-semibold text-success mb-2">
+                <span class="badge bg-success me-1">ES</span> Spanish Preview
+              </p>
+
+              <div class="preview-thumb-wrapper mb-2">
+                <img
+                  *ngIf="config?.spanishPreview"
+                  [src]="getPreviewUrl(config!.spanishPreview)"
+                  class="img-fluid rounded border preview-thumb"
+                  alt="Spanish Preview">
+                <div *ngIf="!config?.spanishPreview" class="preview-empty rounded border d-flex align-items-center justify-content-center text-muted">
+                  <div class="text-center p-3">
+                    <i class="bi bi-image-fill display-6 opacity-40"></i>
+                    <p class="small mb-0 mt-1">No preview</p>
+                  </div>
+                </div>
+              </div>
+
+              <div *ngIf="uploadSuccessSpanish" class="alert alert-success alert-sm py-1 px-2 mb-2 small">
+                <i class="bi bi-check-circle me-1"></i>{{ uploadSuccessSpanish }}
+              </div>
+              <div *ngIf="uploadErrorSpanish" class="alert alert-danger alert-sm py-1 px-2 mb-2 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ uploadErrorSpanish }}
+              </div>
+
+              <label class="btn btn-outline-success btn-sm w-100" [class.disabled]="uploadingSpanish">
+                <span *ngIf="uploadingSpanish" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <i *ngIf="!uploadingSpanish" class="bi bi-upload me-1"></i>
+                {{ uploadingSpanish ? 'Uploading…' : 'Upload Spanish Preview' }}
+                <input type="file" accept="image/*" class="d-none" (change)="uploadPreview($event, 'spanish')" [disabled]="uploadingSpanish">
+              </label>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

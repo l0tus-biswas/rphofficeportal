@@ -1,0 +1,66 @@
+<div *ngIf="!loading && !allComplete" class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-bottom py-3 px-4">
+    <div class="d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-list-check text-primary fs-5"></i>
+        <h6 class="mb-0 fw-semibold">Getting Started Checklist</h6>
+      </div>
+      <span class="badge bg-primary rounded-pill">{{ completedCount }}/{{ checklist.length }}</span>
+    </div>
+    <!-- Progress bar -->
+    <div class="progress mt-2" style="height: 6px;">
+      <div class="progress-bar bg-success transition-width"
+           role="progressbar"
+           [style.width.%]="progressPercent"
+           [attr.aria-valuenow]="progressPercent"
+           aria-valuemin="0"
+           aria-valuemax="100">
+      </div>
+    </div>
+  </div>
+  <ul class="list-group list-group-flush">
+    <li *ngFor="let item of checklist"
+        class="list-group-item d-flex align-items-center gap-3 px-4 py-3"
+        [class.cursor-pointer]="item.link && !item.completed"
+        (click)="item.link && !item.completed ? navigate(item) : null">
+
+      <!-- Status icon -->
+      <span class="flex-shrink-0">
+        <i *ngIf="item.completed" class="bi bi-check-circle-fill text-success fs-5"></i>
+        <i *ngIf="!item.completed" class="bi bi-circle text-secondary fs-5"></i>
+      </span>
+
+      <!-- Label -->
+      <span class="flex-grow-1 small"
+            [class.text-decoration-line-through]="item.completed"
+            [class.text-muted]="item.completed"
+            [class.fw-semibold]="!item.completed">
+        {{ item.label }}
+      </span>
+
+      <!-- Action link: external URL -->
+      <a *ngIf="item.link && !item.completed && isExternal(item.link)"
+         [href]="item.link" target="_blank" rel="noopener"
+         class="btn btn-sm btn-outline-primary py-0 px-2 small"
+         (click)="$event.stopPropagation()">
+        Go <i class="bi bi-arrow-right ms-1"></i>
+      </a>
+      <!-- Action link: internal route -->
+      <a *ngIf="item.link && !item.completed && !isExternal(item.link)"
+         [routerLink]="item.link"
+         class="btn btn-sm btn-outline-primary py-0 px-2 small"
+         (click)="$event.stopPropagation()">
+        Go <i class="bi bi-arrow-right ms-1"></i>
+      </a>
+      <span *ngIf="!item.link && !item.completed"
+            class="text-muted small">Pending</span>
+    </li>
+  </ul>
+</div>
+
+<div *ngIf="loading" class="card border-0 shadow-sm mb-4">
+  <div class="card-body text-center py-3">
+    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+    <span class="ms-2 text-muted small">Loading checklist...</span>
+  </div>
+</div>

@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
+const Notification = require('../models/Notification');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const {
@@ -271,14 +272,21 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 
     const isSetupFeePayment = payment.type === 'setup_fee' || payment.type === 'one-time';
 
-    if (isSetupFeePayment) {
-      const user = await User.findById(payment.user);
-      if (user) {
+    const user = await User.findById(payment.user);
+    if (user) {
+      if (isSetupFeePayment) {
         user.oneTimePaymentCompleted = true;
         user.oneTimePaymentDate = new Date();
         user.lastPaymentDate = new Date();
         await user.save();
       }
+      Notification.createNotification({
+        userId: payment.user,
+        type: 'payment_completed',
+        title: 'Payment Successful',
+        message: `Your payment of $${(payment.amount / 100).toFixed(2)} was processed successfully.`,
+        link: '/transactions'
+      }, false).catch(() => {});
     }
   }
 }
@@ -289,6 +297,14 @@ async function handlePaymentIntentFailed(paymentIntent) {
   if (payment) {
     payment.status = 'failed';
     await payment.save();
+
+    Notification.createNotification({
+      userId: payment.user,
+      type: 'payment_failed',
+      title: 'Payment Failed',
+      message: `A payment of $${(payment.amount / 100).toFixed(2)} could not be processed. Please update your payment method.`,
+      link: '/transactions'
+    }, false).catch(() => {});
   }
 }
 
@@ -328,12 +344,19 @@ async function handleSubscriptionDeleted(subscription) {
     sub.endedAt = new Date();
     await sub.save();
 
-    // Update user
     const user = await User.findById(sub.user);
     if (user) {
       user.subscriptionStatus = 'canceled';
       user.paymentAccessEnabled = false;
       await user.save();
+
+      Notification.createNotification({
+        userId: sub.user,
+        type: 'subscription_canceled',
+        title: 'Subscription Canceled',
+        message: 'Your subscription has been canceled. Your access will end at the current billing period.',
+        link: '/transactions'
+      }, false).catch(() => {});
     }
   }
 }
@@ -361,6 +384,14 @@ async function handleInvoicePaid(invoice) {
         user.lastPaymentDate = new Date();
         user.paymentAccessEnabled = true;
         await user.save();
+
+        Notification.createNotification({
+          userId: sub.user,
+          type: 'payment_completed',
+          title: 'Subscription Payment Received',
+          message: `Your monthly subscription payment of $${(invoice.amount_paid / 100).toFixed(2)} was processed successfully.`,
+          link: '/transactions'
+        }, false).catch(() => {});
       }
     }
   }
@@ -376,6 +407,14 @@ async function handleInvoicePaymentFailed(invoice) {
       if (user) {
         user.paymentAccessEnabled = false;
         await user.save();
+
+        Notification.createNotification({
+          userId: sub.user,
+          type: 'payment_failed',
+          title: 'Subscription Payment Failed',
+          message: 'Your subscription payment failed. Please update your payment method to maintain access.',
+          link: '/transactions'
+        }, false).catch(() => {});
       }
     }
   }

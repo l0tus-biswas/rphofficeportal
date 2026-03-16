@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const APAApplication = require('../models/APAApplication');
+const Notification = require('../models/Notification');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 
@@ -112,6 +113,16 @@ router.put('/apa-applications/:id/approve', async (req, res) => {
     application.reviewedAt = new Date();
     application.reviewedBy = req.user._id;
     await application.save();
+
+    if (application.userId) {
+      Notification.createNotification({
+        userId: application.userId,
+        type: 'apa_approved',
+        title: 'APA Application Approved',
+        message: 'Congratulations! Your APA application has been approved and is now active.',
+        link: '/profile'
+      }, false).catch(() => {});
+    }
     
     sendResponse(res, 200, {
       success: true,
@@ -147,8 +158,16 @@ router.put('/apa-applications/:id/reject', async (req, res) => {
     application.reviewedAt = new Date();
     application.reviewedBy = req.user._id;
     await application.save();
-    
-    // TODO: Send rejection email to applicant
+
+    if (application.userId) {
+      Notification.createNotification({
+        userId: application.userId,
+        type: 'apa_rejected',
+        title: 'APA Application Rejected',
+        message: `Your APA application was rejected. Reason: ${reason}`,
+        link: '/profile'
+      }, false).catch(() => {});
+    }
     
     sendResponse(res, 200, {
       success: true,

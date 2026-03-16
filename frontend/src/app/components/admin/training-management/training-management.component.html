@@ -1,4 +1,3 @@
-<app-navbar></app-navbar>
 
 <div class="container-fluid">
   <div class="row">
@@ -36,6 +35,8 @@
               <select class="form-select" [(ngModel)]="typeFilter" (change)="onFilterChange()">
                 <option value="all">All Types</option>
                 <option value="video">Videos</option>
+                <option value="youtube">YouTube</option>
+                <option value="loom">Loom</option>
                 <option value="document">Documents</option>
                 <option value="link">Links</option>
                 <option value="article">Articles</option>
@@ -109,6 +110,13 @@
                   <i class="bi bi-box-arrow-up-right me-1"></i>View Material
                 </a>
               </div>
+
+              <!-- PDF Attachment badge/download -->
+              <div *ngIf="material.pdfAttachment?.filePath" class="mb-3">
+                <a [href]="getFileUrl(material.pdfAttachment.filePath)" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger w-100">
+                  <i class="bi bi-file-earmark-pdf me-1"></i>PDF: {{ material.pdfAttachment.fileName }}
+                </a>
+              </div>
               
               <div class="d-flex gap-2">
                 <button class="btn btn-sm btn-outline-secondary flex-grow-1" (click)="openEditModal(material)">
@@ -166,6 +174,8 @@
               <label class="form-label">Type <span class="text-danger">*</span></label>
               <select class="form-select" formControlName="type">
                 <option value="video">Video</option>
+                <option value="youtube">YouTube</option>
+                <option value="loom">Loom</option>
                 <option value="document">Document</option>
                 <option value="link">Link</option>
                 <option value="article">Article</option>
@@ -187,7 +197,7 @@
             <div *ngIf="f['url'].invalid && f['url'].touched" class="invalid-feedback">
               Valid URL is required
             </div>
-            <small class="text-muted">YouTube link, document URL, or external link</small>
+            <small class="text-muted">YouTube, Loom, Vimeo, or any video/document URL</small>
           </div>
 
           <div class="mb-3">
@@ -196,11 +206,20 @@
               placeholder="e.g., 15 minutes, 1 hour">
             <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
           </div>
+
+          <div class="mb-3">
+            <label class="form-label">
+              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachment
+              <small class="text-muted ms-2">(Optional)</small>
+            </label>
+            <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
+            <small class="text-muted">Upload a PDF resource to accompany this material (max 20 MB)</small>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" (click)="closeModals()">Cancel</button>
-          <button type="submit" class="btn btn-primary" [disabled]="loading || trainingForm.invalid">
-            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+          <button type="submit" class="btn btn-primary" [disabled]="loading || pdfUploading || trainingForm.invalid">
+            <span *ngIf="loading || pdfUploading" class="spinner-border spinner-border-sm me-2"></span>
             <i class="bi bi-plus-circle me-1"></i>Create Material
           </button>
         </div>
@@ -236,6 +255,8 @@
               <label class="form-label">Type</label>
               <select class="form-select" formControlName="type">
                 <option value="video">Video</option>
+                <option value="youtube">YouTube</option>
+                <option value="loom">Loom</option>
                 <option value="document">Document</option>
                 <option value="link">Link</option>
                 <option value="article">Article</option>
@@ -251,7 +272,9 @@
 
           <div class="mb-3">
             <label class="form-label">URL</label>
-            <input type="url" class="form-control" formControlName="url">
+            <input type="url" class="form-control" formControlName="url"
+              placeholder="https://...">
+            <small class="text-muted">YouTube, Loom, Vimeo, or any video/document URL</small>
           </div>
 
           <div class="mb-3">
@@ -259,11 +282,33 @@
             <input type="text" class="form-control" formControlName="duration">
             <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
           </div>
+
+          <!-- PDF Attachment section for Edit modal -->
+          <div class="mb-3">
+            <label class="form-label">
+              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachment
+            </label>
+            <!-- Existing PDF -->
+            <div *ngIf="selectedMaterial?.pdfAttachment?.filePath" class="d-flex align-items-center gap-2 mb-2 p-2 bg-light rounded">
+              <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
+              <span class="small flex-grow-1">{{ selectedMaterial.pdfAttachment.fileName }}</span>
+              <a [href]="getFileUrl(selectedMaterial.pdfAttachment.filePath)" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-download"></i> View
+              </a>
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removePdf(selectedMaterial)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+            <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
+            <small class="text-muted">
+              {{ selectedMaterial?.pdfAttachment?.filePath ? 'Upload a new PDF to replace the current one' : 'Attach a PDF resource (max 20 MB)' }}
+            </small>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" (click)="closeModals()">Cancel</button>
-          <button type="submit" class="btn btn-warning" [disabled]="loading || trainingForm.invalid">
-            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+          <button type="submit" class="btn btn-warning" [disabled]="loading || pdfUploading || trainingForm.invalid">
+            <span *ngIf="loading || pdfUploading" class="spinner-border spinner-border-sm me-2"></span>
             <i class="bi bi-save me-1"></i>Save Changes
           </button>
         </div>

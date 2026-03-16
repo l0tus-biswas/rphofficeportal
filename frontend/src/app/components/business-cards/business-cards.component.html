@@ -1,0 +1,137 @@
+
+<div class="business-cards-page">
+  <div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header mb-4">
+      <h2 class="page-title mb-1">
+        <i class="bi bi-card-heading me-2 text-primary"></i>
+        Business Cards
+      </h2>
+      <p class="text-muted mb-0">
+        Order professional business cards through our Vistaprint partner program.
+      </p>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-3 text-muted">Loading business card options...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="!loading && error" class="alert alert-danger d-flex align-items-center">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      {{ error }}
+    </div>
+
+    <!-- Cards -->
+    <div *ngIf="!loading && !error && config" class="row g-4 justify-content-center">
+
+      <!-- English Template Card -->
+      <div class="col-12 col-md-6 col-lg-5">
+        <div class="card template-card h-100 shadow-sm border-0">
+          <!-- Preview Image -->
+          <div class="card-img-wrapper bg-light d-flex align-items-center justify-content-center">
+            <img
+              *ngIf="config?.englishPreview"
+              [src]="getPreviewUrl(config!.englishPreview)"
+              class="card-img-top template-preview"
+              alt="English Business Card Design">
+            <div *ngIf="!config?.englishPreview" class="preview-placeholder text-center p-5">
+              <i class="bi bi-card-heading display-1 text-muted opacity-50"></i>
+              <p class="text-muted mt-2 mb-0 small">Preview not available</p>
+            </div>
+          </div>
+
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3">
+              <span class="badge bg-primary mb-2">English</span>
+              <h5 class="card-title">RHP Insurance Business Card</h5>
+              <p class="card-text text-muted small">
+                Professional English-language business card featuring the RHP Insurance branding.
+                Printed and shipped by Vistaprint.
+              </p>
+            </div>
+
+            <div class="mt-auto">
+              <button
+                class="btn btn-primary w-100"
+                [disabled]="!hasEnglishUrl"
+                (click)="orderNow('english')">
+                <i class="bi bi-bag-check me-2"></i>
+                <span *ngIf="hasEnglishUrl">Order Now</span>
+                <span *ngIf="!hasEnglishUrl">Coming Soon</span>
+              </button>
+              <small *ngIf="!hasEnglishUrl" class="text-muted d-block text-center mt-1">
+                Link not yet configured
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Spanish Template Card -->
+      <div class="col-12 col-md-6 col-lg-5">
+        <div class="card template-card h-100 shadow-sm border-0">
+          <!-- Preview Image -->
+          <div class="card-img-wrapper bg-light d-flex align-items-center justify-content-center">
+            <img
+              *ngIf="config?.spanishPreview"
+              [src]="getPreviewUrl(config!.spanishPreview)"
+              class="card-img-top template-preview"
+              alt="Spanish Business Card Design">
+            <div *ngIf="!config?.spanishPreview" class="preview-placeholder text-center p-5">
+              <i class="bi bi-card-heading display-1 text-muted opacity-50"></i>
+              <p class="text-muted mt-2 mb-0 small">Preview not available</p>
+            </div>
+          </div>
+
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3">
+              <span class="badge bg-success mb-2">Spanish</span>
+              <h5 class="card-title">Tarjeta de Presentación RHP</h5>
+              <p class="card-text text-muted small">
+                Tarjeta de presentación en español con la marca oficial de RHP Insurance.
+                Impresa y enviada por Vistaprint.
+              </p>
+            </div>
+
+            <div class="mt-auto">
+              <button
+                class="btn btn-success w-100"
+                [disabled]="!hasSpanishUrl"
+                (click)="orderNow('spanish')">
+                <i class="bi bi-bag-check me-2"></i>
+                <span *ngIf="hasSpanishUrl">Order Now</span>
+                <span *ngIf="!hasSpanishUrl">Coming Soon</span>
+              </button>
+              <small *ngIf="!hasSpanishUrl" class="text-muted d-block text-center mt-1">
+                Link not yet configured
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Disclaimer -->
+    <div *ngIf="!loading && !error" class="disclaimer-box mt-5">
+      <div class="alert alert-info d-flex align-items-start border-0 bg-light-info">
+        <i class="bi bi-info-circle-fill me-3 mt-1 text-info flex-shrink-0"></i>
+        <div>
+          <strong>Ordering Information</strong>
+          <p class="mb-0 mt-1 small text-muted">
+            Purchases are processed securely through Vistaprint. Clicking "Order Now" will open
+            the Vistaprint website in a new tab where you can customize and complete your order.
+            RHP Insurance is a Vistaprint affiliate partner.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

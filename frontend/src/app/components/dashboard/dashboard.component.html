@@ -1,4 +1,3 @@
-<app-navbar></app-navbar>
 
 <div class="dashboard-container">
   <div class="container-fluid p-4">
@@ -31,6 +30,21 @@
         </div>
       </div>
       
+      <!-- Getting Started Checklist (Agent Only) -->
+      <div *ngIf="authService.isAgent()">
+        <app-next-steps-checklist></app-next-steps-checklist>
+      </div>
+
+      <!-- Promotion Tracker (Agent Only) -->
+      <div *ngIf="authService.isAgent()">
+        <app-promotion-tracker></app-promotion-tracker>
+      </div>
+
+      <!-- ACA Client Volume Tracker (Agent Only) -->
+      <div *ngIf="authService.isAgent()">
+        <app-aca-tracker></app-aca-tracker>
+      </div>
+
       <!-- Licensing Countdown Timer (Agent Only) -->
       <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress && !licensingProgress.isLicensed && daysRemaining > 0">
         <div class="col-12">
@@ -302,7 +316,7 @@
             <div class="col-md-4">
               <div class="card action-card">
                 <div class="card-body text-center">
-                  <i class="bi bi-journals-fill display-4 text-success mb-3"></i>
+                  <i class="bi bi-mortarboard-fill display-4 text-success mb-3"></i>
                   <h5 class="card-title">{{ "Training Management" }}</h5>
                   <p class="text-muted small mb-3">{{ "Manage training materials and courses" }}</p>
                   <a routerLink="/admin/training" class="btn btn-success w-100">

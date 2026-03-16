@@ -1,0 +1,192 @@
+<!-- Promotion Tracker Widget -->
+<div class="card shadow-sm mb-4" *ngIf="!loading && data?.hasData">
+  <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+    <h5 class="mb-0 fw-semibold">
+      <i class="bi bi-bar-chart-steps me-2 text-primary"></i>Promotion Tracker
+    </h5>
+    <div class="d-flex align-items-center">
+      <label class="form-label mb-0 me-2 small text-muted">Window:</label>
+      <select class="form-select form-select-sm" style="width: auto"
+              [(ngModel)]="selectedWindow" (ngModelChange)="onWindowChange()">
+        <option *ngFor="let opt of windowOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    <!-- ─── Promotion Ready Banner ─── -->
+    <div *ngIf="data!.promotionReady && data!.nextLevel"
+         class="alert alert-success d-flex align-items-center gap-2 mb-4 py-2">
+      <i class="bi bi-trophy-fill fs-5 flex-shrink-0"></i>
+      <div>
+        <strong>Promotion threshold met!</strong>
+        You qualify for <strong>{{ formatLevel(data!.nextLevel.name) }} ({{ data!.nextLevel.commissionPercent }}%)</strong>
+        via the <strong>{{ data!.producerMet && data!.builderMet ? 'Producer &amp; Builder tracks' : (data!.producerMet ? 'Producer track' : 'Builder track') }}</strong>.
+        Your upline admin has been notified.
+      </div>
+    </div>
+
+    <!-- ─── Track Cards (each with its own arrow strip) ─── -->
+    <div class="row g-4" *ngIf="!data!.isMaxLevel">
+
+      <!-- ══ Producer Track ══ -->
+      <div class="col-12">
+        <div class="track-card">
+          <div class="track-card-header producer">
+            <span><i class="bi bi-person-fill me-2"></i>Producer Track</span>
+            <span class="track-label">Personal Production — Life &amp; Supplemental In Force premium</span>
+            <span *ngIf="data!.producerMet" class="badge bg-success ms-auto"><i class="bi bi-check-circle-fill me-1"></i>Threshold Met</span>
+          </div>
+          <div class="track-card-body">
+            <!-- Producer Arrow Strip -->
+            <div class="level-strip-wrapper mb-3">
+              <div class="level-strip">
+                <div class="level-arrow"
+                     *ngFor="let lvl of allLevels; let i = index"
+                     [ngClass]="arrowClassProducer(lvl)"
+                     [class.first-arrow]="i === 0"
+                     [class.last-arrow]="i === allLevels.length - 1">
+                  <i class="bi bi-check-circle-fill arrow-check" *ngIf="arrowClassProducer(lvl) === 'completed'"></i>
+                  <i class="bi bi-unlock-fill arrow-unlock" *ngIf="arrowClassProducer(lvl) === 'next-ready'"></i>
+                  <div class="arrow-name">{{ formatLevel(lvl.name) }}</div>
+                  <div class="arrow-pct">{{ lvl.commissionPercent }}%</div>
+                  <div class="arrow-hint" *ngIf="arrowClassProducer(lvl) === 'next-pending' || arrowClassProducer(lvl) === 'next-ready'">
+                    {{ formatCurrency(lvl.producerPremiumThreshold) }} premium
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Producer Progress Bar -->
+            <div class="track-row">
+              <span class="track-key">In Force Premium</span>
+              <span class="track-val">{{ formatCurrency(data!.producer.premium) }} <span class="track-target">/ {{ formatCurrency(data!.producer.targetPremium) }}</span></span>
+            </div>
+            <div class="progress track-progress" style="height:18px">
+              <div class="progress-bar bg-{{ progressColor(data!.producer.progressPercent) }}"
+                   role="progressbar"
+                   [style.width.%]="data!.producer.progressPercent"
+                   [attr.aria-valuenow]="data!.producer.progressPercent"
+                   aria-valuemin="0" aria-valuemax="100">
+                {{ data!.producer.progressPercent }}%
+              </div>
+            </div>
+            <div class="track-meta">
+              <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.producer.windowDays }}-day window
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ Builder Track ══ -->
+      <div class="col-12">
+        <div class="track-card">
+          <div class="track-card-header builder">
+            <span><i class="bi bi-people-fill me-2"></i>Builder Track</span>
+            <span class="track-label">Team Production — premium &amp; active agents</span>
+            <span *ngIf="data!.builderMet" class="badge bg-success ms-auto"><i class="bi bi-check-circle-fill me-1"></i>Threshold Met</span>
+          </div>
+          <div class="track-card-body">
+            <!-- Builder Arrow Strip -->
+            <div class="level-strip-wrapper mb-3">
+              <div class="level-strip">
+                <div class="level-arrow"
+                     *ngFor="let lvl of allLevels; let i = index"
+                     [ngClass]="arrowClassBuilder(lvl)"
+                     [class.first-arrow]="i === 0"
+                     [class.last-arrow]="i === allLevels.length - 1">
+                  <i class="bi bi-check-circle-fill arrow-check" *ngIf="arrowClassBuilder(lvl) === 'completed'"></i>
+                  <i class="bi bi-unlock-fill arrow-unlock" *ngIf="arrowClassBuilder(lvl) === 'next-ready'"></i>
+                  <div class="arrow-name">{{ formatLevel(lvl.name) }}</div>
+                  <div class="arrow-pct">{{ lvl.commissionPercent }}%</div>
+                  <div class="arrow-hint" *ngIf="arrowClassBuilder(lvl) === 'next-pending' || arrowClassBuilder(lvl) === 'next-ready'">
+                    {{ formatCurrency(lvl.builderPremiumThreshold) }} · {{ lvl.builderAgentCountThreshold }} agents
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Builder Progress Bars (side by side on desktop) -->
+            <div class="row g-3">
+              <div class="col-12 col-md-6">
+                <div class="track-row">
+                  <span class="track-key">Team Premium</span>
+                  <span class="track-val">{{ formatCurrency(data!.builder.premium) }} <span class="track-target">/ {{ formatCurrency(data!.builder.targetPremium) }}</span></span>
+                </div>
+                <div class="progress track-progress" style="height:18px">
+                  <div class="progress-bar bg-{{ progressColor(data!.builder.premiumProgress) }}"
+                       role="progressbar"
+                       [style.width.%]="data!.builder.premiumProgress"
+                       [attr.aria-valuenow]="data!.builder.premiumProgress"
+                       aria-valuemin="0" aria-valuemax="100">
+                    {{ data!.builder.premiumProgress }}%
+                  </div>
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <div class="track-row">
+                  <span class="track-key">Active Producing Agents</span>
+                  <span class="track-val">{{ data!.builder.activeAgents }} <span class="track-target">/ {{ data!.builder.targetAgentCount }}</span></span>
+                </div>
+                <div class="progress track-progress" style="height:18px">
+                  <div class="progress-bar bg-{{ progressColor(data!.builder.agentProgress) }}"
+                       role="progressbar"
+                       [style.width.%]="data!.builder.agentProgress"
+                       [attr.aria-valuenow]="data!.builder.agentProgress"
+                       aria-valuemin="0" aria-valuemax="100">
+                    {{ data!.builder.agentProgress }}%
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="track-meta mt-2">
+              <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.builder.windowDays }}-day window
+              &middot; {{ data!.totalDownline }} total downline
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Max Level -->
+    <div *ngIf="data!.isMaxLevel" class="text-center py-3">
+      <i class="bi bi-trophy-fill text-warning fs-2"></i>
+      <p class="fw-bold mt-2 mb-0">You have reached the maximum promotion level!</p>
+    </div>
+
+    <!-- Shared legend -->
+    <div *ngIf="!data!.isMaxLevel" class="d-flex gap-3 mt-3 justify-content-center flex-wrap">
+      <span class="legend-dot completed">Completed</span>
+      <span class="legend-dot current">Your Level</span>
+      <span class="legend-dot next-pending">Next Level</span>
+      <span class="legend-dot next-ready">Ready to Promote</span>
+      <span class="legend-dot future">Future</span>
+    </div>
+
+    <!-- Skip-level note -->
+    <div *ngIf="data!.skipInfo?.canSkip" class="alert alert-info small mt-3 mb-0 py-2">
+      <i class="bi bi-lightning-fill me-1"></i><strong>Skip-level eligible:</strong> {{ data!.skipInfo.requirements }}
+    </div>
+  </div>
+</div>
+
+<!-- No data -->
+<div *ngIf="!loading && !error && data && !data.hasData" class="card shadow-sm mb-4 border-0">
+  <div class="card-body text-center py-4">
+    <i class="bi bi-bar-chart-steps display-6 text-muted"></i>
+    <p class="text-muted mt-2 mb-0">Promotion tracker is not configured yet.</p>
+    <p class="text-muted small">{{ data.message || 'Contact your admin to set up promotion levels.' }}</p>
+  </div>
+</div>
+
+<!-- Loading -->
+<div *ngIf="loading" class="card shadow-sm mb-4">
+  <div class="card-body text-center py-4">
+    <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+    <span class="text-muted">Loading promotion tracker...</span>
+  </div>
+</div>
+
+<!-- Error -->
+<div *ngIf="!loading && error" class="alert alert-warning small mb-4">
+  <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+</div>

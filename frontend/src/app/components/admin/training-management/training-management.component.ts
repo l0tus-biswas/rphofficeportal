@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { TrainingService } from '../../../services/training.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-training-management',
@@ -19,6 +20,8 @@ export class TrainingManagementComponent implements OnInit {
   showEditModal = false;
   trainingForm!: FormGroup;
   selectedMaterial: any = null;
+  selectedPdfFile: File | null = null;
+  pdfUploading = false;
   
   typeFilter = 'all';
   searchTerm = '';
@@ -108,7 +111,46 @@ export class TrainingManagementComponent implements OnInit {
     this.showCreateModal = false;
     this.showEditModal = false;
     this.selectedMaterial = null;
+    this.selectedPdfFile = null;
     this.trainingForm.reset();
+  }
+
+  onPdfFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.selectedPdfFile = input.files && input.files.length > 0 ? input.files[0] : null;
+  }
+
+  private uploadPdfIfSelected(materialId: string, callback: () => void): void {
+    if (!this.selectedPdfFile) {
+      callback();
+      return;
+    }
+    this.pdfUploading = true;
+    this.trainingService.uploadPdf(materialId, this.selectedPdfFile).subscribe({
+      next: () => {
+        this.pdfUploading = false;
+        callback();
+      },
+      error: (err: any) => {
+        this.pdfUploading = false;
+        this.error = err.error?.message || 'Material saved but PDF upload failed';
+        callback();
+      }
+    });
+  }
+
+  removePdf(material: any): void {
+    if (!confirm(`Remove the PDF attachment from "${material.title}"?`)) return;
+    this.trainingService.removePdf(material._id).subscribe({
+      next: () => {
+        this.success = 'PDF attachment removed';
+        this.loadMaterials();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err: any) => {
+        this.error = err.error?.message || 'Failed to remove PDF';
+      }
+    });
   }
 
   createMaterial(): void {
@@ -123,11 +165,15 @@ export class TrainingManagementComponent implements OnInit {
     };
     
     this.trainingService.createMaterial(materialData).subscribe({
-      next: (response) => {
-        this.success = 'Training material created successfully!';
-        this.loadMaterials();
-        this.closeModals();
-        setTimeout(() => this.success = '', 3000);
+      next: (response: any) => {
+        const newId = response.material?._id || response._id;
+        this.uploadPdfIfSelected(newId, () => {
+          this.success = 'Training material created successfully!';
+          this.loadMaterials();
+          this.closeModals();
+          this.loading = false;
+          setTimeout(() => this.success = '', 3000);
+        });
       },
       error: (error) => {
         this.error = error.error?.message || 'Failed to create material';
@@ -143,11 +189,14 @@ export class TrainingManagementComponent implements OnInit {
 
     this.loading = true;
     this.trainingService.updateMaterial(this.selectedMaterial._id, this.trainingForm.value).subscribe({
-      next: (response) => {
-        this.success = 'Training material updated successfully!';
-        this.loadMaterials();
-        this.closeModals();
-        setTimeout(() => this.success = '', 3000);
+      next: () => {
+        this.uploadPdfIfSelected(this.selectedMaterial._id, () => {
+          this.success = 'Training material updated successfully!';
+          this.loadMaterials();
+          this.closeModals();
+          this.loading = false;
+          setTimeout(() => this.success = '', 3000);
+        });
       },
       error: (error) => {
         this.error = error.error?.message || 'Failed to update material';
@@ -178,6 +227,8 @@ export class TrainingManagementComponent implements OnInit {
   getTypeIcon(type: string): string {
     const icons: any = {
       'video': 'bi-camera-video-fill',
+      'youtube': 'bi-youtube',
+      'loom': 'bi-play-circle-fill',
       'document': 'bi-file-earmark-text-fill',
       'link': 'bi-link-45deg',
       'article': 'bi-file-text-fill'
@@ -188,6 +239,8 @@ export class TrainingManagementComponent implements OnInit {
   getTypeBadgeClass(type: string): string {
     const classes: any = {
       'video': 'bg-danger',
+      'youtube': 'bg-danger',
+      'loom': 'bg-danger',
       'document': 'bg-primary',
       'link': 'bg-info',
       'article': 'bg-success'
@@ -229,4 +282,11 @@ export class TrainingManagementComponent implements OnInit {
   }
 
   get f() { return this.trainingForm.controls; }
+
+  /** Converts a server-relative path (e.g. /uploads/...) to a full absolute URL. */
+  getFileUrl(path: string): string {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return `${environment.baseUrl}${path}`;
+  }
 }

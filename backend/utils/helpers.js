@@ -42,3 +42,30 @@ exports.paginate = (query, page = 1, limit = 10) => {
   const skip = (page - 1) * limit;
   return query.skip(skip).limit(limit);
 };
+
+/**
+ * Recursively collect all descendant user IDs for a given upline user.
+ * Uses the User.children[] array to walk the tree breadth-first.
+ *
+ * @param {string|ObjectId} userId  - The root user (upline) whose full downline we want
+ * @returns {Promise<ObjectId[]>}   - Array of all descendant ObjectIds (not including userId itself)
+ */
+exports.getDownlineIds = async (userId) => {
+  const User = require('../models/User');
+  const result = [];
+  const queue = [userId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const user = await User.findById(current).select('children').lean();
+    if (user && user.children && user.children.length > 0) {
+      for (const childId of user.children) {
+        result.push(childId);
+        queue.push(childId);
+      }
+    }
+  }
+
+  return result;
+};
+

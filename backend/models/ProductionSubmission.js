@@ -21,26 +21,11 @@ const productionSubmissionSchema = new mongoose.Schema({
     trim: true
   },
   
-  // Product sold
+  // Product sold — no hardcoded enum; valid values are driven by the ProductType collection
   productSold: {
     type: String,
     required: [true, 'Product is required'],
-    enum: [
-      'Accident Insurance',
-      'Cancer Insurance',
-      'Critical Illness',
-      'Dental / Vision / Hearing',
-      'Disability',
-      'Final Expense',
-      'Hospital Indemnity',
-      'Life Insurance – Term',
-      'Life Insurance – IUL',
-      'Life Insurance – Whole Life',
-      'Life Insurance – VUL',
-      'Long Term Care',
-      'Medicare Advantage',
-      'Other'
-    ]
+    trim: true
   },
   
   // For "Other" product type
@@ -69,11 +54,26 @@ const productionSubmissionSchema = new mongoose.Schema({
     default: ''
   },
   
-  // Status tracking (for future use)
+  // Product category (auto-derived from productSold)
+  productCategory: {
+    type: String,
+    enum: [
+      'Life Insurance',
+      'Health Insurance',
+      'Medicare',
+      'Supplemental Insurance',
+      'Retirement / Annuities',
+      'Property & Casualty - Personal',
+      'Property & Casualty - Commercial'
+    ],
+    required: true
+  },
+
+  // Status tracking
   status: {
     type: String,
-    enum: ['submitted', 'pending', 'approved', 'rejected', 'paid'],
-    default: 'submitted'
+    enum: ['Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled'],
+    default: 'Submitted'
   },
   
   // Admin review

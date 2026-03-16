@@ -12,7 +12,7 @@ const trainingMaterialSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['link', 'youtube', 'document', 'video', 'other'],
+    enum: ['link', 'youtube', 'loom', 'document', 'video', 'article', 'other'],
     required: true
   },
   url: {
@@ -39,6 +39,13 @@ const trainingMaterialSchema = new mongoose.Schema({
   },
   thumbnail: String,
   
+  // PDF Attachment
+  pdfAttachment: {
+    fileName: { type: String },
+    filePath: { type: String },
+    uploadedAt: { type: Date, default: Date.now }
+  },
+
   // Access control
   accessLevel: {
     type: String,

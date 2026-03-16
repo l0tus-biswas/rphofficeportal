@@ -1,0 +1,199 @@
+
+<div class="container-fluid">
+  <div class="row">
+    <main class="col-12 px-md-4">
+
+      <!-- Header -->
+      <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h1 class="h2"><i class="bi bi-box-seam-fill me-2"></i>Product Management</h1>
+        <button class="btn btn-primary" (click)="openNewForm()">
+          <i class="bi bi-plus-circle me-1"></i>Add New Product
+        </button>
+      </div>
+
+      <!-- Alerts -->
+      <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+        <button type="button" class="btn-close" (click)="success = ''" aria-label="Close"></button>
+      </div>
+      <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+        <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+      </div>
+
+      <!-- Stats -->
+      <div class="row mb-4">
+        <div class="col-md-4">
+          <div class="card bg-primary text-white">
+            <div class="card-body py-3">
+              <h4 class="mb-0">{{ products.length }}</h4>
+              <small>Total Products</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-success text-white">
+            <div class="card-body py-3">
+              <h4 class="mb-0">{{ activeCount }}</h4>
+              <small>Active</small>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card bg-secondary text-white">
+            <div class="card-body py-3">
+              <h4 class="mb-0">{{ inactiveCount }}</h4>
+              <small>Inactive</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" placeholder="Search products..."
+                  [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+              </div>
+            </div>
+            <div class="col-md-4">
+              <select class="form-select" [(ngModel)]="filterCategory" (change)="onFilterChange()">
+                <option value="all">All Categories</option>
+                <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" [(ngModel)]="filterStatus" (change)="onFilterChange()">
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+                <option value="all">All Status</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Loading -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Products Table -->
+      <div *ngIf="!loading" class="card shadow-sm">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-box-seam me-2"></i>Products
+            <span class="badge bg-secondary ms-2">{{ filteredProducts.length }}</span>
+          </span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Product Name</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Added By</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngIf="filteredProducts.length === 0">
+                <td colspan="6" class="text-center text-muted py-4">
+                  <i class="bi bi-inbox display-6 d-block mb-2"></i>
+                  No products found
+                </td>
+              </tr>
+              <tr *ngFor="let product of filteredProducts" [class.table-secondary]="!product.isActive">
+                <td>
+                  <strong>{{ product.name }}</strong>
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="getCategoryBadgeClass(product.category)">
+                    {{ product.category }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge" [class.bg-success]="product.isActive" [class.bg-secondary]="!product.isActive">
+                    {{ product.isActive ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td>{{ product.addedBy?.name || '—' }}</td>
+                <td>{{ product.createdAt | date: 'MMM d, y' }}</td>
+                <td class="text-end">
+                  <button class="btn btn-sm btn-outline-secondary me-1" (click)="editProduct(product)" title="Edit">
+                    <i class="bi bi-pencil-square"></i>
+                  </button>
+                  <button class="btn btn-sm" (click)="toggleActive(product)"
+                    [class.btn-outline-danger]="product.isActive"
+                    [class.btn-outline-success]="!product.isActive"
+                    [title]="product.isActive ? 'Deactivate' : 'Re-activate'">
+                    <i class="bi" [class.bi-toggle-on]="product.isActive" [class.bi-toggle-off]="!product.isActive"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Product Modal -->
+<div class="modal fade" [class.show]="showForm" [style.display]="showForm ? 'block' : 'none'"
+  tabindex="-1" role="dialog" aria-labelledby="productModalLabel">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header" [ngClass]="editMode ? 'bg-warning text-dark' : 'bg-primary text-white'">
+        <h5 class="modal-title" id="productModalLabel">
+          <i class="bi me-2" [class.bi-plus-circle]="!editMode" [class.bi-pencil-square]="editMode"></i>
+          {{ editMode ? 'Edit Product' : 'New Product' }}
+        </h5>
+        <button type="button" class="btn-close" [class.btn-close-white]="!editMode" (click)="cancelForm()" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Product Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" [(ngModel)]="currentProduct.name"
+            placeholder="e.g., Life Insurance – Term">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Category <span class="text-danger">*</span></label>
+          <select class="form-select" [(ngModel)]="currentProduct.category">
+            <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+          </select>
+        </div>
+        <div class="mb-1">
+          <label class="form-label fw-semibold">Status</label>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" [(ngModel)]="currentProduct.isActive" id="activeSwitch">
+            <label class="form-check-label" for="activeSwitch">
+              {{ currentProduct.isActive ? 'Active' : 'Inactive' }}
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="cancelForm()">
+          <i class="bi bi-x-circle me-1"></i>Cancel
+        </button>
+        <button class="btn" [class.btn-primary]="!editMode" [class.btn-warning]="editMode"
+          (click)="saveProduct()">
+          <i class="bi me-1" [class.bi-plus-circle]="!editMode" [class.bi-save]="editMode"></i>
+          {{ editMode ? 'Save Changes' : 'Create Product' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showForm" *ngIf="showForm"></div>

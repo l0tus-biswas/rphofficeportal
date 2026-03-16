@@ -1,1 +1,6 @@
-<router-outlet></router-outlet>
+<div class="app-shell d-flex" style="min-height: 100vh">
+  <app-sidebar></app-sidebar>
+  <div class="app-content flex-grow-1 overflow-auto">
+    <router-outlet></router-outlet>
+  </div>
+</div>

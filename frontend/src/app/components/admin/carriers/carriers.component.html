@@ -1,11 +1,8 @@
-<app-navbar></app-navbar>
 
 <div class="container-fluid py-4">
   <div class="row mb-4">
     <div class="col">
-      <h2 class="mb-0">
-        <i class="bi bi-building me-2"></i>Carrier Management
-      </h2>
+      <h2 class="mb-0"><i class="bi bi-building me-2"></i>Carrier Management</h2>
       <p class="text-muted">Manage insurance carriers and providers</p>
     </div>
     <div class="col-auto">
@@ -15,45 +12,119 @@
     </div>
   </div>
 
-  <!-- Alert Messages -->
+  <!-- Alerts -->
   <div class="alert alert-success alert-dismissible fade show" *ngIf="success" role="alert">
     <i class="bi bi-check-circle me-2"></i>{{ success }}
     <button type="button" class="btn-close" (click)="success = ''"></button>
   </div>
-
   <div class="alert alert-danger alert-dismissible fade show" *ngIf="error" role="alert">
     <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
     <button type="button" class="btn-close" (click)="error = ''"></button>
   </div>
 
-  <!-- Carrier Form -->
+  <!-- Add / Edit Form -->
   <div class="card mb-4" *ngIf="showForm">
     <div class="card-header bg-primary text-white">
-      <h5 class="mb-0">
-        <i class="bi bi-building me-2"></i>{{ editMode ? 'Edit Carrier' : 'Add New Carrier' }}
-      </h5>
+      <h5 class="mb-0"><i class="bi bi-building me-2"></i>{{ editMode ? 'Edit Carrier' : 'Add New Carrier' }}</h5>
     </div>
     <div class="card-body">
       <form>
+        <!-- Row 1: Name + Category -->
         <div class="row">
           <div class="col-md-6 mb-3">
             <label class="form-label">Carrier Name *</label>
-            <input type="text" class="form-control" [(ngModel)]="currentCarrier.name" name="name" 
-                   placeholder="Enter carrier name" required>
+            <input type="text" class="form-control" [(ngModel)]="currentCarrier.name" name="name" placeholder="e.g. Mutual of Omaha" required>
           </div>
-          <div class="col-md-6 mb-3">
-            <label class="form-label">Status *</label>
+          <div class="col-md-4 mb-3">
+            <label class="form-label">Category *</label>
+            <select class="form-select" [(ngModel)]="currentCarrier.category" name="category">
+              <option value="" disabled>Select category</option>
+              <option *ngFor="let cat of CATEGORIES" [value]="cat">{{ cat }}</option>
+            </select>
+          </div>
+          <div class="col-md-2 mb-3">
+            <label class="form-label">Status</label>
             <select class="form-select" [(ngModel)]="currentCarrier.isActive" name="isActive">
               <option [ngValue]="true">Active</option>
               <option [ngValue]="false">Inactive</option>
             </select>
           </div>
         </div>
+
+        <!-- Row 2: Base factor + Contracting link -->
+        <div class="row">
+          <div class="col-md-3 mb-3">
+            <label class="form-label">Base Commission Factor (%)</label>
+            <input type="number" class="form-control" [(ngModel)]="currentCarrier.factor" name="factor" min="0" max="200" placeholder="e.g. 80">
+          </div>
+          <div class="col-md-9 mb-3">
+            <label class="form-label">Contracting Link</label>
+            <input type="url" class="form-control" [(ngModel)]="currentCarrier.contractingLink" name="contractingLink" placeholder="https://...">
+          </div>
+        </div>
+
+        <!-- Contracting Instructions -->
+        <div class="mb-3">
+          <label class="form-label">Contracting Instructions</label>
+          <textarea class="form-control" [(ngModel)]="currentCarrier.contractingInstructions" name="contractingInstructions" rows="3" placeholder="Step-by-step contracting process..."></textarea>
+        </div>
+
+        <!-- What to Expect -->
+        <div class="mb-3">
+          <label class="form-label">What to Expect</label>
+          <textarea class="form-control" [(ngModel)]="currentCarrier.whatToExpect" name="whatToExpect" rows="3" placeholder="Timeline, next steps after contracting..."></textarea>
+        </div>
+
+        <!-- Product Factors -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Per-Product Commission Factors <span class="text-muted fw-normal">(for multi-product carriers)</span></label>
+          <div class="table-responsive mb-2" *ngIf="currentCarrier.productFactors && currentCarrier.productFactors.length > 0">
+            <table class="table table-sm table-bordered align-middle">
+              <thead class="table-light">
+                <tr><th>Product Name</th><th>Factor (%)</th><th>Level</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let pf of currentCarrier.productFactors; let i = index">
+                  <td>{{ pf.productName }}</td>
+                  <td>{{ pf.factor ?? '—' }}</td>
+                  <td>{{ pf.level || '—' }}</td>
+                  <td><button type="button" class="btn btn-link text-danger p-0" (click)="removeProductFactor(i)"><i class="bi bi-trash"></i></button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Add new product factor row -->
+          <div class="row g-2 align-items-end" *ngIf="currentCarrier.newProductFactor">
+            <div class="col-md-5">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.productName" name="pfName" placeholder="Product name">
+            </div>
+            <div class="col-md-3">
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.factor" name="pfFactor" placeholder="Factor %" min="0" max="200">
+            </div>
+            <div class="col-md-2">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.level" name="pfLevel" placeholder="Level (opt.)">
+            </div>
+            <div class="col-md-2">
+              <button type="button" class="btn btn-outline-primary btn-sm" (click)="addProductFactor()"><i class="bi bi-plus"></i> Add</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supplemental Level Guide PDF -->
+        <div class="mb-3" *ngIf="currentCarrier.category === 'Supplemental Insurance'">
+          <label class="form-label">Supplemental Level Guide PDF</label>
+          <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf" name="levelGuideFile">
+          <small class="text-muted" *ngIf="currentCarrier.supplementalLevelGuide">
+            Current file: <a [href]="getGuideUrl(currentCarrier.supplementalLevelGuide)" target="_blank">View</a>
+          </small>
+        </div>
+
+        <!-- Notes -->
         <div class="mb-3">
           <label class="form-label">Notes</label>
-          <textarea class="form-control" [(ngModel)]="currentCarrier.notes" name="notes" rows="3" 
-                    placeholder="Add any additional notes about this carrier"></textarea>
+          <textarea class="form-control" [(ngModel)]="currentCarrier.notes" name="notes" rows="2" placeholder="Additional notes..."></textarea>
         </div>
+
         <div class="d-flex gap-2">
           <button type="button" class="btn btn-primary" (click)="saveCarrier()">
             <i class="bi bi-save me-2"></i>{{ editMode ? 'Update Carrier' : 'Add Carrier' }}
@@ -66,39 +137,51 @@
     </div>
   </div>
 
+  <!-- Category filter -->
+  <div class="d-flex gap-2 mb-3 flex-wrap">
+    <button class="btn btn-sm" [class.btn-primary]="filterCategory === ''" [class.btn-outline-primary]="filterCategory !== ''" (click)="filterCategory = ''; applyFilter()">All</button>
+    <button *ngFor="let cat of CATEGORIES" class="btn btn-sm"
+      [class.btn-primary]="filterCategory === cat" [class.btn-outline-primary]="filterCategory !== cat"
+      (click)="filterCategory = cat; applyFilter()">{{ cat }}</button>
+  </div>
+
   <!-- Carriers Table -->
   <div class="card">
     <div class="card-body">
       <div *ngIf="loading" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
-        </div>
+        <div class="spinner-border text-primary" role="status"></div>
         <p class="mt-2 text-muted">Loading carriers...</p>
       </div>
 
-      <div *ngIf="!loading && carriers.length === 0" class="text-center py-5">
+      <div *ngIf="!loading && filteredCarriers.length === 0" class="text-center py-5">
         <i class="bi bi-inbox display-1 text-muted"></i>
         <p class="mt-3 text-muted">No carriers found</p>
-        <button class="btn btn-primary" (click)="openNewForm()">
-          <i class="bi bi-plus-circle me-2"></i>Add First Carrier
-        </button>
+        <button class="btn btn-primary" (click)="openNewForm()"><i class="bi bi-plus-circle me-2"></i>Add First Carrier</button>
       </div>
 
-      <div *ngIf="!loading && carriers.length > 0" class="table-responsive">
+      <div *ngIf="!loading && filteredCarriers.length > 0" class="table-responsive">
         <table class="table table-hover align-middle">
           <thead class="table-light">
             <tr>
               <th>Name</th>
+              <th>Category</th>
+              <th>Factor</th>
               <th>Status</th>
+              <th>Contracting</th>
               <th>Notes</th>
-              <th>Created At</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr *ngFor="let carrier of carriers">
+            <tr *ngFor="let carrier of filteredCarriers">
+              <td><strong>{{ carrier.name }}</strong></td>
+              <td><span class="badge bg-info text-dark">{{ carrier.category }}</span></td>
               <td>
-                <strong>{{ carrier.name }}</strong>
+                <span *ngIf="carrier.factor != null">{{ carrier.factor }}%</span>
+                <span *ngIf="carrier.productFactors && carrier.productFactors.length > 0" class="ms-1">
+                  <span class="badge bg-secondary" title="Multi-product factors available">+{{ carrier.productFactors.length }}</span>
+                </span>
+                <span *ngIf="carrier.factor == null && (!carrier.productFactors || carrier.productFactors.length === 0)" class="text-muted">—</span>
               </td>
               <td>
                 <span class="badge" [ngClass]="carrier.isActive ? 'bg-success' : 'bg-secondary'">
@@ -106,19 +189,16 @@
                 </span>
               </td>
               <td>
-                <small class="text-muted">{{ carrier.notes || 'No notes' }}</small>
+                <a *ngIf="carrier.contractingLink" [href]="carrier.contractingLink" target="_blank" class="btn btn-link btn-sm p-0">
+                  <i class="bi bi-link-45deg"></i> Link
+                </a>
+                <span *ngIf="!carrier.contractingLink" class="text-muted">—</span>
               </td>
-              <td>
-                <small class="text-muted">{{ carrier.createdAt | date: 'short' }}</small>
-              </td>
+              <td><small class="text-muted">{{ carrier.notes || '—' }}</small></td>
               <td>
                 <div class="btn-group btn-group-sm">
-                  <button class="btn btn-outline-primary" (click)="editCarrier(carrier)" title="Edit">
-                    <i class="bi bi-pencil"></i>
-                  </button>
-                  <button class="btn btn-outline-danger" (click)="deleteCarrier(carrier._id)" title="Delete">
-                    <i class="bi bi-trash"></i>
-                  </button>
+                  <button class="btn btn-outline-primary" (click)="editCarrier(carrier)" title="Edit"><i class="bi bi-pencil"></i></button>
+                  <button class="btn btn-outline-danger" (click)="deleteCarrier(carrier._id)" title="Delete"><i class="bi bi-trash"></i></button>
                 </div>
               </td>
             </tr>

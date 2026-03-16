@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { authLimiter, resetLimiter } = require('../middleware/rateLimiter.middleware');
 const { sendPasswordResetEmail } = require('../utils/email');
@@ -40,7 +41,20 @@ router.post('/login', authLimiter, validateRequest(schemas.login), async (req, r
     const userResponse = await User.findById(user._id)
       .select('-password')
       .populate('referredBy', 'name email phone referralCode');
-    
+
+    // Login notification – awaited so it exists before the frontend fetches unread count
+    try {
+      await Notification.createNotification({
+        userId: user._id,
+        type: 'login',
+        title: 'New Login',
+        message: `You logged in on ${new Date().toLocaleString()}`,
+        link: '/dashboard'
+      }, false);
+    } catch (notifErr) {
+      console.error('Login notification error:', notifErr.message);
+    }
+
     sendResponse(res, 200, {
       token,
       user: userResponse
@@ -107,6 +121,14 @@ router.post('/reset-password/:resetToken', validateRequest(schemas.resetPassword
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'password_reset',
+      title: 'Password Reset',
+      message: 'Your password was reset successfully. If you did not do this, contact support immediately.',
+      link: '/profile'
+    }, false).catch(() => {});
     
     sendResponse(res, 200, {
       message: 'Password reset successful. You can now login with your new password.'

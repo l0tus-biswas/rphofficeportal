@@ -10,19 +10,45 @@ const notificationSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: [
+      // Activity
+      'login',
+      'profile_updated',
+      'password_changed',
+      'password_reset',
+      // Recruitment
       'recruit_added',
       'downline_recruit',
+      // Payments
       'payment_completed',
       'payment_failed',
+      'subscription_updated',
+      'subscription_canceled',
+      // APA
+      'apa_submitted',
       'apa_approved',
       'apa_rejected',
+      // Onboarding
+      'onboarding_submitted',
+      'onboarding_step_updated',
       'onboarding_approved',
       'onboarding_rejected',
+      // Licensing
       'license_submitted',
       'license_approved',
+      // Production
       'production_submitted',
+      'production_reviewed',
+      // Training
       'training_completed',
-      'system_announcement'
+      // Admin actions
+      'user_created',
+      'user_activated',
+      'user_deactivated',
+      'user_promoted',
+      'user_transferred',
+      // Misc
+      'system_announcement',
+      'promotion_eligible'
     ],
     required: true
   },

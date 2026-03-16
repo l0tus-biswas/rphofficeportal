@@ -1,0 +1,189 @@
+/* ── Level Arrow Strip ─────────────────────────────────────── */
+.level-strip-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.level-strip {
+  display: flex;
+  align-items: stretch;
+  min-width: max-content; /* allow horizontal scroll on small screens */
+  padding: 4px 0;
+}
+
+/* Base arrow shape */
+.level-arrow {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 108px;
+  padding: 10px 22px 10px 30px;
+  margin-right: -1px;     /* overlap so arrows touch cleanly */
+  cursor: default;
+  transition: filter 0.15s ease, transform 0.15s ease;
+  /* Arrow notch on right */
+  clip-path: polygon(
+    0% 0%,
+    calc(100% - 16px) 0%,
+    100% 50%,
+    calc(100% - 16px) 100%,
+    0% 100%,
+    16px 50%
+  );
+}
+/* First arrow — no left notch */
+.level-arrow.first-arrow {
+  clip-path: polygon(
+    0% 0%,
+    calc(100% - 16px) 0%,
+    100% 50%,
+    calc(100% - 16px) 100%,
+    0% 100%
+  );
+  padding-left: 14px;
+}
+/* Last arrow — no right point */
+.level-arrow.last-arrow {
+  clip-path: polygon(
+    0% 0%,
+    100% 0%,
+    100% 100%,
+    0% 100%,
+    16px 50%
+  );
+  padding-right: 14px;
+}
+
+/* ── Arrow colour states ── */
+.level-arrow.completed {
+  background: #94a3b8;
+  color: #fff;
+}
+.level-arrow.current {
+  background: #4f6ef7;
+  color: #fff;
+  z-index: 5;
+  transform: scaleY(1.08);
+  box-shadow: 0 4px 14px rgba(79,110,247,0.35);
+  /* Slightly taller to stand out */
+  min-height: 70px;
+}
+.level-arrow.next-pending {
+  background: #e2e8f0;
+  color: #475569;
+}
+.level-arrow.next-ready {
+  background: #22c55e;
+  color: #fff;
+  z-index: 4;
+  animation: pulseGreen 1.8s ease-in-out infinite;
+}
+.level-arrow.future {
+  background: #f1f5f9;
+  color: #cbd5e1;
+}
+
+@keyframes pulseGreen {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+}
+
+/* ── Arrow text ── */
+.arrow-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.arrow-pct {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+.arrow-hint {
+  font-size: 0.62rem;
+  opacity: 0.85;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.arrow-check {
+  font-size: 0.75rem;
+  margin-bottom: 2px;
+  opacity: 0.9;
+}
+.arrow-unlock {
+  font-size: 0.8rem;
+  margin-bottom: 2px;
+}
+
+/* ── Strip Legend ── */
+.legend-dot {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #64748b;
+  gap: 5px;
+}
+.legend-dot::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.legend-dot.completed::before  { background: #94a3b8; }
+.legend-dot.current::before    { background: #4f6ef7; }
+.legend-dot.next-pending::before { background: #e2e8f0; border: 1px solid #94a3b8; }
+.legend-dot.next-ready::before { background: #22c55e; }
+.legend-dot.future::before     { background: #f1f5f9; border: 1px solid #cbd5e1; }
+
+/* ── Track Cards ─────────────────────────────────────────── */
+.track-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.track-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+.track-card-header.producer {
+  background: #eef1fe;
+  color: #4f6ef7;
+  border-bottom: 2px solid #4f6ef7;
+}
+.track-card-header.builder {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-bottom: 2px solid #22c55e;
+}
+.track-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.75;
+}
+.track-card-body {
+  padding: 14px 16px;
+}
+.track-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.track-key  { font-size: 0.8rem; color: #64748b; }
+.track-val  { font-size: 0.9rem; font-weight: 700; color: #1e293b; }
+.track-target { font-size: 0.8rem; font-weight: 400; color: #94a3b8; }
+.track-progress { border-radius: 6px; margin-bottom: 2px; }
+.track-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 8px; }

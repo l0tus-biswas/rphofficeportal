@@ -38,10 +38,11 @@ exports.logAction = (action) => {
       
       res.json = function(data) {
         // Only log successful actions
-        if (data.success !== false && req.user) {
+        const actorId = req.user && (req.user._id || req.user.id);
+        if (data.success !== false && actorId) {
           AuditLog.create({
             action,
-            performedBy: req.user._id,
+            performedBy: actorId,
             targetUser: req.params.userId || req.body.userId || null,
             details: {
               method: req.method,

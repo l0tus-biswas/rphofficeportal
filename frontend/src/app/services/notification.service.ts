@@ -1,7 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, interval } from 'rxjs';
+import { BehaviorSubject, Observable, interval, EMPTY } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { AuthService } from './auth.service';
 
 export interface Notification {
   _id: string;
@@ -24,10 +26,21 @@ export class NotificationService {
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
 
-  constructor(private http: HttpClient) {
-    // Poll for unread count every 30 seconds
-    interval(30000).subscribe(() => {
+  constructor(private http: HttpClient, private authService: AuthService) {
+    // Poll every 30 s only while a user is authenticated.
+    // When currentUser$ emits null (logged-out / login page), switchMap to EMPTY
+    // so no HTTP requests are made until the user logs back in.
+    this.authService.currentUser$.pipe(
+      switchMap(user => (user ? interval(30000) : EMPTY))
+    ).subscribe(() => {
       this.refreshUnreadCount();
+    });
+
+    // Reset badge to 0 whenever the user logs out
+    this.authService.currentUser$.subscribe(user => {
+      if (!user) {
+        this.unreadCountSubject.next(0);
+      }
     });
   }
 
@@ -40,9 +53,12 @@ export class NotificationService {
   }
 
   refreshUnreadCount(): void {
+    if (!this.authService.isLoggedIn()) {
+      return;
+    }
     this.getUnreadCount().subscribe({
       next: (response: any) => {
-        const count = response?.data?.count ?? 0;
+        const count = response?.count ?? response?.data?.count ?? 0;
         this.unreadCountSubject.next(count);
       },
       error: (error) => {
