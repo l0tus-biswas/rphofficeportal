@@ -21,6 +21,8 @@ const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const OnboardingDocument = require('../models/OnboardingDocument');
+const OnboardingDocType = require('../models/OnboardingDocType');
 
 // TEST ROUTE - Get DocuSign template fields
 router.get('/test-template-fields', async (req, res) => {
@@ -273,7 +275,51 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
         console.error('❌ Failed to download signed document:', downloadError);
         // Continue anyway - document can be retrieved later
       }
-      
+
+      // ---------------------------------------------------------------
+      // Create / update OnboardingDocument so the link appears in the
+      // Onboarding Hub.  Prefer application.userId; fall back to .user.
+      // NOTE: userId is only set after payment, so this covers agents
+      // who are already active.  For brand-new agents who haven't paid
+      // yet the record will be created when payment completes.
+      // ---------------------------------------------------------------
+      const agentUserId = application.userId || application.user || null;
+      if (agentUserId) {
+        try {
+          const apaDocType = await OnboardingDocType.findOne({ name: 'APA Agreement', isActive: true });
+          if (apaDocType) {
+            const docRelPath = application.docusign.documentUrl
+              ? application.docusign.documentUrl.replace(/^\//, '')
+              : null;
+            const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+            await OnboardingDocument.findOneAndUpdate(
+              { agent: agentUserId, docType: apaDocType._id },
+              {
+                $set: {
+                  agent: agentUserId,
+                  docType: apaDocType._id,
+                  filePath: docRelPath,
+                  externalLink: docRelPath ? `${baseUrl}/${docRelPath}` : null,
+                  originalFileName: `APA_Agreement_${application.personalInfo?.legalFirstName || ''}_${application.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
+                  uploadedBy: agentUserId,
+                  uploadedAt: application.docusign.signedDate || new Date(),
+                  deletedAt: null
+                }
+              },
+              { upsert: true, new: true }
+            );
+            console.log('✅ OnboardingDocument created/updated for APA Agreement, agent:', agentUserId);
+          } else {
+            console.warn('⚠️ OnboardingDocType "APA Agreement" not found — run seedOnboardingDocTypes.js');
+          }
+        } catch (onboardingErr) {
+          console.error('❌ Failed to create OnboardingDocument for APA Agreement:', onboardingErr);
+          // Non-blocking — don't fail the webhook
+        }
+      } else {
+        console.warn('⚠️ No userId/user on APAApplication at signing time — will create OnboardingDocument after payment for', application._id);
+      }
+
       // Send payment link email
       console.log('📧 Sending payment email to:', application.personalInfo.email);
       await sendPaymentLinkEmail(application);
@@ -639,6 +685,35 @@ const verifyPaymentHandler = async (req, res) => {
     application.userId = user._id;
     application.user = user._id;
     await application.save();
+
+    // Create OnboardingDocument for APA Agreement so it shows in /onboarding-hub
+    try {
+      const apaDocType = await OnboardingDocType.findOne({ name: 'APA Agreement', isActive: true });
+      if (apaDocType && application.docusign?.documentUrl) {
+        const docRelPath = application.docusign.documentUrl.replace(/^\//, '');
+        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+        await OnboardingDocument.findOneAndUpdate(
+          { agent: user._id, docType: apaDocType._id },
+          {
+            $set: {
+              agent: user._id,
+              docType: apaDocType._id,
+              filePath: docRelPath,
+              externalLink: `${baseUrl}/${docRelPath}`,
+              originalFileName: `APA_Agreement_${application.personalInfo?.legalFirstName || ''}_${application.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
+              uploadedBy: user._id,
+              uploadedAt: application.docusign.signedDate || application.docusign.signedAt || new Date(),
+              deletedAt: null
+            }
+          },
+          { upsert: true, new: true }
+        );
+        console.log('✅ OnboardingDocument created for APA Agreement on payment completion, agent:', user._id);
+      }
+    } catch (onboardingErr) {
+      console.error('❌ Failed to create OnboardingDocument for APA Agreement during payment:', onboardingErr);
+      // Non-blocking — don't fail account creation
+    }
 
     // Send welcome email with set-password link (backup)
     await sendWelcomeEmail(user, password, null, setPasswordToken);

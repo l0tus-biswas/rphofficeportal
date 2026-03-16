@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const APAApplication = require('../models/APAApplication');
 const Notification = require('../models/Notification');
+const OnboardingDocument = require('../models/OnboardingDocument');
+const OnboardingDocType = require('../models/OnboardingDocType');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 
@@ -69,7 +71,7 @@ router.get('/apa-applications', async (req, res) => {
 // @route   GET /api/admin/apa-applications/:id
 // @desc    Get single APA application with full details
 // @access  Admin only
-router.get('/apa-applications/:id', async (req, res) => {
+router.get('/apa-applications/:id([a-fA-F0-9]{24})', async (req, res) => {
   try {
     const application = await APAApplication.findById(req.params.id);
     
@@ -94,7 +96,7 @@ router.get('/apa-applications/:id', async (req, res) => {
 // @route   PUT /api/admin/apa-applications/:id/approve
 // @desc    Approve APA application
 // @access  Admin only
-router.put('/apa-applications/:id/approve', async (req, res) => {
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/approve', async (req, res) => {
   try {
     const { adminNotes } = req.body;
     
@@ -138,7 +140,7 @@ router.put('/apa-applications/:id/approve', async (req, res) => {
 // @route   PUT /api/admin/apa-applications/:id/reject
 // @desc    Reject APA application
 // @access  Admin only
-router.put('/apa-applications/:id/reject', async (req, res) => {
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => {
   try {
     const { reason, adminNotes } = req.body;
     
@@ -183,7 +185,7 @@ router.put('/apa-applications/:id/reject', async (req, res) => {
 // @route   PUT /api/admin/apa-applications/:id/notes
 // @desc    Update admin notes on application
 // @access  Admin only
-router.put('/apa-applications/:id/notes', async (req, res) => {
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/notes', async (req, res) => {
   try {
     const { adminNotes } = req.body;
     
@@ -236,6 +238,90 @@ router.get('/apa-applications/stats/overview', async (req, res) => {
       }
     });
     
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/admin/apa-applications/backfill-onboarding-docs
+// @desc    For every completed APA that has a signed PDF but no OnboardingDocument,
+//          create the missing record so agents see the link in /onboarding-hub.
+//          Safe to run multiple times (uses upsert).
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.post('/apa-applications/backfill-onboarding-docs', async (req, res) => {
+  try {
+    const apaDocType = await OnboardingDocType.findOne({ name: 'APA Agreement', isActive: true });
+    if (!apaDocType) {
+      return res.status(404).json({ message: 'OnboardingDocType "APA Agreement" not found. Run seedOnboardingDocTypes.js first.' });
+    }
+
+    // Find all completed applications that have a linked user account.
+    // APAApplication stores the user in EITHER userId or user (both set on payment).
+    const signedApps = await APAApplication.find({
+      'docusign.status': 'completed',
+      $or: [
+        { userId: { $exists: true, $ne: null } },
+        { user: { $exists: true, $ne: null } }
+      ]
+    });
+
+    const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const app of signedApps) {
+      const agentUserId = app.userId || app.user;
+      if (!agentUserId) { skipped++; continue; }
+
+      const docRelPath = app.docusign?.documentUrl
+        ? app.docusign.documentUrl.replace(/^\//, '')
+        : null;
+
+      try {
+        const existing = await OnboardingDocument.findOne({
+          agent: agentUserId,
+          docType: apaDocType._id,
+          deletedAt: null
+        });
+
+        // If record already has an externalLink, leave it alone
+        if (existing?.externalLink) { skipped++; continue; }
+
+        await OnboardingDocument.findOneAndUpdate(
+          { agent: agentUserId, docType: apaDocType._id },
+          {
+            $set: {
+              agent: agentUserId,
+              docType: apaDocType._id,
+              filePath: docRelPath,
+              externalLink: docRelPath ? `${baseUrl}/${docRelPath}` : null,
+              originalFileName: `APA_Agreement_${app.personalInfo?.legalFirstName || ''}_${app.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
+              uploadedBy: agentUserId,
+              uploadedAt: app.docusign?.signedDate || app.updatedAt || new Date(),
+              deletedAt: null
+            }
+          },
+          { upsert: true, new: true }
+        );
+
+        existing ? updated++ : created++;
+      } catch (err) {
+        errors.push({ appId: app._id, agentUserId, error: err.message });
+      }
+    }
+
+    res.json({
+      message: 'Backfill complete',
+      total: signedApps.length,
+      created,
+      updated,
+      skipped,
+      errors
+    });
   } catch (error) {
     errorResponse(res, error);
   }
