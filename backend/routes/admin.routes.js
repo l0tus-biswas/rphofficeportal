@@ -261,11 +261,12 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
     const validLevels = [
       'associate',
       'senior associate',
-      'field manager',
+      'manager',
       'senior manager',
-      'division executive',
       'regional executive',
-      'national executive'
+      'senior regional executive',
+      'national executive',
+      'senior national executive'
     ];
     
     if (!level || !validLevels.includes(level)) {

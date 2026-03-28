@@ -28,6 +28,14 @@ export interface BuilderTrack {
   windowDays: number;
 }
 
+export interface FastTrackInfo {
+  eligible: boolean;
+  skipToLevel?: PromotionLevelInfo;
+  track?: string;
+  producerSkipThreshold?: number;
+  builderSkipThreshold?: number;
+}
+
 export interface PromotionTrackerData {
   hasData: boolean;
   message?: string;
@@ -41,6 +49,7 @@ export interface PromotionTrackerData {
   builder: BuilderTrack;
   totalDownline: number;
   skipInfo: { canSkip: boolean; requirements?: string };
+  fastTrack: FastTrackInfo;
 }
 
 // ---------- Admin level config ----------

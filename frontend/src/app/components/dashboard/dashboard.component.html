@@ -35,17 +35,7 @@
         <app-next-steps-checklist></app-next-steps-checklist>
       </div>
 
-      <!-- Promotion Tracker (Agent Only) -->
-      <div *ngIf="authService.isAgent()">
-        <app-promotion-tracker></app-promotion-tracker>
-      </div>
-
-      <!-- ACA Client Volume Tracker (Agent Only) -->
-      <div *ngIf="authService.isAgent()">
-        <app-aca-tracker></app-aca-tracker>
-      </div>
-
-      <!-- Licensing Countdown Timer (Agent Only) -->
+      <!-- Licensing Countdown Timer (Agent Only) — shown first for unlicensed agents -->
       <div class="row mb-4" *ngIf="authService.isAgent() && licensingProgress && !licensingProgress.isLicensed && daysRemaining > 0">
         <div class="col-12">
           <div class="card border-warning shadow-sm">
@@ -100,6 +90,16 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Promotion Tracker (Agent Only) -->
+      <div *ngIf="authService.isAgent()">
+        <app-promotion-tracker></app-promotion-tracker>
+      </div>
+
+      <!-- ACA Client Volume Tracker (Agent Only) -->
+      <div *ngIf="authService.isAgent()">
+        <app-aca-tracker></app-aca-tracker>
       </div>
       
       <!-- Referral Section - For All Users -->

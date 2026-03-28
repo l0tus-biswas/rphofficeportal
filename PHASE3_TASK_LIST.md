@@ -644,7 +644,7 @@ Route: `/admin/aca-management`
 
 ---
 
-### TASK 020 — Dashboard Promotion Tracker — Producer Track
+### ✅ TASK 020 — Dashboard Promotion Tracker — Producer Track
 **Effort:** 5 days  
 **File(s):** New model `PromotionLevel.js`, new routes, Angular dashboard, admin panel  
 **What:** The first progress bar showing an agent's personal In Force Life & Supplemental premium vs. the next promotion threshold, with rolling time window.  
@@ -705,7 +705,7 @@ Route: `/admin/aca-management`
 
 ---
 
-### TASK 021 — Dashboard Promotion Tracker — Builder Track
+### ✅ TASK 021 — Dashboard Promotion Tracker — Builder Track
 **Effort:** 3 days  
 **Depends on:** TASK 020  
 **What:** The second progress bar tracking the Builder path: (a) team In Force premium and (b) number of active producing downline agents, both within the rolling window.  
@@ -729,7 +729,7 @@ Route: `/admin/aca-management`
 
 ---
 
-### TASK 022 — Promotion Threshold Admin Config UI
+### ✅ TASK 022 — Promotion Threshold Admin Config UI
 **Effort:** 1 day  
 **Depends on:** TASK 020  
 **File(s):** Angular admin panel  

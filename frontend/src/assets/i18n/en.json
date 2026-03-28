@@ -162,11 +162,12 @@
   "LEVELS": {
     "ASSOCIATE": "Associate",
     "SENIOR_ASSOCIATE": "Senior Associate",
-    "FIELD_MANAGER": "Field Manager",
+    "MANAGER": "Manager",
     "SENIOR_MANAGER": "Senior Manager",
-    "DIVISION_EXECUTIVE": "Division Executive",
     "REGIONAL_EXECUTIVE": "Regional Executive",
-    "NATIONAL_EXECUTIVE": "National Executive"
+    "SENIOR_REGIONAL_EXECUTIVE": "Senior Regional Executive",
+    "NATIONAL_EXECUTIVE": "National Executive",
+    "SENIOR_NATIONAL_EXECUTIVE": "Senior National Executive"
   },
   "AUTH": {
     "LOGIN": "Login",

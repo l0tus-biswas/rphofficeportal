@@ -194,11 +194,12 @@ export class UserManagementComponent implements OnInit {
     const levels = [
       'associate',
       'senior associate',
-      'field manager',
+      'manager',
       'senior manager',
-      'division executive',
       'regional executive',
-      'national executive'
+      'senior regional executive',
+      'national executive',
+      'senior national executive'
     ];
     
     const currentLevel = user.level || 'associate';

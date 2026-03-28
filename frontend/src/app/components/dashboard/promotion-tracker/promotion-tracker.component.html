@@ -27,6 +27,18 @@
       </div>
     </div>
 
+    <!-- ─── Fast-Track Skip Banner ─── -->
+    <div *ngIf="data!.fastTrack?.eligible && data!.fastTrack?.skipToLevel"
+         class="alert alert-warning d-flex align-items-center gap-2 mb-4 py-2">
+      <i class="bi bi-lightning-fill fs-5 flex-shrink-0"></i>
+      <div>
+        <strong>Fast-Track eligible!</strong>
+        You qualify to <strong>skip one level</strong> to <strong>{{ formatLevel(data!.fastTrack.skipToLevel!.name) }} ({{ data!.fastTrack.skipToLevel!.commissionPercent }}%)</strong>
+        via the <strong>{{ data!.fastTrack.track === 'producer' ? 'Producer' : 'Builder' }} track</strong> (1.4&times; threshold met).
+        Your admin has been notified.
+      </div>
+    </div>
+
     <!-- ─── Track Cards (each with its own arrow strip) ─── -->
     <div class="row g-4" *ngIf="!data!.isMaxLevel">
 
@@ -162,9 +174,11 @@
       <span class="legend-dot future">Future</span>
     </div>
 
-    <!-- Skip-level note -->
+    <!-- Skip-level / Fast-Track note -->
     <div *ngIf="data!.skipInfo?.canSkip" class="alert alert-info small mt-3 mb-0 py-2">
-      <i class="bi bi-lightning-fill me-1"></i><strong>Skip-level eligible:</strong> {{ data!.skipInfo.requirements }}
+      <i class="bi bi-lightning-fill me-1"></i><strong>Fast-Track Rule:</strong>
+      Skip one promotion level by producing <strong>1.4&times;</strong> the premium requirement of the target level.
+      <span class="d-block mt-1 text-muted">Builder track: no more than 50% of team premium may come from one leg or personal production.</span>
     </div>
   </div>
 </div>

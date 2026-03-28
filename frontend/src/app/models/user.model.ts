@@ -4,7 +4,7 @@ export interface User {
   email: string;
   phone: string;
   role: 'admin' | 'agent';
-  level?: 'associate' | 'senior associate' | 'field manager' | 'senior manager' | 'division executive' | 'regional executive' | 'national executive';
+  level?: 'associate' | 'senior associate' | 'manager' | 'senior manager' | 'regional executive' | 'senior regional executive' | 'national executive' | 'senior national executive';
   promotedAt?: Date;
   promotedBy?: User;
   referralCode?: string;

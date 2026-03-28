@@ -63,6 +63,62 @@ async function countProducingAgents(agentIds, windowDays) {
 }
 
 // ============================================================================
+// Fast-Track multiplier: agents can skip one level if they hit this × target
+// ============================================================================
+const FAST_TRACK_MULTIPLIER = 1.4;
+
+// ============================================================================
+// Helper: compute premium per direct leg (first-level children) for 50% cap
+// ============================================================================
+async function getPremiumByLeg(userId, windowDays) {
+  const User = require('../models/User');
+  const user = await User.findById(userId).select('children').lean();
+  if (!user || !user.children || user.children.length === 0) return [];
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - windowDays);
+
+  const legPremiums = [];
+  for (const childId of user.children) {
+    // Get all descendants under this child (leg)
+    const legIds = [childId];
+    const queue = [childId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const u = await User.findById(current).select('children').lean();
+      if (u && u.children) {
+        for (const cid of u.children) {
+          legIds.push(cid);
+          queue.push(cid);
+        }
+      }
+    }
+    const premium = await sumQualifyingPremium(legIds, windowDays);
+    legPremiums.push({ legId: childId, premium });
+  }
+
+  // Also include personal production as a "leg"
+  const personalPremium = await sumQualifyingPremium([userId], windowDays);
+  if (personalPremium > 0) {
+    legPremiums.push({ legId: userId, premium: personalPremium, isPersonal: true });
+  }
+
+  return legPremiums;
+}
+
+// ============================================================================
+// Helper: check if builder fast-track 50% leg cap is satisfied
+// No more than 50% of team premium may come from one leg or personal production
+// ============================================================================
+function checkBuilderLegCap(legPremiums, totalPremium) {
+  if (totalPremium <= 0) return true;
+  for (const leg of legPremiums) {
+    if (leg.premium / totalPremium > 0.5) return false;
+  }
+  return true;
+}
+
+// ============================================================================
 // @route   GET /api/promotion/tracker
 // @desc    Dashboard promotion tracker — Producer + Builder tracks
 // @access  Authenticated (any agent or admin)
@@ -122,26 +178,65 @@ router.get('/tracker', authenticate, async (req, res) => {
     ) : false;
     const promotionReady = producerMet || builderMet;
 
+    // ---- Fast-Track Skip Logic ----
+    // Producer: skip one level if premium >= 1.4× the skip-target level's threshold
+    // Builder: skip one level if team premium >= 1.4× skip-target's threshold (with 50% leg cap)
+    let fastTrack = { eligible: false };
+    const skipTargetIdx = resolvedIdx + 2; // skip one level ahead
+    if (!isMaxLevel && skipTargetIdx < levels.length) {
+      const skipTarget = levels[skipTargetIdx];
+      if (skipTarget.canSkipTo || next.canSkipTo) {
+        const producerSkipThreshold = skipTarget.producerPremiumThreshold * FAST_TRACK_MULTIPLIER;
+        const builderSkipThreshold = skipTarget.builderPremiumThreshold * FAST_TRACK_MULTIPLIER;
+
+        const producerFastTrack = producerPremium >= producerSkipThreshold;
+
+        // Builder fast-track: 1.4× team premium AND 50% leg cap
+        let builderFastTrack = false;
+        if (builderPremium >= builderSkipThreshold) {
+          const legPremiums = await getPremiumByLeg(userId, builderWindow);
+          const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow));
+          builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium);
+        }
+
+        if (producerFastTrack || builderFastTrack) {
+          fastTrack = {
+            eligible: true,
+            skipToLevel: {
+              name: skipTarget.name,
+              rank: skipTarget.rank,
+              commissionPercent: skipTarget.commissionPercent
+            },
+            track: producerFastTrack ? 'producer' : 'builder',
+            producerSkipThreshold,
+            builderSkipThreshold
+          };
+        }
+      }
+    }
+
     // Auto-notify admins when eligible (deduplicate: skip if already notified in past 7 days)
-    if (promotionReady && next) {
+    const effectiveNextName = fastTrack.eligible ? fastTrack.skipToLevel.name : (next ? next.name : null);
+    if ((promotionReady || fastTrack.eligible) && effectiveNextName) {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const recentNotif = await Notification.findOne({
         type: 'promotion_eligible',
         'data.agentId': String(userId),
-        'data.nextLevel': next.name,
+        'data.nextLevel': effectiveNextName,
         createdAt: { $gte: sevenDaysAgo }
       }).lean();
       if (!recentNotif) {
         const fullUser = await User.findById(userId).select('name').lean();
         const admins = await User.find({ role: 'admin' }).select('_id').lean();
         const track = producerMet ? 'producer' : 'builder';
+        const skipNote = fastTrack.eligible ? ' (Fast-Track Skip)' : '';
         for (const admin of admins) {
           await Notification.createNotification({
             userId:  admin._id,
             type:    'promotion_eligible',
-            title:   'Agent Promotion Eligible',
-            message: `${fullUser.name} has met the ${track} track threshold and is ready to be promoted to ${next.name} (${next.commissionPercent}%).`,
-            data:    { agentId: String(userId), agentName: fullUser.name, currentLevel: current.name, nextLevel: next.name, track },
+            title:   `Agent Promotion Eligible${skipNote}`,
+            message: `${fullUser.name} has met the ${track} track threshold and is ready to be promoted to ${effectiveNextName}${skipNote}.`,
+            data:    { agentId: String(userId), agentName: fullUser.name, currentLevel: current.name, nextLevel: effectiveNextName, track, fastTrack: fastTrack.eligible },
             link:    '/admin/user-management'
           });
         }
@@ -195,7 +290,10 @@ router.get('/tracker', authenticate, async (req, res) => {
       skipInfo: next && next.canSkipTo ? {
         canSkip: true,
         requirements: next.skipRequirements
-      } : { canSkip: false }
+      } : { canSkip: false },
+
+      // Fast-track skip info
+      fastTrack
     });
   } catch (err) {
     return errorResponse(res, err);
