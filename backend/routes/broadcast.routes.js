@@ -5,6 +5,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
+const { sendNotificationEmail } = require('../utils/neuzmail');
 
 // All routes require authentication
 router.use(protect);
@@ -148,12 +149,13 @@ router.post('/', authorize('admin'), async (req, res) => {
       filter.role = { $in: broadcast.targetRoles };
     }
 
-    const users = await User.find(filter).select('_id').lean();
+    const users = await User.find(filter).select('_id email name').lean();
     let sentCount = 0;
     let emailsSent = 0;
 
     for (const user of users) {
       try {
+        // Create in-app notification (without email — we handle email separately)
         const notification = await Notification.createNotification({
           userId: user._id,
           type: 'admin_broadcast',
@@ -161,13 +163,31 @@ router.post('/', authorize('admin'), async (req, res) => {
           message: broadcast.message,
           link: broadcast.link,
           data: { broadcastBy: req.user._id, broadcastId: broadcast._id.toString() }
-        });
-        if (notification) {
-          sentCount++;
-          if (notification.emailSent) emailsSent++;
+        }, false); // false = don't send email via notification system
+
+        if (notification) sentCount++;
+
+        // Send email directly
+        if (user.email) {
+          try {
+            await sendNotificationEmail({
+              toEmail: user.email,
+              title: broadcast.title,
+              message: broadcast.message,
+              link: broadcast.link || null,
+              actionLabel: 'View Announcement'
+            });
+            emailsSent++;
+            if (notification) {
+              notification.emailSent = true;
+              await notification.save();
+            }
+          } catch (emailErr) {
+            console.error(`[Broadcast] Email failed for ${user.email}:`, emailErr.message);
+          }
         }
       } catch (e) {
-        // Skip users who opted out
+        console.error(`[Broadcast] Notification failed for user ${user._id}:`, e.message);
       }
     }
 
@@ -245,7 +265,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
       filter.role = { $in: broadcast.targetRoles };
     }
 
-    const users = await User.find(filter).select('_id').lean();
+    const users = await User.find(filter).select('_id email name').lean();
 
     // Find users who already have this notification
     const existing = await Notification.find({
@@ -267,13 +287,31 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
           message: broadcast.message,
           link: broadcast.link,
           data: { broadcastBy: broadcast.createdBy, broadcastId: broadcast._id.toString() }
-        });
-        if (notification) {
-          sentCount++;
-          if (notification.emailSent) emailsSent++;
+        }, false);
+
+        if (notification) sentCount++;
+
+        // Send email directly
+        if (user.email) {
+          try {
+            await sendNotificationEmail({
+              toEmail: user.email,
+              title: broadcast.title,
+              message: broadcast.message,
+              link: broadcast.link || null,
+              actionLabel: 'View Announcement'
+            });
+            emailsSent++;
+            if (notification) {
+              notification.emailSent = true;
+              await notification.save();
+            }
+          } catch (emailErr) {
+            console.error(`[Broadcast Resend] Email failed for ${user.email}:`, emailErr.message);
+          }
         }
       } catch (e) {
-        // skip
+        console.error(`[Broadcast Resend] Notification failed for user ${user._id}:`, e.message);
       }
     }
 
