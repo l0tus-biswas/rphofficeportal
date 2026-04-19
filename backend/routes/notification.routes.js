@@ -70,7 +70,7 @@ router.put('/preferences', async (req, res) => {
 });
 
 // @route   POST /api/notifications/broadcast
-// @desc    Admin sends a broadcast notification to all users or specific roles
+// @desc    Admin sends a broadcast notification (LEGACY — prefer POST /api/broadcasts)
 // @access  Private (Admin only)
 router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
   try {
@@ -78,6 +78,20 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
 
     if (!title || !message) {
       return sendResponse(res, 400, { message: 'Title and message are required' });
+    }
+
+    // Also create a Broadcast record for the new management page
+    let Broadcast;
+    try { Broadcast = require('../models/Broadcast'); } catch (e) { /* ignore */ }
+
+    let broadcastRecord = null;
+    if (Broadcast) {
+      broadcastRecord = await Broadcast.create({
+        title, message,
+        link: link || null,
+        targetRoles: Array.isArray(targetRoles) ? targetRoles : [],
+        createdBy: req.user._id
+      });
     }
 
     // Build user filter
@@ -88,24 +102,37 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
 
     const users = await User.find(filter).select('_id').lean();
     let sentCount = 0;
+    let emailsSent = 0;
 
     for (const user of users) {
       try {
-        await Notification.createNotification({
+        const notification = await Notification.createNotification({
           userId: user._id,
           type: 'admin_broadcast',
           title,
           message,
           link: link || null,
-          data: { broadcastBy: req.user._id }
+          data: {
+            broadcastBy: req.user._id,
+            broadcastId: broadcastRecord ? broadcastRecord._id.toString() : undefined
+          }
         });
-        sentCount++;
+        if (notification) {
+          sentCount++;
+          if (notification.emailSent) emailsSent++;
+        }
       } catch (e) {
         // Skip users who opted out
       }
     }
 
-    sendResponse(res, 200, { message: `Broadcast sent to ${sentCount} users`, sentCount });
+    if (broadcastRecord) {
+      broadcastRecord.sentCount = sentCount;
+      broadcastRecord.emailsSent = emailsSent;
+      await broadcastRecord.save();
+    }
+
+    sendResponse(res, 200, { message: `Broadcast sent to ${sentCount} users (${emailsSent} emails)`, sentCount, emailsSent });
   } catch (error) {
     errorResponse(res, error);
   }

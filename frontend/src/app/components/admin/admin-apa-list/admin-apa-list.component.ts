@@ -26,6 +26,16 @@ export class AdminApaListComponent implements OnInit {
   autoApprove = false;
   autoApproveLoading = false;
 
+  // APA Template Management
+  templateInfo: any = null;
+  templateLoading = false;
+  templateUploading = false;
+  templateFile: File | null = null;
+  uploadMode: string = 'replace';
+  templateError = '';
+  templateSuccess = '';
+  showTemplateSection = false;
+
   constructor(
     private apaService: ApaService,
     private router: Router
@@ -34,6 +44,7 @@ export class AdminApaListComponent implements OnInit {
   ngOnInit(): void {
     this.loadApplications();
     this.loadAutoApproveSetting();
+    this.loadTemplateInfo();
   }
 
   loadAutoApproveSetting(): void {
@@ -119,5 +130,84 @@ export class AdminApaListComponent implements OnInit {
       'rejected': 'Rejected'
     };
     return labels[status] || status;
+  }
+
+  // --- APA Template Management ---
+
+  loadTemplateInfo(): void {
+    this.templateLoading = true;
+    this.apaService.getTemplateInfo().subscribe({
+      next: (res) => {
+        this.templateInfo = res;
+        this.templateLoading = false;
+      },
+      error: () => {
+        this.templateLoading = false;
+      }
+    });
+  }
+
+  onTemplateFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.templateError = '';
+    this.templateSuccess = '';
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (file.type !== 'application/pdf') {
+        this.templateError = 'Only PDF files are allowed.';
+        this.templateFile = null;
+        return;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        this.templateError = 'File must be under 20MB.';
+        this.templateFile = null;
+        return;
+      }
+      this.templateFile = file;
+    }
+  }
+
+  uploadTemplate(): void {
+    if (!this.templateFile) return;
+    this.templateUploading = true;
+    this.templateError = '';
+    this.templateSuccess = '';
+
+    this.apaService.uploadTemplate(this.templateFile, this.uploadMode).subscribe({
+      next: (res) => {
+        this.templateSuccess = res.message || 'Template updated successfully.';
+        this.templateUploading = false;
+        this.templateFile = null;
+        this.loadTemplateInfo();
+      },
+      error: (err) => {
+        this.templateError = err.error?.message || 'Failed to upload template.';
+        this.templateUploading = false;
+      }
+    });
+  }
+
+  revertTemplate(): void {
+    if (!confirm('Revert to the original default APA template? This will undo any custom template.')) return;
+    this.templateUploading = true;
+    this.apaService.revertTemplate().subscribe({
+      next: (res) => {
+        this.templateSuccess = res.message || 'Reverted to default template.';
+        this.templateUploading = false;
+        this.loadTemplateInfo();
+      },
+      error: (err) => {
+        this.templateError = err.error?.message || 'Failed to revert template.';
+        this.templateUploading = false;
+      }
+    });
+  }
+
+  formatFileSize(bytes: number): string {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 }

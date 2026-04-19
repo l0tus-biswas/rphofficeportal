@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const APAApplication = require('../models/APAApplication');
 const Notification = require('../models/Notification');
 const OnboardingDocument = require('../models/OnboardingDocument');
@@ -9,6 +10,25 @@ const SystemConfig = require('../models/SystemConfig');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { sendNotificationEmail } = require('../utils/neuzmail');
+const {
+  getActiveTemplateId,
+  updateTemplateDocument,
+  createTemplateFromPDF,
+  getTemplateInfo
+} = require('../utils/docusign');
+
+// Multer for APA template PDF upload (in-memory, 20MB limit)
+const templateUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  },
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
 
 // All routes require admin authentication
 router.use(protect);
@@ -406,6 +426,135 @@ router.put('/apa-applications/settings/auto-approve', async (req, res) => {
       message: enabled
         ? 'Auto-approve enabled. New applications will be approved automatically after payment.'
         : 'Auto-approve disabled. Applications require manual admin approval.'
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// ============================================================
+// APA Agreement Template Management
+// ============================================================
+
+// @route   GET /api/admin/apa-applications/settings/template
+// @desc    Get current APA template info
+// @access  Admin only
+router.get('/apa-applications/settings/template', async (req, res) => {
+  try {
+    const templateId = await getActiveTemplateId();
+    const isCustom = !!(await SystemConfig.findOne({ key: 'docusign_template_id' }).lean());
+
+    let templateInfo = null;
+    try {
+      templateInfo = await getTemplateInfo(templateId);
+    } catch (e) {
+      // DocuSign may be unavailable — still return config
+      console.error('Failed to fetch DocuSign template info:', e.message);
+    }
+
+    const uploadHistory = await SystemConfig.findOne({ key: 'apa_template_history' }).lean();
+
+    sendResponse(res, 200, {
+      templateId,
+      isCustom,
+      envTemplateId: process.env.DOCUSIGN_TEMPLATE_ID,
+      templateInfo,
+      uploadHistory: uploadHistory ? JSON.parse(uploadHistory.value || '[]') : []
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/apa-applications/settings/template/upload
+// @desc    Upload new APA agreement PDF — replaces document in current template
+// @access  Admin only
+router.post('/apa-applications/settings/template/upload', templateUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No PDF file provided.' });
+    }
+
+    const mode = req.body.mode || 'replace'; // 'replace' or 'new'
+    let result;
+
+    if (mode === 'new') {
+      // Create a brand new DocuSign template and set it as active
+      result = await createTemplateFromPDF(req.file.buffer, req.file.originalname);
+
+      // Store new template ID in SystemConfig
+      await SystemConfig.findOneAndUpdate(
+        { key: 'docusign_template_id' },
+        {
+          $set: {
+            key: 'docusign_template_id',
+            value: result.templateId,
+            category: 'docusign',
+            description: 'Active DocuSign template ID for APA agreement',
+            isEditable: true,
+            updatedBy: req.user._id
+          }
+        },
+        { upsert: true, new: true }
+      );
+    } else {
+      // Replace the document in the existing template
+      result = await updateTemplateDocument(req.file.buffer, req.file.originalname);
+    }
+
+    // Save upload history
+    const historyConfig = await SystemConfig.findOne({ key: 'apa_template_history' }).lean();
+    const history = historyConfig ? JSON.parse(historyConfig.value || '[]') : [];
+    history.unshift({
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mode,
+      templateId: result.templateId,
+      uploadedBy: req.user.name,
+      uploadedAt: new Date().toISOString()
+    });
+    // Keep last 20 entries
+    if (history.length > 20) history.length = 20;
+
+    await SystemConfig.findOneAndUpdate(
+      { key: 'apa_template_history' },
+      {
+        $set: {
+          key: 'apa_template_history',
+          value: JSON.stringify(history),
+          category: 'docusign',
+          description: 'APA template upload history',
+          isEditable: false,
+          updatedBy: req.user._id
+        }
+      },
+      { upsert: true }
+    );
+
+    sendResponse(res, 200, {
+      success: true,
+      message: mode === 'new'
+        ? `New APA template created and activated (ID: ${result.templateId})`
+        : `APA template document replaced successfully`,
+      result,
+      mode
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/apa-applications/settings/template/revert
+// @desc    Revert to the default (.env) template ID
+// @access  Admin only
+router.put('/apa-applications/settings/template/revert', async (req, res) => {
+  try {
+    await SystemConfig.deleteOne({ key: 'docusign_template_id' });
+
+    sendResponse(res, 200, {
+      success: true,
+      templateId: process.env.DOCUSIGN_TEMPLATE_ID,
+      message: 'Reverted to default APA template from environment configuration.'
     });
   } catch (error) {
     errorResponse(res, error);

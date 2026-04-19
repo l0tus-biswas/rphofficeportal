@@ -75,6 +75,17 @@ export class TrainingService {
     return this.http.put(`${this.apiUrl}/training/folders/${id}`, data, this.getHeaders());
   }
 
+  uploadFolderThumbnail(id: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    const authHeader = new HttpHeaders({ 'Authorization': `Bearer ${this.authService.getToken()}` });
+    return this.http.post(`${this.apiUrl}/training/folders/${id}/thumbnail`, formData, { headers: authHeader });
+  }
+
+  removeFolderThumbnail(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/training/folders/${id}/thumbnail`, this.getHeaders());
+  }
+
   deleteFolder(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/training/folders/${id}`, this.getHeaders());
   }

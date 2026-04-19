@@ -327,9 +327,66 @@
 
 ---
 
+## 26. APA Agreement Template Management – Admin Upload & Replace
+
+| # | Item | Classification | Reason |
+|---|------|---------------|--------|
+| 26.1 | ✅ Admin can upload new APA agreement PDF to replace current DocuSign template | 🔴 **NEW FEATURE** | No template management existed. Admin had to ask developer to change the APA document. Completely new feature. |
+| 26.2 | ✅ Option to replace document in existing template or create brand new template | 🔴 **NEW FEATURE** | Two upload modes (replace in-place vs. create new) with automatic DocuSign API integration. New workflow. |
+| 26.3 | ✅ Dynamic template ID stored in SystemConfig (overrides .env default) | 🔴 **NEW FEATURE** | Template ID was hardcoded in .env. Dynamic switching via database config is new infrastructure. |
+| 26.4 | ✅ Revert to default template (undo custom upload) | 🔴 **NEW FEATURE** | Reset mechanism to fall back to original .env template. New admin control. |
+| 26.5 | ✅ Upload history tracking (file name, size, mode, who uploaded, when) | 🔴 **NEW FEATURE** | No upload audit trail existed. New tracking stored in SystemConfig. |
+
+> **Implementation Notes (Section 26):**
+> - **Backend (docusign.js)**: Added 4 new utility functions — `getActiveTemplateId()` checks SystemConfig key `docusign_template_id` first, falls back to `.env`. `updateTemplateDocument()` replaces the PDF in an existing DocuSign template via `templatesApi.updateDocument()`. `createTemplateFromPDF()` creates a brand new template with `agent` signer role. `getTemplateInfo()` fetches template name, documents, and last modified date. Both `getTemplateFields()` and `createAPAEnvelope()` now use `getActiveTemplateId()` instead of direct env var.
+> - **Backend (admin-apa.routes.js)**: Added multer middleware (memory storage, PDF-only, 20MB limit). Three new endpoints: `GET /settings/template` (returns current template info, custom/default status, upload history), `POST /settings/template/upload` (accepts PDF with `mode=replace` or `mode=new`), `PUT /settings/template/revert` (deletes custom template ID from SystemConfig). Upload history capped at 20 entries in SystemConfig key `apa_template_history`.
+> - **Frontend (apa.service.ts)**: Added `getTemplateInfo()`, `uploadTemplate(file, mode)` with FormData, and `revertTemplate()` methods.
+> - **Frontend (admin-apa-list component)**: Collapsible "APA Agreement Template" card on the APA management page. Shows current template name, ID, custom/default badge, last modified, and upload history (last 5 entries). File upload form with PDF-only validation (client-side + server-side), mode selector dropdown (Replace in Current Template / Create New Template), and upload button with spinner. "Revert to Default Template" button shown only when a custom template is active. Dismissible success/error alerts.
+
+---
+
+## 27. Training Folders – Thumbnail Images
+
+| # | Item | Classification | Reason |
+|---|------|---------------|--------|
+| 27.1 | ✅ Admin can upload thumbnail image for training folders | 🔴 **NEW FEATURE** | No image/thumbnail support existed on training folders. Completely new feature. |
+| 27.2 | ✅ Thumbnail displayed on agent-side folder cards (replaces default folder icon) | 🔴 **NEW FEATURE** | New visual feature — folders previously only showed a Bootstrap icon. |
+| 27.3 | ✅ Admin can replace or remove existing thumbnail | 🔴 **NEW FEATURE** | Full CRUD for thumbnail images with old file cleanup on disk. |
+
+> **Implementation Notes (Section 27):**
+> - **Model (TrainingFolder.js)**: Added `thumbnail: String` field (stores path like `/uploads/training-thumbnails/folder-thumb-xxx.jpg`).
+> - **Backend (training.routes.js)**: Added multer disk storage config for `uploads/training-thumbnails/` (images only, 5MB limit). Two new endpoints: `POST /api/training/folders/:id/thumbnail` (uploads/replaces thumbnail, deletes old file from disk) and `DELETE /api/training/folders/:id/thumbnail` (removes thumbnail file and clears field).
+> - **Frontend (training.service.ts)**: Added `uploadFolderThumbnail(id, file)` with FormData and `removeFolderThumbnail(id)` methods.
+> - **Frontend (training-management admin component)**: Added file input for thumbnail in both Create and Edit folder modals with live preview. Edit modal shows existing thumbnail with remove button. Client-side validation (image type, 5MB limit). Thumbnail auto-uploaded after folder creation or during folder update.
+> - **Frontend (training agent component)**: Folder cards show `<img>` thumbnail when available, fallback to `bi-folder-fill` icon when not set. Works for both root folders and subfolders.
+> - **Static serving**: Already handled by existing `express.static('uploads')` middleware in server.js — no changes needed.
+
+---
+
+## 28. Broadcast System – Full Management & Agent View
+
+| # | Item | Classification | Reason |
+|---|------|---------------|--------|
+| 28.1 | ✅ Broadcast model as first-class entity (title, message, link, target roles, sent/email counts) | 🔴 **NEW FEATURE** | Previously broadcasts were only ephemeral notifications. A dedicated Broadcast model with CRUD is entirely new. |
+| 28.2 | ✅ Admin broadcast management page (create, edit, delete broadcasts) | 🔴 **NEW FEATURE** | No admin UI existed for managing broadcasts. Completely new page with table, modals, and full CRUD. |
+| 28.3 | ✅ Agent announcements page (view all broadcasts with read status) | 🔴 **NEW FEATURE** | Agents had no dedicated page to view broadcast history. New page with pagination, read/unread tracking, and detail modal. |
+| 28.4 | ✅ Broadcast resend to new users who haven't received it | 🔴 **NEW FEATURE** | New capability — checks which users already have notifications and sends only to those who don't. |
+| 28.5 | ✅ Broadcast activate/deactivate toggle | 🔴 **NEW FEATURE** | Ability to hide/show broadcasts without deleting. New soft-delete pattern for broadcasts. |
+
+> **Implementation Notes (Section 28):**
+> - **Model (Broadcast.js)**: New schema with title, message, link, targetRoles (admin/agent), sentCount, emailsSent, isActive, createdBy. Index on `{ isActive: 1, createdAt: -1 }`.
+> - **Backend (broadcast.routes.js)**: Full REST API — `GET /` (agent list with read status), `GET /:id` (detail + mark read), `GET /admin/all` (paginated admin list), `POST /` (create + send notifications + emails via Notification.createNotification), `PUT /:id` (edit without re-send), `DELETE /:id` (cascade delete notifications), `POST /:id/resend` (send to new users only).
+> - **Backend (notification.routes.js)**: Legacy `POST /broadcast` endpoint updated to also create Broadcast record for backward compatibility.
+> - **Frontend (broadcast.service.ts)**: Service with all CRUD methods + resend.
+> - **Frontend (broadcasts.component)**: Agent-facing page — card list with unread indicators (blue border + "New" badge), click-to-view modal, pagination, timeAgo display.
+> - **Frontend (broadcast-management.component)**: Admin page — table with all broadcasts, create/edit modal with target audience checkboxes, resend button, active/inactive toggle, delete with confirmation.
+> - **Emails**: Sent automatically via existing `Notification.createNotification()` which checks `NotificationPreference` and calls `sendNotificationEmail()`. No additional email code needed.
+
+---
+
 ## Summary: Chargeable Items for Client
 
-### 🔴 NEW FEATURES (Chargeable) — 30 items
+### 🔴 NEW FEATURES (Chargeable) — 43 items
 
 | # | Feature | Section |
 |---|---------|---------|
@@ -363,6 +420,19 @@
 | 28 | Dashboard 24-hour activity widget | §25 |
 | 29 | Dashboard ACA leaderboard widget | §25 |
 | 30 | Dashboard clickable metrics navigation + alerts | §25 |
+| 31 | APA template upload — replace document in existing DocuSign template | §26 |
+| 32 | APA template upload — create brand new DocuSign template | §26 |
+| 33 | Dynamic template ID switching via SystemConfig | §26 |
+| 34 | Revert to default APA template | §26 |
+| 35 | APA template upload history tracking | §26 |
+| 36 | Training folder thumbnail upload (admin) | §27 |
+| 37 | Training folder thumbnail display (agent view) | §27 |
+| 38 | Training folder thumbnail replace/remove | §27 |
+| 39 | Broadcast model as first-class entity | §28 |
+| 40 | Admin broadcast management page (CRUD) | §28 |
+| 41 | Agent announcements page with read tracking | §28 |
+| 42 | Broadcast resend to new users | §28 |
+| 43 | Broadcast activate/deactivate toggle | §28 |
 
 ### 🟢 BUG FIXES (Covered) — 25 items
 

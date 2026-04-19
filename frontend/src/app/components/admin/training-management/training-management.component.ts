@@ -42,6 +42,9 @@ export class TrainingManagementComponent implements OnInit {
   showEditFolderModal = false;
   folderForm!: FormGroup;
   selectedFolder: any = null;
+  selectedThumbnailFile: File | null = null;
+  thumbnailPreview: string | null = null;
+  thumbnailUploading = false;
 
   // === Active Tab ===
   activeTab: 'materials' | 'categories' | 'folders' = 'materials';
@@ -243,6 +246,8 @@ export class TrainingManagementComponent implements OnInit {
       description: folder.description || '',
       parent: folder.parent?._id || folder.parent || ''
     });
+    this.selectedThumbnailFile = null;
+    this.thumbnailPreview = folder.thumbnail ? this.getThumbnailUrl(folder.thumbnail) : null;
     this.showEditFolderModal = true;
   }
 
@@ -251,6 +256,8 @@ export class TrainingManagementComponent implements OnInit {
     this.showEditFolderModal = false;
     this.selectedFolder = null;
     this.folderForm.reset();
+    this.selectedThumbnailFile = null;
+    this.thumbnailPreview = null;
   }
 
   createFolder(): void {
@@ -259,18 +266,37 @@ export class TrainingManagementComponent implements OnInit {
     const data = { ...this.folderForm.value, order: this.folders.length };
     if (!data.parent) delete data.parent;
     this.trainingService.createFolder(data).subscribe({
-      next: () => {
-        this.success = 'Folder created successfully!';
-        this.loadFolders();
-        this.closeFolderModals();
-        this.loading = false;
-        setTimeout(() => this.success = '', 3000);
+      next: (res: any) => {
+        const newFolder = res.folder;
+        // Upload thumbnail if selected
+        if (this.selectedThumbnailFile && newFolder?._id) {
+          this.trainingService.uploadFolderThumbnail(newFolder._id, this.selectedThumbnailFile).subscribe({
+            next: () => {
+              this.success = 'Folder created with thumbnail!';
+              this.finishFolderCreate();
+            },
+            error: () => {
+              this.success = 'Folder created (thumbnail upload failed).';
+              this.finishFolderCreate();
+            }
+          });
+        } else {
+          this.success = 'Folder created successfully!';
+          this.finishFolderCreate();
+        }
       },
       error: (err: any) => {
         this.error = err.error?.message || 'Failed to create folder';
         this.loading = false;
       }
     });
+  }
+
+  private finishFolderCreate(): void {
+    this.loadFolders();
+    this.closeFolderModals();
+    this.loading = false;
+    setTimeout(() => this.success = '', 3000);
   }
 
   updateFolder(): void {
@@ -280,17 +306,35 @@ export class TrainingManagementComponent implements OnInit {
     if (!data.parent) data.parent = null;
     this.trainingService.updateFolder(this.selectedFolder._id, data).subscribe({
       next: () => {
-        this.success = 'Folder updated successfully!';
-        this.loadFolders();
-        this.closeFolderModals();
-        this.loading = false;
-        setTimeout(() => this.success = '', 3000);
+        // Upload new thumbnail if selected
+        if (this.selectedThumbnailFile) {
+          this.trainingService.uploadFolderThumbnail(this.selectedFolder._id, this.selectedThumbnailFile).subscribe({
+            next: () => {
+              this.success = 'Folder updated with new thumbnail!';
+              this.finishFolderUpdate();
+            },
+            error: () => {
+              this.success = 'Folder updated (thumbnail upload failed).';
+              this.finishFolderUpdate();
+            }
+          });
+        } else {
+          this.success = 'Folder updated successfully!';
+          this.finishFolderUpdate();
+        }
       },
       error: (err: any) => {
         this.error = err.error?.message || 'Failed to update folder';
         this.loading = false;
       }
     });
+  }
+
+  private finishFolderUpdate(): void {
+    this.loadFolders();
+    this.closeFolderModals();
+    this.loading = false;
+    setTimeout(() => this.success = '', 3000);
   }
 
   deleteFolder(folder: any): void {
@@ -306,6 +350,51 @@ export class TrainingManagementComponent implements OnInit {
         this.error = err.error?.message || 'Failed to delete folder';
       }
     });
+  }
+
+  // ========== FOLDER THUMBNAIL ==========
+
+  onThumbnailSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (!file.type.startsWith('image/')) {
+        this.error = 'Only image files are allowed.';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        this.error = 'Image must be under 5MB.';
+        return;
+      }
+      this.selectedThumbnailFile = file;
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = () => this.thumbnailPreview = reader.result as string;
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeThumbnail(folder: any): void {
+    if (!confirm('Remove the thumbnail image from this folder?')) return;
+    this.thumbnailUploading = true;
+    this.trainingService.removeFolderThumbnail(folder._id).subscribe({
+      next: () => {
+        this.success = 'Thumbnail removed.';
+        this.thumbnailUploading = false;
+        this.thumbnailPreview = null;
+        this.loadFolders();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: () => {
+        this.error = 'Failed to remove thumbnail.';
+        this.thumbnailUploading = false;
+      }
+    });
+  }
+
+  getThumbnailUrl(thumbPath: string): string {
+    if (!thumbPath) return '';
+    return `${environment.baseUrl}${thumbPath}`;
   }
 
   // ========== MATERIALS ==========

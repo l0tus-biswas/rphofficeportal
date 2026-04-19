@@ -76,6 +76,34 @@ const uploadPdf = multer({
   }
 });
 
+// Configure multer for folder thumbnail uploads
+const thumbnailStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads/training-thumbnails');
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `folder-thumb-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadThumbnail = multer({
+  storage: thumbnailStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(jpeg|jpg|png|gif|webp|svg\+xml)$/.test(file.mimetype)) {
+      return cb(null, true);
+    }
+    cb(new Error('Only image files (JPEG, PNG, GIF, WebP, SVG) are allowed'));
+  }
+});
+
 // @route   GET /api/training/materials
 // @desc    Get all training materials (filtered by access level)
 // @access  Private
@@ -384,6 +412,52 @@ router.delete('/folders/:id', logAction('DELETE_TRAINING_FOLDER'), async (req, r
     folder.isActive = false;
     await folder.save();
     sendResponse(res, 200, { message: 'Folder deleted successfully' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/training/folders/:id/thumbnail
+// @desc    Upload or replace folder thumbnail image
+// @access  Private (Admin only)
+router.post('/folders/:id/thumbnail', uploadThumbnail.single('thumbnail'), logAction('UPDATE_FOLDER_THUMBNAIL'), async (req, res) => {
+  try {
+    const folder = await TrainingFolder.findById(req.params.id);
+    if (!folder || !folder.isActive) {
+      return sendResponse(res, 404, { message: 'Folder not found' });
+    }
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No image file provided' });
+    }
+    // Delete old thumbnail if it exists
+    if (folder.thumbnail) {
+      const oldPath = path.join(__dirname, '..', folder.thumbnail);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
+    }
+    folder.thumbnail = `/uploads/training-thumbnails/${req.file.filename}`;
+    await folder.save();
+    sendResponse(res, 200, { message: 'Thumbnail uploaded successfully', folder });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/training/folders/:id/thumbnail
+// @desc    Remove folder thumbnail
+// @access  Private (Admin only)
+router.delete('/folders/:id/thumbnail', logAction('DELETE_FOLDER_THUMBNAIL'), async (req, res) => {
+  try {
+    const folder = await TrainingFolder.findById(req.params.id);
+    if (!folder || !folder.isActive) {
+      return sendResponse(res, 404, { message: 'Folder not found' });
+    }
+    if (folder.thumbnail) {
+      const oldPath = path.join(__dirname, '..', folder.thumbnail);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
+      folder.thumbnail = null;
+      await folder.save();
+    }
+    sendResponse(res, 200, { message: 'Thumbnail removed', folder });
   } catch (error) {
     errorResponse(res, error);
   }

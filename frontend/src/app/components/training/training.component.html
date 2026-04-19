@@ -79,7 +79,9 @@
           <div *ngFor="let folder of getRootFolders()" class="col-md-3 col-sm-6">
             <div class="card shadow-sm folder-card" role="button" (click)="navigateToFolder(folder)">
               <div class="card-body text-center py-3">
-                <i class="bi bi-folder-fill text-warning fs-2 d-block mb-2"></i>
+                <img *ngIf="folder.thumbnail" [src]="getFileUrl(folder.thumbnail)"
+                     class="rounded mb-2" style="width: 64px; height: 64px; object-fit: cover;">
+                <i *ngIf="!folder.thumbnail" class="bi bi-folder-fill text-warning fs-2 d-block mb-2"></i>
                 <h6 class="mb-0">{{ folder.name }}</h6>
                 <small *ngIf="folder.description" class="text-muted">{{ folder.description }}</small>
               </div>
@@ -95,7 +97,9 @@
           <div *ngFor="let sub of currentSubfolders" class="col-md-3 col-sm-6">
             <div class="card shadow-sm folder-card" role="button" (click)="navigateToFolder(sub)">
               <div class="card-body text-center py-3">
-                <i class="bi bi-folder-fill text-info fs-2 d-block mb-2"></i>
+                <img *ngIf="sub.thumbnail" [src]="getFileUrl(sub.thumbnail)"
+                     class="rounded mb-2" style="width: 64px; height: 64px; object-fit: cover;">
+                <i *ngIf="!sub.thumbnail" class="bi bi-folder-fill text-info fs-2 d-block mb-2"></i>
                 <h6 class="mb-0">{{ sub.name }}</h6>
               </div>
             </div>

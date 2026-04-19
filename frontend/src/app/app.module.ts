@@ -46,6 +46,8 @@ import { AdminApaListComponent } from './components/admin/admin-apa-list/admin-a
 import { AdminApaDetailComponent } from './components/admin/admin-apa-detail/admin-apa-detail.component';
 import { TranslationComponent } from './components/user/translation.component';
 import { NotificationsComponent } from './components/user/notifications.component';
+import { BroadcastsComponent } from './components/broadcasts/broadcasts.component';
+import { BroadcastManagementComponent } from './components/admin/broadcast-management/broadcast-management.component';
 import { ApplicationSuccessComponent } from './components/apply/application-success.component';
 import { AgentCarriersComponent } from './components/carriers/agent-carriers/agent-carriers.component';
 import { CarrierAppointmentsComponent } from './components/admin/carrier-appointments/carrier-appointments.component';
@@ -104,6 +106,8 @@ import { SafePipe } from './pipes/safe.pipe';
     AdminApaDetailComponent,
     TranslationComponent,
     NotificationsComponent,
+    BroadcastsComponent,
+    BroadcastManagementComponent,
     SafePipe,
     AgentCarriersComponent,
     CarrierAppointmentsComponent,

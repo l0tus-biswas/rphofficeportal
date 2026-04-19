@@ -1,0 +1,13 @@
+.border-start-primary {
+  border-left: 4px solid #0d6efd !important;
+}
+
+.card:hover {
+  box-shadow: 0 0.25rem 0.75rem rgba(0,0,0,.12) !important;
+  transition: box-shadow 0.2s;
+}
+
+.badge-sm {
+  font-size: 0.65rem;
+  padding: 0.2em 0.5em;
+}

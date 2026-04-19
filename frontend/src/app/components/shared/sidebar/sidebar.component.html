@@ -98,6 +98,12 @@
         <i class="bi bi-translate me-2"></i>Translation
       </a>
     </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/broadcasts" routerLinkActive="active">
+        <i class="bi bi-broadcast-pin me-2"></i>Announcements
+      </a>
+    </li>
     
     <div *ngIf="authService.isAdmin()">
       <hr>
@@ -194,6 +200,12 @@
       <li class="nav-item">
         <a class="nav-link" routerLink="/admin/promotion-levels" routerLinkActive="active">
           <i class="bi bi-bar-chart-steps me-2"></i>Promotion Levels
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/admin/broadcasts" routerLinkActive="active">
+          <i class="bi bi-broadcast-pin me-2"></i>Broadcast Management
         </a>
       </li>
 

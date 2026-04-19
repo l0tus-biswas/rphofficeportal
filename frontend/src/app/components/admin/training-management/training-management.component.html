@@ -249,7 +249,9 @@
                   </div>
                   <div class="flex-grow-1">
                     <h5 class="mb-1">
-                      <i class="bi bi-folder-fill text-warning me-2"></i>{{ folder.name }}
+                      <img *ngIf="folder.thumbnail" [src]="getThumbnailUrl(folder.thumbnail)" 
+                           class="rounded me-2" style="width: 36px; height: 36px; object-fit: cover; vertical-align: middle;">
+                      <i *ngIf="!folder.thumbnail" class="bi bi-folder-fill text-warning me-2"></i>{{ folder.name }}
                     </h5>
                     <small *ngIf="folder.description" class="text-muted">{{ folder.description }}</small>
                   </div>
@@ -589,6 +591,14 @@
             <input type="text" class="form-control" formControlName="description" placeholder="Optional description">
           </div>
           <div class="mb-3">
+            <label class="form-label">Thumbnail Image</label>
+            <input type="file" class="form-control" accept="image/*" (change)="onThumbnailSelected($event)">
+            <div class="form-text">Optional. JPEG, PNG, GIF, WebP — max 5MB.</div>
+            <div *ngIf="thumbnailPreview" class="mt-2">
+              <img [src]="thumbnailPreview" class="rounded border" style="max-height: 80px; max-width: 120px; object-fit: cover;">
+            </div>
+          </div>
+          <div class="mb-3">
             <label class="form-label">Parent Folder</label>
             <select class="form-select" formControlName="parent">
               <option value="">Root (No Parent)</option>
@@ -627,6 +637,18 @@
           <div class="mb-3">
             <label class="form-label">Description</label>
             <input type="text" class="form-control" formControlName="description">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Thumbnail Image</label>
+            <input type="file" class="form-control" accept="image/*" (change)="onThumbnailSelected($event)">
+            <div class="form-text">JPEG, PNG, GIF, WebP — max 5MB.</div>
+            <div *ngIf="thumbnailPreview" class="mt-2 d-flex align-items-center gap-2">
+              <img [src]="thumbnailPreview" class="rounded border" style="max-height: 80px; max-width: 120px; object-fit: cover;">
+              <button *ngIf="selectedFolder?.thumbnail && !selectedThumbnailFile" type="button" class="btn btn-sm btn-outline-danger"
+                      (click)="removeThumbnail(selectedFolder)" [disabled]="thumbnailUploading">
+                <i class="bi bi-trash me-1"></i>Remove
+              </button>
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Parent Folder</label>

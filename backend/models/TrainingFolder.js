@@ -10,6 +10,10 @@ const trainingFolderSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  thumbnail: {
+    type: String,
+    default: null
+  },
   parent: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'TrainingFolder',

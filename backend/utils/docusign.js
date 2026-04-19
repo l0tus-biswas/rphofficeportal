@@ -2,6 +2,7 @@ const docusign = require('docusign-esign');
 const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
+const SystemConfig = require('../models/SystemConfig');
 
 // Ensure environment variables are available when this module is required directly
 const envPath = path.resolve(__dirname, '../.env');
@@ -13,6 +14,19 @@ if (fs.existsSync(envPath)) {
  * DocuSign Integration Utility
  * Handles authentication, envelope creation, and webhook processing
  */
+
+/**
+ * Get the active DocuSign template ID
+ * Checks SystemConfig first, falls back to .env
+ * @returns {Promise<string>} Template ID
+ */
+async function getActiveTemplateId() {
+  try {
+    const config = await SystemConfig.findOne({ key: 'docusign_template_id' }).lean();
+    if (config && config.value) return config.value;
+  } catch (e) { /* fall through */ }
+  return process.env.DOCUSIGN_TEMPLATE_ID;
+}
 
 // Initialize DocuSign API client
 function getDocuSignClient() {
@@ -75,7 +89,7 @@ async function getTemplateFields(templateIdOverride = null) {
 
     const templatesApi = new docusign.TemplatesApi(apiClient);
     const accountId = process.env.DOCUSIGN_ACCOUNT_ID;
-    const templateId = templateIdOverride || process.env.DOCUSIGN_TEMPLATE_ID;
+    const templateId = templateIdOverride || await getActiveTemplateId();
 
     // Get template with recipients included
     const template = await templatesApi.get(accountId, templateId, { include: 'recipients,tabs' });
@@ -190,7 +204,7 @@ async function createAPAEnvelope(application) {
     
     envelope.emailSubject = `${recruiterName} via RHP Office - Please Sign Your Agent Partnership Agreement`;
     envelope.emailBlurb = `Thank you for applying to RHP Office! ${recruiterName} has invited you to join the team. Please review and sign your Agent Partnership Agreement to continue. Once signed, you will receive instructions for payment setup ($20/month subscription).`;
-    envelope.templateId = process.env.DOCUSIGN_TEMPLATE_ID; // APA template created in DocuSign
+    envelope.templateId = await getActiveTemplateId(); // APA template created in DocuSign
 
     // Create signer for remote (email-based) signing
     const signer = new docusign.TemplateRole();
@@ -213,7 +227,7 @@ async function createAPAEnvelope(application) {
     envelope.status = 'created'; // Create as draft first, then send after updating email settings
 
     console.log('=== Creating DocuSign Envelope ===');
-    console.log('Template ID:', process.env.DOCUSIGN_TEMPLATE_ID);
+    console.log('Template ID:', envelope.templateId);
     console.log('Role Name:', signer.roleName);
     console.log('Signer:', signer.name, '-', signer.email);
     console.log('Text Tabs Count:', signer.tabs?.textTabs?.length || 0);
@@ -708,6 +722,132 @@ function validateWebhookSignature(req) {
   }
 }
 
+/**
+ * Update the document in an existing DocuSign template
+ * Replaces the current PDF while keeping tabs/fields intact
+ * @param {Buffer} pdfBuffer - The new PDF file buffer
+ * @param {string} fileName - Original file name
+ * @param {string} templateIdOverride - Optional template ID (defaults to active)
+ * @returns {Promise<Object>} Updated template info
+ */
+async function updateTemplateDocument(pdfBuffer, fileName, templateIdOverride = null) {
+  const accessToken = await authenticateWithJWT();
+  const apiClient = getDocuSignClient();
+  apiClient.addDefaultHeader('Authorization', 'Bearer ' + accessToken);
+
+  const templatesApi = new docusign.TemplatesApi(apiClient);
+  const accountId = process.env.DOCUSIGN_ACCOUNT_ID;
+  const templateId = templateIdOverride || await getActiveTemplateId();
+
+  // Get existing template to find the document ID
+  const template = await templatesApi.get(accountId, templateId);
+  const existingDocId = template.documents && template.documents.length > 0
+    ? template.documents[0].documentId
+    : '1';
+
+  // Create the updated document definition
+  const document = new docusign.Document();
+  document.documentBase64 = pdfBuffer.toString('base64');
+  document.name = fileName || 'APA Agreement';
+  document.fileExtension = 'pdf';
+  document.documentId = existingDocId;
+
+  // Update the document in the template
+  const envelopeDefinition = new docusign.EnvelopeDefinition();
+  envelopeDefinition.documents = [document];
+
+  await templatesApi.updateDocument(accountId, templateId, existingDocId, {
+    envelopeDefinition: envelopeDefinition
+  });
+
+  console.log(`DocuSign template ${templateId} document updated with "${fileName}"`);
+
+  return {
+    templateId,
+    documentId: existingDocId,
+    fileName,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Create a brand new DocuSign template from a PDF upload
+ * @param {Buffer} pdfBuffer - PDF file buffer
+ * @param {string} fileName - Original file name
+ * @returns {Promise<Object>} New template info { templateId, name }
+ */
+async function createTemplateFromPDF(pdfBuffer, fileName) {
+  const accessToken = await authenticateWithJWT();
+  const apiClient = getDocuSignClient();
+  apiClient.addDefaultHeader('Authorization', 'Bearer ' + accessToken);
+
+  const templatesApi = new docusign.TemplatesApi(apiClient);
+  const accountId = process.env.DOCUSIGN_ACCOUNT_ID;
+
+  // Build the template definition
+  const document = new docusign.Document();
+  document.documentBase64 = pdfBuffer.toString('base64');
+  document.name = fileName || 'APA Agreement';
+  document.fileExtension = 'pdf';
+  document.documentId = '1';
+
+  const signer = new docusign.Signer();
+  signer.roleName = 'agent';
+  signer.recipientId = '1';
+  signer.routingOrder = '1';
+
+  const recipients = new docusign.Recipients();
+  recipients.signers = [signer];
+
+  const templateReq = new docusign.EnvelopeTemplate();
+  templateReq.name = `APA Agreement - ${new Date().toISOString().slice(0, 10)}`;
+  templateReq.description = 'Agent Partnership Agreement uploaded by admin';
+  templateReq.documents = [document];
+  templateReq.recipients = recipients;
+  templateReq.emailSubject = 'RHP Office - Please Sign Your Agent Partnership Agreement';
+  templateReq.status = 'created';
+
+  const result = await templatesApi.createTemplate(accountId, {
+    envelopeTemplate: templateReq
+  });
+
+  console.log(`New DocuSign template created: ${result.templateId}`);
+
+  return {
+    templateId: result.templateId,
+    name: templateReq.name
+  };
+}
+
+/**
+ * Get template info (name, documents, last modified)
+ * @param {string} templateIdOverride
+ * @returns {Promise<Object>}
+ */
+async function getTemplateInfo(templateIdOverride = null) {
+  const accessToken = await authenticateWithJWT();
+  const apiClient = getDocuSignClient();
+  apiClient.addDefaultHeader('Authorization', 'Bearer ' + accessToken);
+
+  const templatesApi = new docusign.TemplatesApi(apiClient);
+  const accountId = process.env.DOCUSIGN_ACCOUNT_ID;
+  const templateId = templateIdOverride || await getActiveTemplateId();
+
+  const template = await templatesApi.get(accountId, templateId);
+
+  return {
+    templateId,
+    name: template.name,
+    description: template.description,
+    lastModified: template.lastModifiedDateTime || template.lastModified,
+    documents: (template.documents || []).map(d => ({
+      documentId: d.documentId,
+      name: d.name,
+      pages: d.pages
+    }))
+  };
+}
+
 module.exports = {
   authenticateWithJWT,
   createAPAEnvelope,
@@ -715,5 +855,9 @@ module.exports = {
   downloadSignedDocument,
   processWebhook,
   validateWebhookSignature,
-  getTemplateFields
+  getTemplateFields,
+  getActiveTemplateId,
+  updateTemplateDocument,
+  createTemplateFromPDF,
+  getTemplateInfo
 };

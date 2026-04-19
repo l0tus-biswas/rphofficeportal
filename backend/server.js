@@ -67,6 +67,7 @@ app.use('/api/user', require('./routes/user.routes'));
 app.use('/api/licensing', require('./routes/licensing.routes'));
 app.use('/api/production', require('./routes/production.routes'));
 app.use('/api/notifications', authMiddleware, require('./routes/notification.routes'));
+app.use('/api/broadcasts', require('./routes/broadcast.routes'));
 app.use('/api/carriers', require('./routes/carrier.routes'));
 app.use('/api/commission-statements', require('./routes/commission-statements.routes'));
 app.use('/api/onboarding-hub', require('./routes/onboarding-hub.routes'));

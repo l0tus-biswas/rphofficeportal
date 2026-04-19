@@ -56,4 +56,20 @@ export class ApaService {
   setAutoApproveSetting(enabled: boolean): Observable<any> {
     return this.http.put(`${this.apiUrl}/apa-applications/settings/auto-approve`, { enabled });
   }
+
+  // APA Template Management
+  getTemplateInfo(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/apa-applications/settings/template`);
+  }
+
+  uploadTemplate(file: File, mode: string = 'replace'): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('mode', mode);
+    return this.http.post(`${this.apiUrl}/apa-applications/settings/template/upload`, formData);
+  }
+
+  revertTemplate(): Observable<any> {
+    return this.http.put(`${this.apiUrl}/apa-applications/settings/template/revert`, {});
+  }
 }
