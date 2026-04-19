@@ -4,9 +4,6 @@
     <main class="col-12 px-md-4">
       <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
         <h1 class="h2"><i class="bi bi-book-fill me-2"></i>Training Materials Management</h1>
-        <button class="btn btn-primary" (click)="openCreateModal()">
-          <i class="bi bi-plus-circle me-1"></i>Add New Material
-        </button>
       </div>
 
       <!-- Alerts -->
@@ -20,117 +17,281 @@
         <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
       </div>
 
-      <!-- Filters -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" placeholder="Search materials..." 
-                  [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="activeTab === 'materials'" (click)="activeTab = 'materials'" role="button">
+            <i class="bi bi-collection me-1"></i>Materials
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="activeTab === 'categories'" (click)="activeTab = 'categories'" role="button">
+            <i class="bi bi-tags me-1"></i>Categories
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="activeTab === 'folders'" (click)="activeTab = 'folders'" role="button">
+            <i class="bi bi-folder me-1"></i>Folders
+          </a>
+        </li>
+      </ul>
+
+      <!-- ===================== MATERIALS TAB ===================== -->
+      <div *ngIf="activeTab === 'materials'">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0">Training Materials</h4>
+          <button class="btn btn-primary" (click)="openCreateModal()">
+            <i class="bi bi-plus-circle me-1"></i>Add New Material
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" placeholder="Search materials..."
+                    [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()">
+                </div>
+              </div>
+              <div class="col-md-3">
+                <select class="form-select" [(ngModel)]="typeFilter" (change)="onFilterChange()">
+                  <option value="all">All Types</option>
+                  <option value="video">Videos</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="loom">Loom</option>
+                  <option value="document">Documents</option>
+                  <option value="link">Links</option>
+                  <option value="article">Articles</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <select class="form-select" [(ngModel)]="folderFilter" (change)="onFilterChange()">
+                  <option value="all">All Folders</option>
+                  <option value="none">No Folder</option>
+                  <option *ngFor="let folder of folders" [value]="folder._id">{{ getFolderPath(folder) }}</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <button class="btn btn-outline-primary w-100" (click)="loadMaterials()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+                </button>
               </div>
             </div>
-            <div class="col-md-4">
-              <select class="form-select" [(ngModel)]="typeFilter" (change)="onFilterChange()">
-                <option value="all">All Types</option>
-                <option value="video">Videos</option>
-                <option value="youtube">YouTube</option>
-                <option value="loom">Loom</option>
-                <option value="document">Documents</option>
-                <option value="link">Links</option>
-                <option value="article">Articles</option>
-              </select>
-            </div>
-            <div class="col-md-2">
-              <button class="btn btn-outline-primary w-100" (click)="loadMaterials()">
-                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-              </button>
+          </div>
+        </div>
+
+        <!-- Drag and Drop Info -->
+        <div *ngIf="!loading && filteredMaterials.length > 0" class="alert alert-info mb-3">
+          <i class="bi bi-grip-vertical me-2"></i>
+          <strong>Drag & Drop:</strong> Click and hold the grip icon on any card to reorder materials. Changes save automatically.
+        </div>
+
+        <!-- Loading -->
+        <div *ngIf="loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div *ngIf="!loading && filteredMaterials.length === 0" class="text-center py-5 text-muted">
+          <i class="bi bi-inbox display-1 d-block mb-3"></i>
+          <p>No training materials found</p>
+          <button class="btn btn-primary" (click)="openCreateModal()">
+            <i class="bi bi-plus-circle me-1"></i>Create First Material
+          </button>
+        </div>
+
+        <!-- Materials Grid -->
+        <div *ngIf="!loading && filteredMaterials.length > 0"
+             class="materials-grid"
+             cdkDropList
+             (cdkDropListDropped)="drop($event)">
+          <div *ngFor="let material of filteredMaterials" class="material-item" cdkDrag>
+            <div class="card h-100 shadow-sm material-card">
+              <div class="drag-handle-wrapper" cdkDragHandle>
+                <i class="bi bi-grip-vertical drag-handle"></i>
+              </div>
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                  <div class="material-icon">
+                    <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
+                  </div>
+                  <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">
+                    {{ material.type }}
+                  </span>
+                </div>
+
+                <h5 class="card-title">{{ material.title }}</h5>
+                <p class="card-text text-muted small">{{ material.description }}</p>
+
+                <div class="mb-3">
+                  <small class="text-muted">
+                    <i class="bi bi-tag me-1"></i>{{ material.category || 'Uncategorized' }}
+                  </small>
+                  <span *ngIf="material.duration" class="ms-3">
+                    <small class="text-muted">
+                      <i class="bi bi-clock me-1"></i>{{ material.duration }}
+                    </small>
+                  </span>
+                </div>
+
+                <!-- Folder badge -->
+                <div *ngIf="material.folder" class="mb-2">
+                  <small class="badge bg-light text-dark border">
+                    <i class="bi bi-folder me-1"></i>{{ getMaterialFolderName(material) }}
+                  </small>
+                </div>
+
+                <div class="mb-3">
+                  <a [href]="material.url" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>View Material
+                  </a>
+                </div>
+
+                <!-- PDF Attachment badge/download -->
+                <div *ngIf="material.pdfAttachment?.filePath" class="mb-3">
+                  <a [href]="getFileUrl(material.pdfAttachment.filePath)" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger w-100">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF: {{ material.pdfAttachment.fileName }}
+                  </a>
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-secondary flex-grow-1" (click)="openEditModal(material)">
+                    <i class="bi bi-pencil-square me-1"></i>Edit
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" (click)="deleteMaterial(material)">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
+
+                <div class="mt-2">
+                  <small class="text-muted">
+                    <i class="bi bi-calendar3 me-1"></i>{{ material.createdAt | date: 'short' }}
+                  </small>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Drag and Drop Info -->
-      <div *ngIf="!loading && filteredMaterials.length > 0" class="alert alert-info mb-3">
-        <i class="bi bi-grip-vertical me-2"></i>
-        <strong>Drag & Drop:</strong> Click and hold the grip icon on any card to reorder materials. Changes save automatically.
-      </div>
-
-      <!-- Materials Grid -->
-      <div *ngIf="loading" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">Loading...</span>
+      <!-- ===================== CATEGORIES TAB ===================== -->
+      <div *ngIf="activeTab === 'categories'">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0"><i class="bi bi-tags me-2"></i>Training Categories</h4>
+          <button class="btn btn-primary" (click)="openCategoryModal()">
+            <i class="bi bi-plus-circle me-1"></i>Add Category
+          </button>
         </div>
-      </div>
 
-      <div *ngIf="!loading && filteredMaterials.length === 0" class="text-center py-5 text-muted">
-        <i class="bi bi-inbox display-1 d-block mb-3"></i>
-        <p>No training materials found</p>
-        <button class="btn btn-primary" (click)="openCreateModal()">
-          <i class="bi bi-plus-circle me-1"></i>Create First Material
-        </button>
-      </div>
+        <div *ngIf="categories.length === 0" class="text-center py-5 text-muted">
+          <i class="bi bi-tags display-1 d-block mb-3"></i>
+          <p>No categories yet</p>
+          <button class="btn btn-primary" (click)="openCategoryModal()">
+            <i class="bi bi-plus-circle me-1"></i>Create First Category
+          </button>
+        </div>
 
-      <div *ngIf="!loading && filteredMaterials.length > 0" 
-           class="materials-grid" 
-           cdkDropList 
-           (cdkDropListDropped)="drop($event)">
-        <div *ngFor="let material of filteredMaterials" class="material-item" cdkDrag>
-          <div class="card h-100 shadow-sm material-card">
-            <div class="drag-handle-wrapper" cdkDragHandle>
-              <i class="bi bi-grip-vertical drag-handle"></i>
-            </div>
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-start mb-3">
-                <div class="material-icon">
-                  <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
-                </div>
-                <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">
-                  {{ material.type }}
-                </span>
+        <div cdkDropList (cdkDropListDropped)="dropCategory($event)" *ngIf="categories.length > 0" class="drag-list">
+          <div *ngFor="let cat of categories" cdkDrag class="drag-item card shadow-sm mb-2">
+            <div class="card-body d-flex align-items-center py-2">
+              <div cdkDragHandle class="drag-handle me-3">
+                <i class="bi bi-grip-vertical fs-4 text-muted"></i>
               </div>
-              
-              <h5 class="card-title">{{ material.title }}</h5>
-              <p class="card-text text-muted small">{{ material.description }}</p>
-              
-              <div class="mb-3">
-                <small class="text-muted">
-                  <i class="bi bi-tag me-1"></i>{{ material.category || 'Uncategorized' }}
-                </small>
-                <span *ngIf="material.duration" class="ms-3">
-                  <small class="text-muted">
-                    <i class="bi bi-clock me-1"></i>{{ material.duration }}
-                  </small>
-                </span>
+              <div class="flex-grow-1">
+                <h5 class="mb-0">
+                  <i class="bi bi-tag-fill me-2 text-primary"></i>{{ cat.name }}
+                </h5>
+                <small *ngIf="cat.description" class="text-muted">{{ cat.description }}</small>
               </div>
-
-              <div class="mb-3">
-                <a [href]="material.url" target="_blank" class="btn btn-sm btn-outline-primary w-100">
-                  <i class="bi bi-box-arrow-up-right me-1"></i>View Material
-                </a>
-              </div>
-
-              <!-- PDF Attachment badge/download -->
-              <div *ngIf="material.pdfAttachment?.filePath" class="mb-3">
-                <a [href]="getFileUrl(material.pdfAttachment.filePath)" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger w-100">
-                  <i class="bi bi-file-earmark-pdf me-1"></i>PDF: {{ material.pdfAttachment.fileName }}
-                </a>
-              </div>
-              
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-secondary flex-grow-1" (click)="openEditModal(material)">
-                  <i class="bi bi-pencil-square me-1"></i>Edit
+              <div class="d-flex gap-2 ms-2">
+                <button class="btn btn-sm btn-outline-secondary" (click)="openEditCategoryModal(cat)">
+                  <i class="bi bi-pencil me-1"></i>Edit
                 </button>
-                <button class="btn btn-sm btn-outline-danger" (click)="deleteMaterial(material)">
+                <button class="btn btn-sm btn-outline-danger" (click)="deleteCategory(cat)">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-              <div class="mt-2">
-                <small class="text-muted">
-                  <i class="bi bi-calendar3 me-1"></i>{{ material.createdAt | date: 'short' }}
-                </small>
+      <!-- ===================== FOLDERS TAB ===================== -->
+      <div *ngIf="activeTab === 'folders'">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h4 class="mb-0"><i class="bi bi-folder me-2"></i>Training Folders</h4>
+          <button class="btn btn-primary" (click)="openFolderModal()">
+            <i class="bi bi-folder-plus me-1"></i>Add Folder
+          </button>
+        </div>
+
+        <div *ngIf="folders.length === 0" class="text-center py-5 text-muted">
+          <i class="bi bi-folder display-1 d-block mb-3"></i>
+          <p>No folders yet</p>
+          <button class="btn btn-primary" (click)="openFolderModal()">
+            <i class="bi bi-folder-plus me-1"></i>Create First Folder
+          </button>
+        </div>
+
+        <!-- Root Folders (draggable) -->
+        <div cdkDropList (cdkDropListDropped)="dropFolder($event)" *ngIf="rootFolders.length > 0" class="drag-list">
+          <div *ngFor="let folder of rootFolders" cdkDrag class="drag-item mb-3">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <div class="d-flex align-items-center">
+                  <div cdkDragHandle class="drag-handle me-3">
+                    <i class="bi bi-grip-vertical fs-4 text-muted"></i>
+                  </div>
+                  <div class="flex-grow-1">
+                    <h5 class="mb-1">
+                      <i class="bi bi-folder-fill text-warning me-2"></i>{{ folder.name }}
+                    </h5>
+                    <small *ngIf="folder.description" class="text-muted">{{ folder.description }}</small>
+                  </div>
+                  <div class="d-flex gap-2 ms-2">
+                    <button class="btn btn-sm btn-outline-primary" (click)="openFolderModal(folder._id)" title="Add subfolder">
+                      <i class="bi bi-folder-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" (click)="openEditFolderModal(folder)">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" (click)="deleteFolder(folder)">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Subfolders (draggable within parent) -->
+                <div *ngIf="getSubfolders(folder._id).length > 0" class="mt-3 ms-4">
+                  <div cdkDropList (cdkDropListDropped)="dropSubfolder($event, folder._id)" class="drag-list">
+                    <div *ngFor="let sub of getSubfolders(folder._id)" cdkDrag class="drag-item d-flex align-items-center py-2 border-bottom">
+                      <div cdkDragHandle class="drag-handle me-2">
+                        <i class="bi bi-grip-vertical text-muted"></i>
+                      </div>
+                      <div class="flex-grow-1">
+                        <i class="bi bi-folder text-info me-2"></i>
+                        <span>{{ sub.name }}</span>
+                        <small *ngIf="sub.description" class="text-muted ms-2">— {{ sub.description }}</small>
+                      </div>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" (click)="openFolderModal(sub._id)" title="Add sub-subfolder">
+                          <i class="bi bi-folder-plus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" (click)="openEditFolderModal(sub)">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" (click)="deleteFolder(sub)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -140,8 +301,8 @@
   </div>
 </div>
 
-<!-- Create Material Modal -->
-<div class="modal fade" [class.show]="showCreateModal" [style.display]="showCreateModal ? 'block' : 'none'" 
+<!-- ===================== CREATE MATERIAL MODAL ===================== -->
+<div class="modal fade" [class.show]="showCreateModal" [style.display]="showCreateModal ? 'block' : 'none'"
   tabindex="-1" *ngIf="showCreateModal">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
@@ -184,25 +345,34 @@
             <div class="col-md-6 mb-3">
               <label class="form-label">Category</label>
               <select class="form-select" formControlName="category">
-                <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+                <option value="">Select Category</option>
+                <option *ngFor="let cat of categories" [value]="cat.name">{{ cat.name }}</option>
               </select>
             </div>
           </div>
 
           <div class="mb-3">
+            <label class="form-label">Folder</label>
+            <select class="form-select" formControlName="folder">
+              <option value="">No Folder (Root)</option>
+              <option *ngFor="let folder of folders" [value]="folder._id">{{ getFolderPath(folder) }}</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label">URL <span class="text-danger">*</span></label>
-            <input type="url" class="form-control" formControlName="url" 
+            <input type="url" class="form-control" formControlName="url"
               placeholder="https://..."
               [class.is-invalid]="f['url'].invalid && f['url'].touched">
             <div *ngIf="f['url'].invalid && f['url'].touched" class="invalid-feedback">
               Valid URL is required
             </div>
-            <small class="text-muted">YouTube, Loom, Vimeo, or any video/document URL</small>
+            <small class="text-muted">YouTube, Loom, Vimeo, or any video/document URL — type is auto-detected from the URL</small>
           </div>
 
           <div class="mb-3">
             <label class="form-label">Duration</label>
-            <input type="text" class="form-control" formControlName="duration" 
+            <input type="text" class="form-control" formControlName="duration"
               placeholder="e.g., 15 minutes, 1 hour">
             <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
           </div>
@@ -228,8 +398,8 @@
   </div>
 </div>
 
-<!-- Edit Material Modal -->
-<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'" 
+<!-- ===================== EDIT MATERIAL MODAL ===================== -->
+<div class="modal fade" [class.show]="showEditModal" [style.display]="showEditModal ? 'block' : 'none'"
   tabindex="-1" *ngIf="showEditModal">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
@@ -265,9 +435,18 @@
             <div class="col-md-6 mb-3">
               <label class="form-label">Category</label>
               <select class="form-select" formControlName="category">
-                <option *ngFor="let cat of categories" [value]="cat">{{ cat }}</option>
+                <option value="">Select Category</option>
+                <option *ngFor="let cat of categories" [value]="cat.name">{{ cat.name }}</option>
               </select>
             </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Folder</label>
+            <select class="form-select" formControlName="folder">
+              <option value="">No Folder (Root)</option>
+              <option *ngFor="let folder of folders" [value]="folder._id">{{ getFolderPath(folder) }}</option>
+            </select>
           </div>
 
           <div class="mb-3">
@@ -316,4 +495,161 @@
     </div>
   </div>
 </div>
-<div class="modal-backdrop fade" [class.show]="showCreateModal || showEditModal" *ngIf="showCreateModal || showEditModal"></div>
+
+<!-- ===================== CREATE CATEGORY MODAL ===================== -->
+<div class="modal fade" [class.show]="showCategoryModal" [style.display]="showCategoryModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showCategoryModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-tag me-2"></i>Add Category</h5>
+        <button type="button" class="btn-close btn-close-white" (click)="closeCategoryModals()"></button>
+      </div>
+      <form [formGroup]="categoryForm" (ngSubmit)="createCategory()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="name"
+              [class.is-invalid]="cf['name'].invalid && cf['name'].touched" placeholder="e.g., ACA University">
+            <div *ngIf="cf['name'].invalid && cf['name'].touched" class="invalid-feedback">
+              Category name is required (min 2 characters)
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-control" formControlName="description" placeholder="Optional description">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeCategoryModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="loading || categoryForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            Create Category
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EDIT CATEGORY MODAL ===================== -->
+<div class="modal fade" [class.show]="showEditCategoryModal" [style.display]="showEditCategoryModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showEditCategoryModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Category</h5>
+        <button type="button" class="btn-close" (click)="closeCategoryModals()"></button>
+      </div>
+      <form [formGroup]="categoryForm" (ngSubmit)="updateCategory()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="name"
+              [class.is-invalid]="cf['name'].invalid && cf['name'].touched">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-control" formControlName="description">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeCategoryModals()">Cancel</button>
+          <button type="submit" class="btn btn-warning" [disabled]="loading || categoryForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CREATE FOLDER MODAL ===================== -->
+<div class="modal fade" [class.show]="showFolderModal" [style.display]="showFolderModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showFolderModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i>Add Folder</h5>
+        <button type="button" class="btn-close btn-close-white" (click)="closeFolderModals()"></button>
+      </div>
+      <form [formGroup]="folderForm" (ngSubmit)="createFolder()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Folder Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="name"
+              [class.is-invalid]="ff['name'].invalid && ff['name'].touched" placeholder="e.g., ACA University">
+            <div *ngIf="ff['name'].invalid && ff['name'].touched" class="invalid-feedback">
+              Folder name is required (min 2 characters)
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-control" formControlName="description" placeholder="Optional description">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Parent Folder</label>
+            <select class="form-select" formControlName="parent">
+              <option value="">Root (No Parent)</option>
+              <option *ngFor="let f of folders" [value]="f._id">{{ getFolderPath(f) }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeFolderModals()">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="loading || folderForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            Create Folder
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EDIT FOLDER MODAL ===================== -->
+<div class="modal fade" [class.show]="showEditFolderModal" [style.display]="showEditFolderModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showEditFolderModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-warning">
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Folder</h5>
+        <button type="button" class="btn-close" (click)="closeFolderModals()"></button>
+      </div>
+      <form [formGroup]="folderForm" (ngSubmit)="updateFolder()">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Folder Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" formControlName="name"
+              [class.is-invalid]="ff['name'].invalid && ff['name'].touched">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description</label>
+            <input type="text" class="form-control" formControlName="description">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Parent Folder</label>
+            <select class="form-select" formControlName="parent">
+              <option value="">Root (No Parent)</option>
+              <option *ngFor="let f of folders" [value]="f._id"
+                [disabled]="f._id === selectedFolder?._id">{{ getFolderPath(f) }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeFolderModals()">Cancel</button>
+          <button type="submit" class="btn btn-warning" [disabled]="loading || folderForm.invalid">
+            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Shared backdrop for all modals -->
+<div class="modal-backdrop fade"
+  [class.show]="showCreateModal || showEditModal || showCategoryModal || showEditCategoryModal || showFolderModal || showEditFolderModal"
+  *ngIf="showCreateModal || showEditModal || showCategoryModal || showEditCategoryModal || showFolderModal || showEditFolderModal"></div>

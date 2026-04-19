@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const Carrier = require('../models/Carrier');
 const AgentCarrierStatus = require('../models/AgentCarrierStatus');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 
 // ---------------------------------------------------------------------------
@@ -36,6 +38,7 @@ router.get('/my-statuses', authenticate, async (req, res) => {
   try {
     const statuses = await AgentCarrierStatus.find({ agent: req.user._id })
       .populate('carrier', 'name category factor')
+      .populate('notes.addedBy', 'name')
       .sort('-requestedAt');
     res.json(statuses);
   } catch (error) {
@@ -56,6 +59,8 @@ router.get('/admin/all-requests', authenticate, authorize('admin'), async (req, 
       .populate('agent', 'name email')
       .populate('carrier', 'name category')
       .populate('appointedBy', 'name')
+      .populate('unappointedBy', 'name')
+      .populate('notes.addedBy', 'name')
       .sort('-requestedAt');
 
     res.json(requests);
@@ -245,6 +250,24 @@ router.post('/:carrierId/request', authenticate, async (req, res) => {
     if (existing) return res.json({ message: 'Contract already requested', status: existing });
 
     const status = await AgentCarrierStatus.create({ agent: req.user._id, carrier: carrier._id });
+
+    // Notify all admins about the contract request
+    try {
+      const admins = await User.find({ role: 'admin' }).select('_id').lean();
+      for (const admin of admins) {
+        await Notification.createNotification({
+          userId: admin._id,
+          type: 'carrier_contract_requested',
+          title: 'New Carrier Contract Request',
+          message: `${req.user.name} has requested a contract with ${carrier.name}.`,
+          data: { agentId: String(req.user._id), agentName: req.user.name, carrierId: String(carrier._id), carrierName: carrier.name },
+          link: '/admin/carrier-appointments'
+        });
+      }
+    } catch (notifErr) {
+      console.error('Error sending contract request notification:', notifErr);
+    }
+
     res.status(201).json({ message: 'Contract request submitted', status });
   } catch (error) {
     console.error('Error requesting contract:', error);
@@ -268,9 +291,88 @@ router.put('/admin/status/:statusId/appoint', authenticate, authorize('admin'), 
     statusRecord.appointedBy = req.user._id;
     await statusRecord.save();
 
+    // Notify the agent about appointment
+    try {
+      await Notification.createNotification({
+        userId: statusRecord.agent._id || statusRecord.agent,
+        type: 'carrier_appointed',
+        title: 'Carrier Contract Appointed',
+        message: `You have been appointed for ${statusRecord.carrier?.name || 'a carrier'}.`,
+        data: { carrierId: String(statusRecord.carrier._id || statusRecord.carrier) },
+        link: '/carriers'
+      });
+    } catch (notifErr) {
+      console.error('Error sending appointment notification:', notifErr);
+    }
+
     res.json({ message: 'Agent appointed successfully', status: statusRecord });
   } catch (error) {
     console.error('Error appointing agent:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/carriers/admin/status/:statusId/unappoint
+// @desc    Admin: unappoint an agent from a carrier
+// @access  Admin only
+router.put('/admin/status/:statusId/unappoint', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const statusRecord = await AgentCarrierStatus.findById(req.params.statusId)
+      .populate('agent', 'name email')
+      .populate('carrier', 'name');
+
+    if (!statusRecord) return res.status(404).json({ message: 'Request not found' });
+    if (statusRecord.status !== 'Appointed') return res.status(400).json({ message: 'Can only unappoint an appointed carrier' });
+
+    statusRecord.status = 'Unappointed';
+    statusRecord.unappointedAt = new Date();
+    statusRecord.unappointedBy = req.user._id;
+    await statusRecord.save();
+
+    // Notify the agent
+    try {
+      await Notification.createNotification({
+        userId: statusRecord.agent._id || statusRecord.agent,
+        type: 'carrier_unappointed',
+        title: 'Carrier Contract Unappointed',
+        message: `Your appointment for ${statusRecord.carrier?.name || 'a carrier'} has been removed.`,
+        data: { carrierId: String(statusRecord.carrier._id || statusRecord.carrier) },
+        link: '/carriers'
+      });
+    } catch (notifErr) {
+      console.error('Error sending unappoint notification:', notifErr);
+    }
+
+    res.json({ message: 'Agent unappointed successfully', status: statusRecord });
+  } catch (error) {
+    console.error('Error unappointing agent:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/carriers/admin/status/:statusId/notes
+// @desc    Admin: add a note to a carrier request
+// @access  Admin only
+router.post('/admin/status/:statusId/notes', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ message: 'Note text is required' });
+
+    const statusRecord = await AgentCarrierStatus.findById(req.params.statusId);
+    if (!statusRecord) return res.status(404).json({ message: 'Request not found' });
+
+    statusRecord.notes.push({ text: text.trim(), addedBy: req.user._id, addedAt: new Date() });
+    await statusRecord.save();
+
+    // Re-fetch with populated notes
+    const updated = await AgentCarrierStatus.findById(statusRecord._id)
+      .populate('agent', 'name email')
+      .populate('carrier', 'name category')
+      .populate('notes.addedBy', 'name');
+
+    res.json({ message: 'Note added', status: updated });
+  } catch (error) {
+    console.error('Error adding note:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

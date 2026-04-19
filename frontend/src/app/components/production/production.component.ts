@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { ProductionService, ProductionSubmission, ProductionFilters, STATUS_VALUES } from '../../services/production.service';
+import { ProductionService, ProductionSubmission, ProductionFilters, STATUS_VALUES, RankingEntry, CustomFieldDef } from '../../services/production.service';
 import { CarrierService, Carrier } from '../../services/carrier.service';
 import { AuthService } from '../../services/auth.service';
 import { AdminService } from '../../services/admin.service';
@@ -34,6 +34,9 @@ export class ProductionComponent implements OnInit {
     limit: 20
   };
   
+  // 8.5: Date preset active label
+  activeDatePreset = '';
+
   // Product types — loaded dynamically from API
   productTypes: string[] = [];
   productCategoryMap: Record<string, string> = {};
@@ -53,6 +56,19 @@ export class ProductionComponent implements OnInit {
   teamReportWindow = 30;
   teamReportLoading = false;
 
+  // 8.7: Ranking
+  showRanking = false;
+  ranking: RankingEntry[] = [];
+  rankingSortBy = 'premium';
+  rankingWindow = 0;
+  rankingLoading = false;
+
+  // 8.2: Custom fields
+  customFieldDefs: CustomFieldDef[] = [];
+  showCustomFieldsConfig = false;
+  editingCustomFields: CustomFieldDef[] = [];
+  customFieldsSaving = false;
+
   constructor(
     private productionService: ProductionService,
     private carrierService: CarrierService,
@@ -68,6 +84,7 @@ export class ProductionComponent implements OnInit {
     
     this.loadProductTypes();
     this.loadCarriers();
+    this.loadCustomFields();
     if (this.isAdmin) {
       this.loadAgents();
     }
@@ -184,6 +201,7 @@ export class ProductionComponent implements OnInit {
 
   clearFilters(): void {
     this.filters = { page: 1, limit: 20 };
+    this.activeDatePreset = '';
     this.loadSubmissions();
     this.loadStats();
   }
@@ -215,6 +233,8 @@ export class ProductionComponent implements OnInit {
   openNewSubmissionForm(): void {
     this.showForm = true;
     this.editMode = false;
+    const cf: Record<string, any> = {};
+    this.customFieldDefs.forEach(d => cf[d.key] = d.type === 'checkbox' ? false : '');
     this.currentSubmission = {
       submissionDate: new Date(),
       clientName: '',
@@ -223,7 +243,10 @@ export class ProductionComponent implements OnInit {
       carrier: '',
       premiumAmount: 0,
       notes: '',
-      status: 'Submitted'
+      status: 'Submitted',
+      numberOfMembers: 1,
+      isTrainingPeriod: false,
+      customFields: cf
     };
   }
 
@@ -234,7 +257,11 @@ export class ProductionComponent implements OnInit {
   editSubmission(submission: ProductionSubmission): void {
     this.showForm = true;
     this.editMode = true;
-    this.currentSubmission = { ...submission, carrier: submission.carrier._id };
+    this.currentSubmission = {
+      ...submission,
+      carrier: submission.carrier._id,
+      customFields: submission.customFields || {}
+    };
   }
 
   cancelForm(): void {
@@ -355,5 +382,92 @@ export class ProductionComponent implements OnInit {
       'Property & Casualty - Commercial': 'bg-dark'
     };
     return (category && classes[category]) || 'bg-secondary';
+  }
+
+  // --- 8.5: Date preset filters ---
+  setDatePreset(preset: string): void {
+    this.activeDatePreset = preset;
+    const now = new Date();
+    let start: Date | undefined;
+    switch (preset) {
+      case '30d':  start = new Date(now.getTime() - 30 * 86400000); break;
+      case '60d':  start = new Date(now.getTime() - 60 * 86400000); break;
+      case '90d':  start = new Date(now.getTime() - 90 * 86400000); break;
+      case '6mo':  start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()); break;
+      case '12mo': start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); break;
+      default:     start = undefined; break;
+    }
+    this.filters.startDate = start ? start.toISOString().split('T')[0] : undefined;
+    this.filters.endDate = preset === 'all' ? undefined : now.toISOString().split('T')[0];
+    this.applyFilters();
+  }
+
+  // --- 8.7: Ranking ---
+  toggleRanking(): void {
+    this.showRanking = !this.showRanking;
+    if (this.showRanking && this.ranking.length === 0) {
+      this.loadRanking();
+    }
+  }
+
+  loadRanking(): void {
+    this.rankingLoading = true;
+    this.productionService.getRanking(this.rankingSortBy, this.rankingWindow).subscribe({
+      next: (data) => { this.ranking = data.ranking; this.rankingLoading = false; },
+      error: () => { this.rankingLoading = false; }
+    });
+  }
+
+  // --- 8.2: Custom field configuration ---
+  loadCustomFields(): void {
+    this.productionService.getCustomFields().subscribe({
+      next: (res) => { this.customFieldDefs = res.fields; },
+      error: () => {}
+    });
+  }
+
+  openCustomFieldsConfig(): void {
+    this.editingCustomFields = this.customFieldDefs.map(f => ({ ...f }));
+    this.showCustomFieldsConfig = true;
+  }
+
+  addCustomField(): void {
+    this.editingCustomFields.push({ key: '', label: '', type: 'text', required: false });
+  }
+
+  removeCustomField(i: number): void {
+    this.editingCustomFields.splice(i, 1);
+  }
+
+  saveCustomFieldsConfig(): void {
+    // auto-generate keys from labels
+    this.editingCustomFields.forEach(f => {
+      if (!f.key && f.label) {
+        f.key = f.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
+      }
+    });
+    this.customFieldsSaving = true;
+    this.productionService.saveCustomFields(this.editingCustomFields).subscribe({
+      next: (res: any) => {
+        this.customFieldDefs = res.fields || this.editingCustomFields;
+        this.customFieldsSaving = false;
+        this.showCustomFieldsConfig = false;
+        this.success = 'Custom fields saved';
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: () => { this.customFieldsSaving = false; this.error = 'Failed to save custom fields'; }
+    });
+  }
+
+  cancelCustomFieldsConfig(): void {
+    this.showCustomFieldsConfig = false;
+  }
+
+  getOptionsString(f: CustomFieldDef): string {
+    return (f.options || []).join(', ');
+  }
+
+  setOptionsFromString(f: CustomFieldDef, value: string): void {
+    f.options = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
   }
 }

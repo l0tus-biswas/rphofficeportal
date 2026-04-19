@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { AcaService, AcaTrackerData } from '../../../services/aca.service';
+import { AcaService, AcaTrackerData, AgentBreakdownEntry } from '../../../services/aca.service';
 
 @Component({
   selector: 'app-aca-tracker',
@@ -10,6 +10,7 @@ export class AcaTrackerComponent implements OnInit {
   data: AcaTrackerData | null = null;
   loading = true;
   error = '';
+  showBreakdown = false; // 5.14: expandable agent breakdown
 
   readonly TIER_COLORS: Record<number, string> = {
     0: 'secondary',
@@ -44,15 +45,21 @@ export class AcaTrackerComponent implements OnInit {
 
   get batchDisplay(): string {
     if (!this.data?.uploadBatch) return '—';
-    const match = this.data.uploadBatch.match(/^(\d{4})-(\d{2})$/);
-    if (match) {
-      const date = new Date(parseInt(match[1]), parseInt(match[2]) - 1, 1);
+    // Handle YYYY-MM
+    const matchYM = this.data.uploadBatch.match(/^(\d{4})-(\d{2})$/);
+    if (matchYM) {
+      const date = new Date(parseInt(matchYM[1]), parseInt(matchYM[2]) - 1, 1);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    // Handle MM-YYYY
+    const matchMY = this.data.uploadBatch.match(/^(\d{2})-(\d{4})$/);
+    if (matchMY) {
+      const date = new Date(parseInt(matchMY[2]), parseInt(matchMY[1]) - 1, 1);
       return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     }
     return this.data.uploadBatch;
   }
 
-  /** Compare colour: green if verified >= reported, amber otherwise */
   compareColor(reported: number, verified: number): string {
     if (verified >= reported) return 'success';
     return 'warning';
@@ -60,5 +67,17 @@ export class AcaTrackerComponent implements OnInit {
 
   formatCurrency(amount: number): string {
     return '$' + (amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  toggleBreakdown(): void {
+    this.showBreakdown = !this.showBreakdown;
+  }
+
+  get selfEntry(): AgentBreakdownEntry | undefined {
+    return this.data?.agentBreakdown?.find(a => a.isSelf);
+  }
+
+  get teamEntries(): AgentBreakdownEntry[] {
+    return this.data?.agentBreakdown?.filter(a => !a.isSelf) || [];
   }
 }

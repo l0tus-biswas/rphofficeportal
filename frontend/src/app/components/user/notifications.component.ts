@@ -1,6 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { NotificationService, Notification } from '../../services/notification.service';
+import { AuthService } from '../../services/auth.service';
+
+interface PreferenceEntry {
+  type: string;
+  inApp: boolean;
+  email: boolean;
+}
 
 @Component({
   selector: 'app-notifications',
@@ -15,9 +22,29 @@ export class NotificationsComponent implements OnInit {
   unreadCount: number = 0;
   showUnreadOnly: boolean = false;
 
+  // Tab control
+  activeTab: 'notifications' | 'preferences' | 'broadcast' = 'notifications';
+
+  // Preferences
+  categories: { [key: string]: string[] } = {};
+  preferencesMap: { [type: string]: { inApp: boolean; email: boolean } } = {};
+  muteAllEmails: boolean = false;
+  prefsLoading: boolean = false;
+  prefsSaving: boolean = false;
+  prefsMessage: string = '';
+
+  // Broadcast (admin)
+  broadcastTitle: string = '';
+  broadcastMessage: string = '';
+  broadcastLink: string = '';
+  broadcastRoles: string[] = [];
+  broadcastSending: boolean = false;
+  broadcastResult: string = '';
+
   constructor(
     private notificationService: NotificationService,
-    private router: Router
+    private router: Router,
+    public authService: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -159,6 +186,18 @@ export class NotificationsComponent implements OnInit {
       'user_deactivated':       'bi-person-fill-slash',
       'user_promoted':          'bi-trophy-fill',
       'user_transferred':       'bi-arrow-left-right',
+      // Carrier
+      'carrier_contract_requested': 'bi-file-earmark-plus-fill',
+      'carrier_appointed':      'bi-building-fill-check',
+      'carrier_unappointed':    'bi-building-fill-slash',
+      // Document Hub
+      'document_request':       'bi-file-earmark-arrow-down-fill',
+      'document_submitted':     'bi-file-earmark-arrow-up-fill',
+      'document_reviewed':      'bi-file-earmark-check-fill',
+      // New types
+      'new_agent_registered':   'bi-person-fill-add',
+      'production_in_force':    'bi-shield-fill-check',
+      'admin_broadcast':        'bi-broadcast-pin',
       // Misc
       'system_announcement':    'bi-megaphone-fill',
       'promotion_eligible':     'bi-star-fill'
@@ -195,6 +234,19 @@ export class NotificationsComponent implements OnInit {
       'user_deactivated':       'danger',
       'user_promoted':          'warning',
       'user_transferred':       'info',
+      // Carrier
+      'carrier_contract_requested': 'info',
+      'carrier_appointed':      'success',
+      'carrier_unappointed':    'secondary',
+      // Document Hub
+      'document_request':       'info',
+      'document_submitted':     'primary',
+      'document_reviewed':      'success',
+      // New types
+      'new_agent_registered':   'success',
+      'production_in_force':    'success',
+      'admin_broadcast':        'dark',
+      // Misc
       'system_announcement':    'dark',
       'promotion_eligible':     'warning'
     };
@@ -220,5 +272,123 @@ export class NotificationsComponent implements OnInit {
     if (weeks < 4) return `${weeks}w ago`;
     
     return notifDate.toLocaleDateString();
+  }
+
+  // ─── Tab switching ───
+  switchTab(tab: 'notifications' | 'preferences' | 'broadcast'): void {
+    this.activeTab = tab;
+    if (tab === 'preferences' && Object.keys(this.categories).length === 0) {
+      this.loadPreferences();
+    }
+  }
+
+  // ─── Preferences ───
+  loadPreferences(): void {
+    this.prefsLoading = true;
+    this.prefsMessage = '';
+    this.notificationService.getPreferences().subscribe({
+      next: (response: any) => {
+        const data = response?.preferences || response?.data?.preferences || response;
+        this.categories = response?.categories || response?.data?.categories || {};
+        this.muteAllEmails = data?.muteAllEmails || false;
+
+        // Build preferences map with defaults (all enabled)
+        const savedPrefs = data?.preferences || {};
+        this.preferencesMap = {};
+        for (const types of Object.values(this.categories)) {
+          for (const type of types as string[]) {
+            const saved = savedPrefs[type];
+            this.preferencesMap[type] = {
+              inApp: saved?.inApp !== false,
+              email: saved?.email !== false
+            };
+          }
+        }
+        this.prefsLoading = false;
+      },
+      error: (error: any) => {
+        console.error('Error loading preferences:', error);
+        this.prefsLoading = false;
+      }
+    });
+  }
+
+  savePreferences(): void {
+    this.prefsSaving = true;
+    this.prefsMessage = '';
+    this.notificationService.updatePreferences(this.preferencesMap, this.muteAllEmails).subscribe({
+      next: () => {
+        this.prefsSaving = false;
+        this.prefsMessage = 'Preferences saved successfully!';
+        setTimeout(() => this.prefsMessage = '', 3000);
+      },
+      error: (error: any) => {
+        console.error('Error saving preferences:', error);
+        this.prefsSaving = false;
+        this.prefsMessage = 'Failed to save preferences.';
+      }
+    });
+  }
+
+  getCategoryTypes(category: string): string[] {
+    return this.categories[category] || [];
+  }
+
+  getCategoryList(): string[] {
+    return Object.keys(this.categories);
+  }
+
+  formatTypeName(type: string): string {
+    return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  toggleCategoryInApp(category: string): void {
+    const types = this.getCategoryTypes(category);
+    const allOn = types.every(t => this.preferencesMap[t]?.inApp !== false);
+    types.forEach(t => {
+      if (this.preferencesMap[t]) this.preferencesMap[t].inApp = !allOn;
+    });
+  }
+
+  toggleCategoryEmail(category: string): void {
+    const types = this.getCategoryTypes(category);
+    const allOn = types.every(t => this.preferencesMap[t]?.email !== false);
+    types.forEach(t => {
+      if (this.preferencesMap[t]) this.preferencesMap[t].email = !allOn;
+    });
+  }
+
+  // ─── Broadcast (Admin only) ───
+  toggleBroadcastRole(role: string): void {
+    const idx = this.broadcastRoles.indexOf(role);
+    if (idx >= 0) this.broadcastRoles.splice(idx, 1);
+    else this.broadcastRoles.push(role);
+  }
+
+  sendBroadcast(): void {
+    if (!this.broadcastTitle.trim() || !this.broadcastMessage.trim()) return;
+    this.broadcastSending = true;
+    this.broadcastResult = '';
+    this.notificationService.broadcast(
+      this.broadcastTitle.trim(),
+      this.broadcastMessage.trim(),
+      this.broadcastLink.trim() || undefined,
+      this.broadcastRoles.length > 0 ? this.broadcastRoles : undefined
+    ).subscribe({
+      next: (response: any) => {
+        const count = response?.sentCount || response?.data?.sentCount || 0;
+        this.broadcastResult = `Broadcast sent to ${count} users`;
+        this.broadcastSending = false;
+        this.broadcastTitle = '';
+        this.broadcastMessage = '';
+        this.broadcastLink = '';
+        this.broadcastRoles = [];
+      },
+      error: (error: any) => {
+        console.error('Broadcast error:', error);
+        this.broadcastResult = 'Failed to send broadcast.';
+        this.broadcastSending = false;
+      }
+    });
   }
 }

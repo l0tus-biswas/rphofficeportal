@@ -1,0 +1,11 @@
+.tree-node:hover {
+  background-color: #f8f9fa;
+}
+
+.tree-node-wrapper {
+  transition: all 0.2s ease;
+}
+
+.tree-node .btn-sm {
+  line-height: 1;
+}

@@ -4,8 +4,11 @@ const APAApplication = require('../models/APAApplication');
 const Notification = require('../models/Notification');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
+const User = require('../models/User');
+const SystemConfig = require('../models/SystemConfig');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
+const { sendNotificationEmail } = require('../utils/neuzmail');
 
 // All routes require admin authentication
 router.use(protect);
@@ -125,6 +128,19 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/approve', async (req, res) =>
         link: '/profile'
       }, false).catch(() => {});
     }
+
+    // Send approval email to applicant
+    const applicantEmail = application.personalInfo?.email;
+    const applicantName = application.personalInfo?.legalFirstName || 'Applicant';
+    if (applicantEmail) {
+      sendNotificationEmail({
+        toEmail: applicantEmail,
+        title: 'APA Application Approved',
+        message: `Congratulations ${applicantName}! Your APA application has been approved and is now active. You can log in to your account to view your status and get started.`,
+        link: '/dashboard',
+        actionLabel: 'Go to Dashboard'
+      }).catch(err => console.error('[APA Approve] Email error:', err.message));
+    }
     
     sendResponse(res, 200, {
       success: true,
@@ -169,6 +185,19 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
         message: `Your APA application was rejected. Reason: ${reason}`,
         link: '/profile'
       }, false).catch(() => {});
+    }
+
+    // Send rejection email to applicant
+    const rejApplicantEmail = application.personalInfo?.email;
+    const rejApplicantName = application.personalInfo?.legalFirstName || 'Applicant';
+    if (rejApplicantEmail) {
+      sendNotificationEmail({
+        toEmail: rejApplicantEmail,
+        title: 'APA Application Update',
+        message: `Dear ${rejApplicantName}, your APA application was not approved. Reason: ${reason}. If you have questions or would like to re-apply, please contact our support team.`,
+        link: '/profile',
+        actionLabel: 'View Profile'
+      }).catch(err => console.error('[APA Reject] Email error:', err.message));
     }
     
     sendResponse(res, 200, {
@@ -321,6 +350,62 @@ router.post('/apa-applications/backfill-onboarding-docs', async (req, res) => {
       updated,
       skipped,
       errors
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// APA Auto-Approval Setting
+// ---------------------------------------------------------------------------
+
+// @route   GET /api/admin/apa-applications/settings/auto-approve
+// @desc    Get current auto-approve setting
+// @access  Admin only
+router.get('/apa-applications/settings/auto-approve', async (req, res) => {
+  try {
+    const config = await SystemConfig.findOne({ key: 'apa_auto_approve' }).lean();
+    sendResponse(res, 200, {
+      autoApprove: config ? config.value === 'true' : false,
+      description: 'When enabled, APA applications are automatically approved after payment is completed, skipping manual admin review.'
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/apa-applications/settings/auto-approve
+// @desc    Toggle auto-approve setting
+// @access  Admin only
+router.put('/apa-applications/settings/auto-approve', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return errorResponse(res, new Error('"enabled" must be a boolean'), 400);
+    }
+
+    await SystemConfig.findOneAndUpdate(
+      { key: 'apa_auto_approve' },
+      {
+        $set: {
+          key: 'apa_auto_approve',
+          value: String(enabled),
+          category: 'application',
+          description: 'Auto-approve APA applications after payment completion',
+          isEditable: true,
+          updatedBy: req.user._id
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    sendResponse(res, 200, {
+      success: true,
+      autoApprove: enabled,
+      message: enabled
+        ? 'Auto-approve enabled. New applications will be approved automatically after payment.'
+        : 'Auto-approve disabled. Applications require manual admin approval.'
     });
   } catch (error) {
     errorResponse(res, error);

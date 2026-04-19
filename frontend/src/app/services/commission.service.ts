@@ -3,15 +3,25 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface CommissionNote {
+  _id?: string;
+  text: string;
+  addedBy?: { _id: string; name: string };
+  addedAt?: string;
+}
+
 export interface CommissionStatement {
   _id?: string;
   agent?: any;
   carrier: string;
+  carriers: string[];
+  carrierList: string[];
   payPeriod: string | Date;
   filePath?: string;
   originalFileName?: string;
   uploadedBy?: any;
   uploadedAt?: Date;
+  notes: CommissionNote[];
 }
 
 @Injectable({
@@ -37,13 +47,29 @@ export class CommissionService {
     return this.http.get<CommissionStatement[]>(this.apiUrl, { params });
   }
 
-  // Get download URL for a statement
-  getDownloadUrl(statementId: string): string {
-    return `${this.apiUrl}/${statementId}/download`;
+  // Download a statement PDF (returns blob with auth header)
+  downloadStatement(statementId: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/${statementId}/download`, { responseType: 'blob' });
   }
 
   // Delete statement (admin)
   deleteStatement(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${id}`);
+  }
+
+  // 6.4: Search agents by name
+  searchAgents(query: string): Observable<{ agents: any[] }> {
+    const params = new HttpParams().set('q', query);
+    return this.http.get<{ agents: any[] }>(`${this.apiUrl}/agents/search`, { params });
+  }
+
+  // 6.3: Add note to statement
+  addNote(statementId: string, text: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${statementId}/notes`, { text });
+  }
+
+  // 6.3: Delete note from statement
+  deleteNote(statementId: string, noteId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${statementId}/notes/${noteId}`);
   }
 }

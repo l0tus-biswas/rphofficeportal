@@ -14,6 +14,13 @@ export class CarrierAppointmentsComponent implements OnInit {
   error = '';
   success = '';
   appointingId = '';
+  unappointingId = '';
+
+  // Notes modal
+  showNotesModal = false;
+  selectedRequest: AgentCarrierStatus | null = null;
+  newNoteText = '';
+  addingNote = false;
 
   constructor(private carrierService: CarrierService) {}
 
@@ -57,6 +64,59 @@ export class CarrierAppointmentsComponent implements OnInit {
       error: (err) => {
         this.error = err.error?.message || 'Failed to appoint agent';
         this.appointingId = '';
+      }
+    });
+  }
+
+  unappoint(request: AgentCarrierStatus): void {
+    if (!request._id) return;
+    if (!confirm(`Unappoint ${(request.agent as any)?.name} from ${(request.carrier as any)?.name}?`)) return;
+    this.unappointingId = request._id;
+    this.error = '';
+
+    this.carrierService.unappointCarrier(request._id).subscribe({
+      next: () => {
+        this.success = `Agent unappointed from ${(request.carrier as any)?.name || 'carrier'}`;
+        this.unappointingId = '';
+        this.loadRequests();
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to unappoint agent';
+        this.unappointingId = '';
+      }
+    });
+  }
+
+  openNotes(request: AgentCarrierStatus): void {
+    this.selectedRequest = request;
+    this.newNoteText = '';
+    this.showNotesModal = true;
+  }
+
+  closeNotesModal(): void {
+    this.showNotesModal = false;
+    this.selectedRequest = null;
+    this.newNoteText = '';
+  }
+
+  addNote(): void {
+    if (!this.selectedRequest?._id || !this.newNoteText.trim()) return;
+    this.addingNote = true;
+
+    this.carrierService.addNote(this.selectedRequest._id, this.newNoteText.trim()).subscribe({
+      next: (res) => {
+        this.selectedRequest = res.status;
+        // Also update in the main list
+        const idx = this.requests.findIndex(r => r._id === res.status._id);
+        if (idx !== -1) this.requests[idx] = res.status;
+        this.applyFilter();
+        this.newNoteText = '';
+        this.addingNote = false;
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to add note';
+        this.addingNote = false;
       }
     });
   }

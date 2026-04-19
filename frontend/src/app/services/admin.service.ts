@@ -76,7 +76,7 @@ export class AdminService {
   }
 
   getAllAgents(): Observable<User[]> {
-    return this.http.get<User[]>(`${this.apiUrl}/admin/users?role=agent`, this.getHeaders());
+    return this.http.get<User[]>(`${this.apiUrl}/admin/users?role=agent&limit=1000`, this.getHeaders());
   }
 
   promoteAgent(userId: string, level: string): Observable<any> {

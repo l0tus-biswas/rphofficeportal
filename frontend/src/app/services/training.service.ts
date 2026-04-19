@@ -43,6 +43,44 @@ export class TrainingService {
     return this.http.get(`${this.apiUrl}/training/categories`, this.getHeaders());
   }
 
+  // ===== CATEGORY CRUD (Admin) =====
+
+  createCategory(data: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/training/categories`, data, this.getHeaders());
+  }
+
+  updateCategory(id: string, data: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/training/categories/${id}`, data, this.getHeaders());
+  }
+
+  deleteCategory(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/training/categories/${id}`, this.getHeaders());
+  }
+
+  // ===== FOLDER CRUD =====
+
+  getFolders(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/training/folders`, this.getHeaders());
+  }
+
+  getFolderContents(folderId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/training/folders/${folderId}/contents`, this.getHeaders());
+  }
+
+  createFolder(data: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/training/folders`, data, this.getHeaders());
+  }
+
+  updateFolder(id: string, data: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/training/folders/${id}`, data, this.getHeaders());
+  }
+
+  deleteFolder(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/training/folders/${id}`, this.getHeaders());
+  }
+
+  // ===== MATERIALS =====
+
   createMaterial(data: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/training/materials`, data, this.getHeaders());
   }

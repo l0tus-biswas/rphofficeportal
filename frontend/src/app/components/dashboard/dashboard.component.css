@@ -111,6 +111,95 @@
   to { opacity: 1; }
 }
 
+/* §25.6 — Clickable metric cards */
+.clickable-card {
+  cursor: pointer;
+}
+
+.clickable-card:hover {
+  border-left-color: #0d6efd !important;
+}
+
+.click-hint {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  opacity: 0;
+  color: #0d6efd;
+  transition: opacity 0.2s ease;
+}
+
+.clickable-card:hover .click-hint {
+  opacity: 0.6;
+}
+
+/* §25.3 — Activity Card */
+.activity-card {
+  background: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.activity-card .card-body {
+  overflow-y: auto;
+  max-height: 360px;
+}
+
+.activity-feed .activity-item:hover {
+  background: #f8f9fa;
+}
+
+.activity-feed .activity-item:last-child {
+  border-bottom: none !important;
+}
+
+/* §25.5 — Alerts Card */
+.alerts-card {
+  background: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-height: 420px;
+  overflow: hidden;
+}
+
+.alerts-card .card-body {
+  overflow-y: auto;
+  max-height: 360px;
+}
+
+.alerts-feed .alert-item:hover {
+  background: #f8f9fa;
+}
+
+.alerts-feed .alert-item:last-child {
+  border-bottom: none !important;
+}
+
+.unread-alert {
+  background: #f0f7ff;
+  border-left: 3px solid #0d6efd;
+}
+
+/* §25.4 — Leaderboard Card */
+.leaderboard-card {
+  background: white;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.leaderboard-card .card-body > div > div:last-child {
+  border-bottom: none !important;
+}
+
+.leaderboard-card .card-body > div > div:hover {
+  background: #f8f9fa;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .welcome-header {

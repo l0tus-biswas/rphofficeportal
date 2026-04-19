@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Complete Your Payment</title>
+  <!--
+    TEMPLATE: Payment Setup Link
+    TRIGGER: After DocuSign agreement is signed
+    SUBJECT: {APP_NAME} - Complete Your Payment Setup
+    
+    MERGE TAGS:
+    {FIRST_NAME}      - Applicant's first name
+    {PAYMENT_URL}     - Full payment page URL (with applicationId)
+    {APP_NAME}        - Application/company name
+    {APP_URL}         - Base application URL
+    {CURRENT_YEAR}    - Current year for copyright
+  -->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #4CAF50; padding: 30px 40px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Almost There!</h1>
+              <p style="color: #e8f5e9; margin: 10px 0 0 0; font-size: 15px;">One last step to activate your account</p>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="color: #333333; margin: 0 0 15px 0; font-size: 20px;">Welcome aboard, {FIRST_NAME}!</h2>
+              <p style="color: #555555; font-size: 15px; line-height: 1.6; margin: 0 0 15px 0;">
+                Thank you for signing the Agent Partnership Agreement with {APP_NAME}.
+              </p>
+              <p style="color: #555555; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                To complete your onboarding, please set up your payment information:
+              </p>
+              
+              <!-- CTA Button -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto 25px auto;" align="center">
+                <tr>
+                  <td style="background-color: #4CAF50; border-radius: 6px;">
+                    <a href="{PAYMENT_URL}" style="display: inline-block; padding: 16px 40px; color: #ffffff; text-decoration: none; font-size: 17px; font-weight: 600;">Complete Payment Setup</a>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Pricing Info -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 25px 0;">
+                <tr>
+                  <td style="background-color: #e8f5e9; padding: 18px 20px; border-radius: 8px; text-align: center;">
+                    <p style="color: #2e7d32; font-size: 16px; font-weight: 600; margin: 0 0 5px 0;">Only $20/month for full CRM access</p>
+                    <p style="color: #4caf50; font-size: 14px; margin: 0;">No setup fee required!</p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Post-Payment Benefits -->
+              <h3 style="color: #333333; margin: 25px 0 12px 0; font-size: 16px;">After payment, you'll be able to:</h3>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding: 8px 0 8px 20px; color: #555555; font-size: 14px;">🔐 Set your account password</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0 8px 20px; color: #555555; font-size: 14px;">🚀 Access all platform features</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0 8px 20px; color: #555555; font-size: 14px;">👥 Start building your team</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #fafafa; padding: 25px 40px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="color: #999999; font-size: 12px; margin: 0 0 5px 0;">&copy; {CURRENT_YEAR} {APP_NAME}. All rights reserved.</p>
+              <a href="{APP_URL}" style="color: #4CAF50; font-size: 12px; text-decoration: none;">{APP_URL}</a>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

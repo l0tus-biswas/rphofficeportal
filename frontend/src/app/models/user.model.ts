@@ -86,4 +86,54 @@ export interface Stats {
   totalDownline?: number;
   activeRecruits?: number;
   inactiveRecruits?: number;
+  licensedAgents?: number;
+  unlicensedAgents?: number;
+  totalProduction?: number;
+  productionInForce?: number;
+  recentProduction?: number;
+  totalPremiumInForce?: number;
+  // §25.3 — 24-hour activity
+  newAgents24h?: number;
+  newLicensedAgents24h?: number;
+  newUnlicensedAgents24h?: number;
+  newProduction24h?: number;
+  newProductionSubmitted24h?: number;
+  newProductionInForce24h?: number;
+  newApplications24h?: number;
+  recentActivity?: ActivityItem[];
+  // §25.4 — ACA leaderboard
+  totalACAClients?: number;
+  acaBatch?: string;
+  topPersonalACA?: ACALeaderEntry[];
+  topTeamACA?: ACATeamEntry[];
+  // §25.5 — Recent alerts
+  recentAlerts?: AlertItem[];
+}
+
+export interface ActivityItem {
+  type: string;
+  icon: string;
+  color: string;
+  text: string;
+  time: string;
+}
+
+export interface ACALeaderEntry {
+  agentName: string;
+  clientCount: number;
+}
+
+export interface ACATeamEntry {
+  agentName: string;
+  teamClientCount: number;
+}
+
+export interface AlertItem {
+  _id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  link?: string;
+  createdAt: string;
 }

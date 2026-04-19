@@ -2,39 +2,64 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { parse } = require('csv-parse/sync');
+const XLSX = require('xlsx');
 const User = require('../models/User');
 const ACAClientRecord = require('../models/ACAClientRecord');
+const AcaTierConfig = require('../models/AcaTierConfig');
 const ProductionSubmission = require('../models/ProductionSubmission');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse, getDownlineIds } = require('../utils/helpers');
 
 // ---------------------------------------------------------------------------
-// Multer — in-memory CSV storage (no files saved to disk)
+// Multer — in-memory storage for CSV + XLSX (5.1: Excel support, 5.2: multi-file)
 // ---------------------------------------------------------------------------
-const csvUpload = multer({
+const fileUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+    const allowed = [
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(file.mimetype) || ['.csv', '.xlsx', '.xls'].includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only CSV files are allowed'), false);
+      cb(new Error('Only CSV and Excel (.xlsx/.xls) files are allowed'), false);
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB
+  limits: { fileSize: 10 * 1024 * 1024 } // 10 MB per file
 });
 
 // ---------------------------------------------------------------------------
-// Tier calculation
+// Helper: parse any uploaded file buffer → array of row objects
+// Supports CSV and XLSX (5.1)
 // ---------------------------------------------------------------------------
-function calcTier(count) {
-  if (count >= 3000) return { tier: 3, label: 'Tier 3', rate: 3, bonus: count * 3 };
-  if (count >= 2000) return { tier: 2, label: 'Tier 2', rate: 2, bonus: count * 2 };
-  if (count >= 1000) return { tier: 1, label: 'Tier 1', rate: 1, bonus: count * 1 };
-  return { tier: 0, label: 'Tier 0', rate: 0, bonus: 0 };
+function parseFileToRows(buffer, originalname) {
+  const ext = path.extname(originalname).toLowerCase();
+  if (ext === '.xlsx' || ext === '.xls') {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) throw new Error('Excel file has no sheets.');
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+    // Normalize headers
+    return rows.map(row => {
+      const normalized = {};
+      for (const key of Object.keys(row)) {
+        normalized[normalizeHeader(key)] = row[key];
+      }
+      return normalized;
+    });
+  }
+  // Default: CSV
+  return parse(buffer.toString('utf-8'), {
+    columns: (headers) => headers.map(normalizeHeader),
+    skip_empty_lines: true,
+    trim: true
+  });
 }
-
-const TIER_THRESHOLDS = [0, 1000, 2000, 3000];
 
 // ---------------------------------------------------------------------------
 // Helper: normalize CSV header names
@@ -45,65 +70,102 @@ function normalizeHeader(h) {
 
 // ---------------------------------------------------------------------------
 // @route   POST /api/admin/aca-clients/upload
-// @desc    Upload client-level ACA CSV; groups by agent, sums household_size
+// @desc    Upload ACA client CSV/XLSX (single or multi-file); groups by agent
 // @access  Admin only
 //
-// Expected CSV columns (in order):
-//   first_name, last_name, issuer, agent, household_size
+// Supports: CSV and Excel (.xlsx/.xls) — 5.1
+// Multi-file: send multiple files in field "files" — 5.2
+// Replace batch: set body.replaceBatch = "true" to clear previous data — 5.7
+//
+// Expected columns: first_name, last_name, issuer, agent, household_size
 // ---------------------------------------------------------------------------
-router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUpload.single('file'), async (req, res) => {
+router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileUpload.fields([
+  { name: 'files', maxCount: 10 },
+  { name: 'file', maxCount: 1 }
+]), async (req, res) => {
   try {
-    if (!req.file) {
-      return sendResponse(res, 400, { message: 'No CSV file provided. Send file in field "file".' });
+    // Support both 'files' (new multi-file) and 'file' (legacy single-file) field names
+    const filesArr = (req.files && req.files['files']) || [];
+    const fileArr = (req.files && req.files['file']) || [];
+    const files = [...filesArr, ...fileArr];
+    if (files.length === 0) {
+      return sendResponse(res, 400, { message: 'No file provided. Send CSV or Excel file(s) in field "files".' });
     }
 
-    // Parse the CSV
-    let rows;
-    try {
-      rows = parse(req.file.buffer.toString('utf-8'), {
-        columns: (headers) => headers.map(normalizeHeader),
-        skip_empty_lines: true,
-        trim: true
-      });
-    } catch (parseErr) {
-      return sendResponse(res, 422, { message: `CSV parse error: ${parseErr.message}` });
-    }
-
-    if (!rows || rows.length === 0) {
-      return sendResponse(res, 422, { message: 'CSV file is empty or has no data rows.' });
-    }
-
-    // Determine upload batch: use param, body field, or default to current YYYY-MM
+    // Determine upload batch: use body field, query, or default to current YYYY-MM
     let uploadBatch = (req.body && req.body.uploadBatch) || req.query.uploadBatch;
     if (!uploadBatch) {
       const now = new Date();
       uploadBatch = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    // ------------------------------------------------------------------
-    // Step 1 — Group client rows by agent name, summing household_size
-    // Each CSV row = one client policy. household_size = covered members.
-    // ------------------------------------------------------------------
-    const agentTotals = new Map(); // agentName (lowercase) → { displayName, householdSize, rowCount }
+    // 5.7: Replace batch — delete all existing records for this batch before inserting
+    const replaceBatch = req.body && (req.body.replaceBatch === 'true' || req.body.replaceBatch === true);
+    if (replaceBatch) {
+      await ACAClientRecord.deleteMany({ uploadBatch });
+    }
 
+    // ------------------------------------------------------------------
+    // Step 1 — Parse all files and merge rows
+    // ------------------------------------------------------------------
+    let allRows = [];
+    const fileResults = []; // per-file parse info
+    const parseErrors = [];
+
+    for (const file of files) {
+      try {
+        const rows = parseFileToRows(file.buffer, file.originalname);
+        if (!rows || rows.length === 0) {
+          parseErrors.push({ file: file.originalname, reason: 'File is empty or has no data rows.' });
+          continue;
+        }
+        fileResults.push({ file: file.originalname, rowCount: rows.length });
+        allRows = allRows.concat(rows.map((r, idx) => ({ ...r, _sourceFile: file.originalname, _sourceRow: idx + 2 })));
+      } catch (parseErr) {
+        parseErrors.push({ file: file.originalname, reason: `Parse error: ${parseErr.message}` });
+      }
+    }
+
+    if (allRows.length === 0 && parseErrors.length > 0) {
+      return sendResponse(res, 422, {
+        message: 'All files failed to parse.',
+        parseErrors
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // Step 2 — Group client rows by agent name, summing household_size
+    // ------------------------------------------------------------------
+    const agentTotals = new Map();
     const invalidRows = [];
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = 0; i < allRows.length; i++) {
+      const row = allRows[i];
       const agentName = row.agent ? String(row.agent).trim() : null;
 
       if (!agentName) {
-        invalidRows.push({ rowIndex: i + 2, ...row, reason: 'Missing "agent" column value' });
+        invalidRows.push({
+          rowIndex: row._sourceRow,
+          sourceFile: row._sourceFile,
+          firstName: row.first_name || '',
+          lastName: row.last_name || '',
+          reason: 'Missing "agent" column value'
+        });
         continue;
       }
 
       const householdSizeRaw = row.household_size;
       const householdSize = householdSizeRaw !== undefined && householdSizeRaw !== ''
         ? parseInt(String(householdSizeRaw).trim(), 10)
-        : 1; // default 1 member if blank
+        : 1;
 
       if (isNaN(householdSize) || householdSize < 0) {
-        invalidRows.push({ rowIndex: i + 2, ...row, reason: `Invalid household_size: "${householdSizeRaw}"` });
+        invalidRows.push({
+          rowIndex: row._sourceRow,
+          sourceFile: row._sourceFile,
+          agentName,
+          reason: `Invalid household_size: "${householdSizeRaw}"`
+        });
         continue;
       }
 
@@ -118,20 +180,18 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
     }
 
     // ------------------------------------------------------------------
-    // Step 2 — Match each agent group to a User record and upsert
+    // Step 3 — Match agents to User records and upsert (5.8: detailed errors)
     // ------------------------------------------------------------------
     const matched = [];
-    const unmatched = [...invalidRows]; // invalid rows are always unmatched
+    const unmatched = [];
     const errors = [];
 
-    for (const [, { displayName, householdSize }] of agentTotals) {
-      // Match by exact name (case-insensitive), role=agent
+    for (const [, { displayName, householdSize, rowCount }] of agentTotals) {
       let agentDoc = await User.findOne({
         name: { $regex: new RegExp(`^${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         role: 'agent'
       }).select('_id email name').lean();
 
-      // Fallback: partial match on first+last name
       if (!agentDoc) {
         const parts = displayName.split(/\s+/);
         if (parts.length >= 2) {
@@ -146,6 +206,7 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
         unmatched.push({
           agentName: displayName,
           householdSize,
+          rowCount,
           reason: 'Agent not found in system'
         });
         continue;
@@ -163,7 +224,7 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
             uploadBatch,
             uploadedBy: req.user._id,
             uploadedAt: new Date(),
-            source: 'csv'
+            source: files.length === 1 ? path.extname(files[0].originalname).replace('.', '') : 'multi'
           },
           { upsert: true, new: true }
         );
@@ -172,6 +233,7 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
           agentName: agentDoc.name,
           agentEmail: agentDoc.email,
           clientCount: householdSize,
+          rowCount,
           batch: uploadBatch
         });
       } catch (upsertErr) {
@@ -181,13 +243,19 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
 
     return sendResponse(res, 200, {
       message: `Upload complete. ${matched.length} agents matched, ${unmatched.length} unmatched.`,
-      totalClientRows: rows.length,
+      totalClientRows: allRows.length,
+      filesProcessed: fileResults.length,
+      fileResults,
       agentGroupsFound: agentTotals.size,
       uploadBatch,
+      replacedBatch: replaceBatch,
       matched: matched.length,
+      matchedDetails: matched,
       unmatchedCount: unmatched.length,
       unmatched,
-      errors
+      invalidRows,
+      errors,
+      parseErrors
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -196,7 +264,7 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), csvUp
 
 // ---------------------------------------------------------------------------
 // @route   GET /api/admin/aca-clients/batches
-// @desc    List all upload batches with summary stats
+// @desc    List all upload batches with summary stats (5.6: improved clarity)
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.get('/admin/aca-clients/batches', authenticate, authorize('admin'), async (req, res) => {
@@ -212,14 +280,45 @@ router.get('/admin/aca-clients/batches', authenticate, authorize('admin'), async
             $sum: { $cond: [{ $eq: ['$isProducing', true] }, 1, 0] }
           },
           uploadedAt: { $max: '$uploadedAt' },
-          uploadedBy: { $last: '$uploadedBy' }
+          uploadedBy: { $last: '$uploadedBy' },
+          source: { $last: '$source' }
         }
       },
       { $sort: { _id: -1 } },
       { $limit: 24 }
     ]);
 
+    // Populate uploadedBy name
+    const User = require('../models/User');
+    for (const b of batches) {
+      if (b.uploadedBy) {
+        const u = await User.findById(b.uploadedBy).select('name').lean();
+        b.uploadedByName = u ? u.name : 'Unknown';
+      }
+    }
+
     return sendResponse(res, 200, { batches });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   DELETE /api/admin/aca-clients/batches/:batch
+// @desc    Delete all records for a given batch (5.3)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.delete('/admin/aca-clients/batches/:batch', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { batch } = req.params;
+    if (!batch) {
+      return sendResponse(res, 400, { message: 'Batch identifier is required.' });
+    }
+    const result = await ACAClientRecord.deleteMany({ uploadBatch: batch });
+    return sendResponse(res, 200, {
+      message: `Batch "${batch}" deleted. ${result.deletedCount} record(s) removed.`,
+      deletedCount: result.deletedCount
+    });
   } catch (err) {
     return errorResponse(res, err);
   }
@@ -247,21 +346,22 @@ router.get('/admin/aca-clients/records', authenticate, authorize('admin'), async
 // ---------------------------------------------------------------------------
 // @route   GET /api/dashboard/aca-tracker
 // @desc    Agent + admin: Reported vs Verified ACA tracker
-//          Reported  = self-reported from ProductionSubmission (ACA / Health Insurance, In Force)
-//          Verified  = carrier-verified from ACAClientRecord (admin CSV upload)
+//          Fixed: separates personal vs team (5.9-5.10), configurable tiers (5.11-5.12)
+//          Added: agent breakdown (5.14)
 // @access  Authenticated (agent or admin)
 // ---------------------------------------------------------------------------
 router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
   try {
-    const downlineIds = await getDownlineIds(req.user._id);
-    const teamIds = [req.user._id, ...downlineIds];
+    const userId = req.user._id;
+    const downlineIds = await getDownlineIds(userId);
+    const teamIds = [userId, ...downlineIds];
 
     // ── REPORTED (from ProductionSubmission) ─────────────────────────
-    // ACA = 'Health Insurance' category, status 'In Force'
-    const reportedAgg = await ProductionSubmission.aggregate([
+    // Personal reported
+    const personalReportedAgg = await ProductionSubmission.aggregate([
       {
         $match: {
-          agent: { $in: teamIds },
+          agent: userId,
           productCategory: 'Health Insurance',
           status: 'In Force'
         }
@@ -269,16 +369,38 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       {
         $group: {
           _id: null,
-          reportedClientCount: { $sum: 1 },
-          reportedPremium: { $sum: '$premiumAmount' },
-          producingAgents: { $addToSet: '$agent' }
+          clientCount: { $sum: 1 },
+          premium: { $sum: '$premiumAmount' }
         }
       }
     ]);
 
-    const reportedClientCount = reportedAgg.length > 0 ? reportedAgg[0].reportedClientCount : 0;
-    const reportedPremium = reportedAgg.length > 0 ? reportedAgg[0].reportedPremium : 0;
-    const reportedProducingAgents = reportedAgg.length > 0 ? reportedAgg[0].producingAgents.length : 0;
+    // Team reported (downline only, excluding self)
+    const teamReportedAgg = downlineIds.length > 0 ? await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: { $in: downlineIds },
+          productCategory: 'Health Insurance',
+          status: 'In Force'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          clientCount: { $sum: 1 },
+          premium: { $sum: '$premiumAmount' },
+          producingAgents: { $addToSet: '$agent' }
+        }
+      }
+    ]) : [];
+
+    const personalReportedClients = personalReportedAgg.length > 0 ? personalReportedAgg[0].clientCount : 0;
+    const personalReportedPremium = personalReportedAgg.length > 0 ? personalReportedAgg[0].premium : 0;
+    const teamReportedClients = teamReportedAgg.length > 0 ? teamReportedAgg[0].clientCount : 0;
+    const teamReportedPremium = teamReportedAgg.length > 0 ? teamReportedAgg[0].premium : 0;
+    const teamReportedProducingAgents = teamReportedAgg.length > 0 ? teamReportedAgg[0].producingAgents.length : 0;
+    const totalReportedClients = personalReportedClients + teamReportedClients;
+    const totalReportedPremium = personalReportedPremium + teamReportedPremium;
 
     // ── VERIFIED (from ACAClientRecord — latest batch) ───────────────
     const latestBatchDoc = await ACAClientRecord.findOne(
@@ -286,66 +408,119 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       { uploadBatch: 1, uploadedAt: 1 }
     ).sort({ uploadedAt: -1 }).lean();
 
-    let verifiedClientCount = 0;
-    let verifiedPremium = 0;
-    let verifiedProducingAgents = 0;
+    let personalVerifiedClients = 0;
+    let personalVerifiedPremium = 0;
+    let teamVerifiedClients = 0;
+    let teamVerifiedPremium = 0;
+    let teamVerifiedProducingAgents = 0;
     let uploadBatch = null;
     let uploadedAt = null;
+    let agentBreakdown = []; // 5.14
 
     if (latestBatchDoc) {
       uploadBatch = latestBatchDoc.uploadBatch;
 
-      const verifiedAgg = await ACAClientRecord.aggregate([
-        { $match: { agent: { $in: teamIds }, uploadBatch } },
+      // Personal verified
+      const personalVerifiedAgg = await ACAClientRecord.aggregate([
+        { $match: { agent: userId, uploadBatch } },
         {
           $group: {
             _id: null,
             totalClients: { $sum: '$clientCount' },
-            totalPremium: { $sum: '$verifiedPremium' },
-            producingCount: {
-              $sum: { $cond: [{ $eq: ['$isProducing', true] }, 1, 0] }
-            },
-            uploadedAt: { $max: '$uploadedAt' }
+            totalPremium: { $sum: '$verifiedPremium' }
           }
         }
       ]);
 
-      if (verifiedAgg.length > 0) {
-        verifiedClientCount = verifiedAgg[0].totalClients;
-        verifiedPremium = verifiedAgg[0].totalPremium;
-        verifiedProducingAgents = verifiedAgg[0].producingCount;
-        uploadedAt = verifiedAgg[0].uploadedAt;
+      if (personalVerifiedAgg.length > 0) {
+        personalVerifiedClients = personalVerifiedAgg[0].totalClients;
+        personalVerifiedPremium = personalVerifiedAgg[0].totalPremium;
       }
+
+      // Team verified (downline only, excluding self)
+      if (downlineIds.length > 0) {
+        const teamVerifiedAgg = await ACAClientRecord.aggregate([
+          { $match: { agent: { $in: downlineIds }, uploadBatch } },
+          {
+            $group: {
+              _id: null,
+              totalClients: { $sum: '$clientCount' },
+              totalPremium: { $sum: '$verifiedPremium' },
+              producingCount: {
+                $sum: { $cond: [{ $eq: ['$isProducing', true] }, 1, 0] }
+              }
+            }
+          }
+        ]);
+
+        if (teamVerifiedAgg.length > 0) {
+          teamVerifiedClients = teamVerifiedAgg[0].totalClients;
+          teamVerifiedPremium = teamVerifiedAgg[0].totalPremium;
+          teamVerifiedProducingAgents = teamVerifiedAgg[0].producingCount;
+        }
+      }
+
+      uploadedAt = latestBatchDoc.uploadedAt;
+
+      // 5.14: Agent breakdown — per-agent client counts for the team
+      const breakdownRaw = await ACAClientRecord.find(
+        { agent: { $in: teamIds }, uploadBatch }
+      ).populate('agent', 'name email').lean();
+
+      agentBreakdown = breakdownRaw.map(r => ({
+        agentId: r.agent?._id || r.agent,
+        agentName: r.agent?.name || r.agentName,
+        agentEmail: r.agent?.email || r.agentEmail,
+        clientCount: r.clientCount,
+        isProducing: r.isProducing,
+        isSelf: String(r.agent?._id || r.agent) === String(userId)
+      })).sort((a, b) => b.clientCount - a.clientCount);
     }
 
-    const hasData = reportedClientCount > 0 || verifiedClientCount > 0;
+    const totalVerifiedClients = personalVerifiedClients + teamVerifiedClients;
+    const totalVerifiedPremium = personalVerifiedPremium + teamVerifiedPremium;
+    const hasData = totalReportedClients > 0 || totalVerifiedClients > 0;
 
-    // Tier is based on verified count
-    const tierInfo = calcTier(verifiedClientCount);
-    const nextTier = tierInfo.tier < 3 ? tierInfo.tier + 1 : 3;
-    const nextTierThreshold = TIER_THRESHOLDS[nextTier] || TIER_THRESHOLDS[3];
-    const currentThreshold = TIER_THRESHOLDS[tierInfo.tier];
+    // ── TIERS — configurable (5.11-5.12) + per-agent (5.13) ──────────
+    const tiers = await AcaTierConfig.getTiersForAgent(userId);
+    const tierInfo = AcaTierConfig.calcTierFromList(totalVerifiedClients, tiers);
+
+    // Sort tiers ascending by threshold for progress calculation
+    const sortedTiers = [...tiers].sort((a, b) => a.threshold - b.threshold);
+    const currentTierIdx = sortedTiers.findIndex(t => t.tier === tierInfo.tier);
+    const nextTierEntry = sortedTiers[currentTierIdx + 1] || null;
+    const currentThreshold = sortedTiers[currentTierIdx]?.threshold || 0;
+    const nextTierThreshold = nextTierEntry ? nextTierEntry.threshold : currentThreshold;
 
     let progressPercent;
-    if (tierInfo.tier >= 3) {
-      progressPercent = 100;
+    if (!nextTierEntry) {
+      progressPercent = 100; // max tier
     } else {
       const bandSize = nextTierThreshold - currentThreshold;
-      const inBand = verifiedClientCount - currentThreshold;
-      progressPercent = Math.min(100, Math.round((inBand / bandSize) * 100));
+      const inBand = totalVerifiedClients - currentThreshold;
+      progressPercent = bandSize > 0 ? Math.min(100, Math.round((inBand / bandSize) * 100)) : 100;
     }
 
     return sendResponse(res, 200, {
       hasData,
-      // Reported (self-reported from production submissions)
-      reportedClientCount,
-      reportedPremium,
-      reportedProducingAgents,
-      // Verified (carrier-verified from admin CSV)
-      verifiedClientCount,
-      verifiedPremium,
-      verifiedProducingAgents,
-      // Tier info (based on verified)
+      // Personal (5.10)
+      personalReportedClients,
+      personalReportedPremium,
+      personalVerifiedClients,
+      personalVerifiedPremium,
+      // Team (downline only) (5.9-5.10)
+      teamReportedClients,
+      teamReportedPremium,
+      teamVerifiedClients,
+      teamVerifiedPremium,
+      teamVerifiedProducingAgents,
+      teamReportedProducingAgents,
+      // Combined totals
+      totalReportedClients,
+      totalReportedPremium,
+      totalVerifiedClients,
+      totalVerifiedPremium,
+      // Tier info (based on total verified) (5.11-5.12)
       currentTier: tierInfo.tier,
       currentTierLabel: tierInfo.label,
       bonusRate: tierInfo.rate,
@@ -353,9 +528,14 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       progressPercent,
       tierThreshold: currentThreshold,
       nextTierThreshold,
+      isMaxTier: !nextTierEntry,
+      allTiers: sortedTiers,
       // Batch info
       uploadBatch,
-      uploadedAt
+      uploadedAt,
+      // Agent breakdown (5.14)
+      agentBreakdown,
+      teamSize: downlineIds.length
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -364,16 +544,124 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // @route   GET /api/admin/aca-clients/sample-csv
-// @desc    Download the sample ACA CSV template
+// @desc    Download the sample ACA CSV template (5.4: fixed)
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.get('/admin/aca-clients/sample-csv', authenticate, authorize('admin'), (req, res) => {
   const filePath = path.join(__dirname, '../uploads/aca-sample.csv');
+  if (!fs.existsSync(filePath)) {
+    return sendResponse(res, 404, { message: 'Sample CSV file not found on server. Please contact support.' });
+  }
   res.download(filePath, 'aca-sample.csv', (err) => {
-    if (err) {
-      return errorResponse(res, err);
+    if (err && !res.headersSent) {
+      return sendResponse(res, 500, { message: 'Failed to download sample CSV.' });
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/admin/aca-tiers
+// @desc    Get the current global ACA tier configuration (5.12)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.get('/admin/aca-tiers', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const tiers = await AcaTierConfig.getTiersForAgent(null);
+    const config = await AcaTierConfig.findOne({ agent: null }).lean();
+    return sendResponse(res, 200, {
+      tiers,
+      updatedBy: config?.updatedBy || null,
+      updatedAt: config?.updatedAt || null
+    });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/admin/aca-tiers
+// @desc    Update global ACA tier thresholds and rates (5.12)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.put('/admin/aca-tiers', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { tiers } = req.body;
+    if (!Array.isArray(tiers) || tiers.length === 0) {
+      return sendResponse(res, 400, { message: 'Provide a non-empty "tiers" array.' });
+    }
+    // Validate each tier entry
+    for (const t of tiers) {
+      if (typeof t.tier !== 'number' || typeof t.threshold !== 'number' || typeof t.rate !== 'number' || !t.label) {
+        return sendResponse(res, 400, { message: 'Each tier must have: tier (number), label (string), threshold (number), rate (number).' });
+      }
+    }
+    const config = await AcaTierConfig.findOneAndUpdate(
+      { agent: null },
+      { tiers, updatedBy: req.user._id, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+    return sendResponse(res, 200, { message: 'Tier configuration updated.', tiers: config.tiers });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/admin/aca-tiers/agent-overrides
+// @desc    List all per-agent tier overrides (5.13)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.get('/admin/aca-tiers/agent-overrides', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const overrides = await AcaTierConfig.find({ agent: { $ne: null } })
+      .populate('agent', 'name email')
+      .lean();
+    return sendResponse(res, 200, { overrides });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/admin/aca-tiers/agent/:agentId
+// @desc    Set or update per-agent tier override (5.13)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.put('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { tiers } = req.body;
+    if (!Array.isArray(tiers) || tiers.length === 0) {
+      return sendResponse(res, 400, { message: 'Provide a non-empty "tiers" array.' });
+    }
+    for (const t of tiers) {
+      if (typeof t.tier !== 'number' || typeof t.threshold !== 'number' || typeof t.rate !== 'number' || !t.label) {
+        return sendResponse(res, 400, { message: 'Each tier must have: tier, label, threshold, rate.' });
+      }
+    }
+    const config = await AcaTierConfig.findOneAndUpdate(
+      { agent: agentId },
+      { agent: agentId, tiers, updatedBy: req.user._id, updatedAt: new Date() },
+      { upsert: true, new: true }
+    );
+    return sendResponse(res, 200, { message: 'Agent tier override saved.', config });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   DELETE /api/admin/aca-tiers/agent/:agentId
+// @desc    Remove per-agent tier override (revert to global) (5.13)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.delete('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    await AcaTierConfig.deleteOne({ agent: req.params.agentId });
+    return sendResponse(res, 200, { message: 'Agent tier override removed. Agent will use global tiers.' });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
 });
 
 module.exports = router;

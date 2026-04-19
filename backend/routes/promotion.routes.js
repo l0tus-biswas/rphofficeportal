@@ -21,11 +21,14 @@ async function getSortedLevels() {
 }
 
 // ============================================================================
-// Helper: compute premium for a set of agent IDs within a rolling window
+// Helper: compute premium for a set of agent IDs since a date or rolling window
+// If sinceDate is provided, use it; otherwise fall back to rolling windowDays
 // ============================================================================
-async function sumQualifyingPremium(agentIds, windowDays) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - windowDays);
+async function sumQualifyingPremium(agentIds, windowDays, sinceDate) {
+  const cutoff = sinceDate ? new Date(sinceDate) : new Date();
+  if (!sinceDate) {
+    cutoff.setDate(cutoff.getDate() - windowDays);
+  }
 
   const result = await ProductionSubmission.aggregate([
     {
@@ -42,16 +45,29 @@ async function sumQualifyingPremium(agentIds, windowDays) {
 }
 
 // ============================================================================
-// Helper: count distinct producing agents within a rolling window
+// Helper: count distinct producing agents since a date or rolling window
+// Only counts LICENSED agents (LicensingProgress.isLicensed === true)
 // ============================================================================
-async function countProducingAgents(agentIds, windowDays) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - windowDays);
+async function countProducingAgents(agentIds, windowDays, sinceDate) {
+  const cutoff = sinceDate ? new Date(sinceDate) : new Date();
+  if (!sinceDate) {
+    cutoff.setDate(cutoff.getDate() - windowDays);
+  }
+
+  // Get licensed agent IDs first
+  const LicensingProgress = require('../models/LicensingProgress');
+  const licensedRecords = await LicensingProgress.find({
+    agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
+    isLicensed: true
+  }).select('agent').lean();
+  const licensedIds = licensedRecords.map(r => r.agent);
+
+  if (licensedIds.length === 0) return 0;
 
   const result = await ProductionSubmission.aggregate([
     {
       $match: {
-        agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
+        agent: { $in: licensedIds },
         status: 'In Force',
         productCategory: { $in: QUALIFYING_CATEGORIES },
         submissionDate: { $gte: cutoff }
@@ -70,13 +86,10 @@ const FAST_TRACK_MULTIPLIER = 1.4;
 // ============================================================================
 // Helper: compute premium per direct leg (first-level children) for 50% cap
 // ============================================================================
-async function getPremiumByLeg(userId, windowDays) {
+async function getPremiumByLeg(userId, windowDays, sinceDate) {
   const User = require('../models/User');
   const user = await User.findById(userId).select('children').lean();
   if (!user || !user.children || user.children.length === 0) return [];
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - windowDays);
 
   const legPremiums = [];
   for (const childId of user.children) {
@@ -93,12 +106,12 @@ async function getPremiumByLeg(userId, windowDays) {
         }
       }
     }
-    const premium = await sumQualifyingPremium(legIds, windowDays);
+    const premium = await sumQualifyingPremium(legIds, windowDays, sinceDate);
     legPremiums.push({ legId: childId, premium });
   }
 
   // Also include personal production as a "leg"
-  const personalPremium = await sumQualifyingPremium([userId], windowDays);
+  const personalPremium = await sumQualifyingPremium([userId], windowDays, sinceDate);
   if (personalPremium > 0) {
     legPremiums.push({ legId: userId, premium: personalPremium, isPersonal: true });
   }
@@ -126,7 +139,7 @@ function checkBuilderLegCap(legPremiums, totalPremium) {
 router.get('/tracker', authenticate, async (req, res) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).select('level').lean();
+    const user = await User.findById(userId).select('level promotedAt').lean();
     if (!user) return errorResponse(res, new Error('User not found'), 404);
 
     const windowParam = parseInt(req.query.window, 10);
@@ -144,9 +157,12 @@ router.get('/tracker', authenticate, async (req, res) => {
     const isMaxLevel = resolvedIdx >= levels.length - 1;
     const next = isMaxLevel ? null : levels[resolvedIdx + 1];
 
+    // Use promotedAt as production reset point; fall back to rolling window if no promotion date
+    const promotedAt = user.promotedAt || null;
+
     // ---- Producer Track ----
     const producerWindow = windowParam || (next ? next.producerWindowDays : current.producerWindowDays);
-    const producerPremium = await sumQualifyingPremium([userId], producerWindow);
+    const producerPremium = await sumQualifyingPremium([userId], producerWindow, promotedAt);
     const producerTarget = next ? next.producerPremiumThreshold : current.producerPremiumThreshold;
     const producerProgress = producerTarget > 0
       ? Math.min(Math.round((producerPremium / producerTarget) * 100), 100)
@@ -155,13 +171,13 @@ router.get('/tracker', authenticate, async (req, res) => {
     // ---- Builder Track ----
     const downlineIds = await getDownlineIds(userId);
     const builderWindow = windowParam || (next ? next.builderWindowDays : current.builderWindowDays);
-    const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow);
+    const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow, promotedAt);
     const builderTarget = next ? next.builderPremiumThreshold : current.builderPremiumThreshold;
     const builderProgress = builderTarget > 0
       ? Math.min(Math.round((builderPremium / builderTarget) * 100), 100)
       : 100;
 
-    const activeAgents = await countProducingAgents(downlineIds, builderWindow);
+    const activeAgents = await countProducingAgents(downlineIds, builderWindow, promotedAt);
     const targetAgentCount = next ? next.builderAgentCountThreshold : current.builderAgentCountThreshold;
     const agentProgress = targetAgentCount > 0
       ? Math.min(Math.round((activeAgents / targetAgentCount) * 100), 100)
@@ -194,8 +210,8 @@ router.get('/tracker', authenticate, async (req, res) => {
         // Builder fast-track: 1.4× team premium AND 50% leg cap
         let builderFastTrack = false;
         if (builderPremium >= builderSkipThreshold) {
-          const legPremiums = await getPremiumByLeg(userId, builderWindow);
-          const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow));
+          const legPremiums = await getPremiumByLeg(userId, builderWindow, promotedAt);
+          const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow, promotedAt));
           builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium);
         }
 
@@ -369,7 +385,7 @@ router.put('/admin/levels/:id', authenticate, authorize('admin'), async (req, re
 router.post('/check-advancement', authenticate, async (req, res) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).select('level name').lean();
+    const user = await User.findById(userId).select('level name promotedAt').lean();
     if (!user) return errorResponse(res, new Error('User not found'), 404);
 
     const levels = await getSortedLevels();
@@ -383,15 +399,16 @@ router.post('/check-advancement', authenticate, async (req, res) => {
     }
 
     const next = levels[currentIdx + 1];
+    const promotedAt = user.promotedAt || null;
 
     // Check Producer track
-    const producerPremium = await sumQualifyingPremium([userId], next.producerWindowDays);
+    const producerPremium = await sumQualifyingPremium([userId], next.producerWindowDays, promotedAt);
     const producerMet = producerPremium >= next.producerPremiumThreshold;
 
     // Check Builder track
     const downlineIds = await getDownlineIds(userId);
-    const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays);
-    const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays);
+    const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt);
+    const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt);
     const builderMet = builderPremium >= next.builderPremiumThreshold &&
                        activeAgents >= next.builderAgentCountThreshold;
 

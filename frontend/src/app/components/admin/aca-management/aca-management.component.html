@@ -1,234 +1,536 @@
-
 <div class="container-fluid py-4">
   <!-- Page header -->
   <div class="d-flex align-items-center mb-4">
     <div>
       <h2 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>ACA Client Volume Management</h2>
-      <p class="text-muted mb-0 small">Upload monthly ACA client count CSV files and review upload history.</p>
+      <p class="text-muted mb-0 small">Upload monthly ACA client data, manage batches, and configure bonus tiers.</p>
     </div>
   </div>
 
-  <div class="row g-4">
-    <!-- Upload panel -->
-    <div class="col-12 col-lg-5">
-      <div class="card shadow-sm h-100">
-        <div class="card-header bg-white py-3">
-          <h5 class="mb-0 fw-semibold"><i class="bi bi-upload me-2"></i>Upload CSV</h5>
-        </div>
-        <div class="card-body">
-          <!-- Expected format note -->
-          <div class="alert alert-light border small">
-            <strong>Required CSV columns (in order):</strong>
-            <ol class="mb-1 mt-1 ps-3">
-              <li><code>first_name</code> — Client's first name</li>
-              <li><code>last_name</code> — Client's last name</li>
-              <li><code>issuer</code> — Insurance carrier</li>
-              <li><code>agent</code> — Agent's full name assigned to client</li>
-              <li><code>household_size</code> — Number of members on the policy</li>
-            </ol>
-            <span class="text-muted">Each row = one client policy. The system groups rows by agent name and sums <code>household_size</code> to compute each agent's total covered members. Unmatched agent names are reported.</span>
-            <div class="mt-2">
-              <button class="btn btn-sm btn-outline-secondary" (click)="downloadSampleCsv()">
-                <i class="bi bi-download me-1"></i>Download Sample CSV
-              </button>
-            </div>
+  <!-- Tabs: Upload & History | Tier Configuration -->
+  <ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+      <a class="nav-link" [class.active]="activeTab === 'upload'" (click)="activeTab = 'upload'" role="button">
+        <i class="bi bi-cloud-upload me-1"></i>Upload &amp; History
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" [class.active]="activeTab === 'tiers'" (click)="activeTab = 'tiers'" role="button">
+        <i class="bi bi-sliders me-1"></i>Tier Configuration
+      </a>
+    </li>
+  </ul>
+
+  <!-- ================================================================ -->
+  <!-- TAB 1: Upload & History                                          -->
+  <!-- ================================================================ -->
+  <div *ngIf="activeTab === 'upload'">
+    <div class="row g-4">
+      <!-- Upload panel -->
+      <div class="col-12 col-lg-5">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-semibold"><i class="bi bi-upload me-2"></i>Upload CSV / Excel</h5>
           </div>
-
-          <!-- Batch override (optional) -->
-          <div class="mb-3">
-            <label for="uploadBatchInput" class="form-label small fw-semibold">
-              Batch Period <span class="text-muted fw-normal">(optional — defaults to current month)</span>
-            </label>
-            <input
-              type="text"
-              id="uploadBatchInput"
-              class="form-control"
-              [(ngModel)]="uploadBatchInput"
-              [placeholder]="defaultBatchPlaceholder"
-              [disabled]="uploading"
-            />
-            <div class="form-text">Format: YYYY-MM, e.g. {{ defaultBatchPlaceholder }}</div>
-          </div>
-
-          <!-- File picker -->
-          <div class="mb-3">
-            <label for="csvFileInput" class="form-label small fw-semibold">Select CSV File</label>
-            <input
-              type="file"
-              id="csvFileInput"
-              class="form-control"
-              accept=".csv,text/csv"
-              (change)="onFileSelected($event)"
-              [disabled]="uploading"
-            />
-          </div>
-
-          <!-- Upload button -->
-          <button
-            class="btn btn-primary w-100"
-            (click)="upload()"
-            [disabled]="uploading || !selectedFile">
-            <span *ngIf="uploading" class="spinner-border spinner-border-sm me-2" role="status"></span>
-            <i *ngIf="!uploading" class="bi bi-cloud-upload me-2"></i>
-            {{ uploading ? 'Uploading...' : 'Upload CSV' }}
-          </button>
-
-          <!-- Upload error -->
-          <div *ngIf="uploadError" class="alert alert-danger mt-3 mb-0 py-2 small">
-            <i class="bi bi-exclamation-circle me-1"></i>{{ uploadError }}
-          </div>
-
-          <!-- Upload result -->
-          <div *ngIf="uploadResult" class="mt-3">
-            <div class="alert alert-success py-2 small mb-2">
-              <i class="bi bi-check-circle me-1"></i>{{ uploadResult.message }}
-            </div>
-            <div class="row g-2 text-center">
-              <div class="col-4">
-                <div class="bg-light rounded p-2">
-                  <div class="fs-5 fw-bold text-muted">{{ uploadResult.totalClientRows || '—' }}</div>
-                  <div class="small text-muted">Client Rows</div>
-                </div>
+          <div class="card-body">
+            <!-- Expected format note -->
+            <div class="alert alert-light border small">
+              <strong>Required columns:</strong>
+              <ol class="mb-1 mt-1 ps-3">
+                <li><code>first_name</code> — Client's first name</li>
+                <li><code>last_name</code> — Client's last name</li>
+                <li><code>issuer</code> — Insurance carrier</li>
+                <li><code>agent</code> — Agent's full name</li>
+                <li><code>household_size</code> — Members on the policy</li>
+              </ol>
+              <span class="text-muted">Supports <strong>CSV</strong> and <strong>Excel (.xlsx/.xls)</strong>. Multiple files allowed.</span>
+              <div class="mt-2">
+                <button class="btn btn-sm btn-outline-secondary" (click)="downloadSampleCsv()">
+                  <i class="bi bi-download me-1"></i>Download Sample CSV
+                </button>
               </div>
-              <div class="col-4">
-                <div class="bg-light rounded p-2">
-                  <div class="fs-5 fw-bold text-success">{{ uploadResult.matched }}</div>
-                  <div class="small text-muted">Agents Matched</div>
-                </div>
+            </div>
+
+            <!-- Batch override (optional) -->
+            <div class="mb-3">
+              <label for="uploadBatchInput" class="form-label small fw-semibold">
+                Batch Period <span class="text-muted fw-normal">(optional — defaults to current month)</span>
+              </label>
+              <input
+                type="text"
+                id="uploadBatchInput"
+                class="form-control"
+                [(ngModel)]="uploadBatchInput"
+                [placeholder]="defaultBatchPlaceholder"
+                [disabled]="uploading"
+              />
+              <div class="form-text">Format: MM-YYYY, e.g. {{ defaultBatchPlaceholder }}</div>
+            </div>
+
+            <!-- Replace batch toggle (5.7) -->
+            <div class="form-check mb-3">
+              <input
+                type="checkbox"
+                class="form-check-input"
+                id="replaceBatchToggle"
+                [(ngModel)]="replaceBatch"
+                [disabled]="uploading"
+              />
+              <label class="form-check-label small" for="replaceBatchToggle">
+                <strong>Replace batch</strong> — Delete all existing records for this month before uploading
+              </label>
+            </div>
+
+            <!-- File picker (multi-file, CSV + XLSX) -->
+            <div class="mb-3">
+              <label for="fileInput" class="form-label small fw-semibold">Select File(s)</label>
+              <input
+                type="file"
+                id="fileInput"
+                class="form-control"
+                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                (change)="onFilesSelected($event)"
+                [disabled]="uploading"
+                multiple
+              />
+            </div>
+
+            <!-- Selected files list -->
+            <div *ngIf="selectedFiles.length > 0" class="mb-3">
+              <div class="small fw-semibold text-muted mb-1">Selected files:</div>
+              <div *ngFor="let file of selectedFiles; let i = index" class="d-flex align-items-center justify-content-between bg-light rounded px-2 py-1 mb-1">
+                <span class="small">
+                  <i class="bi" [ngClass]="file.name.endsWith('.csv') ? 'bi-filetype-csv text-success' : 'bi-file-earmark-excel text-primary'"></i>
+                  {{ file.name }} <span class="text-muted">({{ (file.size / 1024).toFixed(1) }} KB)</span>
+                </span>
+                <button class="btn btn-sm btn-close" (click)="removeFile(i)"></button>
               </div>
-              <div class="col-4">
-                <div class="bg-light rounded p-2">
-                  <div class="fs-5 fw-bold" [class.text-warning]="uploadResult.unmatchedCount > 0" [class.text-muted]="uploadResult.unmatchedCount === 0">
-                    {{ uploadResult.unmatchedCount }}
+            </div>
+
+            <!-- Upload button -->
+            <button
+              class="btn btn-primary w-100"
+              (click)="upload()"
+              [disabled]="uploading || selectedFiles.length === 0">
+              <span *ngIf="uploading" class="spinner-border spinner-border-sm me-2" role="status"></span>
+              <i *ngIf="!uploading" class="bi bi-cloud-upload me-2"></i>
+              {{ uploading ? 'Uploading...' : 'Upload ' + selectedFiles.length + ' File(s)' }}
+            </button>
+
+            <!-- Upload error -->
+            <div *ngIf="uploadError" class="alert alert-danger mt-3 mb-0 py-2 small">
+              <i class="bi bi-exclamation-circle me-1"></i>{{ uploadError }}
+            </div>
+
+            <!-- Upload result (5.6: improved clarity, 5.8: detailed errors) -->
+            <div *ngIf="uploadResult" class="mt-3">
+              <div class="alert alert-success py-2 small mb-2">
+                <i class="bi bi-check-circle me-1"></i>{{ uploadResult.message }}
+                <span *ngIf="uploadResult.replacedBatch" class="badge bg-warning text-dark ms-1">Batch Replaced</span>
+              </div>
+
+              <!-- Summary stats -->
+              <div class="row g-2 text-center">
+                <div class="col-3">
+                  <div class="bg-light rounded p-2">
+                    <div class="fs-5 fw-bold text-muted">{{ uploadResult.filesProcessed }}</div>
+                    <div class="small text-muted">Files</div>
                   </div>
-                  <div class="small text-muted">Unmatched Agents</div>
+                </div>
+                <div class="col-3">
+                  <div class="bg-light rounded p-2">
+                    <div class="fs-5 fw-bold text-muted">{{ uploadResult.totalClientRows | number }}</div>
+                    <div class="small text-muted">Rows</div>
+                  </div>
+                </div>
+                <div class="col-3">
+                  <div class="bg-light rounded p-2">
+                    <div class="fs-5 fw-bold text-success">{{ uploadResult.matched }}</div>
+                    <div class="small text-muted">Matched</div>
+                  </div>
+                </div>
+                <div class="col-3">
+                  <div class="bg-light rounded p-2">
+                    <div class="fs-5 fw-bold" [class.text-warning]="uploadResult.unmatchedCount > 0" [class.text-muted]="uploadResult.unmatchedCount === 0">
+                      {{ uploadResult.unmatchedCount }}
+                    </div>
+                    <div class="small text-muted">Unmatched</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Per-file results -->
+              <div *ngIf="uploadResult.fileResults && uploadResult.fileResults.length > 1" class="mt-2">
+                <div class="small fw-semibold text-muted mb-1">Per-file breakdown:</div>
+                <div *ngFor="let fr of uploadResult.fileResults" class="small text-muted">
+                  <i class="bi bi-file-earmark me-1"></i>{{ fr.file }}: {{ fr.rowCount }} rows
+                </div>
+              </div>
+
+              <!-- Parse errors -->
+              <div *ngIf="uploadResult.parseErrors && uploadResult.parseErrors.length > 0" class="mt-2">
+                <div class="small fw-semibold text-danger"><i class="bi bi-x-circle me-1"></i>File Parse Errors:</div>
+                <div *ngFor="let pe of uploadResult.parseErrors" class="small text-danger">
+                  {{ pe.file }}: {{ pe.reason }}
+                </div>
+              </div>
+
+              <!-- Invalid rows -->
+              <div *ngIf="uploadResult.invalidRows && uploadResult.invalidRows.length > 0" class="mt-2">
+                <div class="small fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Invalid Rows ({{ uploadResult.invalidRows.length }})</div>
+                <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                  <table class="table table-sm table-bordered small mb-0">
+                    <thead class="table-light">
+                      <tr><th>File</th><th>Row</th><th>Agent</th><th>Reason</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let row of uploadResult.invalidRows">
+                        <td class="text-muted">{{ row.sourceFile || '—' }}</td>
+                        <td>{{ row.rowIndex }}</td>
+                        <td>{{ row.agentName || row.firstName + ' ' + row.lastName || '—' }}</td>
+                        <td class="text-danger">{{ row.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Unmatched agents -->
+              <div *ngIf="uploadResult.unmatched && uploadResult.unmatched.length > 0" class="mt-2">
+                <div class="small fw-semibold text-warning"><i class="bi bi-person-x me-1"></i>Unmatched Agents ({{ uploadResult.unmatched.length }})</div>
+                <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                  <table class="table table-sm table-bordered small mb-0">
+                    <thead class="table-light">
+                      <tr><th>Agent Name</th><th>Household Size</th><th>Rows</th><th>Reason</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let row of uploadResult.unmatched">
+                        <td>{{ row.agentName || '—' }}</td>
+                        <td>{{ row.householdSize ?? '—' }}</td>
+                        <td>{{ row.rowCount ?? '—' }}</td>
+                        <td class="text-danger small">{{ row.reason }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Processing errors -->
+              <div *ngIf="uploadResult.errors && uploadResult.errors.length > 0" class="mt-2">
+                <div class="small fw-semibold text-danger"><i class="bi bi-bug me-1"></i>Processing Errors:</div>
+                <div *ngFor="let e of uploadResult.errors" class="small text-danger">
+                  {{ e.agentName }}: {{ e.error }}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <!-- Unmatched rows -->
-            <div *ngIf="uploadResult.unmatched && uploadResult.unmatched.length > 0" class="mt-3">
-              <h6 class="small fw-semibold text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Unmatched Rows</h6>
-              <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
-                <table class="table table-sm table-bordered small mb-0">
+      <!-- Batch history panel (5.6: improved) -->
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm">
+          <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-2"></i>Upload History</h5>
+            <button class="btn btn-sm btn-outline-secondary" (click)="loadBatches()" [disabled]="batchesLoading">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <div *ngIf="batchesLoading" class="text-center py-4">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+              <p class="text-muted small mt-2 mb-0">Loading batch history...</p>
+            </div>
+            <div *ngIf="!batchesLoading && batchesError" class="alert alert-warning m-3 py-2 small">
+              <i class="bi bi-exclamation-triangle me-1"></i>{{ batchesError }}
+            </div>
+            <div *ngIf="!batchesLoading && !batchesError && batches.length === 0" class="text-center py-4 text-muted small">
+              <i class="bi bi-inbox display-6"></i>
+              <p class="mt-2 mb-0">No uploads yet.</p>
+            </div>
+            <div *ngIf="!batchesLoading && batches.length > 0" class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Period</th>
+                    <th class="text-end">Agents</th>
+                    <th class="text-end">Total Clients</th>
+                    <th class="text-end">Producing</th>
+                    <th>Uploaded</th>
+                    <th>By</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let batch of batches">
+                    <td class="fw-semibold">{{ formatBatch(batch._id) }}</td>
+                    <td class="text-end">{{ batch.agentCount | number }}</td>
+                    <td class="text-end text-primary fw-semibold">{{ batch.totalClients | number }}</td>
+                    <td class="text-end text-success">{{ batch.producingAgents | number }}</td>
+                    <td class="text-muted small">{{ batch.uploadedAt | date:'mediumDate' }}</td>
+                    <td class="text-muted small">{{ batch.uploadedByName || '—' }}</td>
+                    <td class="text-end">
+                      <button class="btn btn-sm btn-outline-primary me-1" (click)="viewBatchRecords(batch._id)" title="View records">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                      <button
+                        class="btn btn-sm btn-outline-danger"
+                        (click)="confirmDelete(batch._id)"
+                        [disabled]="deletingBatch === batch._id"
+                        title="Delete batch">
+                        <i class="bi bi-trash" *ngIf="deletingBatch !== batch._id"></i>
+                        <span *ngIf="deletingBatch === batch._id" class="spinner-border spinner-border-sm" role="status"></span>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delete confirmation -->
+        <div *ngIf="confirmDeleteBatch" class="alert alert-danger mt-3 d-flex align-items-center justify-content-between">
+          <span>
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            Delete all records for <strong>{{ formatBatch(confirmDeleteBatch) }}</strong>? This cannot be undone.
+          </span>
+          <span>
+            <button class="btn btn-sm btn-danger me-2" (click)="deleteBatchConfirmed()">Yes, Delete</button>
+            <button class="btn btn-sm btn-outline-secondary" (click)="cancelDelete()">Cancel</button>
+          </span>
+        </div>
+
+        <!-- Batch drill-down detail -->
+        <div *ngIf="selectedBatch" class="card shadow-sm mt-3">
+          <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-semibold">
+              <i class="bi bi-list-ul me-2"></i>Records — {{ formatBatch(selectedBatch) }}
+            </h6>
+            <button class="btn-close small" (click)="closeBatchDetail()"></button>
+          </div>
+          <div class="card-body p-0">
+            <div *ngIf="batchRecordsLoading" class="text-center py-3">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+            <div *ngIf="!batchRecordsLoading" class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Agent</th>
+                    <th>Email</th>
+                    <th class="text-end">Clients</th>
+                    <th class="text-end">Verified Premium</th>
+                    <th class="text-center">Producing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let rec of batchRecords">
+                    <td>{{ rec.agent?.name || rec.agentName || '—' }}</td>
+                    <td class="small text-muted">{{ rec.agent?.email || rec.agentEmail || '—' }}</td>
+                    <td class="text-end fw-semibold text-primary">{{ rec.clientCount | number }}</td>
+                    <td class="text-end text-muted">{{ rec.verifiedPremium ? ('$' + (rec.verifiedPremium | number)) : '—' }}</td>
+                    <td class="text-center">
+                      <i class="bi" [ngClass]="rec.isProducing ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-muted'"></i>
+                    </td>
+                  </tr>
+                  <tr *ngIf="batchRecords.length === 0">
+                    <td colspan="5" class="text-center text-muted small py-3">No records found.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- TAB 2: Tier Configuration (5.12 + 5.13)                         -->
+  <!-- ================================================================ -->
+  <div *ngIf="activeTab === 'tiers'">
+    <div class="row g-4">
+      <!-- Global tier config (5.12) -->
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-semibold"><i class="bi bi-sliders me-2"></i>Global Tier Thresholds</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small">Configure the client count thresholds and bonus rates for each tier. Changes affect all agents (unless they have a custom override).</p>
+
+            <div *ngIf="tiersLoading" class="text-center py-3">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+
+            <div *ngIf="!tiersLoading">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-3">
                   <thead class="table-light">
                     <tr>
-                      <th>Agent Name</th>
-                      <th>Household Size</th>
-                      <th>Row #</th>
-                      <th>Reason</th>
+                      <th style="width:80px">Tier #</th>
+                      <th>Label</th>
+                      <th>Min Clients</th>
+                      <th>$/Client</th>
+                      <th style="width:50px"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let row of uploadResult.unmatched">
-                      <td>{{ row.agentName || row.agent || '—' }}</td>
-                      <td>{{ row.householdSize ?? row.household_size ?? '—' }}</td>
-                      <td class="text-muted">{{ row.rowIndex ?? '—' }}</td>
-                      <td class="text-danger small">{{ row.reason }}</td>
+                    <tr *ngFor="let t of tiers; let i = index">
+                      <td>
+                        <input type="number" class="form-control form-control-sm" [(ngModel)]="t.tier" min="0" style="width:60px" />
+                      </td>
+                      <td>
+                        <input type="text" class="form-control form-control-sm" [(ngModel)]="t.label" />
+                      </td>
+                      <td>
+                        <input type="number" class="form-control form-control-sm" [(ngModel)]="t.threshold" min="0" />
+                      </td>
+                      <td>
+                        <input type="number" class="form-control form-control-sm" [(ngModel)]="t.rate" min="0" step="0.5" />
+                      </td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-danger" (click)="removeTier(i)" [disabled]="tiers.length <= 1" title="Remove tier">
+                          <i class="bi bi-x"></i>
+                        </button>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+
+              <div class="d-flex justify-content-between">
+                <button class="btn btn-sm btn-outline-secondary" (click)="addTier()">
+                  <i class="bi bi-plus me-1"></i>Add Tier
+                </button>
+                <button class="btn btn-primary" (click)="saveTiers()" [disabled]="tiersSaving">
+                  <span *ngIf="tiersSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                  Save Tiers
+                </button>
+              </div>
+
+              <div *ngIf="tiersError" class="alert alert-danger mt-3 py-2 small mb-0">{{ tiersError }}</div>
+              <div *ngIf="tiersSuccess" class="alert alert-success mt-3 py-2 small mb-0">{{ tiersSuccess }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent tier overrides (5.13) -->
+      <div class="col-12 col-lg-6">
+        <div class="card shadow-sm">
+          <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-semibold"><i class="bi bi-person-gear me-2"></i>Agent-Specific Overrides</h5>
+            <button class="btn btn-sm btn-outline-primary" (click)="openOverrideModal()">
+              <i class="bi bi-plus me-1"></i>Add Override
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small">Assign custom tier thresholds and bonus rates to individual agents.</p>
+
+            <div *ngIf="overridesLoading" class="text-center py-3">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+
+            <div *ngIf="!overridesLoading && agentOverrides.length === 0" class="text-center py-4 text-muted small">
+              <p class="mb-0">No agent-specific overrides. All agents use global tiers.</p>
+            </div>
+
+            <div *ngIf="!overridesLoading && agentOverrides.length > 0" class="table-responsive">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Agent</th>
+                    <th>Tiers</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ov of agentOverrides">
+                    <td>
+                      <div class="fw-semibold">{{ ov.agent?.name || 'Unknown' }}</div>
+                      <div class="small text-muted">{{ ov.agent?.email || '' }}</div>
+                    </td>
+                    <td class="small">
+                      <span *ngFor="let t of ov.tiers; let last = last" class="badge bg-light text-dark me-1">
+                        {{ t.label }}: {{ t.threshold }}+ &#64; ${{ t.rate }}
+                      </span>
+                    </td>
+                    <td class="text-end">
+                      <button class="btn btn-sm btn-outline-primary me-1" (click)="openOverrideModal(ov)" title="Edit">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" (click)="removeOverride(ov.agent._id)" title="Remove override">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- Batch history panel -->
-    <div class="col-12 col-lg-7">
-      <div class="card shadow-sm">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-          <h5 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-2"></i>Upload History</h5>
-          <button class="btn btn-sm btn-outline-secondary" (click)="loadBatches()" [disabled]="batchesLoading">
-            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-          </button>
-        </div>
-        <div class="card-body p-0">
-          <div *ngIf="batchesLoading" class="text-center py-4">
-            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            <p class="text-muted small mt-2 mb-0">Loading batch history...</p>
-          </div>
-          <div *ngIf="!batchesLoading && batchesError" class="alert alert-warning m-3 py-2 small">
-            <i class="bi bi-exclamation-triangle me-1"></i>{{ batchesError }}
-          </div>
-          <div *ngIf="!batchesLoading && !batchesError && batches.length === 0" class="text-center py-4 text-muted small">
-            <i class="bi bi-inbox display-6"></i>
-            <p class="mt-2 mb-0">No uploads yet.</p>
-          </div>
-          <div *ngIf="!batchesLoading && batches.length > 0" class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Period</th>
-                  <th class="text-end">Agents</th>
-                  <th class="text-end">Total Clients</th>
-                  <th class="text-end">Verified Premium</th>
-                  <th class="text-end">Producing</th>
-                  <th>Uploaded</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let batch of batches">
-                  <td class="fw-semibold">{{ formatBatch(batch._id) }}</td>
-                  <td class="text-end">{{ batch.agentCount | number }}</td>
-                  <td class="text-end text-primary fw-semibold">{{ batch.totalClients | number }}</td>
-                  <td class="text-end text-muted">{{ batch.totalVerifiedPremium ? ('$' + (batch.totalVerifiedPremium | number)) : '—' }}</td>
-                  <td class="text-end text-success">{{ batch.producingAgents | number }}</td>
-                  <td class="text-muted small">{{ batch.uploadedAt | date:'mediumDate' }}</td>
-                  <td class="text-end">
-                    <button class="btn btn-sm btn-outline-primary" (click)="viewBatchRecords(batch._id)">
-                      <i class="bi bi-eye me-1"></i>View
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+<!-- ================================================================ -->
+<!-- Agent Override Modal (5.13)                                       -->
+<!-- ================================================================ -->
+<div *ngIf="showOverrideModal" class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Agent Tier Override</h5>
+        <button class="btn-close" (click)="closeOverrideModal()"></button>
       </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Agent ID</label>
+          <input type="text" class="form-control" [(ngModel)]="overrideAgentId" placeholder="Paste agent's MongoDB _id" [disabled]="overrideSaving" />
+          <div class="form-text">You can find the Agent ID in the batch records or user management.</div>
+        </div>
 
-      <!-- Batch drill-down detail -->
-      <div *ngIf="selectedBatch" class="card shadow-sm mt-3">
-        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-          <h6 class="mb-0 fw-semibold">
-            <i class="bi bi-list-ul me-2"></i>Records — {{ formatBatch(selectedBatch) }}
-          </h6>
-          <button class="btn-close small" (click)="closeBatchDetail()"></button>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-3">
+            <thead class="table-light">
+              <tr>
+                <th style="width:80px">Tier #</th>
+                <th>Label</th>
+                <th>Min Clients</th>
+                <th>$/Client</th>
+                <th style="width:50px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of overrideTiers; let i = index">
+                <td><input type="number" class="form-control form-control-sm" [(ngModel)]="t.tier" min="0" style="width:60px" /></td>
+                <td><input type="text" class="form-control form-control-sm" [(ngModel)]="t.label" /></td>
+                <td><input type="number" class="form-control form-control-sm" [(ngModel)]="t.threshold" min="0" /></td>
+                <td><input type="number" class="form-control form-control-sm" [(ngModel)]="t.rate" min="0" step="0.5" /></td>
+                <td>
+                  <button class="btn btn-sm btn-outline-danger" (click)="overrideTiers.splice(i, 1)" [disabled]="overrideTiers.length <= 1">
+                    <i class="bi bi-x"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <div class="card-body p-0">
-          <div *ngIf="batchRecordsLoading" class="text-center py-3">
-            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-          </div>
-          <div *ngIf="!batchRecordsLoading" class="table-responsive" style="max-height: 300px; overflow-y: auto;">
-            <table class="table table-sm table-hover mb-0">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th>Agent</th>
-                  <th>Email</th>
-                  <th class="text-end">Clients</th>
-                  <th class="text-end">Verified Premium</th>
-                  <th class="text-center">Producing</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let rec of batchRecords">
-                  <td>{{ rec.agent?.name || rec.agentName || '—' }}</td>
-                  <td class="small text-muted">{{ rec.agent?.email || rec.agentEmail || '—' }}</td>
-                  <td class="text-end fw-semibold text-primary">{{ rec.clientCount | number }}</td>
-                  <td class="text-end text-muted">{{ rec.verifiedPremium ? ('$' + (rec.verifiedPremium | number)) : '—' }}</td>
-                  <td class="text-center">
-                    <i class="bi" [ngClass]="rec.isProducing ? 'bi-check-circle-fill text-success' : 'bi-x-circle text-muted'"></i>
-                  </td>
-                </tr>
-                <tr *ngIf="batchRecords.length === 0">
-                  <td colspan="5" class="text-center text-muted small py-3">No records found.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <button class="btn btn-sm btn-outline-secondary" (click)="overrideTiers.push({ tier: overrideTiers.length, label: 'Tier ' + overrideTiers.length, threshold: 0, rate: 0 })">
+          <i class="bi bi-plus me-1"></i>Add Tier
+        </button>
+
+        <div *ngIf="overrideError" class="alert alert-danger mt-3 py-2 small mb-0">{{ overrideError }}</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" (click)="closeOverrideModal()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveOverride()" [disabled]="overrideSaving">
+          <span *ngIf="overrideSaving" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          Save Override
+        </button>
       </div>
     </div>
   </div>

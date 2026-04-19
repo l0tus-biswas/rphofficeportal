@@ -8,6 +8,7 @@ export interface ProductionSubmission {
   agent: any;
   submissionDate: Date;
   clientName: string;
+  numberOfMembers?: number;
   productSold: string;
   productOtherDescription?: string;
   productCategory?: 'Life Insurance' | 'Health Insurance' | 'Medicare' | 'Supplemental Insurance' | 'Retirement / Annuities' | 'Property & Casualty - Personal' | 'Property & Casualty - Commercial';
@@ -15,6 +16,8 @@ export interface ProductionSubmission {
   premiumAmount: number;
   notes?: string;
   status: 'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled';
+  isTrainingPeriod?: boolean;
+  customFields?: Record<string, any>;
   reviewedBy?: any;
   reviewedAt?: Date;
   reviewNotes?: string;
@@ -30,6 +33,7 @@ export interface ProductionFilters {
   status?: string;
   startDate?: string;
   endDate?: string;
+  scope?: string;
   page?: number;
   limit?: number;
 }
@@ -42,6 +46,26 @@ export interface ProductionResponse {
     total: number;
     pages: number;
   };
+}
+
+export interface RankingEntry {
+  rank: number;
+  agentId: string;
+  agentName: string;
+  agentEmail: string;
+  totalPremium: number;
+  totalPolicies: number;
+  totalMembers: number;
+  inForceCount: number;
+  inForcePremium: number;
+}
+
+export interface CustomFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select' | 'date' | 'checkbox';
+  options?: string[];
+  required?: boolean;
 }
 
 export interface ProductionStats {
@@ -261,5 +285,36 @@ export class ProductionService {
     if (filters?.endDate) params = params.set('endDate', filters.endDate);
 
     return this.http.get(`${this.apiUrl}/export`, { params, responseType: 'blob' });
+  }
+
+  // 8.3: Get team-scoped production submissions
+  getTeamSubmissions(filters?: ProductionFilters): Observable<ProductionResponse> {
+    let params = new HttpParams().set('scope', 'team');
+    if (filters?.startDate) params = params.set('startDate', filters.startDate);
+    if (filters?.endDate) params = params.set('endDate', filters.endDate);
+    if (filters?.productSold) params = params.set('productSold', filters.productSold);
+    if (filters?.status) params = params.set('status', filters.status);
+    if (filters?.page) params = params.set('page', filters.page.toString());
+    if (filters?.limit) params = params.set('limit', filters.limit.toString());
+    return this.http.get<ProductionResponse>(this.apiUrl, { params });
+  }
+
+  // 8.7: Get agent ranking/leaderboard
+  getRanking(sortBy?: string, windowDays?: number, limit?: number): Observable<{ ranking: RankingEntry[]; sortBy: string; windowDays: number }> {
+    let params = new HttpParams();
+    if (sortBy) params = params.set('sortBy', sortBy);
+    if (windowDays) params = params.set('window', windowDays.toString());
+    if (limit) params = params.set('limit', limit.toString());
+    return this.http.get<any>(`${this.apiUrl}/ranking`, { params });
+  }
+
+  // 8.2: Get custom field definitions
+  getCustomFields(): Observable<{ fields: CustomFieldDef[] }> {
+    return this.http.get<{ fields: CustomFieldDef[] }>(`${this.apiUrl}/custom-fields`);
+  }
+
+  // 8.2: Save custom field definitions (admin)
+  saveCustomFields(fields: CustomFieldDef[]): Observable<any> {
+    return this.http.put(`${this.apiUrl}/custom-fields`, { fields });
   }
 }

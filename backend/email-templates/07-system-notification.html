@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notification</title>
+  <!--
+    TEMPLATE: System Notification (Generic)
+    TRIGGER: Various system events - login, password change, recruit added, etc.
+    SUBJECT: {NOTIFICATION_TITLE}
+    
+    MERGE TAGS:
+    {APP_NAME}              - Application name
+    {NOTIFICATION_TITLE}    - Notification title/heading
+    {NOTIFICATION_MESSAGE}  - Notification body message
+    {ACTION_URL}            - Optional action link URL (View Details button)
+    {ACTION_LABEL}          - Optional button label (default: "View Details")
+    {APP_URL}               - Base application URL
+    {CURRENT_YEAR}          - Current year for copyright
+  -->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1976D2; padding: 25px 40px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 600;">{APP_NAME}</h1>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="color: #333333; margin: 0 0 15px 0; font-size: 20px;">{NOTIFICATION_TITLE}</h2>
+              <p style="color: #555555; font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                {NOTIFICATION_MESSAGE}
+              </p>
+              
+              <!-- Action Button (shown when ACTION_URL is provided) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="background-color: #0d6efd; border-radius: 6px;">
+                    <a href="{ACTION_URL}" style="display: inline-block; padding: 12px 28px; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600;">{ACTION_LABEL}</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #fafafa; padding: 25px 40px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="color: #999999; font-size: 12px; margin: 0 0 5px 0;">You received this email because you are a member of {APP_NAME}.</p>
+              <p style="color: #999999; font-size: 12px; margin: 0 0 5px 0;">&copy; {CURRENT_YEAR} {APP_NAME}. All rights reserved.</p>
+              <a href="{APP_URL}" style="color: #1976D2; font-size: 12px; text-decoration: none;">{APP_URL}</a>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

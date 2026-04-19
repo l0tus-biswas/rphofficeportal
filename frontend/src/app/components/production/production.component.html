@@ -5,21 +5,27 @@
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h2><i class="bi bi-graph-up me-2"></i>Production Tracking</h2>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 flex-wrap">
         <button *ngIf="submissions.length > 0" class="btn btn-outline-success" (click)="exportCsv()" title="Download filtered data as CSV">
           <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export CSV
         </button>
         <button class="btn btn-primary" (click)="openNewSubmissionForm()">
           <i class="bi bi-plus-circle"></i> New Submission
         </button>
-        <button *ngIf="!isAdmin" class="btn btn-outline-info" (click)="toggleTeamReport()">
+        <button class="btn btn-outline-info" (click)="toggleTeamReport()">
           <i class="bi bi-diagram-3 me-1"></i>{{ showTeamReport ? 'Hide' : 'Team Report' }}
+        </button>
+        <button class="btn btn-outline-warning" (click)="toggleRanking()">
+          <i class="bi bi-trophy me-1"></i>{{ showRanking ? 'Hide Ranking' : 'Ranking' }}
+        </button>
+        <button *ngIf="isAdmin" class="btn btn-outline-secondary" (click)="openCustomFieldsConfig()">
+          <i class="bi bi-gear me-1"></i>Custom Fields
         </button>
       </div>
     </div>
 
     <!-- Team Report Panel (Agent) -->
-    <div *ngIf="showTeamReport && !isAdmin" class="card border-0 shadow-sm mb-4">
+    <div *ngIf="showTeamReport" class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
         <span><i class="bi bi-diagram-3 me-2"></i>Team Report</span>
         <div class="d-flex align-items-center gap-2">
@@ -71,6 +77,62 @@
       </div>
     </div>
 
+    <!-- 8.7: Ranking Panel -->
+    <div *ngIf="showRanking" class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-trophy me-2"></i>Agent Ranking</span>
+        <div class="d-flex align-items-center gap-2">
+          <label class="mb-0 small">Sort by:</label>
+          <select class="form-select form-select-sm w-auto" [(ngModel)]="rankingSortBy" (change)="loadRanking()">
+            <option value="premium">Premium</option>
+            <option value="policies">Policies</option>
+            <option value="members">Members</option>
+          </select>
+          <label class="mb-0 small ms-2">Window:</label>
+          <select class="form-select form-select-sm w-auto" [(ngModel)]="rankingWindow" (change)="loadRanking()">
+            <option [ngValue]="0">All Time</option>
+            <option [ngValue]="30">30 Days</option>
+            <option [ngValue]="60">60 Days</option>
+            <option [ngValue]="90">90 Days</option>
+            <option [ngValue]="180">6 Months</option>
+            <option [ngValue]="365">12 Months</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div *ngIf="rankingLoading" class="text-center py-3">
+          <div class="spinner-border text-warning" role="status"></div>
+        </div>
+        <table *ngIf="!rankingLoading && ranking.length > 0" class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Agent</th>
+              <th class="text-end">Total Premium</th>
+              <th class="text-end">Policies</th>
+              <th class="text-end">Members</th>
+              <th class="text-end">In Force</th>
+              <th class="text-end">In Force Premium</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of ranking">
+              <td><span class="badge bg-warning text-dark">{{ r.rank }}</span></td>
+              <td>{{ r.agentName }}<br><small class="text-muted">{{ r.agentEmail }}</small></td>
+              <td class="text-end">{{ formatCurrency(r.totalPremium) }}</td>
+              <td class="text-end">{{ r.totalPolicies }}</td>
+              <td class="text-end">{{ r.totalMembers }}</td>
+              <td class="text-end">{{ r.inForceCount }}</td>
+              <td class="text-end">{{ formatCurrency(r.inForcePremium) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="!rankingLoading && ranking.length === 0" class="text-center text-muted py-3">
+          No ranking data available.
+        </div>
+      </div>
+    </div>
+
     <!-- Alerts -->
     <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
       <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
@@ -115,6 +177,18 @@
         <i class="bi bi-funnel me-2"></i>Filters
       </div>
       <div class="card-body">
+        <!-- 8.5: Date preset buttons -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Quick Date Range</label>
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === '30d' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('30d')">30 Days</button>
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === '60d' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('60d')">60 Days</button>
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === '90d' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('90d')">90 Days</button>
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === '6mo' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('6mo')">6 Months</button>
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === '12mo' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('12mo')">12 Months</button>
+            <button type="button" class="btn btn-sm" [class]="activeDatePreset === 'all' ? 'btn-primary' : 'btn-outline-primary'" (click)="setDatePreset('all')">All Time</button>
+          </div>
+        </div>
         <div class="row g-3">
           <div class="col-md-3" *ngIf="isAdmin">
             <label class="form-label">Agent</label>
@@ -189,8 +263,10 @@
                 <th>Product</th>
                 <th>Category</th>
                 <th>Carrier</th>
-                <th>Premium</th>
+                <th class="text-end">Premium</th>
+                <th class="text-end">Members</th>
                 <th>Status</th>
+                <th>Notes</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -211,11 +287,21 @@
                   </span>
                 </td>
                 <td>{{ submission.carrier.name }}</td>
-                <td>{{ formatCurrency(submission.premiumAmount) }}</td>
+                <td class="text-end">{{ formatCurrency(submission.premiumAmount) }}</td>
+                <td class="text-end">{{ submission.numberOfMembers || 1 }}</td>
                 <td>
                   <span class="badge" [class]="getStatusBadgeClass(submission.status)">
                     {{ submission.status }}
                   </span>
+                  <span *ngIf="submission.isTrainingPeriod" class="badge bg-purple text-white ms-1" title="Training period">
+                    <i class="bi bi-mortarboard-fill"></i> Training
+                  </span>
+                </td>
+                <td>
+                  <span *ngIf="submission.notes" class="text-truncate d-inline-block" style="max-width: 200px;" [title]="submission.notes">
+                    {{ submission.notes }}
+                  </span>
+                  <span *ngIf="!submission.notes" class="text-muted">—</span>
                 </td>
                 <td>
                   <button class="btn btn-sm btn-outline-primary me-1" 
@@ -308,6 +394,39 @@
             <label class="form-label">Premium Amount *</label>
             <input type="number" class="form-control" [(ngModel)]="currentSubmission.premiumAmount" required min="0" step="0.01">
           </div>
+          <!-- 8.1: Number of Members -->
+          <div class="col-md-6">
+            <label class="form-label">Number of Members</label>
+            <input type="number" class="form-control" [(ngModel)]="currentSubmission.numberOfMembers" min="1" step="1">
+          </div>
+          <!-- 8.8: Training period -->
+          <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="isTrainingPeriod" [(ngModel)]="currentSubmission.isTrainingPeriod">
+              <label class="form-check-label" for="isTrainingPeriod">
+                <i class="bi bi-mortarboard-fill me-1"></i>Training Period Submission
+              </label>
+            </div>
+          </div>
+          <!-- 8.2: Dynamic custom fields -->
+          <ng-container *ngFor="let cf of customFieldDefs">
+            <div class="col-md-6">
+              <label class="form-label">{{ cf.label }}<span *ngIf="cf.required"> *</span></label>
+              <input *ngIf="cf.type === 'text'" type="text" class="form-control"
+                     [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
+              <input *ngIf="cf.type === 'number'" type="number" class="form-control"
+                     [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
+              <select *ngIf="cf.type === 'select'" class="form-select"
+                      [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
+                <option value="">Select...</option>
+                <option *ngFor="let opt of cf.options" [value]="opt">{{ opt }}</option>
+              </select>
+              <div *ngIf="cf.type === 'checkbox'" class="form-check mt-2">
+                <input type="checkbox" class="form-check-input" [(ngModel)]="currentSubmission.customFields![cf.key]">
+                <label class="form-check-label">{{ cf.label }}</label>
+              </div>
+            </div>
+          </ng-container>
           <div class="col-12">
             <label class="form-label">Notes</label>
             <textarea class="form-control" [(ngModel)]="currentSubmission.notes" rows="3"></textarea>
@@ -322,4 +441,72 @@
   </div>
 </div>
 <div class="modal-backdrop fade" [class.show]="showForm" *ngIf="showForm"></div>
+
+<!-- 8.2: Custom Fields Config Modal (Admin) -->
+<div class="modal fade" [class.show]="showCustomFieldsConfig" [style.display]="showCustomFieldsConfig ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-gear me-2"></i>Configure Custom Fields</h5>
+        <button type="button" class="btn-close" (click)="cancelCustomFieldsConfig()"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Define custom fields that agents can fill in when submitting production records.</p>
+        <table class="table table-sm" *ngIf="editingCustomFields.length > 0">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Type</th>
+              <th>Options (comma-separated)</th>
+              <th>Required</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let f of editingCustomFields; let i = index">
+              <td><input type="text" class="form-control form-control-sm" [(ngModel)]="f.label" placeholder="Field label"></td>
+              <td>
+                <select class="form-select form-select-sm" [(ngModel)]="f.type">
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="select">Dropdown</option>
+                  <option value="checkbox">Checkbox</option>
+                </select>
+              </td>
+              <td>
+                <input *ngIf="f.type === 'select'" type="text" class="form-control form-control-sm"
+                       [ngModel]="getOptionsString(f)"
+                       (ngModelChange)="setOptionsFromString(f, $event)"
+                       placeholder="Option 1, Option 2, ...">
+                <span *ngIf="f.type !== 'select'" class="text-muted">—</span>
+              </td>
+              <td class="text-center">
+                <input type="checkbox" class="form-check-input" [(ngModel)]="f.required">
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger" (click)="removeCustomField(i)" title="Remove">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="editingCustomFields.length === 0" class="text-center text-muted py-3">
+          No custom fields configured. Click "Add Field" to create one.
+        </div>
+        <button class="btn btn-sm btn-outline-primary" (click)="addCustomField()">
+          <i class="bi bi-plus-circle me-1"></i>Add Field
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cancelCustomFieldsConfig()">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="saveCustomFieldsConfig()" [disabled]="customFieldsSaving">
+          <span *ngIf="customFieldsSaving" class="spinner-border spinner-border-sm me-1"></span>
+          Save Custom Fields
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showCustomFieldsConfig" *ngIf="showCustomFieldsConfig"></div>
 

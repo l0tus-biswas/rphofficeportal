@@ -40,11 +40,13 @@ import { CarrierAppointmentsComponent } from './components/admin/carrier-appoint
 import { CommissionsComponent } from './components/commissions/commissions/commissions.component';
 import { CommissionStatementsComponent } from './components/admin/commission-statements/commission-statements.component';
 import { OnboardingHubComponent } from './components/onboarding/onboarding-hub/onboarding-hub.component';
+import { DocumentHubComponent } from './components/document-hub/document-hub.component';
 import { OnboardingDocTypesComponent } from './components/admin/onboarding-doc-types/onboarding-doc-types.component';
 import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
+import { MyTeamComponent } from './components/my-team/my-team.component';
 
 const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -83,6 +85,12 @@ const routes: Routes = [
   { 
     path: 'downline', 
     component: DownlineComponent, 
+    canActivate: [AuthGuard],
+    data: { roles: ['agent', 'admin'] }
+  },
+  { 
+    path: 'my-team', 
+    component: MyTeamComponent, 
     canActivate: [AuthGuard],
     data: { roles: ['agent', 'admin'] }
   },
@@ -223,6 +231,11 @@ const routes: Routes = [
   {
     path: 'onboarding-hub',
     component: OnboardingHubComponent,
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'document-hub',
+    component: DocumentHubComponent,
     canActivate: [AuthGuard]
   },
   // TIER 3 — Admin routes

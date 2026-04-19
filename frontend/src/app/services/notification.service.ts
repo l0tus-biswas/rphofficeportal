@@ -83,4 +83,18 @@ export class NotificationService {
   deleteAllRead(): Observable<any> {
     return this.http.delete(this.apiUrl);
   }
+
+  // Notification Preferences
+  getPreferences(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/preferences`);
+  }
+
+  updatePreferences(preferences: any, muteAllEmails: boolean): Observable<any> {
+    return this.http.put(`${this.apiUrl}/preferences`, { preferences, muteAllEmails });
+  }
+
+  // Admin broadcast
+  broadcast(title: string, message: string, link?: string, targetRoles?: string[]): Observable<any> {
+    return this.http.post(`${this.apiUrl}/broadcast`, { title, message, link, targetRoles });
+  }
 }

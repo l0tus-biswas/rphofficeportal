@@ -2,12 +2,14 @@ const express = require('express');
 const router = express.Router();
 const APAApplication = require('../models/APAApplication');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const Onboarding = require('../models/Onboarding');
+const SystemConfig = require('../models/SystemConfig');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { sendResponse, errorResponse, generatePassword } = require('../utils/helpers');
-const { sendEmail } = require('../utils/email');
+const { sendApplicationConfirmationEmail, sendPaymentLinkEmail, sendAccountActivatedEmail, sendWelcomeSetPasswordEmail } = require('../utils/neuzmail');
 const { applyLimiter } = require('../middleware/rateLimiter.middleware');
 const { 
   createAPAEnvelope, 
@@ -715,8 +717,55 @@ const verifyPaymentHandler = async (req, res) => {
       // Non-blocking — don't fail account creation
     }
 
-    // Send welcome email with set-password link (backup)
-    await sendWelcomeEmail(user, password, null, setPasswordToken);
+    // Send welcome email with set-password link
+    if (setPasswordToken) {
+      await sendWelcomeSetPasswordEmail(user, setPasswordToken);
+    } else {
+      await sendAccountActivatedEmail(user, password);
+    }
+
+    // Notify all admins about the new agent registration (16.1)
+    try {
+      const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
+      for (const admin of admins) {
+        Notification.createNotification({
+          userId: admin._id,
+          type: 'new_agent_registered',
+          title: 'New Agent Registered',
+          message: `${user.name} (${user.email}) has completed registration and payment.`,
+          link: '/admin/users',
+          data: { newUserId: user._id }
+        }, false).catch(() => {});
+      }
+    } catch (notifErr) {
+      console.error('Failed to notify admins of new registration:', notifErr);
+    }
+
+    // Notify upline about new recruit
+    if (user.referredBy) {
+      Notification.createNotification({
+        userId: user.referredBy,
+        type: 'recruit_added',
+        title: 'New Recruit Joined',
+        message: `${user.name} has joined your team through your referral link!`,
+        link: '/my-team',
+        data: { recruitId: user._id }
+      }).catch(() => {});
+    }
+
+    // Auto-approve APA if setting is enabled (§23.3)
+    try {
+      const autoApproveConfig = await SystemConfig.findOne({ key: 'apa_auto_approve' }).lean();
+      if (autoApproveConfig && autoApproveConfig.value === 'true' && application.status === 'completed') {
+        application.status = 'active';
+        application.reviewedAt = new Date();
+        application.adminNotes = 'Auto-approved by system';
+        await application.save();
+        console.log(`[APA] Auto-approved application ${application._id} for ${user.email}`);
+      }
+    } catch (autoErr) {
+      console.error('[APA] Auto-approve check failed:', autoErr.message);
+    }
 
     sendResponse(res, 200, {
       success: true,
@@ -1174,7 +1223,7 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
     }
 
     // Send welcome email with credentials
-    await sendWelcomeEmail(newUser, password);
+    await sendAccountActivatedEmail(newUser, password);
 
     sendResponse(res, 200, {
       success: true,
@@ -1243,146 +1292,6 @@ function generateReferralCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
-}
-
-// Send confirmation email - DocuSign will send the signing email separately
-async function sendApplicationConfirmationEmail(application) {
-  const { legalFirstName, legalLastName, email } = application.personalInfo;
-  
-  console.log('=== Sending Confirmation Email ===');
-  console.log('To:', email);
-  console.log('Application ID:', application._id);
-  
-  await sendEmail({
-    email: email,
-    subject: 'Application Submitted - Review & Send Your Agreement',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #4CAF50;">✓ Application Submitted Successfully!</h2>
-        <p>Dear ${legalFirstName} ${legalLastName},</p>
-        <p>Thank you for submitting your Agent Producer Agreement (APA) application.</p>
-        
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">Next Step: Launch Your DocuSign Packet</h3>
-          <p>On the confirmation page, you can <strong>verify or edit your signing email</strong> before sending the agreement.</p>
-          <p>Once you click <em>Send DocuSign</em>, the DocuSign email will arrive within minutes. If you already closed the page, simply return using your browser history or contact your recruiter for the link.</p>
-        </div>
-
-        <div style="background: #e3f2fd; border-left: 4px solid #2196F3; padding: 15px; margin: 20px 0;">
-          <h4 style="margin-top: 0; color: #1565C0;">📧 What Happens Next?</h4>
-          <ol style="margin: 10px 0; padding-left: 20px; color: #1565C0;">
-            <li>Review the confirmation page and update the signing email if needed</li>
-            <li>Click <strong>Send DocuSign</strong> to trigger the agreement email</li>
-            <li>Sign the agreement through DocuSign's secure platform</li>
-            <li>Once signed, you'll receive a payment setup email from us</li>
-            <li>Complete your payment to activate your account</li>
-          </ol>
-        </div>
-
-        <p><strong>Application ID:</strong> ${application._id}</p>
-        
-        <p style="color: #666; font-size: 14px;">Need help or a fresh link? Please contact your recruiter and share your Application ID.</p>
-        
-        <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
-        <p style="text-align: center; color: #999; font-size: 12px;">
-          &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
-          <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
-        </p>
-      </div>
-    `
-  });
-  
-  console.log('Confirmation email sent successfully to:', email);
-}
-
-async function sendPaymentLinkEmail(application) {
-  const { legalFirstName, email } = application.personalInfo;
-  const paymentUrl = `${process.env.APP_URL || 'http://localhost:4200'}/apa-payment?applicationId=${application._id}`;
-  
-  await sendEmail({
-    email: email,
-    subject: 'RHP Office - Complete Your Payment Setup',
-    html: `
-      <h2>Welcome aboard, ${legalFirstName}!</h2>
-      <p>Thank you for signing the Agent Partnership Agreement with RHP Office.</p>
-      <p>To complete your onboarding, please set up your payment information:</p>
-      <p><a href="${paymentUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Complete Payment Setup</a></p>
-      <p>Your subscription is only <strong>$20/month</strong> for full CRM access - no setup fee required!</p>
-      <p>After payment, you'll be able to:</p>
-      <ul>
-        <li>Set your account password</li>
-        <li>Access all platform features</li>
-        <li>Start building your team</li>
-      </ul>
-      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
-      <p style="text-align: center; color: #999; font-size: 12px;">
-        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
-        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
-      </p>
-    `
-  });
-}
-
-async function sendWelcomeEmail(user, password) {
-  const loginUrl = `${process.env.APP_URL || 'http://localhost:4200'}/login`;
-  
-  await sendEmail({
-    email: user.email,
-    subject: 'Welcome to RHP Office - Your Account is Ready!',
-    html: `
-      <h2>Welcome to RHP Office, ${user.name}!</h2>
-      <p>Your account has been successfully created and activated.</p>
-      <h3>Login Credentials:</h3>
-      <p><strong>Email:</strong> ${user.email}</p>
-      <p><strong>Temporary Password:</strong> ${password}</p>
-      <p><strong>Your Referral Code:</strong> ${user.referralCode}</p>
-      <p><a href="${loginUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Login to Your Account</a></p>
-      <p style="color: #d32f2f;"><strong>Important:</strong> Please change your password after your first login for security.</p>
-      <p>You can now access all features including:</p>
-      <ul>
-        <li>Dashboard and analytics</li>
-        <li>Lead management</li>
-        <li>Training materials</li>
-        <li>Downline tracking</li>
-      </ul>
-      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
-      <p style="text-align: center; color: #999; font-size: 12px;">
-        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
-        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
-      </p>
-    `
-  });
-}
-
-async function sendWelcomeEmail(user, password) {
-  const loginUrl = `${process.env.APP_URL || 'http://localhost:4200'}/login`;
-  
-  await sendEmail({
-    email: user.email,
-    subject: 'Welcome to RHP Office - Your Account is Ready!',
-    html: `
-      <h2>Welcome to RHP Office, ${user.name}!</h2>
-      <p>Your account has been successfully created and activated.</p>
-      <h3>Login Credentials:</h3>
-      <p><strong>Email:</strong> ${user.email}</p>
-      <p><strong>Temporary Password:</strong> ${password}</p>
-      <p><strong>Your Referral Code:</strong> ${user.referralCode}</p>
-      <p><a href="${loginUrl}" style="display: inline-block; padding: 12px 24px; background: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">Login to Your Account</a></p>
-      <p style="color: #d32f2f;"><strong>Important:</strong> Please change your password after your first login for security.</p>
-      <p>You can now access all features including:</p>
-      <ul>
-        <li>Dashboard and analytics</li>
-        <li>Lead management</li>
-        <li>Training materials</li>
-        <li>Downline tracking</li>
-      </ul>
-      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
-      <p style="text-align: center; color: #999; font-size: 12px;">
-        &copy; 2025 ${process.env.SMTP_FROM_NAME || 'RHP Office'}. All rights reserved.<br>
-        <a href="${process.env.APP_URL}" style="color: #4CAF50; text-decoration: none;">${process.env.APP_URL || 'rhpoffice.com'}</a>
-      </p>
-    `
-  });
 }
 
 module.exports = router;

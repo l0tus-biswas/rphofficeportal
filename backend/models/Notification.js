@@ -48,7 +48,21 @@ const notificationSchema = new mongoose.Schema({
       'user_transferred',
       // Misc
       'system_announcement',
-      'promotion_eligible'
+      'promotion_eligible',
+      // Carrier
+      'carrier_contract_requested',
+      'carrier_appointed',
+      'carrier_unappointed',
+      // Document Hub
+      'document_request',
+      'document_submitted',
+      'document_reviewed',
+      // New agent / registration
+      'new_agent_registered',
+      // Production lifecycle
+      'production_in_force',
+      // Admin broadcast
+      'admin_broadcast'
     ],
     required: true
   },
@@ -86,27 +100,35 @@ const notificationSchema = new mongoose.Schema({
 // Index for efficient queries
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 
-// Static method to create and optionally send email
+// Static method to create and optionally send email (respects user preferences)
 notificationSchema.statics.createNotification = async function(data, sendEmail = true) {
+  const NotificationPreference = mongoose.model('NotificationPreference');
+
+  // Check if inApp is enabled for this user+type
+  const inAppEnabled = await NotificationPreference.isEnabled(data.userId, data.type, 'inApp');
+  if (!inAppEnabled) {
+    return null; // User opted out of this notification type entirely
+  }
+
   const notification = await this.create(data);
   
   if (sendEmail) {
+    // Check if email channel is enabled for this user+type
+    const emailEnabled = await NotificationPreference.isEnabled(data.userId, data.type, 'email');
+    if (!emailEnabled) return notification;
+
     try {
       const User = mongoose.model('User');
       const user = await User.findById(data.userId);
       
       if (user && user.email) {
-        const { sendEmail: sendEmailUtil } = require('../utils/email');
-        await sendEmailUtil(
-          user.email,
-          data.title,
-          `
-            <h2>${data.title}</h2>
-            <p>${data.message}</p>
-            ${data.link ? `<p><a href="${process.env.FRONTEND_URL}${data.link}" style="display: inline-block; padding: 10px 20px; background: #0d6efd; color: white; text-decoration: none; border-radius: 5px;">View Details</a></p>` : ''}
-            <p style="margin-top: 20px; color: #666; font-size: 12px;">You received this email because you are a member of ${process.env.APP_NAME || 'RHP Office'}.</p>
-          `
-        );
+        const { sendNotificationEmail } = require('../utils/neuzmail');
+        await sendNotificationEmail({
+          toEmail: user.email,
+          title: data.title,
+          message: data.message,
+          link: data.link || null
+        });
         notification.emailSent = true;
         await notification.save();
       }

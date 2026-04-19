@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
 import { AdminService } from '../../services/admin.service';
@@ -28,7 +29,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private agentService: AgentService,
     private adminService: AdminService,
     private licensingService: LicensingService,
-    private brandingService: BrandingService
+    private brandingService: BrandingService,
+    private router: Router
   ) { }
 
   ngOnInit(): void {
@@ -209,5 +211,41 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   closeReferrerInfo(): void {
     this.showReferrerModal = false;
+  }
+
+  // §25.6 — Navigate to a section when clicking a metric card
+  navigateTo(route: string): void {
+    this.router.navigate([route]);
+  }
+
+  // §25.3 — Time ago display for activity feed
+  timeAgo(dateStr: string): string {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    return `${Math.floor(diffHrs / 24)}d ago`;
+  }
+
+  // §25.5 — Alert type badge
+  getAlertBadgeClass(type: string): string {
+    const map: { [key: string]: string } = {
+      'apa_submitted': 'bg-info',
+      'apa_approved': 'bg-success',
+      'apa_rejected': 'bg-danger',
+      'new_agent_registered': 'bg-primary',
+      'production_submitted': 'bg-warning text-dark',
+      'production_in_force': 'bg-success',
+      'promotion_eligible': 'bg-info',
+      'carrier_contract_requested': 'bg-secondary',
+      'document_submitted': 'bg-primary',
+      'admin_broadcast': 'bg-dark',
+      'system_announcement': 'bg-dark'
+    };
+    return map[type] || 'bg-secondary';
   }
 }

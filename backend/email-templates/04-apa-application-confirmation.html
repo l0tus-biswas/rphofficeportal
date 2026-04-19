@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Application Submitted</title>
+  <!--
+    TEMPLATE: APA Application Confirmation
+    TRIGGER: After APA application form is submitted
+    SUBJECT: Application Submitted - Review & Send Your Agreement
+    
+    MERGE TAGS:
+    {FIRST_NAME}      - Applicant's legal first name
+    {LAST_NAME}       - Applicant's legal last name
+    {APPLICATION_ID}  - Application ID for reference
+    {APP_NAME}        - Application/company name (e.g., "RHP Office")
+    {APP_URL}         - Base application URL
+    {CURRENT_YEAR}    - Current year for copyright
+  -->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #4CAF50; padding: 30px 40px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">✓ Application Submitted!</h1>
+            </td>
+          </tr>
+          
+          <!-- Body -->
+          <tr>
+            <td style="padding: 40px;">
+              <p style="color: #555555; font-size: 15px; line-height: 1.6; margin: 0 0 15px 0;">
+                Dear {FIRST_NAME} {LAST_NAME},
+              </p>
+              <p style="color: #555555; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+                Thank you for submitting your Agent Producer Agreement (APA) application.
+              </p>
+              
+              <!-- Next Step Box -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
+                    <h3 style="color: #333333; margin: 0 0 12px 0; font-size: 16px;">Next Step: Launch Your DocuSign Packet</h3>
+                    <p style="color: #555555; font-size: 14px; line-height: 1.5; margin: 0 0 10px 0;">
+                      On the confirmation page, you can <strong>verify or edit your signing email</strong> before sending the agreement.
+                    </p>
+                    <p style="color: #555555; font-size: 14px; line-height: 1.5; margin: 0;">
+                      Once you click <em>Send DocuSign</em>, the DocuSign email will arrive within minutes. If you already closed the page, simply return using your browser history or contact your recruiter for the link.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Timeline Box -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="background-color: #e3f2fd; padding: 20px; border-left: 4px solid #2196F3; border-radius: 4px;">
+                    <h4 style="color: #1565C0; margin: 0 0 12px 0; font-size: 15px;">📧 What Happens Next?</h4>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr><td style="padding: 5px 0; color: #1565C0; font-size: 14px;">1. Review the confirmation page and update signing email if needed</td></tr>
+                      <tr><td style="padding: 5px 0; color: #1565C0; font-size: 14px;">2. Click <strong>Send DocuSign</strong> to trigger the agreement email</td></tr>
+                      <tr><td style="padding: 5px 0; color: #1565C0; font-size: 14px;">3. Sign the agreement through DocuSign's secure platform</td></tr>
+                      <tr><td style="padding: 5px 0; color: #1565C0; font-size: 14px;">4. Once signed, you'll receive a payment setup email from us</td></tr>
+                      <tr><td style="padding: 5px 0; color: #1565C0; font-size: 14px;">5. Complete your payment to activate your account</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Application ID -->
+              <p style="color: #555555; font-size: 14px; margin: 20px 0 5px 0;">
+                <strong>Application ID:</strong> {APPLICATION_ID}
+              </p>
+              
+              <p style="color: #888888; font-size: 13px; margin: 15px 0 0 0;">
+                Need help or a fresh link? Please contact your recruiter and share your Application ID.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #fafafa; padding: 25px 40px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="color: #999999; font-size: 12px; margin: 0 0 5px 0;">&copy; {CURRENT_YEAR} {APP_NAME}. All rights reserved.</p>
+              <a href="{APP_URL}" style="color: #4CAF50; font-size: 12px; text-decoration: none;">{APP_URL}</a>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

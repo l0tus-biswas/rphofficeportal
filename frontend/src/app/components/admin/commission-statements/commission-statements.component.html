@@ -29,24 +29,63 @@
     </div>
     <div class="card-body">
       <div class="row g-3">
+        <!-- 6.4: Agent search typeahead -->
         <div class="col-md-4">
           <label class="form-label">Agent *</label>
-          <select class="form-select" [(ngModel)]="uploadAgentId" name="uploadAgent">
-            <option value="">Select agent...</option>
-            <option *ngFor="let agent of agents" [value]="agent._id">{{ agent.name }} — {{ agent.email }}</option>
-          </select>
+          <div class="position-relative">
+            <input type="text" class="form-control" placeholder="Search agent by name..."
+                   [ngModel]="agentSearchQuery" (ngModelChange)="onAgentSearch($event)" name="agentSearch"
+                   (focus)="agentSearchQuery.length >= 2 && (showAgentDropdown = true)"
+                   (blur)="showAgentDropdown = false" autocomplete="off">
+            <button *ngIf="uploadAgentId" class="btn btn-sm btn-link position-absolute top-50 end-0 translate-middle-y text-danger"
+                    (click)="clearSelectedAgent()" type="button">
+              <i class="bi bi-x-circle"></i>
+            </button>
+            <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; max-height: 200px; overflow-y: auto;"
+                 *ngIf="showAgentDropdown && filteredAgents.length > 0">
+              <button *ngFor="let agent of filteredAgents" type="button"
+                      class="list-group-item list-group-item-action py-1 small"
+                      (mousedown)="selectAgent(agent)">
+                <strong>{{ agent.name }}</strong> <span class="text-muted">— {{ agent.email }}</span>
+              </button>
+            </div>
+          </div>
+          <small *ngIf="selectedAgentName" class="text-success"><i class="bi bi-check-circle me-1"></i>{{ selectedAgentName }}</small>
         </div>
+
+        <!-- 6.2: Multi-carrier tag input (optional) -->
         <div class="col-md-4">
-          <label class="form-label">Carrier Name *</label>
-          <input type="text" class="form-control" [(ngModel)]="uploadCarrier" name="uploadCarrier" placeholder="e.g. Mutual of Omaha">
+          <label class="form-label">Carriers <small class="text-muted">(optional)</small></label>
+          <div class="d-flex gap-1 flex-wrap mb-1" *ngIf="uploadCarriers.length > 0">
+            <span *ngFor="let c of uploadCarriers; let i = index" class="badge bg-primary d-flex align-items-center gap-1">
+              {{ c }}
+              <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" (click)="removeCarrier(i)"></button>
+            </span>
+          </div>
+          <div class="input-group">
+            <input type="text" class="form-control" [(ngModel)]="carrierInput" name="carrierInput"
+                   placeholder="Type carrier &amp; press Enter" (keydown)="addCarrierOnKey($event)">
+            <button class="btn btn-outline-primary" type="button" (click)="addCarrier()">
+              <i class="bi bi-plus"></i>
+            </button>
+          </div>
         </div>
+
         <div class="col-md-4">
           <label class="form-label">Pay Period (Week Ending) *</label>
           <input type="date" class="form-control" [(ngModel)]="uploadPayPeriod" name="uploadPayPeriod">
         </div>
+
+        <!-- 6.5: File picker with remove button -->
         <div class="col-md-6">
           <label class="form-label">Statement PDF *</label>
-          <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf" name="statementFile">
+          <div class="d-flex align-items-center gap-2">
+            <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv" name="statementFile">
+            <button *ngIf="uploadFile" type="button" class="btn btn-outline-danger btn-sm" (click)="removeFile()" title="Remove file">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <small *ngIf="uploadFile" class="text-muted">{{ uploadFile.name }} ({{ (uploadFile.size / 1024).toFixed(1) }} KB)</small>
         </div>
       </div>
       <div class="mt-3 d-flex gap-2">
@@ -91,11 +130,12 @@
           <thead class="table-light">
             <tr>
               <th>Agent</th>
-              <th>Carrier</th>
+              <th>Carriers</th>
               <th>Pay Period</th>
               <th>File</th>
               <th>Uploaded By</th>
               <th>Uploaded At</th>
+              <th>Notes</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -105,19 +145,75 @@
                 <div class="fw-semibold">{{ stmt.agent?.name }}</div>
                 <small class="text-muted">{{ stmt.agent?.email }}</small>
               </td>
-              <td>{{ stmt.carrier }}</td>
+              <td>
+                <span *ngFor="let c of (stmt.carrierList || stmt.carriers || [stmt.carrier])" class="badge bg-info text-dark me-1">{{ c }}</span>
+              </td>
               <td><strong>{{ stmt.payPeriod | date:'mediumDate' }}</strong></td>
               <td><small class="text-muted">{{ stmt.originalFileName || 'statement.pdf' }}</small></td>
-              <td><small>{{ stmt.uploadedBy?.name || '—' }}</small></td>
+              <td><small>{{ stmt.uploadedBy?.name || '\u2014' }}</small></td>
               <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
               <td>
-                <button class="btn btn-outline-danger btn-sm" (click)="deleteStatement(stmt._id)">
-                  <i class="bi bi-trash"></i>
+                <button class="btn btn-outline-secondary btn-sm" (click)="openNotes(stmt)">
+                  <i class="bi bi-chat-left-text me-1"></i>{{ stmt.notes?.length || 0 }}
                 </button>
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-outline-primary btn-sm" (click)="downloadStatement(stmt)" title="Download">
+                    <i class="bi bi-download"></i>
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm" (click)="deleteStatement(stmt._id)" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 6.3: Notes Modal -->
+<div class="modal d-block" tabindex="-1" *ngIf="showNotesModal" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-chat-left-text me-2"></i>Notes — {{ selectedStatement?.agent?.name }}</h5>
+        <button type="button" class="btn-close" (click)="closeNotes()"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Existing notes -->
+        <div *ngIf="selectedStatement?.notes?.length === 0" class="text-center text-muted py-3">
+          No notes yet.
+        </div>
+        <div *ngFor="let note of selectedStatement?.notes" class="border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <strong>{{ note.addedBy?.name || 'Unknown' }}</strong>
+              <small class="text-muted ms-2">{{ note.addedAt | date:'medium' }}</small>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" (click)="deleteNote(note._id!)" title="Delete note">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          <p class="mb-0 mt-1">{{ note.text }}</p>
+        </div>
+
+        <!-- Add note -->
+        <hr>
+        <div class="input-group">
+          <input type="text" class="form-control" [(ngModel)]="newNoteText" name="newNote"
+                 placeholder="Add a note..." (keydown.enter)="addNote()">
+          <button class="btn btn-primary" (click)="addNote()" [disabled]="addingNote || !newNoteText.trim()">
+            <span *ngIf="addingNote" class="spinner-border spinner-border-sm me-1"></span>
+            <i *ngIf="!addingNote" class="bi bi-send me-1"></i>Add
+          </button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeNotes()">Close</button>
       </div>
     </div>
   </div>

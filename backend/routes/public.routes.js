@@ -4,7 +4,7 @@ const User = require('../models/User');
 const SystemConfig = require('../models/SystemConfig');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { applyLimiter } = require('../middleware/rateLimiter.middleware');
-const { sendWelcomeEmail } = require('../utils/email');
+const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, sendResponse, errorResponse } = require('../utils/helpers');
 const { createPaymentIntent } = require('../utils/stripe');
 

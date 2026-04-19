@@ -25,6 +25,8 @@
       (click)="filterStatus = 'Requested'; applyFilter()">Requested</button>
     <button class="btn btn-sm" [class.btn-success]="filterStatus === 'Appointed'" [class.btn-outline-success]="filterStatus !== 'Appointed'"
       (click)="filterStatus = 'Appointed'; applyFilter()">Appointed</button>
+    <button class="btn btn-sm" [class.btn-secondary]="filterStatus === 'Unappointed'" [class.btn-outline-secondary]="filterStatus !== 'Unappointed'"
+      (click)="filterStatus = 'Unappointed'; applyFilter()">Unappointed</button>
   </div>
 
   <!-- Table -->
@@ -50,6 +52,7 @@
               <th>Status</th>
               <th>Requested</th>
               <th>Appointed</th>
+              <th>Notes</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -62,21 +65,43 @@
               <td><strong>{{ req.carrier?.name }}</strong></td>
               <td><span class="badge bg-info text-dark">{{ req.carrier?.category }}</span></td>
               <td>
-                <span class="badge" [ngClass]="req.status === 'Appointed' ? 'bg-success' : 'bg-warning text-dark'">
+                <span class="badge" [ngClass]="{
+                  'bg-success': req.status === 'Appointed',
+                  'bg-warning text-dark': req.status === 'Requested',
+                  'bg-secondary': req.status === 'Unappointed'
+                }">
                   {{ req.status }}
                 </span>
               </td>
               <td><small class="text-muted">{{ req.requestedAt | date:'medium' }}</small></td>
               <td><small class="text-muted">{{ req.appointedAt ? (req.appointedAt | date:'medium') : '—' }}</small></td>
               <td>
-                <button *ngIf="req.status === 'Requested'" class="btn btn-success btn-sm"
-                  (click)="appoint(req)" [disabled]="appointingId === req._id">
-                  <span *ngIf="appointingId === req._id" class="spinner-border spinner-border-sm me-1"></span>
-                  <i *ngIf="appointingId !== req._id" class="bi bi-check2-circle me-1"></i>Appoint
+                <button class="btn btn-sm btn-outline-secondary position-relative" (click)="openNotes(req)">
+                  <i class="bi bi-chat-left-text"></i>
+                  <span *ngIf="req.notes && req.notes.length > 0"
+                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                    {{ req.notes!.length }}
+                  </span>
                 </button>
-                <span *ngIf="req.status === 'Appointed'" class="text-success">
-                  <i class="bi bi-check-circle-fill"></i>
-                </span>
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <button *ngIf="req.status === 'Requested'" class="btn btn-success btn-sm"
+                    (click)="appoint(req)" [disabled]="appointingId === req._id">
+                    <span *ngIf="appointingId === req._id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i *ngIf="appointingId !== req._id" class="bi bi-check2-circle me-1"></i>Appoint
+                  </button>
+                  <button *ngIf="req.status === 'Appointed'" class="btn btn-outline-danger btn-sm"
+                    (click)="unappoint(req)" [disabled]="unappointingId === req._id">
+                    <span *ngIf="unappointingId === req._id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i *ngIf="unappointingId !== req._id" class="bi bi-x-circle me-1"></i>Unappoint
+                  </button>
+                  <button *ngIf="req.status === 'Unappointed'" class="btn btn-outline-success btn-sm"
+                    (click)="appoint(req)" [disabled]="appointingId === req._id">
+                    <span *ngIf="appointingId === req._id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i *ngIf="appointingId !== req._id" class="bi bi-arrow-repeat me-1"></i>Re-Appoint
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -85,3 +110,49 @@
     </div>
   </div>
 </div>
+
+<!-- Notes Modal -->
+<div class="modal fade" [class.show]="showNotesModal" [style.display]="showNotesModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showNotesModal">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-chat-left-text me-2"></i>Notes — {{ selectedRequest?.agent?.name }} / {{ selectedRequest?.carrier?.name }}
+        </h5>
+        <button type="button" class="btn-close" (click)="closeNotesModal()"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Existing notes -->
+        <div *ngIf="!selectedRequest?.notes || selectedRequest?.notes?.length === 0" class="text-center text-muted py-3">
+          <i class="bi bi-chat-left display-4 d-block mb-2"></i>
+          <p>No notes yet. Add the first note below.</p>
+        </div>
+        <div *ngIf="selectedRequest?.notes && selectedRequest?.notes?.length! > 0" class="mb-3" style="max-height: 400px; overflow-y: auto;">
+          <div *ngFor="let note of selectedRequest?.notes" class="border rounded p-3 mb-2 bg-light">
+            <p class="mb-1" style="white-space: pre-line">{{ note.text }}</p>
+            <small class="text-muted">
+              <i class="bi bi-person me-1"></i>{{ note.addedBy?.name || 'Admin' }}
+              <i class="bi bi-clock ms-2 me-1"></i>{{ note.addedAt | date:'medium' }}
+            </small>
+          </div>
+        </div>
+
+        <!-- Add note -->
+        <div class="border-top pt-3">
+          <label class="form-label fw-semibold">Add Note</label>
+          <textarea class="form-control" rows="3" [(ngModel)]="newNoteText" placeholder="Type a note..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeNotesModal()">Close</button>
+        <button type="button" class="btn btn-primary" (click)="addNote()"
+          [disabled]="addingNote || !newNoteText.trim()">
+          <span *ngIf="addingNote" class="spinner-border spinner-border-sm me-1"></span>
+          <i *ngIf="!addingNote" class="bi bi-plus-circle me-1"></i>Add Note
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade show" *ngIf="showNotesModal"></div>

@@ -6,12 +6,14 @@ interface TreeNode {
   name: string;
   email: string;
   role: string;
+  level?: string;
   referralCode?: string;
   isActive: boolean;
+  isLicensed?: boolean;
   createdAt: string;
   children: TreeNode[];
   expanded?: boolean;
-  level?: number;
+  treeLevel?: number;
 }
 
 @Component({
@@ -26,12 +28,17 @@ export class HierarchyComponent implements OnInit {
   error = '';
   searchTerm = '';
   
-  // Statistics
+  // Statistics (from server)
   totalUsers = 0;
   totalAdmins = 0;
   totalAgents = 0;
-  totalRecruits = 0;
+  totalLicensed = 0;
+  totalUnlicensed = 0;
   maxDepth = 0;
+
+  // Role edit state
+  editingRole: string | null = null;
+  savingRole = false;
 
   constructor(private adminService: AdminService) { }
 
@@ -46,7 +53,16 @@ export class HierarchyComponent implements OnInit {
     this.adminService.getHierarchy().subscribe({
       next: (response: any) => {
         this.hierarchy = response.hierarchy || [];
-        this.calculateStatistics(this.hierarchy);
+        // Use server-computed counts if available
+        if (response.counts) {
+          this.totalUsers = response.counts.totalUsers || 0;
+          this.totalAdmins = response.counts.totalAdmins || 0;
+          this.totalAgents = response.counts.totalAgents || 0;
+          this.totalLicensed = response.counts.totalLicensed || 0;
+          this.totalUnlicensed = response.counts.totalUnlicensed || 0;
+        } else {
+          this.calculateStatistics(this.hierarchy);
+        }
         this.flattenHierarchy();
         this.loading = false;
       },
@@ -61,8 +77,11 @@ export class HierarchyComponent implements OnInit {
     nodes.forEach(node => {
       this.totalUsers++;
       if (node.role === 'admin') this.totalAdmins++;
-      if (node.role === 'agent') this.totalAgents++;
-      if (node.role === 'recruit') this.totalRecruits++;
+      else {
+        this.totalAgents++;
+        if (node.isLicensed) this.totalLicensed++;
+        else this.totalUnlicensed++;
+      }
       
       if (depth > this.maxDepth) this.maxDepth = depth;
       
@@ -76,8 +95,8 @@ export class HierarchyComponent implements OnInit {
     this.flattenedHierarchy = [];
     const flatten = (nodes: TreeNode[], level: number = 0) => {
       nodes.forEach(node => {
-        node.level = level;
-        node.expanded = level < 2; // Expand first 2 levels by default
+        node.treeLevel = level;
+        node.expanded = level < 2;
         this.flattenedHierarchy.push(node);
         if (node.children && node.children.length > 0) {
           flatten(node.children, level + 1);
@@ -98,7 +117,6 @@ export class HierarchyComponent implements OnInit {
              (node.referralCode ? node.referralCode.toLowerCase().includes(this.searchTerm.toLowerCase()) : false);
     }
     
-    // Check if parent is expanded
     let parent = this.findParent(node);
     while (parent) {
       if (!parent.expanded) return false;
@@ -131,13 +149,27 @@ export class HierarchyComponent implements OnInit {
     this.flattenedHierarchy.forEach(node => node.expanded = false);
   }
 
-  getRoleBadgeClass(role: string): string {
-    const classes: any = {
-      'admin': 'bg-danger',
-      'agent': 'bg-primary',
-      'recruit': 'bg-secondary'
-    };
-    return classes[role] || 'bg-secondary';
+  // Role display: "Admin", "Agent (Licensed)", or "Recruit (Unlicensed)" (§21.3)
+  getDisplayRole(node: TreeNode): string {
+    if (node.role === 'admin') return 'Admin';
+    if (node.isLicensed) return 'Agent';
+    return 'Recruit';
+  }
+
+  getRoleBadgeClass(node: TreeNode): string {
+    if (node.role === 'admin') return 'bg-danger';
+    if (node.isLicensed) return 'bg-primary';
+    return 'bg-secondary';
+  }
+
+  getLicenseBadgeClass(node: TreeNode): string {
+    if (node.role === 'admin') return '';
+    return node.isLicensed ? 'bg-success' : 'bg-warning text-dark';
+  }
+
+  getLicenseLabel(node: TreeNode): string {
+    if (node.role === 'admin') return '';
+    return node.isLicensed ? 'Licensed' : 'Unlicensed';
   }
 
   getIndentation(level: number): string {
@@ -146,6 +178,40 @@ export class HierarchyComponent implements OnInit {
 
   hasChildren(node: TreeNode): boolean {
     return node.children && node.children.length > 0;
+  }
+
+  // Role management (§21.2)
+  startEditRole(node: TreeNode): void {
+    this.editingRole = node._id;
+  }
+
+  cancelEditRole(): void {
+    this.editingRole = null;
+  }
+
+  toggleRole(node: TreeNode): void {
+    const newRole = node.role === 'admin' ? 'agent' : 'admin';
+    this.savingRole = true;
+    this.adminService.updateUser(node._id, { role: newRole }).subscribe({
+      next: () => {
+        node.role = newRole;
+        this.editingRole = null;
+        this.savingRole = false;
+        // Recalculate counts
+        this.totalUsers = 0;
+        this.totalAdmins = 0;
+        this.totalAgents = 0;
+        this.totalLicensed = 0;
+        this.totalUnlicensed = 0;
+        this.maxDepth = 0;
+        this.calculateStatistics(this.hierarchy);
+      },
+      error: (err: any) => {
+        this.error = err.error?.message || 'Failed to update role';
+        this.editingRole = null;
+        this.savingRole = false;
+      }
+    });
   }
 
   exportHierarchy(): void {

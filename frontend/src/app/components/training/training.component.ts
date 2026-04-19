@@ -16,10 +16,17 @@ export class TrainingComponent implements OnInit {
   
   selectedCategory = 'all';
   selectedType = 'all';
+  selectedFolder = 'all';
   searchTerm = '';
 
   categories: string[] = [];
   types = ['all', 'video', 'youtube', 'loom', 'document', 'link', 'article', 'other'];
+
+  // Folders
+  folders: any[] = [];
+  currentFolder: any = null;
+  currentSubfolders: any[] = [];
+  breadcrumbs: any[] = [];
 
   // Video player modal
   activePlayer: any = null;
@@ -31,7 +38,58 @@ export class TrainingComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.loadFolders();
     this.loadMaterials();
+  }
+
+  loadFolders(): void {
+    this.trainingService.getFolders().subscribe({
+      next: (response: any) => {
+        this.folders = response.folders || [];
+      },
+      error: () => {}
+    });
+  }
+
+  getRootFolders(): any[] {
+    return this.folders.filter(f => !f.parent);
+  }
+
+  getSubfolders(parentId: string): any[] {
+    return this.folders.filter(f => {
+      const pid = f.parent?._id || f.parent;
+      return pid === parentId;
+    });
+  }
+
+  navigateToFolder(folder: any): void {
+    this.currentFolder = folder;
+    this.currentSubfolders = this.getSubfolders(folder._id);
+    this.buildBreadcrumbs();
+    this.selectedFolder = folder._id;
+    this.applyFilters();
+  }
+
+  navigateToRoot(): void {
+    this.currentFolder = null;
+    this.currentSubfolders = [];
+    this.breadcrumbs = [];
+    this.selectedFolder = 'all';
+    this.applyFilters();
+  }
+
+  buildBreadcrumbs(): void {
+    this.breadcrumbs = [];
+    let current = this.currentFolder;
+    while (current) {
+      this.breadcrumbs.unshift(current);
+      const parentId = current.parent?._id || current.parent;
+      current = parentId ? this.folders.find(f => f._id === parentId) : null;
+    }
+  }
+
+  navigateToBreadcrumb(folder: any): void {
+    this.navigateToFolder(folder);
   }
 
   loadMaterials(): void {
@@ -66,8 +124,11 @@ export class TrainingComponent implements OnInit {
       const matchesSearch = !this.searchTerm || 
         material.title?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
         material.description?.toLowerCase().includes(this.searchTerm.toLowerCase());
+      const matchesFolder = this.selectedFolder === 'all' ||
+        (this.selectedFolder === 'none' && !material.folder) ||
+        (material.folder?._id === this.selectedFolder || material.folder === this.selectedFolder);
       
-      return matchesCategory && matchesType && matchesSearch;
+      return matchesCategory && matchesType && matchesSearch && matchesFolder;
     });
   }
 
@@ -110,10 +171,12 @@ export class TrainingComponent implements OnInit {
 
   isEmbeddable(material: any): boolean {
     const url: string = material.url || '';
-    if (['video', 'youtube', 'loom'].includes(material.type)) return true;
-    // Auto-detect video platforms in link type
+    // Only embed known video platforms that support iframe embedding
+    if (['youtube', 'loom'].includes(material.type)) return true;
+    if (material.type === 'video' && /youtube\.com|youtu\.be|loom\.com|vimeo\.com/.test(url)) return true;
+    // Auto-detect video platforms even if type is 'link'
     if (/youtube\.com|youtu\.be|loom\.com|vimeo\.com/.test(url)) return true;
-    if (material.type === 'link') return true;
+    // Documents, plain links, articles, PDFs should open in new tab — not in iframe
     return false;
   }
 

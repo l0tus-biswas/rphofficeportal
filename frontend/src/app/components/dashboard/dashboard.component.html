@@ -196,132 +196,321 @@
           </div>
         </div>
 
-        <!-- Admin Dashboard -->
+        <!-- Admin Dashboard (§25 — Redesigned) -->
         <div *ngIf="authService.isAdmin() && !loading" class="fade-in">
-          <h5 class="mb-3">{{ "System Overview" }}</h5>
+
+          <!-- §25.2 — Key Metrics (clickable → §25.6) -->
+          <h5 class="mb-3">{{ "Key Metrics" }}</h5>
           <div class="row mb-4 g-3">
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/users')">
+                <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-people-fill me-1"></i>{{ "Total Users" }}
                   </h6>
                   <h2 class="mb-0 text-primary">{{ stats.totalUsers || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-people-fill"></i>
-                  </span>
+                  <span class="stat-icon"><i class="bi bi-people-fill"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
-            
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/users')">
+                <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-shield-fill-check me-1"></i>{{ "Total Admins" }}
-                  </h6>
-                  <h2 class="mb-0 text-danger">{{ stats.totalAdmins || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-shield-fill-check"></i>
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
-                  <h6 class="text-muted mb-3">
-                    <i class="bi bi-briefcase-fill me-1"></i>{{ "Total Agents" }}
-                  </h6>
-                  <h2 class="mb-0 text-info">{{ stats.totalAgents || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-briefcase-fill"></i>
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
-                  <h6 class="text-muted mb-3">
-                    <i class="bi bi-check-circle-fill me-1"></i>{{ "Active Users" }}
+                    <i class="bi bi-check-circle-fill me-1"></i>{{ "Active Agents" }}
                   </h6>
                   <h2 class="mb-0 text-success">{{ stats.activeUsers || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-check-circle-fill"></i>
-                  </span>
+                  <span class="stat-icon"><i class="bi bi-check-circle-fill"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
-            
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/hierarchy')">
+                <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-x-circle-fill me-1"></i>{{ "Inactive Users" }}
+                    <i class="bi bi-award-fill me-1"></i>{{ "Licensed Agents" }}
                   </h6>
-                  <h2 class="mb-0 text-secondary">{{ stats.inactiveUsers || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-x-circle-fill"></i>
-                  </span>
+                  <h2 class="mb-0 text-info">{{ stats.licensedAgents || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-award-fill"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
-            
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card">
-                <div class="card-body">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/hierarchy')">
+                <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
-                    <i class="bi bi-calendar-check-fill me-1"></i>{{ "New This Month" }}
+                    <i class="bi bi-person-fill-exclamation me-1"></i>{{ "Unlicensed (Recruits)" }}
                   </h6>
-                  <h2 class="mb-0 text-warning">{{ stats.recentUsers || 0 }}</h2>
-                  <span class="stat-icon">
-                    <i class="bi bi-calendar-check-fill"></i>
-                  </span>
+                  <h2 class="mb-0 text-warning">{{ stats.unlicensedAgents || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-person-fill-exclamation"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
           </div>
 
-          <h5 class="mb-3 mt-4">{{ "Admin Controls" }}</h5>
-          <div class="row g-3">
-            <div class="col-md-4">
-              <div class="card action-card">
-                <div class="card-body text-center">
-                  <i class="bi bi-person-lines-fill display-4 text-danger mb-3"></i>
-                  <h5 class="card-title">{{ "User Management" }}</h5>
-                  <p class="text-muted small mb-3">{{ "Manage user accounts and permissions" }}</p>
-                  <a routerLink="/admin/users" class="btn btn-danger w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "Manage Users" }}
-                  </a>
+          <!-- §25.2 continued — Production Metrics (clickable → §25.6) -->
+          <h5 class="mb-3">{{ "Production Overview" }}</h5>
+          <div class="row mb-4 g-3">
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+                <div class="card-body position-relative">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-graph-up-arrow me-1"></i>{{ "Total Submissions" }}
+                  </h6>
+                  <h2 class="mb-0 text-primary">{{ stats.totalProduction || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-graph-up-arrow"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
-            
-            <div class="col-md-4">
-              <div class="card action-card">
-                <div class="card-body text-center">
-                  <i class="bi bi-diagram-3-fill display-4 text-primary mb-3"></i>
-                  <h5 class="card-title">{{ "Full Hierarchy" }}</h5>
-                  <p class="text-muted small mb-3">{{ "View complete organizational hierarchy" }}</p>
-                  <a routerLink="/admin/hierarchy" class="btn btn-primary w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "View Hierarchy" }}
-                  </a>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+                <div class="card-body position-relative">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-shield-fill-check me-1"></i>{{ "In Force" }}
+                  </h6>
+                  <h2 class="mb-0 text-success">{{ stats.productionInForce || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-shield-fill-check"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
                 </div>
               </div>
             </div>
-            
-            <div class="col-md-4">
-              <div class="card action-card">
-                <div class="card-body text-center">
-                  <i class="bi bi-mortarboard-fill display-4 text-success mb-3"></i>
-                  <h5 class="card-title">{{ "Training Management" }}</h5>
-                  <p class="text-muted small mb-3">{{ "Manage training materials and courses" }}</p>
-                  <a routerLink="/admin/training" class="btn btn-success w-100">
-                    <i class="bi bi-arrow-right-circle-fill me-1"></i> {{ "Manage Training" }}
-                  </a>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+                <div class="card-body position-relative">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-currency-dollar me-1"></i>{{ "Total Premium (In Force)" }}
+                  </h6>
+                  <h2 class="mb-0 text-info">{{ (stats.totalPremiumInForce || 0) | currency:'USD':'symbol':'1.0-0' }}</h2>
+                  <span class="stat-icon"><i class="bi bi-currency-dollar"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-4 col-sm-6">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+                <div class="card-body position-relative">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-calendar-plus me-1"></i>{{ "New This Month" }}
+                  </h6>
+                  <h2 class="mb-0 text-warning">{{ stats.recentProduction || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-calendar-plus"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- §25.3 — 24-Hour Activity Section -->
+          <div class="row mb-4 g-3">
+            <div class="col-lg-8">
+              <div class="card activity-card">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0">
+                    <i class="bi bi-lightning-fill text-warning me-2"></i>Last 24 Hours
+                  </h5>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge bg-primary">{{ stats.newAgents24h || 0 }} New Agents</span>
+                    <span class="badge bg-success-subtle text-success">{{ stats.newLicensedAgents24h || 0 }} Licensed</span>
+                    <span class="badge bg-warning-subtle text-warning">{{ stats.newUnlicensedAgents24h || 0 }} Unlicensed</span>
+                    <span class="badge bg-success">{{ stats.newProductionSubmitted24h || 0 }} Submitted</span>
+                    <span class="badge bg-info">{{ stats.newProductionInForce24h || 0 }} In Force</span>
+                  </div>
+                </div>
+                <div class="card-body p-0">
+                  <div *ngIf="stats.recentActivity && stats.recentActivity.length > 0" class="activity-feed">
+                    <div *ngFor="let item of stats.recentActivity" class="activity-item d-flex align-items-start px-3 py-2 border-bottom">
+                      <div class="activity-icon me-3 mt-1">
+                        <span class="badge rounded-circle bg-{{ item.color }}" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                          <i class="bi bi-{{ item.icon }}"></i>
+                        </span>
+                      </div>
+                      <div class="flex-grow-1">
+                        <p class="mb-0 small">{{ item.text }}</p>
+                        <small class="text-muted">{{ timeAgo(item.time) }}</small>
+                      </div>
+                    </div>
+                  </div>
+                  <div *ngIf="!stats.recentActivity || stats.recentActivity.length === 0" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox display-4 d-block mb-2"></i>
+                    No activity in the last 24 hours
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- §25.5 — Notifications / Alerts Widget -->
+            <div class="col-lg-4">
+              <div class="card alerts-card">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                  <h5 class="mb-0">
+                    <i class="bi bi-bell-fill text-danger me-2"></i>Recent Alerts
+                  </h5>
+                  <a routerLink="/notifications" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                  <div *ngIf="stats.recentAlerts && stats.recentAlerts.length > 0" class="alerts-feed">
+                    <div *ngFor="let alert of stats.recentAlerts" 
+                         class="alert-item px-3 py-2 border-bottom" 
+                         [class.unread-alert]="!alert.isRead"
+                         [style.cursor]="alert.link ? 'pointer' : 'default'"
+                         (click)="alert.link ? navigateTo(alert.link) : null">
+                      <div class="d-flex justify-content-between align-items-start">
+                        <strong class="small">{{ alert.title }}</strong>
+                        <span class="badge" [ngClass]="getAlertBadgeClass(alert.type)" style="font-size: 0.65rem;">
+                          {{ alert.type.replace('_', ' ') }}
+                        </span>
+                      </div>
+                      <p class="mb-0 small text-muted text-truncate">{{ alert.message }}</p>
+                      <small class="text-muted" style="font-size: 0.7rem;">{{ timeAgo(alert.createdAt) }}</small>
+                    </div>
+                  </div>
+                  <div *ngIf="!stats.recentAlerts || stats.recentAlerts.length === 0" class="text-center text-muted py-4">
+                    <i class="bi bi-bell-slash display-4 d-block mb-2"></i>
+                    No recent alerts
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- §25.4 — ACA Section -->
+          <h5 class="mb-3">
+            {{ "ACA Overview" }}
+            <span *ngIf="stats.acaBatch" class="badge bg-secondary ms-2" style="font-size: 0.7rem;">
+              Batch: {{ stats.acaBatch }}
+            </span>
+          </h5>
+          <div class="row mb-4 g-3">
+            <!-- Total ACA Clients -->
+            <div class="col-lg-4 col-md-6">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/aca-clients')">
+                <div class="card-body position-relative">
+                  <h6 class="text-muted mb-3">
+                    <i class="bi bi-heart-pulse-fill me-1"></i>{{ "Total ACA Clients" }}
+                  </h6>
+                  <h2 class="mb-0 text-danger">{{ stats.totalACAClients || 0 }}</h2>
+                  <span class="stat-icon"><i class="bi bi-heart-pulse-fill"></i></span>
+                  <small class="click-hint"><i class="bi bi-arrow-right"></i></small>
+                </div>
+              </div>
+            </div>
+            <!-- Top 5 Personal -->
+            <div class="col-lg-4 col-md-6">
+              <div class="card leaderboard-card">
+                <div class="card-header bg-white border-bottom py-2">
+                  <h6 class="mb-0"><i class="bi bi-trophy-fill text-warning me-1"></i>Top 5 Personal</h6>
+                </div>
+                <div class="card-body p-0">
+                  <div *ngIf="stats.topPersonalACA && stats.topPersonalACA.length > 0">
+                    <div *ngFor="let entry of stats.topPersonalACA; let i = index" 
+                         class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                      <div>
+                        <span class="badge bg-light text-dark me-2">{{ i + 1 }}</span>
+                        <span class="small">{{ entry.agentName }}</span>
+                      </div>
+                      <span class="badge bg-primary">{{ entry.clientCount }}</span>
+                    </div>
+                  </div>
+                  <div *ngIf="!stats.topPersonalACA || stats.topPersonalACA.length === 0" class="text-center text-muted py-3">
+                    <small>No ACA data available</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Top 5 Team -->
+            <div class="col-lg-4 col-md-6">
+              <div class="card leaderboard-card">
+                <div class="card-header bg-white border-bottom py-2">
+                  <h6 class="mb-0"><i class="bi bi-people-fill text-success me-1"></i>Top 5 Team</h6>
+                </div>
+                <div class="card-body p-0">
+                  <div *ngIf="stats.topTeamACA && stats.topTeamACA.length > 0">
+                    <div *ngFor="let entry of stats.topTeamACA; let i = index" 
+                         class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                      <div>
+                        <span class="badge bg-light text-dark me-2">{{ i + 1 }}</span>
+                        <span class="small">{{ entry.agentName }}</span>
+                      </div>
+                      <span class="badge bg-success">{{ entry.teamClientCount }}</span>
+                    </div>
+                  </div>
+                  <div *ngIf="!stats.topTeamACA || stats.topTeamACA.length === 0" class="text-center text-muted py-3">
+                    <small>No ACA data available</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- §25.6 — Admin Quick Controls (clickable navigation) -->
+          <h5 class="mb-3">{{ "Quick Access" }}</h5>
+          <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/users')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-person-lines-fill display-5 text-danger mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "User Management" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/hierarchy')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-diagram-3-fill display-5 text-primary mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Full Hierarchy" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/production')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-graph-up display-5 text-success mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Production" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/training')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-mortarboard-fill display-5 text-info mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Training" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/apa-applications')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-file-earmark-text-fill display-5 text-warning mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Applications" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/aca-clients')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-heart-pulse-fill display-5 text-danger mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "ACA Clients" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/notifications')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-bell-fill display-5 text-secondary mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Notifications" }}</h6>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/payments')">
+                <div class="card-body text-center py-3">
+                  <i class="bi bi-credit-card-fill display-5 text-dark mb-2"></i>
+                  <h6 class="card-title mb-0">{{ "Billing" }}</h6>
                 </div>
               </div>
             </div>

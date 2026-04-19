@@ -1,0 +1,84 @@
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Drag & Drop: Folder card */
+.folder-card {
+  position: relative;
+}
+
+.drag-handle-wrapper {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 6px;
+  padding: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: move;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.drag-handle-wrapper:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.drag-handle {
+  font-size: 1.1rem;
+  color: #6c757d;
+}
+
+/* Drag & Drop: File table row handle */
+.drag-handle-cell {
+  cursor: move;
+  width: 40px;
+  text-align: center;
+}
+
+.drag-handle-cell:hover i {
+  color: #0d6efd !important;
+}
+
+/* CDK Drag Preview (the item being dragged) */
+.cdk-drag-preview {
+  box-sizing: border-box;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+  transform: rotate(2deg);
+}
+
+.cdk-drag-preview .drag-handle-wrapper {
+  display: none;
+}
+
+/* CDK Drag Animation */
+.cdk-drag-animating {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.folder-grid.cdk-drop-list-dragging .col-6:not(.cdk-drag-placeholder),
+.folder-grid.cdk-drop-list-dragging .col-md-4:not(.cdk-drag-placeholder),
+.folder-grid.cdk-drop-list-dragging .col-lg-3:not(.cdk-drag-placeholder) {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+tbody.cdk-drop-list-dragging tr:not(.cdk-drag-placeholder) {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* CDK Drag Placeholder (dashed border where item was) */
+.cdk-drag-placeholder {
+  opacity: 0.3;
+  background: #f8f9fa;
+  border: 2px dashed #0d6efd;
+  border-radius: 10px;
+}
+
+.cdk-drag-placeholder .card,
+.cdk-drag-placeholder td {
+  opacity: 0;
+}

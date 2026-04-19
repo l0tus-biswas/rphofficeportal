@@ -1,0 +1,323 @@
+<div class="container-fluid mt-4 mb-5">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0"><i class="bi bi-people-fill me-2"></i>My Team</h3>
+    <div class="btn-group">
+      <button class="btn btn-sm" [class]="viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'"
+              (click)="onViewToggle('list')">
+        <i class="bi bi-list-ul me-1"></i>List
+      </button>
+      <button class="btn btn-sm" [class]="viewMode === 'tree' ? 'btn-primary' : 'btn-outline-primary'"
+              (click)="onViewToggle('tree')">
+        <i class="bi bi-diagram-3 me-1"></i>Tree
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-primary">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-primary">{{ stats.totalMembers }}</div>
+          <small class="text-muted">Total Members</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-success">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-success">{{ stats.directRecruits }}</div>
+          <small class="text-muted">Direct Recruits</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-success">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-success">{{ stats.totalActive }}</div>
+          <small class="text-muted">Active</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-secondary">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-secondary">{{ stats.totalInactive }}</div>
+          <small class="text-muted">Inactive</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-info">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-info">{{ stats.totalLicensed }}</div>
+          <small class="text-muted">Licensed</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="card text-center border-warning">
+        <div class="card-body py-2">
+          <div class="fs-4 fw-bold text-warning">{{ stats.totalUnlicensed }}</div>
+          <small class="text-muted">Unlicensed</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Search</label>
+          <input type="text" class="form-control form-control-sm" placeholder="Name or email..."
+                 [(ngModel)]="searchTerm" (keyup.enter)="onFilterChange()">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Status</label>
+          <select class="form-select form-select-sm" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+            <option value="">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Licensed</label>
+          <select class="form-select form-select-sm" [(ngModel)]="licensedFilter" (change)="onFilterChange()">
+            <option value="">All</option>
+            <option value="licensed">Licensed</option>
+            <option value="unlicensed">Unlicensed</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Date Range</label>
+          <select class="form-select form-select-sm" [(ngModel)]="datePreset" (change)="onDatePresetChange()">
+            <option value="">All Time</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="60d">Last 60 Days</option>
+            <option value="90d">Last 90 Days</option>
+            <option value="6m">Last 6 Months</option>
+            <option value="12m">Last 12 Months</option>
+          </select>
+        </div>
+        <div class="col-md-3 d-flex gap-1 align-items-end">
+          <div class="flex-fill">
+            <label class="form-label small mb-1">From</label>
+            <input type="date" class="form-control form-control-sm" [(ngModel)]="dateFrom" (change)="onCustomDateChange()">
+          </div>
+          <div class="flex-fill">
+            <label class="form-label small mb-1">To</label>
+            <input type="date" class="form-control form-control-sm" [(ngModel)]="dateTo" (change)="onCustomDateChange()">
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 d-flex gap-2">
+        <button class="btn btn-sm btn-primary" (click)="onFilterChange()">
+          <i class="bi bi-search me-1"></i>Search
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" (click)="clearFilters()">
+          <i class="bi bi-x-circle me-1"></i>Clear
+        </button>
+        <span class="text-muted small align-self-center ms-2" *ngIf="stats.filtered !== stats.totalMembers">
+          Showing {{ stats.filtered }} of {{ stats.totalMembers }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="error" class="alert alert-danger">{{ error }}</div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && !error && stats.totalMembers === 0" class="text-center py-5">
+    <i class="bi bi-people fs-1 text-muted"></i>
+    <p class="mt-3 text-muted">No team members yet. Share your referral link to start recruiting!</p>
+  </div>
+
+  <!-- ═══ LIST VIEW ═══ -->
+  <div *ngIf="!loading && !error && viewMode === 'list' && listData.length > 0">
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Member</th>
+              <th>Status</th>
+              <th>Licensed</th>
+              <th>Level</th>
+              <th>Recruited By</th>
+              <th>Joined</th>
+              <th>Referral Code</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let member of listData">
+              <td>
+                <div class="d-flex align-items-center">
+                  <i [class]="'bi ' + getRoleIcon(member.role) + ' me-2 fs-5'"></i>
+                  <div>
+                    <div class="fw-semibold">{{ member.name }}</div>
+                    <small class="text-muted">{{ member.email }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="badge" [class]="getStatusBadgeClass(member.isActive)">
+                  {{ getStatusText(member.isActive) }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" [class]="getLicenseBadgeClass(member.isLicensed)">
+                  {{ getLicenseText(member.isLicensed) }}
+                </span>
+              </td>
+              <td>
+                <span class="badge bg-light text-dark border" [style.border-left]="'3px solid ' + getLevelColor(member.treeLevel)">
+                  L{{ member.treeLevel }}
+                </span>
+              </td>
+              <td>
+                <span *ngIf="member.recruitedByName">{{ member.recruitedByName }}</span>
+                <span *ngIf="!member.recruitedByName" class="text-muted">—</span>
+              </td>
+              <td>{{ formatDate(member.createdAt) }}</td>
+              <td>
+                <div class="d-flex align-items-center" *ngIf="member.referralCode">
+                  <code class="me-1">{{ member.referralCode }}</code>
+                  <button class="btn btn-sm btn-outline-secondary py-0 px-1"
+                          (click)="copyToClipboard(member.referralCode)" title="Copy referral link">
+                    <i class="bi" [class.bi-clipboard]="copiedCode !== member.referralCode"
+                       [class.bi-check]="copiedCode === member.referralCode"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="card-footer" *ngIf="totalPages > 1">
+        <div class="d-flex justify-content-between align-items-center">
+          <button class="btn btn-sm btn-outline-primary" (click)="onPageChange(currentPage - 1)"
+                  [disabled]="currentPage === 1">
+            <i class="bi bi-chevron-left"></i> Previous
+          </button>
+          <span>Page {{ currentPage }} of {{ totalPages }}</span>
+          <button class="btn btn-sm btn-outline-primary" (click)="onPageChange(currentPage + 1)"
+                  [disabled]="currentPage === totalPages">
+            Next <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TREE VIEW ═══ -->
+  <div *ngIf="!loading && !error && viewMode === 'tree' && treeData.length > 0">
+    <div class="card shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Downline Tree</h6>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" (click)="expandAll()">
+            <i class="bi bi-arrows-expand me-1"></i>Expand All
+          </button>
+          <button class="btn btn-outline-secondary" (click)="collapseAll()">
+            <i class="bi bi-arrows-collapse me-1"></i>Collapse All
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <ng-container *ngTemplateOutlet="treeTemplate; context: { nodes: treeData }"></ng-container>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Breakdown -->
+  <div class="card shadow-sm mt-3" *ngIf="!loading && getLevelStatsArray().length > 0">
+    <div class="card-header bg-white">
+      <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Level Breakdown</h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Level</th>
+              <th class="text-center">Total</th>
+              <th class="text-center">Active</th>
+              <th class="text-center">Inactive</th>
+              <th class="text-center">Licensed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of getLevelStatsArray()">
+              <td>
+                <span class="badge bg-light text-dark border"
+                      [style.border-left]="'3px solid ' + getLevelColor(item.level)">
+                  Level {{ item.level }}
+                </span>
+              </td>
+              <td class="text-center">{{ item.stats.total }}</td>
+              <td class="text-center text-success">{{ item.stats.active }}</td>
+              <td class="text-center text-secondary">{{ item.stats.inactive }}</td>
+              <td class="text-center text-info">{{ item.stats.licensed }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Recursive tree template -->
+<ng-template #treeTemplate let-nodes="nodes">
+  <div *ngFor="let node of nodes" class="tree-node-wrapper">
+    <div class="tree-node d-flex align-items-center px-3 py-2 border-bottom"
+         [style.padding-left.px]="(node.treeLevel || 1) * 24 + 12">
+      <!-- Expand/collapse toggle -->
+      <button class="btn btn-sm p-0 me-2" (click)="toggleNode(node)"
+              *ngIf="node.children && node.children.length > 0" style="width:20px">
+        <i class="bi" [class.bi-chevron-down]="node.expanded" [class.bi-chevron-right]="!node.expanded"></i>
+      </button>
+      <span *ngIf="!node.children || node.children.length === 0" style="width:20px" class="me-2"></span>
+
+      <!-- Level indicator -->
+      <span class="me-2" [style.color]="getLevelColor(node.treeLevel)">
+        <i [class]="'bi ' + getRoleIcon(node.role)"></i>
+      </span>
+
+      <!-- Name & email -->
+      <div class="flex-grow-1">
+        <span class="fw-semibold">{{ node.name }}</span>
+        <small class="text-muted ms-2">{{ node.email }}</small>
+        <span *ngIf="node.recruitedByName" class="text-muted small ms-2">
+          <i class="bi bi-arrow-return-right me-1"></i>by {{ node.recruitedByName }}
+        </span>
+      </div>
+
+      <!-- Badges -->
+      <span class="badge me-1" [class]="getStatusBadgeClass(node.isActive)">{{ getStatusText(node.isActive) }}</span>
+      <span class="badge me-1" [class]="getLicenseBadgeClass(node.isLicensed)">{{ getLicenseText(node.isLicensed) }}</span>
+      <small class="text-muted">{{ formatDate(node.createdAt) }}</small>
+      <span class="badge bg-light text-dark border ms-2">
+        {{ node.children?.length || 0 }} <i class="bi bi-people-fill"></i>
+      </span>
+    </div>
+    <!-- Recursive children -->
+    <div *ngIf="node.expanded && node.children && node.children.length > 0">
+      <ng-container *ngTemplateOutlet="treeTemplate; context: { nodes: node.children }"></ng-container>
+    </div>
+  </div>
+</ng-template>

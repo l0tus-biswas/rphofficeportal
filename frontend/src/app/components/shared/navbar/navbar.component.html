@@ -81,6 +81,13 @@
         <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
           <a class="nav-link px-xl-3" routerLink="/onboarding-hub" routerLinkActive="active">
             <i class="bi bi-folder2-open me-2"></i>
+            <span>Onboarding Docs</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link px-xl-3" routerLink="/document-hub" routerLinkActive="active">
+            <i class="bi bi-archive me-2"></i>
             <span>Document Hub</span>
           </a>
         </li>

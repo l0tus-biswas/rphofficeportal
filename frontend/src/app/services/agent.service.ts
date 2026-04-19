@@ -56,6 +56,29 @@ export class AgentService {
     return this.http.get(`${this.apiUrl}/agent/downline`, this.getHeaders());
   }
 
+  getMyTeam(params?: any): Observable<any> {
+    let url = `${this.apiUrl}/agent/my-team`;
+    const queryParams = new URLSearchParams();
+
+    if (params) {
+      if (params.view) queryParams.append('view', params.view);
+      if (params.page) queryParams.append('page', params.page.toString());
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.search) queryParams.append('search', params.search);
+      if (params.status) queryParams.append('status', params.status);
+      if (params.licensed) queryParams.append('licensed', params.licensed);
+      if (params.datePreset) queryParams.append('datePreset', params.datePreset);
+      if (params.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+      if (params.dateTo) queryParams.append('dateTo', params.dateTo);
+      if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+    }
+
+    const queryString = queryParams.toString();
+    if (queryString) url += `?${queryString}`;
+
+    return this.http.get(url, this.getHeaders());
+  }
+
   getStats(): Observable<any> {
     return this.http.get(`${this.apiUrl}/agent/stats`, this.getHeaders());
   }

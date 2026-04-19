@@ -21,6 +21,13 @@ const productionSubmissionSchema = new mongoose.Schema({
     trim: true
   },
   
+  // 8.1: Number of members (for ACA / health policies)
+  numberOfMembers: {
+    type: Number,
+    default: 1,
+    min: 1
+  },
+
   // Product sold — no hardcoded enum; valid values are driven by the ProductType collection
   productSold: {
     type: String,
@@ -76,6 +83,19 @@ const productionSubmissionSchema = new mongoose.Schema({
     default: 'Submitted'
   },
   
+  // 8.8: Track whether production was done during training period
+  isTrainingPeriod: {
+    type: Boolean,
+    default: false
+  },
+
+  // 8.2: Custom fields — dynamic key-value pairs set by admin
+  customFields: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
   // Admin review
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,

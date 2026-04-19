@@ -12,7 +12,7 @@ export class AdminPaymentManagementComponent implements OnInit {
   // Payments
   payments: any[] = [];
   paymentStats: any[] = [];
-  paymentFilters = { type: '', status: '', userId: '' };
+  paymentFilters = { type: '', status: '', userId: '', search: '' };
   paymentPage = 1;
   paymentLimit = 50;
   paymentTotal = 0;
@@ -141,7 +141,7 @@ export class AdminPaymentManagementComponent implements OnInit {
   }
 
   clearPaymentFilters(): void {
-    this.paymentFilters = { type: '', status: '', userId: '' };
+    this.paymentFilters = { type: '', status: '', userId: '', search: '' };
     this.paymentPage = 1;
     this.loadPayments();
   }

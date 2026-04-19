@@ -4,7 +4,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { authLimiter, resetLimiter } = require('../middleware/rateLimiter.middleware');
-const { sendPasswordResetEmail } = require('../utils/email');
+const { sendPasswordResetEmail } = require('../utils/neuzmail');
 const { generateToken, sendResponse, errorResponse } = require('../utils/helpers');
 const crypto = require('crypto');
 

@@ -1,0 +1,449 @@
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-0"><i class="bi bi-archive me-2"></i>Document Hub</h2>
+      <small class="text-muted">Browse, download, and manage shared resources</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap" *ngIf="isAdmin">
+      <button class="btn btn-primary btn-sm" (click)="openNewFolder()">
+        <i class="bi bi-folder-plus me-1"></i>New Folder
+      </button>
+      <button class="btn btn-success btn-sm" (click)="openUploadForm()">
+        <i class="bi bi-cloud-upload me-1"></i>Upload Files
+      </button>
+      <button class="btn btn-outline-warning btn-sm" (click)="openRequestForm()">
+        <i class="bi bi-send me-1"></i>Request Document
+      </button>
+    </div>
+  </div>
+
+  <!-- Alerts -->
+  <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+    <button type="button" class="btn-close" (click)="error = ''"></button>
+  </div>
+  <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+    <button type="button" class="btn-close" (click)="success = ''"></button>
+  </div>
+
+  <!-- Breadcrumb + Search -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item" [class.active]="!currentFolderId">
+          <a *ngIf="currentFolderId" href="javascript:void(0)" (click)="navigateToFolder(null)">
+            <i class="bi bi-house-door me-1"></i>Root
+          </a>
+          <span *ngIf="!currentFolderId"><i class="bi bi-house-door me-1"></i>Root</span>
+        </li>
+        <li *ngFor="let bc of breadcrumb; let last = last" class="breadcrumb-item" [class.active]="last">
+          <a *ngIf="!last" href="javascript:void(0)" (click)="navigateToFolder(bc._id!)">{{ bc.name }}</a>
+          <span *ngIf="last">{{ bc.name }}</span>
+        </li>
+      </ol>
+    </nav>
+    <div class="d-flex gap-2" style="min-width: 280px;">
+      <input type="text" class="form-control form-control-sm" placeholder="Search files..."
+             [(ngModel)]="searchQuery" (keyup.enter)="onSearch()">
+      <button class="btn btn-sm btn-outline-primary" (click)="onSearch()"><i class="bi bi-search"></i></button>
+      <button *ngIf="searchQuery" class="btn btn-sm btn-outline-secondary" (click)="clearSearch()"><i class="bi bi-x"></i></button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="mt-2 text-muted">Loading...</p>
+  </div>
+
+  <!-- Folders -->
+  <div *ngIf="!loading && subfolders.length > 0" class="mb-4">
+    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+      <i class="bi bi-folder me-1"></i>Folders
+    </h6>
+    <div class="row g-3 folder-grid" cdkDropList (cdkDropListDropped)="dropFolder($event)">
+      <div *ngFor="let folder of subfolders" class="col-6 col-md-4 col-lg-3" cdkDrag [cdkDragDisabled]="!isAdmin">
+        <div class="card border-0 shadow-sm h-100 cursor-pointer folder-card" (click)="navigateToFolder(folder._id!)">
+          <div *ngIf="isAdmin" class="drag-handle-wrapper" cdkDragHandle (click)="$event.stopPropagation()">
+            <i class="bi bi-grip-vertical drag-handle"></i>
+          </div>
+          <div class="card-body d-flex align-items-center gap-3 py-3">
+            <i class="bi bi-folder-fill fs-3 text-warning"></i>
+            <div class="overflow-hidden">
+              <div class="fw-semibold text-truncate">{{ folder.name }}</div>
+              <small *ngIf="folder.description" class="text-muted text-truncate d-block">{{ folder.description }}</small>
+            </div>
+          </div>
+          <div *ngIf="isAdmin" class="card-footer bg-transparent border-0 py-1 px-3 text-end" (click)="$event.stopPropagation()">
+            <button class="btn btn-sm btn-link text-primary p-0 me-2" (click)="openEditFolder(folder)" title="Edit">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+            <button class="btn btn-sm btn-link text-danger p-0" (click)="deleteFolder(folder)" title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Files -->
+  <div *ngIf="!loading">
+    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+      <i class="bi bi-file-earmark me-1"></i>Files
+    </h6>
+    <div *ngIf="filesLoading" class="text-center py-3">
+      <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+    </div>
+    <div *ngIf="!filesLoading && files.length === 0" class="text-center py-4 text-muted">
+      <i class="bi bi-folder2-open fs-1"></i>
+      <p class="mt-2">No files in this location</p>
+    </div>
+    <div *ngIf="!filesLoading && files.length > 0" class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th *ngIf="isAdmin" style="width:40px;"></th>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Uploaded</th>
+            <th *ngIf="isAdmin">Visibility</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody cdkDropList (cdkDropListDropped)="dropFile($event)">
+          <tr *ngFor="let file of files" cdkDrag [cdkDragDisabled]="!isAdmin">
+            <td *ngIf="isAdmin" cdkDragHandle class="drag-handle-cell">
+              <i class="bi bi-grip-vertical fs-5 text-muted"></i>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi fs-5" [class]="getFileIcon(file.mimeType || '')"></i>
+                <div>
+                  <a href="javascript:void(0)" class="fw-semibold text-decoration-none" (click)="openFile(file)">{{ file.name }}</a>
+                  <small class="text-muted d-block">{{ file.originalFileName }}</small>
+                  <small *ngIf="file.description" class="d-block text-muted">{{ file.description }}</small>
+                </div>
+              </div>
+            </td>
+            <td class="text-nowrap">{{ formatFileSize(file.fileSize || 0) }}</td>
+            <td class="text-nowrap">
+              {{ formatDate(file.createdAt) }}
+              <small *ngIf="file.uploadedBy" class="d-block text-muted">by {{ file.uploadedBy.name }}</small>
+            </td>
+            <td *ngIf="isAdmin">
+              <span class="badge" [class]="file.visibility === 'admin' ? 'bg-secondary' : 'bg-success'">
+                {{ file.visibility === 'admin' ? 'Admin Only' : 'Everyone' }}
+              </span>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary me-1" (click)="downloadFile(file)" title="Download">
+                <i class="bi bi-download"></i>
+              </button>
+              <ng-container *ngIf="isAdmin">
+                <button class="btn btn-sm btn-outline-secondary me-1" (click)="openFileEdit(file)" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" (click)="deleteFile(file)" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </ng-container>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Document Requests Section -->
+  <div *ngIf="requests.length > 0" class="mt-4">
+    <h5 class="mb-3"><i class="bi bi-send me-2"></i>Document Requests</h5>
+    <div class="row g-3">
+      <div *ngFor="let req of requests" class="col-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <div>
+              <strong>{{ req.title }}</strong>
+              <span *ngIf="req.dueDate" class="badge bg-warning text-dark ms-2">Due: {{ formatDate(req.dueDate) }}</span>
+              <span *ngIf="req.saveToFolder" class="badge bg-info text-dark ms-2">
+                <i class="bi bi-folder me-1"></i>{{ req.saveToFolder?.name || 'Folder' }}
+              </span>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <small class="text-muted">by {{ req.requestedBy?.name }}</small>
+              <button *ngIf="isAdmin" class="btn btn-sm btn-outline-danger" (click)="deleteRequest(req)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <p *ngIf="req.description" class="text-muted small mb-3">{{ req.description }}</p>
+
+            <!-- Admin: see all responses -->
+            <div *ngIf="isAdmin">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>File</th>
+                    <th>Submitted</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let resp of req.responses">
+                    <td>{{ resp.agent?.name || '—' }}</td>
+                    <td><span class="badge" [class]="getRequestStatusBadge(resp.status)">{{ resp.status }}</span></td>
+                    <td>
+                      <a *ngIf="resp.filePath" href="javascript:void(0)"
+                         (click)="downloadResponse(req._id!, resp.agent?._id || resp.agent, resp.originalFileName || 'document')">
+                        <i class="bi bi-paperclip me-1"></i>{{ resp.originalFileName || 'Download' }}
+                      </a>
+                      <span *ngIf="!resp.filePath" class="text-muted">—</span>
+                    </td>
+                    <td>{{ formatDate(resp.submittedAt) }}</td>
+                    <td>
+                      <ng-container *ngIf="resp.status === 'submitted'">
+                        <button class="btn btn-sm btn-success me-1" (click)="reviewResponse(req._id!, resp.agent?._id || resp.agent, 'approved')">
+                          <i class="bi bi-check"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" (click)="reviewResponse(req._id!, resp.agent?._id || resp.agent, 'rejected')">
+                          <i class="bi bi-x"></i>
+                        </button>
+                      </ng-container>
+                      <span *ngIf="resp.reviewNotes" class="text-muted small ms-2" [title]="resp.reviewNotes">
+                        <i class="bi bi-chat-left-text"></i>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Agent: see own response -->
+            <div *ngIf="!isAdmin">
+              <div *ngFor="let resp of req.responses">
+                <div class="d-flex align-items-center gap-3">
+                  <span class="badge" [class]="getRequestStatusBadge(resp.status)">{{ resp.status }}</span>
+                  <span *ngIf="resp.originalFileName" class="text-muted small">{{ resp.originalFileName }}</span>
+                  <span *ngIf="resp.reviewNotes" class="text-muted small"><i class="bi bi-chat-left-text me-1"></i>{{ resp.reviewNotes }}</span>
+                </div>
+                <!-- Upload form for pending/rejected -->
+                <div *ngIf="resp.status === 'pending' || resp.status === 'rejected'" class="mt-2">
+                  <div *ngIf="respondingRequestId !== req._id" class="d-inline">
+                    <button class="btn btn-sm btn-primary" (click)="startRespond(req._id!)">
+                      <i class="bi bi-upload me-1"></i>{{ resp.status === 'rejected' ? 'Re-submit' : 'Upload Document' }}
+                    </button>
+                  </div>
+                  <div *ngIf="respondingRequestId === req._id" class="d-flex gap-2 align-items-center">
+                    <input type="file" class="form-control form-control-sm" style="max-width: 300px;"
+                           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" (change)="onResponseFileSelected($event)">
+                    <button class="btn btn-sm btn-primary" [disabled]="!responseFile" (click)="submitResponse(req._id!)">
+                      Submit
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" (click)="respondingRequestId = ''">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Folder Create/Edit Modal -->
+<div class="modal fade" [class.show]="showFolderForm" [style.display]="showFolderForm ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ folderEditMode ? 'Edit Folder' : 'New Folder' }}</h5>
+        <button type="button" class="btn-close" (click)="showFolderForm = false"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Folder Name *</label>
+          <input type="text" class="form-control" [(ngModel)]="editingFolder.name" placeholder="e.g. ACA University">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="editingFolder.description" placeholder="Brief description"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Parent Folder</label>
+          <select class="form-select" [(ngModel)]="editingFolder.parent">
+            <option [ngValue]="null">Root (top level)</option>
+            <option *ngFor="let f of folderPathOptions" [ngValue]="f._id">{{ f.path }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="showFolderForm = false">Cancel</button>
+        <button class="btn btn-primary" (click)="saveFolder()" [disabled]="folderSaving">
+          <span *ngIf="folderSaving" class="spinner-border spinner-border-sm me-1"></span>
+          {{ folderEditMode ? 'Save' : 'Create' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showFolderForm" *ngIf="showFolderForm"></div>
+
+<!-- Upload Files Modal -->
+<div class="modal fade" [class.show]="showUploadForm" [style.display]="showUploadForm ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cloud-upload me-2"></i>Upload Files</h5>
+        <button type="button" class="btn-close" (click)="showUploadForm = false"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Files *</label>
+          <input type="file" class="form-control" multiple (change)="onUploadFilesSelected($event)"
+                 accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip">
+          <small class="text-muted">You can select multiple files. Max 25 MB each.</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Display Name (single file only)</label>
+          <input type="text" class="form-control" [(ngModel)]="uploadName" placeholder="Leave blank to use filename">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="uploadDescription"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Visibility</label>
+          <select class="form-select" [(ngModel)]="uploadVisibility">
+            <option value="all">Everyone (agents + admin)</option>
+            <option value="admin">Admin Only</option>
+          </select>
+        </div>
+        <div *ngIf="currentFolderId" class="mb-3">
+          <small class="text-muted"><i class="bi bi-folder me-1"></i>Uploading to: <strong>{{ breadcrumb.length > 0 ? breadcrumb[breadcrumb.length - 1].name : 'Root' }}</strong></small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="showUploadForm = false">Cancel</button>
+        <button class="btn btn-success" (click)="submitUpload()" [disabled]="uploading || uploadFiles.length === 0">
+          <span *ngIf="uploading" class="spinner-border spinner-border-sm me-1"></span>
+          Upload {{ uploadFiles.length }} file(s)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showUploadForm" *ngIf="showUploadForm"></div>
+
+<!-- Edit File Modal -->
+<div class="modal fade" [class.show]="showFileEditForm" [style.display]="showFileEditForm ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit File</h5>
+        <button type="button" class="btn-close" (click)="showFileEditForm = false"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Display Name</label>
+          <input type="text" class="form-control" [(ngModel)]="editingFile.name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="editingFile.description"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Move to Folder</label>
+          <select class="form-select" [(ngModel)]="editingFile.folder">
+            <option [ngValue]="null">Root (top level)</option>
+            <option *ngFor="let f of folderPathOptions" [ngValue]="f._id">{{ f.path }}</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Visibility</label>
+          <select class="form-select" [(ngModel)]="editingFile.visibility">
+            <option value="all">Everyone</option>
+            <option value="admin">Admin Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="showFileEditForm = false">Cancel</button>
+        <button class="btn btn-primary" (click)="saveFileEdit()" [disabled]="fileEditSaving">
+          <span *ngIf="fileEditSaving" class="spinner-border spinner-border-sm me-1"></span>
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showFileEditForm" *ngIf="showFileEditForm"></div>
+
+<!-- Document Request Modal (Admin) -->
+<div class="modal fade" [class.show]="showRequestForm" [style.display]="showRequestForm ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-send me-2"></i>Request Document from Agents</h5>
+        <button type="button" class="btn-close" (click)="showRequestForm = false"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Title *</label>
+          <input type="text" class="form-control" [(ngModel)]="requestForm.title" placeholder="e.g. Updated E&O Certificate">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" rows="2" [(ngModel)]="requestForm.description" placeholder="What document is needed and why"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Due Date</label>
+          <input type="date" class="form-control" [(ngModel)]="requestForm.dueDate">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Save Uploaded Files To</label>
+          <select class="form-select" [(ngModel)]="requestForm.saveToFolder">
+            <option [ngValue]="null">Root (top level)</option>
+            <option *ngFor="let f of folderPathOptions" [ngValue]="f._id">{{ f.path }}</option>
+          </select>
+          <small class="text-muted">When agents submit documents, files will be stored in this folder.</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Select Agents *</label>
+          <input type="text" class="form-control form-control-sm mb-2" [(ngModel)]="agentSearch" placeholder="Search agents by name or email...">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <button class="btn btn-sm btn-outline-primary" (click)="selectAllAgents()">
+              <i class="bi me-1" [class.bi-check-square]="allFilteredSelected" [class.bi-square]="!allFilteredSelected"></i>
+              {{ allFilteredSelected ? 'Deselect All' : 'Select All' }}
+              <span *ngIf="agentSearch.trim()" class="ms-1">(filtered)</span>
+            </button>
+            <span class="badge bg-primary">{{ requestForm.requestedFrom.length }} selected</span>
+          </div>
+          <div class="border rounded p-2" style="max-height: 250px; overflow-y: auto;">
+            <div *ngFor="let agent of filteredAgents" class="form-check py-1">
+              <input class="form-check-input" type="checkbox" [checked]="isAgentSelected(agent._id)"
+                     (change)="toggleAgentSelection(agent._id)" [id]="'agent-' + agent._id">
+              <label class="form-check-label" [for]="'agent-' + agent._id">
+                {{ agent.name }} <small class="text-muted">({{ agent.email }})</small>
+              </label>
+            </div>
+            <div *ngIf="filteredAgents.length === 0" class="text-muted small text-center py-2">No agents found</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="showRequestForm = false">Cancel</button>
+        <button class="btn btn-warning" (click)="submitRequest()" [disabled]="requestSaving">
+          <span *ngIf="requestSaving" class="spinner-border spinner-border-sm me-1"></span>
+          Send Request
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showRequestForm" *ngIf="showRequestForm"></div>

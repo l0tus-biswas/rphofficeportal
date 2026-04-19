@@ -74,6 +74,12 @@ const userSchema = new mongoose.Schema({
     ref: 'User'
   }],
   
+  // Transfer tracking — when agent was last transferred to a new upline
+  transferredAt: {
+    type: Date,
+    default: null
+  },
+  
   // Profile
   address: String,
   city: String,

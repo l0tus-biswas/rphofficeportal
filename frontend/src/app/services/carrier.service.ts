@@ -36,10 +36,13 @@ export interface AgentCarrierStatus {
   _id?: string;
   agent?: any;
   carrier: any;
-  status: 'Requested' | 'Appointed';
+  status: 'Requested' | 'Appointed' | 'Unappointed';
   requestedAt?: Date;
   appointedAt?: Date;
   appointedBy?: any;
+  unappointedAt?: Date;
+  unappointedBy?: any;
+  notes?: { text: string; addedBy: any; addedAt: Date }[];
 }
 
 @Injectable({
@@ -107,6 +110,16 @@ export class CarrierService {
   // Admin: appoint agent for a carrier
   appointCarrier(statusId: string): Observable<any> {
     return this.http.put(`${this.apiUrl}/admin/status/${statusId}/appoint`, {});
+  }
+
+  // Admin: unappoint agent from a carrier
+  unappointCarrier(statusId: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/status/${statusId}/unappoint`, {});
+  }
+
+  // Admin: add note to a carrier request
+  addNote(statusId: string, text: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/admin/status/${statusId}/notes`, { text });
   }
 }
 

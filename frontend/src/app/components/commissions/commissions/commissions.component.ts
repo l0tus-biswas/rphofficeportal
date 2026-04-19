@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
 import { CommissionService, CommissionStatement } from '../../../services/commission.service';
-import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-commissions',
@@ -44,21 +43,31 @@ export class CommissionsComponent implements OnInit {
   }
 
   viewStatement(statement: CommissionStatement): void {
-    if (!statement.filePath) return;
-    const baseUrl = environment.apiUrl.replace('/api', '');
-    window.open(`${baseUrl}/${statement.filePath}`, '_blank');
+    if (!statement._id) return;
+    this.commissionService.downloadStatement(statement._id).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      },
+      error: () => { this.error = 'Failed to view statement'; }
+    });
   }
 
   downloadStatement(statement: CommissionStatement): void {
-    if (!statement.filePath) return;
-    const baseUrl = environment.apiUrl.replace('/api', '');
-    const a = document.createElement('a');
-    a.href = `${baseUrl}/${statement.filePath}`;
-    a.target = '_blank';
-    a.download = statement.originalFileName || 'statement.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!statement._id) return;
+    this.commissionService.downloadStatement(statement._id).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = statement.originalFileName || 'statement.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => { this.error = 'Failed to download statement'; }
+    });
   }
 
   applyFilters(): void {

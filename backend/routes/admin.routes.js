@@ -12,9 +12,10 @@ const ProductionSubmission = require('../models/ProductionSubmission');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
-const { sendWelcomeEmail } = require('../utils/email');
+const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, sendResponse, errorResponse, paginate } = require('../utils/helpers');
 const { cancelSubscription } = require('../utils/stripe');
+const ACAClientRecord = require('../models/ACAClientRecord');
 const path = require('path');
 const fs = require('fs');
 const { ONBOARDING_ROOT } = require('../utils/storage');
@@ -24,14 +25,52 @@ router.use(protect);
 router.use(authorize('admin'));
 
 // @route   GET /api/admin/hierarchy
-// @desc    Get full user hierarchy (all agents and their downlines)
+// @desc    Get full user hierarchy with licensing status and counts
 // @access  Private (Admin only)
 router.get('/hierarchy', async (req, res) => {
   try {
     const hierarchy = await User.getFullHierarchy();
     
+    // Fetch all licensing records to enrich hierarchy nodes
+    const allLicensing = await LicensingProgress.find({}).select('agent isLicensed').lean();
+    const licensingMap = {};
+    allLicensing.forEach(lp => {
+      licensingMap[String(lp.agent)] = lp.isLicensed;
+    });
+
+    // Recursively enrich nodes with licensing info and compute counts
+    let totalUsers = 0, totalAdmins = 0, totalAgents = 0, totalLicensed = 0, totalUnlicensed = 0;
+    const enrichNodes = (nodes) => {
+      nodes.forEach(node => {
+        totalUsers++;
+        const nodeId = String(node._id);
+        node.isLicensed = licensingMap[nodeId] || false;
+        if (node.role === 'admin') {
+          totalAdmins++;
+        } else {
+          totalAgents++;
+          if (node.isLicensed) {
+            totalLicensed++;
+          } else {
+            totalUnlicensed++;
+          }
+        }
+        if (node.children && node.children.length > 0) {
+          enrichNodes(node.children);
+        }
+      });
+    };
+    enrichNodes(hierarchy);
+    
     sendResponse(res, 200, {
-      hierarchy
+      hierarchy,
+      counts: {
+        totalUsers,
+        totalAdmins,
+        totalAgents,
+        totalLicensed,
+        totalUnlicensed
+      }
     });
   } catch (error) {
     errorResponse(res, error);
@@ -231,19 +270,36 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
     }
     
     user.isActive = false;
+    user.paymentAccessEnabled = false;
     user.updatedBy = req.user._id;
+
+    // Cancel Stripe subscription if exists
+    const subscription = await Subscription.findOne({ user: req.params.userId });
+    if (subscription?.stripeSubscriptionId) {
+      try {
+        await cancelSubscription(subscription.stripeSubscriptionId);
+        user.subscriptionStatus = 'canceled';
+        subscription.status = 'canceled';
+        subscription.canceledAt = new Date();
+        await subscription.save();
+        console.log(`Cancelled Stripe subscription for deactivated user ${req.params.userId}`);
+      } catch (stripeError) {
+        console.warn(`Failed to cancel Stripe subscription on deactivation: ${stripeError.message}`);
+      }
+    }
+
     await user.save();
 
     Notification.createNotification({
       userId: user._id,
       type: 'user_deactivated',
       title: 'Account Deactivated',
-      message: 'Your account has been deactivated by an administrator. Please contact support if you have questions.',
+      message: 'Your account has been deactivated by an administrator. Your subscription has been canceled. Please contact support if you have questions.',
       link: '/dashboard'
     }, false).catch(() => {});
     
     sendResponse(res, 200, {
-      message: 'User deactivated successfully',
+      message: 'User deactivated successfully. Subscription canceled.',
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {
@@ -493,7 +549,141 @@ router.get('/stats', async (req, res) => {
     const recentUsers = await User.countDocuments({ 
       createdAt: { $gte: thirtyDaysAgo } 
     });
+
+    // Licensed vs unlicensed agent counts (§21.5)
+    const licensedCount = await LicensingProgress.countDocuments({ isLicensed: true });
+    const unlicensedCount = totalAgents - licensedCount;
+
+    // Production metrics (§22.1)
+    const totalProduction = await ProductionSubmission.countDocuments();
+    const productionInForce = await ProductionSubmission.countDocuments({ status: 'In Force' });
+    const recentProduction = await ProductionSubmission.countDocuments({
+      submissionDate: { $gte: thirtyDaysAgo }
+    });
+    const premiumAgg = await ProductionSubmission.aggregate([
+      { $match: { status: 'In Force' } },
+      { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+    ]);
+    const totalPremiumInForce = premiumAgg.length > 0 ? premiumAgg[0].total : 0;
     
+    // --- 24-hour activity (§25.3) ---
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const newAgents24h = await User.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    // 24h agent breakdown: licensed vs unlicensed
+    const newAgentIds24h = await User.find({ createdAt: { $gte: twentyFourHoursAgo } }).select('_id').lean();
+    const newAgentIdList = newAgentIds24h.map(u => u._id);
+    const newLicensedAgents24h = newAgentIdList.length > 0
+      ? await LicensingProgress.countDocuments({ agent: { $in: newAgentIdList }, isLicensed: true })
+      : 0;
+    const newUnlicensedAgents24h = newAgents24h - newLicensedAgents24h;
+    const newProduction24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    // 24h production breakdown: submitted vs in-force
+    const newProductionSubmitted24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo }, status: { $ne: 'In Force' } });
+    const newProductionInForce24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo }, status: 'In Force' });
+    const newApplications24h = await APAApplication.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    const recentActivity = [];
+    // Recent agents
+    const recentAgents = await User.find({ createdAt: { $gte: twentyFourHoursAgo } })
+      .select('name email role createdAt').sort({ createdAt: -1 }).limit(10).lean();
+    recentAgents.forEach(a => recentActivity.push({
+      type: 'new_agent', icon: 'person-plus-fill', color: 'primary',
+      text: `${a.name} joined as ${a.role}`, time: a.createdAt
+    }));
+    // Recent production
+    const recentProd = await ProductionSubmission.find({ createdAt: { $gte: twentyFourHoursAgo } })
+      .populate('agent', 'name').select('agent productSold premiumAmount createdAt')
+      .sort({ createdAt: -1 }).limit(10).lean();
+    recentProd.forEach(p => recentActivity.push({
+      type: 'production', icon: 'graph-up-arrow', color: 'success',
+      text: `${p.agent?.name || 'Agent'} submitted ${p.productSold} ($${p.premiumAmount})`, time: p.createdAt
+    }));
+    // Recent applications
+    const recentApps = await APAApplication.find({ createdAt: { $gte: twentyFourHoursAgo } })
+      .select('personalInfo.firstName personalInfo.lastName status createdAt')
+      .sort({ createdAt: -1 }).limit(5).lean();
+    recentApps.forEach(a => recentActivity.push({
+      type: 'application', icon: 'file-earmark-text-fill', color: 'info',
+      text: `New APA application from ${a.personalInfo?.firstName || ''} ${a.personalInfo?.lastName || ''}`.trim(),
+      time: a.createdAt
+    }));
+    // Sort by time descending
+    recentActivity.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    // --- ACA leaderboard (§25.4) ---
+    const latestBatchArr = await ACAClientRecord.aggregate([
+      { $group: { _id: null, maxBatch: { $max: '$uploadBatch' } } }
+    ]);
+    const latestBatch = latestBatchArr.length > 0 ? latestBatchArr[0].maxBatch : null;
+
+    let totalACAClients = 0;
+    let topPersonalACA = [];
+    let topTeamACA = [];
+
+    if (latestBatch) {
+      const acaTotalAgg = await ACAClientRecord.aggregate([
+        { $match: { uploadBatch: latestBatch } },
+        { $group: { _id: null, total: { $sum: '$clientCount' } } }
+      ]);
+      totalACAClients = acaTotalAgg.length > 0 ? acaTotalAgg[0].total : 0;
+
+      // Top 5 personal (individual agent client count)
+      topPersonalACA = await ACAClientRecord.aggregate([
+        { $match: { uploadBatch: latestBatch } },
+        { $sort: { clientCount: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
+        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+        { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
+      ]);
+
+      // Top 5 team (agent + their downline total)
+      const allRecords = await ACAClientRecord.find({ uploadBatch: latestBatch }).lean();
+      const agentsWithDownline = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+      // Build parent map
+      const parentMap = {};
+      agentsWithDownline.forEach(u => {
+        if (u.referredBy) parentMap[u._id.toString()] = u.referredBy.toString();
+      });
+      // For each agent, sum their personal + all descendant ACA clients
+      const recordMap = {};
+      allRecords.forEach(r => { recordMap[r.agent.toString()] = r.clientCount; });
+      // Build children map
+      const childrenMap = {};
+      agentsWithDownline.forEach(u => {
+        const pid = u.referredBy?.toString();
+        if (pid) {
+          if (!childrenMap[pid]) childrenMap[pid] = [];
+          childrenMap[pid].push(u._id.toString());
+        }
+      });
+      function sumTree(id) {
+        let total = recordMap[id] || 0;
+        (childrenMap[id] || []).forEach(cid => { total += sumTree(cid); });
+        return total;
+      }
+      const teamTotals = agentsWithDownline.map(u => ({
+        agentName: u.name, teamClientCount: sumTree(u._id.toString())
+      }));
+      teamTotals.sort((a, b) => b.teamClientCount - a.teamClientCount);
+      topTeamACA = teamTotals.slice(0, 5);
+    }
+
+    // --- Recent admin notifications / alerts (§25.5) ---
+    // Prioritize contract requests and system notifications
+    const contractAlerts = await Notification.find({
+      userId: req.user._id,
+      type: { $in: ['carrier_contract_requested', 'system_announcement', 'admin_broadcast', 'promotion_eligible', 'new_agent_registered'] }
+    }).sort({ createdAt: -1 }).limit(5).lean();
+    const otherAlerts = await Notification.find({
+      userId: req.user._id,
+      type: { $nin: ['carrier_contract_requested', 'system_announcement', 'admin_broadcast', 'promotion_eligible', 'new_agent_registered'] }
+    }).sort({ createdAt: -1 }).limit(5).lean();
+    // Merge: prioritized first, then others, total max 8
+    const mergedAlerts = [...contractAlerts, ...otherAlerts]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 8);
+    const recentAlerts = mergedAlerts;
+
     sendResponse(res, 200, {
       stats: {
         totalUsers,
@@ -501,7 +691,29 @@ router.get('/stats', async (req, res) => {
         totalAgents,
         activeUsers,
         inactiveUsers,
-        recentUsers
+        recentUsers,
+        licensedAgents: licensedCount,
+        unlicensedAgents: unlicensedCount,
+        totalProduction,
+        productionInForce,
+        recentProduction,
+        totalPremiumInForce,
+        // §25.3 — 24-hour activity
+        newAgents24h,
+        newLicensedAgents24h,
+        newUnlicensedAgents24h,
+        newProduction24h,
+        newProductionSubmitted24h,
+        newProductionInForce24h,
+        newApplications24h,
+        recentActivity: recentActivity.slice(0, 15),
+        // §25.4 — ACA leaderboard
+        totalACAClients,
+        acaBatch: latestBatch,
+        topPersonalACA,
+        topTeamACA,
+        // §25.5 — Recent alerts
+        recentAlerts
       }
     });
   } catch (error) {
@@ -555,11 +767,23 @@ router.get('/payments', async (req, res) => {
     const type = req.query.type; // setup_fee or subscription
     const status = req.query.status;
     const userId = req.query.userId;
+    const search = req.query.search;
 
     const filter = {};
     if (type) filter.type = type;
     if (status) filter.status = status;
     if (userId) filter.user = userId;
+
+    // Search by user name or email
+    if (search && !userId) {
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id').lean();
+      filter.user = { $in: matchingUsers.map(u => u._id) };
+    }
 
     const query = Payment.find(filter)
       .populate('user', 'name email role')
@@ -783,8 +1007,9 @@ router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, r
       $addToSet: { children: agent._id }
     });
 
-    // 3. Update agent's referredBy
+    // 3. Update agent's referredBy and set transferredAt
     agent.referredBy = newUplineId;
+    agent.transferredAt = new Date();
     await agent.save();
 
     Notification.createNotification({

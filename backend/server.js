@@ -70,6 +70,7 @@ app.use('/api/notifications', authMiddleware, require('./routes/notification.rou
 app.use('/api/carriers', require('./routes/carrier.routes'));
 app.use('/api/commission-statements', require('./routes/commission-statements.routes'));
 app.use('/api/onboarding-hub', require('./routes/onboarding-hub.routes'));
+app.use('/api/document-hub', require('./routes/document-hub.routes'));
 app.use('/api', require('./routes/aca.routes'));
 app.use('/api/business-cards', require('./routes/business-cards.routes'));
 app.use('/api/promotion', require('./routes/promotion.routes'));

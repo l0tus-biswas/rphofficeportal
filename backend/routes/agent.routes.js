@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const LicensingProgress = require('../models/LicensingProgress');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -353,5 +354,209 @@ router.get('/dashboard/checklist', async (req, res) => {
     errorResponse(res, error);
   }
 });
+
+// ───────────────────────────────────────────────────────────────────
+// §17  My Team — Unified recruits + downline with filters & search
+// ───────────────────────────────────────────────────────────────────
+
+// @route   GET /api/agent/my-team
+// @desc    Unified view: full downline tree + flat list with filters
+// @access  Private (Agent/Admin)
+router.get('/my-team', async (req, res) => {
+  try {
+    const {
+      view = 'tree',        // 'tree' or 'list'
+      search,               // search by name/email
+      status,               // 'active' | 'inactive'
+      licensed,             // 'licensed' | 'unlicensed' | 'all'
+      datePreset,           // '30d' | '60d' | '90d' | '6m' | '12m'
+      dateFrom,             // ISO date string
+      dateTo,               // ISO date string
+      page: pageStr = '1',
+      limit: limitStr = '50',
+      sortBy = '-createdAt'
+    } = req.query;
+
+    const page = parseInt(pageStr) || 1;
+    const limit = Math.min(parseInt(limitStr) || 50, 200);
+
+    // 1. Get ALL descendant users via BFS (full hierarchy)
+    const allDescendants = await getAllDescendantsFlat(req.user._id);
+
+    // 2. Get licensing data for all descendants
+    const descendantIds = allDescendants.map(u => u._id);
+    const licensingRecords = await LicensingProgress.find({ agent: { $in: descendantIds } })
+      .select('agent isLicensed')
+      .lean();
+    const licensingMap = {};
+    licensingRecords.forEach(r => {
+      licensingMap[r.agent.toString()] = r.isLicensed;
+    });
+
+    // 3. Enrich with licensing status + level in tree
+    const enriched = allDescendants.map(u => ({
+      ...u,
+      isLicensed: licensingMap[u._id.toString()] || false,
+      recruitedByName: u._recruitedByName || null,
+      recruitedAt: u.createdAt
+    }));
+
+    // 4. Apply filters
+    let filtered = enriched;
+
+    // Search
+    if (search) {
+      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filtered = filtered.filter(u => regex.test(u.name) || regex.test(u.email));
+    }
+
+    // Status
+    if (status === 'active') {
+      filtered = filtered.filter(u => u.isActive);
+    } else if (status === 'inactive') {
+      filtered = filtered.filter(u => !u.isActive);
+    }
+
+    // Licensed
+    if (licensed === 'licensed') {
+      filtered = filtered.filter(u => u.isLicensed);
+    } else if (licensed === 'unlicensed') {
+      filtered = filtered.filter(u => !u.isLicensed);
+    }
+
+    // Date range
+    let fromDate = null, toDate = null;
+    if (datePreset) {
+      const now = new Date();
+      const presetMap = {
+        '30d': 30, '60d': 60, '90d': 90,
+        '6m': 180, '12m': 365
+      };
+      const days = presetMap[datePreset];
+      if (days) {
+        fromDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      if (dateFrom) fromDate = new Date(dateFrom);
+      if (dateTo) toDate = new Date(dateTo);
+    }
+    if (fromDate) filtered = filtered.filter(u => new Date(u.createdAt) >= fromDate);
+    if (toDate) filtered = filtered.filter(u => new Date(u.createdAt) <= toDate);
+
+    // Sort
+    const sortField = sortBy.replace(/^-/, '');
+    const sortDir = sortBy.startsWith('-') ? -1 : 1;
+    filtered.sort((a, b) => {
+      const av = a[sortField], bv = b[sortField];
+      if (av < bv) return -1 * sortDir;
+      if (av > bv) return 1 * sortDir;
+      return 0;
+    });
+
+    // Stats
+    const stats = {
+      totalMembers: enriched.length,
+      totalActive: enriched.filter(u => u.isActive).length,
+      totalInactive: enriched.filter(u => !u.isActive).length,
+      totalLicensed: enriched.filter(u => u.isLicensed).length,
+      totalUnlicensed: enriched.filter(u => !u.isLicensed).length,
+      directRecruits: enriched.filter(u => u.treeLevel === 1).length,
+      filtered: filtered.length
+    };
+
+    // Level breakdown
+    const levelStats = {};
+    enriched.forEach(u => {
+      const lvl = u.treeLevel || 1;
+      if (!levelStats[lvl]) levelStats[lvl] = { total: 0, active: 0, inactive: 0, licensed: 0 };
+      levelStats[lvl].total++;
+      if (u.isActive) levelStats[lvl].active++;
+      else levelStats[lvl].inactive++;
+      if (u.isLicensed) levelStats[lvl].licensed++;
+    });
+    stats.levelStats = levelStats;
+
+    if (view === 'tree') {
+      // Build tree structure from flat list (unfiltered — tree shows all, filters highlight)
+      const tree = buildTreeFromFlat(req.user._id, enriched);
+      sendResponse(res, 200, { tree, stats, view: 'tree' });
+    } else {
+      // Paginated flat list
+      const total = filtered.length;
+      const paginated = filtered.slice((page - 1) * limit, page * limit);
+      sendResponse(res, 200, {
+        members: paginated,
+        stats,
+        view: 'list',
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      });
+    }
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// Helper: BFS to get all descendants as flat array with tree level
+async function getAllDescendantsFlat(rootUserId) {
+  const allUsers = [];
+  const queue = [{ parentId: rootUserId, level: 1 }];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const batch = [...queue];
+    queue.length = 0;
+
+    const parentIds = batch.map(b => b.parentId);
+    const levelMap = {};
+    batch.forEach(b => { levelMap[b.parentId.toString()] = b.level; });
+
+    const children = await User.find({
+      referredBy: { $in: parentIds },
+      _id: { $nin: Array.from(visited) }
+    })
+    .select('_id name email role isActive createdAt referredBy referralCode')
+    .populate('referredBy', 'name')
+    .lean();
+
+    children.forEach(child => {
+      const childIdStr = child._id.toString();
+      if (!visited.has(childIdStr)) {
+        visited.add(childIdStr);
+        const parentLevel = levelMap[child.referredBy?._id?.toString() || child.referredBy?.toString()] || 1;
+        allUsers.push({
+          ...child,
+          _recruitedByName: child.referredBy?.name || null,
+          referredBy: child.referredBy?._id || child.referredBy,
+          treeLevel: parentLevel
+        });
+        queue.push({ parentId: child._id, level: parentLevel + 1 });
+      }
+    });
+  }
+
+  return allUsers;
+}
+
+// Helper: Build tree structure from flat descendants list
+function buildTreeFromFlat(rootUserId, flatList) {
+  const rootIdStr = rootUserId.toString();
+  const childrenMap = {};
+
+  flatList.forEach(user => {
+    const parentId = (user.referredBy?._id || user.referredBy || '').toString();
+    if (!childrenMap[parentId]) childrenMap[parentId] = [];
+    childrenMap[parentId].push(user);
+  });
+
+  const buildNode = (userId) => {
+    const children = (childrenMap[userId.toString()] || []).map(child => ({
+      ...child,
+      children: buildNode(child._id)
+    }));
+    return children;
+  };
+
+  return buildNode(rootUserId);
+}
 
 module.exports = router;

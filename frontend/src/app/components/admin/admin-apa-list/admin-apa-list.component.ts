@@ -22,6 +22,10 @@ export class AdminApaListComponent implements OnInit {
   // Stats
   statusCounts: any = {};
 
+  // Auto-approve setting (§23.3)
+  autoApprove = false;
+  autoApproveLoading = false;
+
   constructor(
     private apaService: ApaService,
     private router: Router
@@ -29,6 +33,27 @@ export class AdminApaListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadApplications();
+    this.loadAutoApproveSetting();
+  }
+
+  loadAutoApproveSetting(): void {
+    this.apaService.getAutoApproveSetting().subscribe({
+      next: (res) => { this.autoApprove = res.autoApprove || false; },
+      error: () => {} // silently ignore if setting doesn't exist
+    });
+  }
+
+  toggleAutoApprove(): void {
+    this.autoApproveLoading = true;
+    this.apaService.setAutoApproveSetting(!this.autoApprove).subscribe({
+      next: (res) => {
+        this.autoApprove = res.autoApprove;
+        this.autoApproveLoading = false;
+      },
+      error: () => {
+        this.autoApproveLoading = false;
+      }
+    });
   }
 
   loadApplications(): void {
@@ -78,6 +103,7 @@ export class AdminApaListComponent implements OnInit {
     const classes: any = {
       'pending_signature': 'bg-warning',
       'pending_payment': 'bg-info',
+      'completed': 'bg-primary',
       'active': 'bg-success',
       'rejected': 'bg-danger'
     };
@@ -88,6 +114,7 @@ export class AdminApaListComponent implements OnInit {
     const labels: any = {
       'pending_signature': 'Pending Signature',
       'pending_payment': 'Pending Payment',
+      'completed': 'Awaiting Review',
       'active': 'Active',
       'rejected': 'Rejected'
     };

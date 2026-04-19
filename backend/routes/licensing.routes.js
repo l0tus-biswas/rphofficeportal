@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const LicensingProgress = require('../models/LicensingProgress');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const APAApplication = require('../models/APAApplication');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const multer = require('multer');
@@ -329,6 +330,32 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
         // Mark as licensed when final step is approved
         licensingProgress.isLicensed = true;
         licensingProgress.licenseObtainedDate = Date.now();
+
+        // Notify the agent about licensing completion (§21.4)
+        Notification.createNotification({
+          userId: req.params.agentId,
+          type: 'license_approved',
+          title: 'You Are Now Licensed!',
+          message: 'Congratulations! Your licensing process is complete. You are now a fully licensed agent.',
+          link: '/licensing'
+        }, true).catch(() => {});
+
+        // Notify all admins about the newly licensed agent
+        try {
+          const admins = await User.find({ role: 'admin' }).select('_id').lean();
+          for (const admin of admins) {
+            Notification.createNotification({
+              userId: admin._id,
+              type: 'license_approved',
+              title: 'Agent Licensed',
+              message: `${agent.name} (${agent.email}) has completed all licensing requirements and is now a licensed agent.`,
+              link: '/admin/licensing',
+              data: { agentId: req.params.agentId }
+            }, false).catch(() => {});
+          }
+        } catch (notifErr) {
+          console.error('Failed to notify admins of licensing:', notifErr);
+        }
       }
     }
     

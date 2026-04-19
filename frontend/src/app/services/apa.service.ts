@@ -48,4 +48,12 @@ export class ApaService {
   getStats(): Observable<any> {
     return this.http.get(`${this.apiUrl}/apa-applications/stats/overview`);
   }
+
+  getAutoApproveSetting(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/apa-applications/settings/auto-approve`);
+  }
+
+  setAutoApproveSetting(enabled: boolean): Observable<any> {
+    return this.http.put(`${this.apiUrl}/apa-applications/settings/auto-approve`, { enabled });
+  }
 }

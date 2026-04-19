@@ -22,14 +22,8 @@
     </li>
     
     <li class="nav-item" *ngIf="authService.isAgent()">
-      <a class="nav-link" routerLink="/recruits" routerLinkActive="active">
-        <i class="bi bi-people me-2"></i>My Recruits
-      </a>
-    </li>
-    
-    <li class="nav-item" *ngIf="authService.isAgent()">
-      <a class="nav-link" routerLink="/downline" routerLinkActive="active">
-        <i class="bi bi-diagram-3 me-2"></i>Downline Tree
+      <a class="nav-link" routerLink="/my-team" routerLinkActive="active">
+        <i class="bi bi-people-fill me-2"></i>My Team
       </a>
     </li>
     
@@ -71,7 +65,13 @@
 
     <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
       <a class="nav-link" routerLink="/onboarding-hub" routerLinkActive="active">
-        <i class="bi bi-folder2-open me-2"></i>Document Hub
+        <i class="bi bi-folder2-open me-2"></i>Onboarding Docs
+      </a>
+    </li>
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/document-hub" routerLinkActive="active">
+        <i class="bi bi-archive me-2"></i>Document Hub
       </a>
     </li>
 
@@ -166,6 +166,12 @@
       <li class="nav-item">
         <a class="nav-link" routerLink="/admin/onboarding-doc-types" routerLinkActive="active">
           <i class="bi bi-folder-check me-2"></i>Onboarding Doc Types
+        </a>
+      </li>
+
+      <li class="nav-item">
+        <a class="nav-link" routerLink="/document-hub" routerLinkActive="active">
+          <i class="bi bi-archive me-2"></i>Document Hub
         </a>
       </li>
       

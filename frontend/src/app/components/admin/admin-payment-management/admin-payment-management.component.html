@@ -67,8 +67,8 @@
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label">User ID</label>
-              <input type="text" class="form-control" [(ngModel)]="paymentFilters.userId" placeholder="Filter by User ID">
+              <label class="form-label">Search Agent</label>
+              <input type="text" class="form-control" [(ngModel)]="paymentFilters.search" placeholder="Search by name or email">
             </div>
             <div class="col-md-2 d-flex align-items-end gap-2">
               <button class="btn btn-primary flex-grow-1" (click)="applyPaymentFilters()">Apply</button>

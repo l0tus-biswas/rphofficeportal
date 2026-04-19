@@ -51,6 +51,7 @@ export class PaymentService {
       if (filters.type) url += `&type=${filters.type}`;
       if (filters.status) url += `&status=${filters.status}`;
       if (filters.userId) url += `&userId=${filters.userId}`;
+      if (filters.search) url += `&search=${encodeURIComponent(filters.search)}`;
     }
     return this.http.get(url, this.getHeaders());
   }

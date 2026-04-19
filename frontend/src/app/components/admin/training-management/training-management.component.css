@@ -124,3 +124,35 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Drag-and-drop list styles for categories and folders */
+.drag-list .drag-item {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.drag-list .drag-handle {
+  cursor: move;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.drag-list .drag-handle:hover {
+  opacity: 1;
+}
+
+.drag-list .cdk-drag-preview {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  opacity: 0.95;
+  transform: rotate(1deg);
+}
+
+.drag-list .cdk-drag-placeholder {
+  opacity: 0.3;
+  background: #f8f9fa;
+  border: 2px dashed #0d6efd;
+  border-radius: 8px;
+}
+
+.drag-list .cdk-drop-list-dragging .drag-item:not(.cdk-drag-placeholder) {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}

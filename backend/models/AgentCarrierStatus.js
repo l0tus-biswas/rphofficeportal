@@ -13,7 +13,7 @@ const agentCarrierStatusSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Requested', 'Appointed'],
+    enum: ['Requested', 'Appointed', 'Unappointed'],
     default: 'Requested'
   },
   requestedAt: {
@@ -26,7 +26,19 @@ const agentCarrierStatusSchema = new mongoose.Schema({
   appointedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  unappointedAt: {
+    type: Date
+  },
+  unappointedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  notes: [{
+    text: { type: String, required: true },
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    addedAt: { type: Date, default: Date.now }
+  }]
 }, {
   timestamps: true
 });

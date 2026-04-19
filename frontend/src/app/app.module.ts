@@ -52,6 +52,7 @@ import { CarrierAppointmentsComponent } from './components/admin/carrier-appoint
 import { CommissionsComponent } from './components/commissions/commissions/commissions.component';
 import { CommissionStatementsComponent } from './components/admin/commission-statements/commission-statements.component';
 import { OnboardingHubComponent } from './components/onboarding/onboarding-hub/onboarding-hub.component';
+import { DocumentHubComponent } from './components/document-hub/document-hub.component';
 import { NextStepsChecklistComponent } from './components/dashboard/next-steps-checklist/next-steps-checklist.component';
 import { OnboardingDocTypesComponent } from './components/admin/onboarding-doc-types/onboarding-doc-types.component';
 import { AcaTrackerComponent } from './components/dashboard/aca-tracker/aca-tracker.component';
@@ -60,6 +61,7 @@ import { BusinessCardsComponent } from './components/business-cards/business-car
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
 import { PromotionTrackerComponent } from './components/dashboard/promotion-tracker/promotion-tracker.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
+import { MyTeamComponent } from './components/my-team/my-team.component';
 
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
@@ -108,6 +110,7 @@ import { SafePipe } from './pipes/safe.pipe';
     CommissionsComponent,
     CommissionStatementsComponent,
     OnboardingHubComponent,
+    DocumentHubComponent,
     NextStepsChecklistComponent,
     OnboardingDocTypesComponent,
     AcaTrackerComponent,
@@ -115,7 +118,8 @@ import { SafePipe } from './pipes/safe.pipe';
     BusinessCardsComponent,
     VistaprintConfigComponent,
     PromotionTrackerComponent,
-    PromotionLevelsComponent
+    PromotionLevelsComponent,
+    MyTeamComponent
   ],
   imports: [
     BrowserModule,

@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { getDownlineIds } = require('../utils/helpers');
+const SystemConfig = require('../models/SystemConfig');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
@@ -335,6 +336,193 @@ router.get('/export', authenticate, async (req, res) => {
   }
 });
 
+// @route   GET /api/production/stats/summary
+// @desc    Get production statistics summary
+// @access  Private
+router.get('/stats/summary', authenticate, async (req, res) => {
+  try {
+    let matchQuery = {};
+    
+    // If not admin, only show own stats
+    if (req.user.role !== 'admin') {
+      matchQuery.agent = req.user._id;
+    } else if (req.query.agentId) {
+      matchQuery.agent = req.query.agentId;
+    }
+    
+    // Date range filter
+    if (req.query.startDate || req.query.endDate) {
+      matchQuery.submissionDate = {};
+      if (req.query.startDate) {
+        matchQuery.submissionDate.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        matchQuery.submissionDate.$lte = new Date(req.query.endDate);
+      }
+    }
+    
+    const stats = await ProductionSubmission.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalSubmissions: { $sum: 1 },
+          totalPremium: { $sum: '$premiumAmount' },
+          avgPremium: { $avg: '$premiumAmount' }
+        }
+      }
+    ]);
+    
+    const byProduct = await ProductionSubmission.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: '$productSold',
+          count: { $sum: 1 },
+          totalPremium: { $sum: '$premiumAmount' }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+    
+    res.json({
+      summary: stats[0] || { totalSubmissions: 0, totalPremium: 0, avgPremium: 0 },
+      byProduct
+    });
+  } catch (error) {
+    console.error('Error fetching production stats:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/production/ranking
+// @desc    Agent ranking/leaderboard by production volume (8.7)
+// @access  Private (admin sees all; agent sees own team)
+// ---------------------------------------------------------------------------
+router.get('/ranking', authenticate, async (req, res) => {
+  try {
+    const sortBy = req.query.sortBy || 'premium'; // premium | policies | members
+    const windowDays = parseInt(req.query.window) || 0; // 0 = all time
+    const limitCount = parseInt(req.query.limit) || 25;
+
+    const matchFilter = {};
+    if (windowDays > 0) {
+      matchFilter.submissionDate = { $gte: new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000) };
+    }
+    // Non-admin: restrict to own team
+    if (req.user.role !== 'admin') {
+      const downlineIds = await getDownlineIds(req.user._id);
+      const allIds = [req.user._id, ...downlineIds];
+      matchFilter.agent = { $in: allIds };
+    }
+
+    const groupFields = {
+      _id: '$agent',
+      totalPremium: { $sum: '$premiumAmount' },
+      totalPolicies: { $sum: 1 },
+      totalMembers: { $sum: { $ifNull: ['$numberOfMembers', 1] } },
+      inForceCount: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, 1, 0] } },
+      inForcePremium: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, '$premiumAmount', 0] } }
+    };
+
+    const pipeline = [
+      { $match: matchFilter },
+      { $group: groupFields },
+      { $sort: { [sortBy === 'policies' ? 'totalPolicies' : sortBy === 'members' ? 'totalMembers' : 'totalPremium']: -1 } },
+      { $limit: limitCount },
+      {
+        $lookup: {
+          from: 'users',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'agentInfo'
+        }
+      },
+      { $unwind: '$agentInfo' },
+      {
+        $project: {
+          agentId: '$_id',
+          agentName: '$agentInfo.name',
+          agentEmail: '$agentInfo.email',
+          totalPremium: 1,
+          totalPolicies: 1,
+          totalMembers: 1,
+          inForceCount: 1,
+          inForcePremium: 1
+        }
+      }
+    ];
+
+    const ranking = await ProductionSubmission.aggregate(pipeline);
+
+    // Add rank number
+    ranking.forEach((r, i) => { r.rank = i + 1; });
+
+    res.json({ ranking, sortBy, windowDays });
+  } catch (error) {
+    console.error('Error fetching production ranking:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/production/custom-fields
+// @desc    Get admin-configured custom production fields (8.2)
+// @access  Private
+// ---------------------------------------------------------------------------
+router.get('/custom-fields', authenticate, async (req, res) => {
+  try {
+    const config = await SystemConfig.findOne({ key: 'production_custom_fields' }).lean();
+    let fields = [];
+    if (config && config.value) {
+      try { fields = JSON.parse(config.value); } catch { fields = []; }
+    }
+    res.json({ fields });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/production/custom-fields
+// @desc    Admin: configure custom production fields (8.2)
+//          Body: { fields: [{ key, label, type, options?, required? }] }
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.put('/custom-fields', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { fields } = req.body;
+    if (!Array.isArray(fields)) {
+      return res.status(400).json({ message: 'fields must be an array' });
+    }
+    // Validate each field definition
+    for (const f of fields) {
+      if (!f.key || !f.label || !f.type) {
+        return res.status(400).json({ message: 'Each field requires: key, label, type' });
+      }
+      if (!['text', 'number', 'select', 'date', 'checkbox'].includes(f.type)) {
+        return res.status(400).json({ message: `Invalid field type "${f.type}". Use: text, number, select, date, checkbox` });
+      }
+    }
+    await SystemConfig.findOneAndUpdate(
+      { key: 'production_custom_fields' },
+      {
+        key: 'production_custom_fields',
+        value: JSON.stringify(fields),
+        category: 'application',
+        description: 'Custom production submission fields',
+        isEditable: true,
+        updatedBy: req.user._id
+      },
+      { upsert: true, new: true }
+    );
+    res.json({ message: 'Custom fields configuration saved.', fields });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // @route   GET /api/production/:id
 // @desc    Get specific production submission
 // @access  Private
@@ -369,13 +557,16 @@ router.post('/', authenticate, async (req, res) => {
     const {
       submissionDate,
       clientName,
+      numberOfMembers,
       productSold,
       productOtherDescription,
       productCategory,
       carrier,
       premiumAmount,
       notes,
-      status
+      status,
+      isTrainingPeriod,
+      customFields
     } = req.body;
     
     // Validate required fields
@@ -405,13 +596,16 @@ router.post('/', authenticate, async (req, res) => {
       agent: req.user._id,
       submissionDate: submissionDate || Date.now(),
       clientName,
+      numberOfMembers: numberOfMembers || 1,
       productSold,
       productOtherDescription,
       productCategory: resolvedCategory,
       carrier,
       premiumAmount,
       notes,
-      status: status || 'Submitted'
+      status: status || 'Submitted',
+      isTrainingPeriod: isTrainingPeriod || false,
+      customFields: customFields || {}
     });
     
     await submission.save();
@@ -452,18 +646,22 @@ router.put('/:id', authenticate, async (req, res) => {
     const {
       submissionDate,
       clientName,
+      numberOfMembers,
       productSold,
       productOtherDescription,
       productCategory,
       carrier,
       premiumAmount,
       notes,
-      status
+      status,
+      isTrainingPeriod,
+      customFields
     } = req.body;
     
     // Update fields
     if (submissionDate) submission.submissionDate = submissionDate;
     if (clientName) submission.clientName = clientName;
+    if (numberOfMembers !== undefined) submission.numberOfMembers = numberOfMembers;
     if (productSold) {
       submission.productSold = productSold;
       // Re-derive category if product changed and no explicit category sent
@@ -474,6 +672,8 @@ router.put('/:id', authenticate, async (req, res) => {
     if (carrier) submission.carrier = carrier;
     if (premiumAmount !== undefined) submission.premiumAmount = premiumAmount;
     if (notes !== undefined) submission.notes = notes;
+    if (isTrainingPeriod !== undefined) submission.isTrainingPeriod = isTrainingPeriod;
+    if (customFields !== undefined) submission.customFields = customFields;
     
     // Both agents and admins can change status
     if (status) {
@@ -570,6 +770,7 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
       return res.status(404).json({ message: 'Production submission not found' });
     }
     
+    const previousStatus = submission.status;
     const { status, reviewNotes } = req.body;
     
     submission.status = status || submission.status;
@@ -581,69 +782,119 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
     await submission.populate('agent', 'name email');
     await submission.populate('carrier', 'name');
     await submission.populate('reviewedBy', 'name');
-    
+
+    // When production goes "In Force", notify the agent and trigger promotion check
+    if (status === 'In Force' && previousStatus !== 'In Force') {
+      const agentId = submission.agent._id || submission.agent;
+
+      // Notify the agent
+      Notification.createNotification({
+        userId: agentId,
+        type: 'production_in_force',
+        title: 'Production In Force',
+        message: `Your production submission for ${submission.clientName} has been marked as In Force.`,
+        link: '/production'
+      }, false).catch(() => {});
+
+      // Notify upline chain about in-force production
+      Notification.notifyUplineChain(
+        agentId,
+        'production_in_force',
+        'Downline Production In Force',
+        `{agentName}'s production for ${submission.clientName} is now In Force.`,
+        '/production'
+      ).catch(() => {});
+
+      // Trigger promotion check for the agent (async, non-blocking)
+      (async () => {
+        try {
+          const PromotionLevel = require('../models/PromotionLevel');
+          const LicensingProgress = require('../models/LicensingProgress');
+          const mongoose = require('mongoose');
+
+          const QUALIFYING_CATEGORIES = ['Life Insurance', 'Supplemental Insurance', 'Retirement / Annuities'];
+          const agent = await User.findById(agentId).select('level name promotedAt').lean();
+          if (!agent) return;
+
+          const levels = await PromotionLevel.find({ isActive: true }).sort({ rank: 1 }).lean();
+          if (!levels.length) return;
+
+          const userLevelLower = (agent.level || '').toLowerCase();
+          const currentIdx = levels.findIndex(l => l.name.toLowerCase() === userLevelLower);
+          if (currentIdx < 0 || currentIdx >= levels.length - 1) return;
+
+          const next = levels[currentIdx + 1];
+          const promotedAt = agent.promotedAt || null;
+          const cutoff = promotedAt ? new Date(promotedAt) : new Date();
+          if (!promotedAt) cutoff.setDate(cutoff.getDate() - (next.producerWindowDays || 365));
+
+          // Check producer track
+          const producerResult = await ProductionSubmission.aggregate([
+            { $match: { agent: new mongoose.Types.ObjectId(agentId), status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: cutoff } } },
+            { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+          ]);
+          const producerPremium = producerResult.length > 0 ? producerResult[0].total : 0;
+          const producerMet = producerPremium >= next.producerPremiumThreshold;
+
+          // Check builder track
+          const downlineIds = await getDownlineIds(agentId);
+          const builderCutoff = promotedAt ? new Date(promotedAt) : new Date();
+          if (!promotedAt) builderCutoff.setDate(builderCutoff.getDate() - (next.builderWindowDays || 365));
+
+          const builderResult = await ProductionSubmission.aggregate([
+            { $match: { agent: { $in: downlineIds.map(id => new mongoose.Types.ObjectId(id)) }, status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: builderCutoff } } },
+            { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+          ]);
+          const builderPremium = builderResult.length > 0 ? builderResult[0].total : 0;
+
+          // Count licensed producing agents
+          const licensedRecords = await LicensingProgress.find({ agent: { $in: downlineIds.map(id => new mongoose.Types.ObjectId(id)) }, isLicensed: true }).select('agent').lean();
+          const licensedIds = licensedRecords.map(r => r.agent);
+          let activeAgents = 0;
+          if (licensedIds.length > 0) {
+            const agentResult = await ProductionSubmission.aggregate([
+              { $match: { agent: { $in: licensedIds }, status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: builderCutoff } } },
+              { $group: { _id: '$agent' } }
+            ]);
+            activeAgents = agentResult.length;
+          }
+
+          const builderMet = builderPremium >= next.builderPremiumThreshold && activeAgents >= next.builderAgentCountThreshold;
+
+          if (producerMet || builderMet) {
+            // Deduplicate: skip if already notified in past 7 days
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            const recentNotif = await Notification.findOne({
+              type: 'promotion_eligible',
+              'data.agentId': String(agentId),
+              'data.nextLevel': next.name,
+              createdAt: { $gte: sevenDaysAgo }
+            }).lean();
+
+            if (!recentNotif) {
+              const admins = await User.find({ role: 'admin' }).select('_id').lean();
+              const track = producerMet ? 'producer' : 'builder';
+              for (const admin of admins) {
+                await Notification.createNotification({
+                  userId: admin._id,
+                  type: 'promotion_eligible',
+                  title: 'Agent Promotion Eligible',
+                  message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
+                  data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
+                  link: '/admin/user-management'
+                });
+              }
+            }
+          }
+        } catch (promoErr) {
+          console.error('[Production Review] Promotion check error:', promoErr.message);
+        }
+      })();
+    }
+
     res.json(submission);
   } catch (error) {
     console.error('Error reviewing production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-// @route   GET /api/production/stats/summary
-// @desc    Get production statistics summary
-// @access  Private
-router.get('/stats/summary', authenticate, async (req, res) => {
-  try {
-    let matchQuery = {};
-    
-    // If not admin, only show own stats
-    if (req.user.role !== 'admin') {
-      matchQuery.agent = req.user._id;
-    } else if (req.query.agentId) {
-      matchQuery.agent = req.query.agentId;
-    }
-    
-    // Date range filter
-    if (req.query.startDate || req.query.endDate) {
-      matchQuery.submissionDate = {};
-      if (req.query.startDate) {
-        matchQuery.submissionDate.$gte = new Date(req.query.startDate);
-      }
-      if (req.query.endDate) {
-        matchQuery.submissionDate.$lte = new Date(req.query.endDate);
-      }
-    }
-    
-    const stats = await ProductionSubmission.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: null,
-          totalSubmissions: { $sum: 1 },
-          totalPremium: { $sum: '$premiumAmount' },
-          avgPremium: { $avg: '$premiumAmount' }
-        }
-      }
-    ]);
-    
-    const byProduct = await ProductionSubmission.aggregate([
-      { $match: matchQuery },
-      {
-        $group: {
-          _id: '$productSold',
-          count: { $sum: 1 },
-          totalPremium: { $sum: '$premiumAmount' }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
-    
-    res.json({
-      summary: stats[0] || { totalSubmissions: 0, totalPremium: 0, avgPremium: 0 },
-      byProduct
-    });
-  } catch (error) {
-    console.error('Error fetching production stats:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

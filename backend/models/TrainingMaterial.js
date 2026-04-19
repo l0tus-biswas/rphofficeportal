@@ -24,6 +24,11 @@ const trainingMaterialSchema = new mongoose.Schema({
     type: String,
     default: 'general'
   },
+  folder: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'TrainingFolder',
+    default: null
+  },
   tags: [String],
   duration: {
     type: String,
@@ -74,5 +79,6 @@ const trainingMaterialSchema = new mongoose.Schema({
 // Indexes
 trainingMaterialSchema.index({ isActive: 1, order: 1 });
 trainingMaterialSchema.index({ category: 1 });
+trainingMaterialSchema.index({ folder: 1, isActive: 1 });
 
 module.exports = mongoose.model('TrainingMaterial', trainingMaterialSchema);
