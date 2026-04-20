@@ -7,6 +7,15 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { sendNotificationEmail } = require('../utils/neuzmail');
 
+// Neuzmail rate limit: 5 requests per 60 seconds
+// Send 4 emails, then pause 61s to let the rate-limit window reset
+const EMAIL_BATCH_SIZE = 4;
+const EMAIL_BATCH_DELAY_MS = 61000; // 61s — just over the 60s rate-limit window
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // All routes require authentication
 router.use(protect);
 
@@ -154,9 +163,10 @@ router.post('/', authorize('admin'), async (req, res) => {
     let sentCount = 0;
     let emailsSent = 0;
 
+    // First: create all in-app notifications (fast, no rate limit)
+    const notificationMap = new Map();
     for (const user of users) {
       try {
-        // Create in-app notification (without email — we handle email separately)
         const notification = await Notification.createNotification({
           userId: user._id,
           type: 'admin_broadcast',
@@ -164,42 +174,83 @@ router.post('/', authorize('admin'), async (req, res) => {
           message: broadcast.message,
           link: broadcast.link,
           data: { broadcastBy: req.user._id, broadcastId: broadcast._id.toString() }
-        }, false); // false = don't send email via notification system
-
-        if (notification) sentCount++;
-
-        // Send email directly
-        if (user.email) {
-          try {
-            await sendNotificationEmail({
-              toEmail: user.email,
-              title: broadcast.title,
-              message: broadcast.message,
-              link: broadcast.link || null,
-              actionLabel: 'View Announcement'
-            });
-            emailsSent++;
-            if (notification) {
-              notification.emailSent = true;
-              await notification.save();
-            }
-          } catch (emailErr) {
-            console.error(`[Broadcast] Email failed for ${user.email}:`, emailErr.message);
-          }
+        }, false);
+        if (notification) {
+          sentCount++;
+          notificationMap.set(user._id.toString(), notification);
         }
       } catch (e) {
         console.error(`[Broadcast] Notification failed for user ${user._id}:`, e.message);
       }
     }
 
+    // Second: send emails with rate-limit pacing
+    // Respond to admin immediately, send emails in background
     broadcast.sentCount = sentCount;
-    broadcast.emailsSent = emailsSent;
     await broadcast.save();
 
     sendResponse(res, 201, {
-      message: `Broadcast sent to ${sentCount} users (${emailsSent} emails)`,
+      message: `Broadcast sent to ${sentCount} users. Emails are being delivered...`,
       broadcast
     });
+
+    // Background email sending (after response)
+    (async () => {
+      let emailCount = 0;
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        if (!user.email) continue;
+
+        // Pause before hitting rate limit
+        if (emailCount > 0 && emailCount % EMAIL_BATCH_SIZE === 0) {
+          await delay(EMAIL_BATCH_DELAY_MS);
+        }
+
+        try {
+          await sendNotificationEmail({
+            toEmail: user.email,
+            title: broadcast.title,
+            message: broadcast.message,
+            link: broadcast.link || null,
+            actionLabel: 'View Announcement'
+          });
+          emailCount++;
+          const notif = notificationMap.get(user._id.toString());
+          if (notif) {
+            notif.emailSent = true;
+            await notif.save();
+          }
+        } catch (emailErr) {
+          console.error(`[Broadcast] Email failed for ${user.email}:`, emailErr.message);
+          // If rate limited, wait and retry once
+          if (emailErr.message && emailErr.message.includes('rate limit')) {
+            await delay(EMAIL_BATCH_DELAY_MS);
+            try {
+              await sendNotificationEmail({
+                toEmail: user.email,
+                title: broadcast.title,
+                message: broadcast.message,
+                link: broadcast.link || null,
+                actionLabel: 'View Announcement'
+              });
+              emailCount++;
+              const notif = notificationMap.get(user._id.toString());
+              if (notif) {
+                notif.emailSent = true;
+                await notif.save();
+              }
+            } catch (retryErr) {
+              console.error(`[Broadcast] Email retry failed for ${user.email}:`, retryErr.message);
+            }
+          }
+        }
+      }
+
+      // Update final email count
+      broadcast.emailsSent = emailCount;
+      await broadcast.save();
+      console.log(`[Broadcast] ${broadcast.title}: ${emailCount} emails delivered to ${sentCount} users`);
+    })();
   } catch (error) {
     errorResponse(res, error);
   }
@@ -275,11 +326,12 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
     }).select('userId').lean();
     const existingSet = new Set(existing.map(n => n.userId.toString()));
 
+    const newUsers = users.filter(u => !existingSet.has(u._id.toString()));
     let sentCount = 0;
-    let emailsSent = 0;
 
-    for (const user of users) {
-      if (existingSet.has(user._id.toString())) continue;
+    // Create in-app notifications first
+    const notificationMap = new Map();
+    for (const user of newUsers) {
       try {
         const notification = await Notification.createNotification({
           userId: user._id,
@@ -289,27 +341,9 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
           link: broadcast.link,
           data: { broadcastBy: broadcast.createdBy, broadcastId: broadcast._id.toString() }
         }, false);
-
-        if (notification) sentCount++;
-
-        // Send email directly
-        if (user.email) {
-          try {
-            await sendNotificationEmail({
-              toEmail: user.email,
-              title: broadcast.title,
-              message: broadcast.message,
-              link: broadcast.link || null,
-              actionLabel: 'View Announcement'
-            });
-            emailsSent++;
-            if (notification) {
-              notification.emailSent = true;
-              await notification.save();
-            }
-          } catch (emailErr) {
-            console.error(`[Broadcast Resend] Email failed for ${user.email}:`, emailErr.message);
-          }
+        if (notification) {
+          sentCount++;
+          notificationMap.set(user._id.toString(), notification);
         }
       } catch (e) {
         console.error(`[Broadcast Resend] Notification failed for user ${user._id}:`, e.message);
@@ -317,13 +351,67 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
     }
 
     broadcast.sentCount += sentCount;
-    broadcast.emailsSent += emailsSent;
     await broadcast.save();
 
     sendResponse(res, 200, {
-      message: `Resent to ${sentCount} new users (${emailsSent} emails)`,
+      message: `Resent to ${sentCount} new users. Emails are being delivered...`,
       broadcast
     });
+
+    // Background email sending
+    (async () => {
+      let emailCount = 0;
+      for (let i = 0; i < newUsers.length; i++) {
+        const user = newUsers[i];
+        if (!user.email) continue;
+
+        if (emailCount > 0 && emailCount % EMAIL_BATCH_SIZE === 0) {
+          await delay(EMAIL_BATCH_DELAY_MS);
+        }
+
+        try {
+          await sendNotificationEmail({
+            toEmail: user.email,
+            title: broadcast.title,
+            message: broadcast.message,
+            link: broadcast.link || null,
+            actionLabel: 'View Announcement'
+          });
+          emailCount++;
+          const notif = notificationMap.get(user._id.toString());
+          if (notif) {
+            notif.emailSent = true;
+            await notif.save();
+          }
+        } catch (emailErr) {
+          console.error(`[Broadcast Resend] Email failed for ${user.email}:`, emailErr.message);
+          if (emailErr.message && emailErr.message.includes('rate limit')) {
+            await delay(EMAIL_BATCH_DELAY_MS);
+            try {
+              await sendNotificationEmail({
+                toEmail: user.email,
+                title: broadcast.title,
+                message: broadcast.message,
+                link: broadcast.link || null,
+                actionLabel: 'View Announcement'
+              });
+              emailCount++;
+              const notif = notificationMap.get(user._id.toString());
+              if (notif) {
+                notif.emailSent = true;
+                await notif.save();
+              }
+            } catch (retryErr) {
+              console.error(`[Broadcast Resend] Email retry failed for ${user.email}:`, retryErr.message);
+            }
+          }
+        }
+      }
+
+      broadcast.emailsSent += emailCount;
+      await broadcast.save();
+      console.log(`[Broadcast Resend] ${broadcast.title}: ${emailCount} emails delivered to ${sentCount} users`);
+    })();
   } catch (error) {
     errorResponse(res, error);
   }
