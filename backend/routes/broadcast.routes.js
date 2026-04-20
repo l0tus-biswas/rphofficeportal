@@ -65,6 +65,37 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ============================================================
+// Admin CRUD
+// ============================================================
+
+// @route   GET /api/broadcasts/admin/all
+// @desc    Get all broadcasts (including inactive) for admin management
+// @access  Admin only
+// NOTE: This route MUST be defined before /:id to avoid Express matching "admin" as an :id param
+router.get('/admin/all', authorize('admin'), async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+
+    const broadcasts = await Broadcast.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip((page - 1) * limit)
+      .populate('createdBy', 'name')
+      .lean();
+
+    const total = await Broadcast.countDocuments();
+
+    sendResponse(res, 200, {
+      broadcasts,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   GET /api/broadcasts/:id
 // @desc    Get single broadcast
 // @access  Private
@@ -85,36 +116,6 @@ router.get('/:id', async (req, res) => {
     );
 
     sendResponse(res, 200, { broadcast });
-  } catch (error) {
-    errorResponse(res, error);
-  }
-});
-
-// ============================================================
-// Admin CRUD
-// ============================================================
-
-// @route   GET /api/broadcasts/admin/all
-// @desc    Get all broadcasts (including inactive) for admin management
-// @access  Admin only
-router.get('/admin/all', authorize('admin'), async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-
-    const broadcasts = await Broadcast.find()
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit)
-      .populate('createdBy', 'name')
-      .lean();
-
-    const total = await Broadcast.countDocuments();
-
-    sendResponse(res, 200, {
-      broadcasts,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
-    });
   } catch (error) {
     errorResponse(res, error);
   }
