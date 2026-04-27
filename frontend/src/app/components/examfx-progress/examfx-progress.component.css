@@ -1,0 +1,50 @@
+.examfx-page {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.card {
+  border-radius: 8px;
+}
+
+.card-header {
+  border-radius: 8px 8px 0 0;
+}
+
+.agent-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.list-group-item {
+  border-left: 3px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.list-group-item:hover {
+  background-color: #f8f9fa;
+  border-left-color: #0d6efd;
+}
+
+.list-group-item.active {
+  border-left-color: #0d6efd;
+  background-color: #e7f1ff;
+  color: #000;
+}
+
+.progress {
+  border-radius: 8px;
+}
+
+.badge {
+  font-size: 0.8rem;
+}
+
+.table th {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.table td {
+  vertical-align: middle;
+}

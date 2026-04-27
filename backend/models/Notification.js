@@ -35,6 +35,11 @@ const notificationSchema = new mongoose.Schema({
       // Licensing
       'license_submitted',
       'license_approved',
+      // ExamFX
+      'examfx_enrolled',
+      'examfx_progress_updated',
+      'examfx_course_completed',
+      'examfx_program_completed',
       // Production
       'production_submitted',
       'production_reviewed',

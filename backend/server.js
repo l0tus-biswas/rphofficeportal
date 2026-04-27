@@ -65,6 +65,7 @@ app.use('/api/training', require('./routes/training.routes'));
 app.use('/api/payments', require('./routes/payment.routes'));
 app.use('/api/user', require('./routes/user.routes'));
 app.use('/api/licensing', require('./routes/licensing.routes'));
+app.use('/api/examfx', require('./routes/examfx.routes'));
 app.use('/api/production', require('./routes/production.routes'));
 app.use('/api/notifications', authMiddleware, require('./routes/notification.routes'));
 app.use('/api/broadcasts', require('./routes/broadcast.routes'));

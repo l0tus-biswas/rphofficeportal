@@ -31,7 +31,7 @@
       </div>
       
       <!-- Getting Started Checklist (Agent Only) -->
-      <div *ngIf="authService.isAgent()">
+      <div *ngIf="authService.isAgent() && !authService.isAdmin()">
         <app-next-steps-checklist></app-next-steps-checklist>
       </div>
 
@@ -93,12 +93,12 @@
       </div>
 
       <!-- Promotion Tracker (Agent Only) -->
-      <div *ngIf="authService.isAgent()">
+      <div *ngIf="authService.isAgent() && !authService.isAdmin()">
         <app-promotion-tracker></app-promotion-tracker>
       </div>
 
       <!-- ACA Client Volume Tracker (Agent Only) -->
-      <div *ngIf="authService.isAgent()">
+      <div *ngIf="authService.isAgent() && !authService.isAdmin()">
         <app-aca-tracker></app-aca-tracker>
       </div>
       
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Agent Dashboard -->
-        <div *ngIf="authService.isAgent() && !loading" class="fade-in">
+        <div *ngIf="authService.isAgent() && !authService.isAdmin() && !loading" class="fade-in">
           <h5 class="mb-3 mt-4">{{ "Quick Actions" }}</h5>
           <div class="row g-3">
             <div class="col-md-4">
@@ -256,7 +256,7 @@
           <h5 class="mb-3">{{ "Production Overview" }}</h5>
           <div class="row mb-4 g-3">
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/production')">
                 <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-graph-up-arrow me-1"></i>{{ "Total Submissions" }}
@@ -268,7 +268,7 @@
               </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/production')">
                 <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-shield-fill-check me-1"></i>{{ "In Force" }}
@@ -280,7 +280,7 @@
               </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/production')">
                 <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-currency-dollar me-1"></i>{{ "Total Premium (In Force)" }}
@@ -292,7 +292,7 @@
               </div>
             </div>
             <div class="col-lg-3 col-md-4 col-sm-6">
-              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/production')">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/production')">
                 <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-calendar-plus me-1"></i>{{ "New This Month" }}
@@ -388,7 +388,7 @@
           <div class="row mb-4 g-3">
             <!-- Total ACA Clients -->
             <div class="col-lg-4 col-md-6">
-              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/aca-clients')">
+              <div class="card stat-card clickable-card" (click)="navigateTo('/admin/aca-management')">
                 <div class="card-body position-relative">
                   <h6 class="text-muted mb-3">
                     <i class="bi bi-heart-pulse-fill me-1"></i>{{ "Total ACA Clients" }}
@@ -401,7 +401,7 @@
             </div>
             <!-- Top 5 Personal -->
             <div class="col-lg-4 col-md-6">
-              <div class="card leaderboard-card">
+              <div class="card leaderboard-card clickable-card" (click)="navigateTo('/admin/aca-management')">
                 <div class="card-header bg-white border-bottom py-2">
                   <h6 class="mb-0"><i class="bi bi-trophy-fill text-warning me-1"></i>Top 5 Personal</h6>
                 </div>
@@ -424,7 +424,7 @@
             </div>
             <!-- Top 5 Team -->
             <div class="col-lg-4 col-md-6">
-              <div class="card leaderboard-card">
+              <div class="card leaderboard-card clickable-card" (click)="navigateTo('/admin/aca-management')">
                 <div class="card-header bg-white border-bottom py-2">
                   <h6 class="mb-0"><i class="bi bi-people-fill text-success me-1"></i>Top 5 Team</h6>
                 </div>
@@ -467,7 +467,7 @@
               </div>
             </div>
             <div class="col-md-3 col-sm-6">
-              <div class="card action-card clickable-card" (click)="navigateTo('/admin/production')">
+              <div class="card action-card clickable-card" (click)="navigateTo('/production')">
                 <div class="card-body text-center py-3">
                   <i class="bi bi-graph-up display-5 text-success mb-2"></i>
                   <h6 class="card-title mb-0">{{ "Production" }}</h6>
@@ -491,7 +491,7 @@
               </div>
             </div>
             <div class="col-md-3 col-sm-6">
-              <div class="card action-card clickable-card" (click)="navigateTo('/admin/aca-clients')">
+              <div class="card action-card clickable-card" (click)="navigateTo('/admin/aca-management')">
                 <div class="card-body text-center py-3">
                   <i class="bi bi-heart-pulse-fill display-5 text-danger mb-2"></i>
                   <h6 class="card-title mb-0">{{ "ACA Clients" }}</h6>

@@ -64,6 +64,7 @@ import { VistaprintConfigComponent } from './components/admin/vistaprint-config/
 import { PromotionTrackerComponent } from './components/dashboard/promotion-tracker/promotion-tracker.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
+import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
@@ -123,7 +124,8 @@ import { SafePipe } from './pipes/safe.pipe';
     VistaprintConfigComponent,
     PromotionTrackerComponent,
     PromotionLevelsComponent,
-    MyTeamComponent
+    MyTeamComponent,
+    ExamfxProgressComponent
   ],
   imports: [
     BrowserModule,

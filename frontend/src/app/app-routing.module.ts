@@ -49,6 +49,7 @@ import { BusinessCardsComponent } from './components/business-cards/business-car
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
+import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 
 const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -295,6 +296,12 @@ const routes: Routes = [
     component: BroadcastManagementComponent,
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
+  },
+  // ExamFX Licensing Progress Tracking
+  {
+    path: 'examfx-progress',
+    component: ExamfxProgressComponent,
+    canActivate: [AuthGuard]
   },
   { path: '**', redirectTo: '/dashboard' }
 ];
