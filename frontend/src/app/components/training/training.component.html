@@ -116,14 +116,14 @@
       </div>
 
       <!-- Empty State -->
-      <div *ngIf="!loading && filteredMaterials.length === 0" class="text-center py-5">
+      <div *ngIf="!loading && filteredMaterials.length === 0 && (currentFolder || selectedFolder !== 'all' || searchTerm || selectedCategory !== 'all' || selectedType !== 'all')" class="text-center py-5">
         <i class="bi bi-inbox display-1 text-muted d-block mb-3"></i>
         <h4 class="text-muted">No Training Materials Found</h4>
         <p class="text-muted">{{ searchTerm || selectedCategory !== 'all' || selectedType !== 'all' ? 'Try adjusting your filters' : 'No materials available yet' }}</p>
       </div>
 
       <!-- Materials Grid -->
-      <div *ngIf="!loading && filteredMaterials.length > 0" class="materials-grid">
+      <div *ngIf="!loading && filteredMaterials.length > 0 && (currentFolder || selectedFolder !== 'all' || searchTerm || selectedCategory !== 'all' || selectedType !== 'all')" class="materials-grid">
         <div *ngFor="let material of filteredMaterials" class="material-card-wrapper">
           <div class="card h-100 shadow-sm material-card">
             <div class="card-body">
@@ -188,7 +188,7 @@
       </div>
 
       <!-- Results Count -->
-      <div *ngIf="!loading && filteredMaterials.length > 0" class="mt-4 text-center text-muted">
+      <div *ngIf="!loading && filteredMaterials.length > 0 && (currentFolder || selectedFolder !== 'all' || searchTerm || selectedCategory !== 'all' || selectedType !== 'all')" class="mt-4 text-center text-muted">
         <small>Showing {{ filteredMaterials.length }} of {{ materials.length }} materials</small>
       </div>
     </main>
