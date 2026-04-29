@@ -6,10 +6,12 @@ const ACAClientRecordSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  // DEPRECATED: Use populate('agent') instead. Kept for legacy data only.
   agentName: {
     type: String,
     trim: true
   },
+  // DEPRECATED: Use populate('agent') instead. Kept for legacy data only.
   agentEmail: {
     type: String,
     trim: true,
@@ -50,5 +52,13 @@ const ACAClientRecordSchema = new mongoose.Schema({
 
 // Compound index: one record per agent per batch
 ACAClientRecordSchema.index({ agent: 1, uploadBatch: 1 }, { unique: true });
+
+// Static: sync denormalized agent fields when a user updates their profile
+ACAClientRecordSchema.statics.syncAgentInfo = async function(userId, name, email) {
+  return this.updateMany(
+    { agent: userId },
+    { $set: { agentName: name, agentEmail: email } }
+  );
+};
 
 module.exports = mongoose.model('ACAClientRecord', ACAClientRecordSchema);

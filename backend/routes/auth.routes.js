@@ -21,6 +21,10 @@ router.post('/login', authLimiter, validateRequest(schemas.login), async (req, r
       return sendResponse(res, 401, { message: 'Invalid credentials' });
     }
     
+    if (user.deletedAt) {
+      return sendResponse(res, 403, { message: 'Account has been deleted. Please contact support.' });
+    }
+    
     if (!user.isActive) {
       return sendResponse(res, 403, { message: 'Account is deactivated. Please contact support.' });
     }

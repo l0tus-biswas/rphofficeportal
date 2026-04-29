@@ -38,7 +38,16 @@ const agentCarrierStatusSchema = new mongoose.Schema({
     text: { type: String, required: true },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     addedAt: { type: Date, default: Date.now }
-  }]
+  }],
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  }
 }, {
   timestamps: true
 });

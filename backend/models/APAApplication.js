@@ -155,8 +155,16 @@ const apaApplicationSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  rejectionReason: String
-
+  rejectionReason: String,
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  }
 }, { timestamps: true });
 
 // Pre-save middleware to convert empty strings to null for enum fields

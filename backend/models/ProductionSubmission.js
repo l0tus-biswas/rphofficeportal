@@ -109,7 +109,16 @@ const productionSubmissionSchema = new mongoose.Schema({
     filename: String,
     url: String,
     uploadedAt: Date
-  }]
+  }],
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  }
 }, {
   timestamps: true
 });

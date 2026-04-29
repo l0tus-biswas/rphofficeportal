@@ -97,6 +97,17 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   
+  // Soft-delete
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  
   // Password Reset
   resetPasswordToken: String,
   resetPasswordExpire: Date,
@@ -177,6 +188,8 @@ const userSchema = new mongoose.Schema({
 // Indexes (only compound indexes, unique indexes are defined in schema)
 userSchema.index({ referredBy: 1 });
 userSchema.index({ role: 1, isActive: 1 });
+userSchema.index({ deletedAt: 1 });
+userSchema.index({ email: 1 });
 
 // Pre-save middleware to hash password
 userSchema.pre('save', async function(next) {
@@ -195,6 +208,23 @@ userSchema.pre('save', function(next) {
     this.referralCode = this.generateReferralCode();
   }
   next();
+});
+
+// Sync denormalized agent data in ACAClientRecord when name or email changes
+userSchema.pre('save', function(next) {
+  this._nameOrEmailChanged = this.isModified('name') || this.isModified('email');
+  next();
+});
+
+userSchema.post('save', async function(doc) {
+  if (doc._nameOrEmailChanged) {
+    try {
+      const ACAClientRecord = mongoose.model('ACAClientRecord');
+      await ACAClientRecord.syncAgentInfo(doc._id, doc.name, doc.email);
+    } catch (err) {
+      console.warn(`Failed to sync ACAClientRecord for user ${doc._id}: ${err.message}`);
+    }
+  }
 });
 
 // Method to compare password
@@ -231,6 +261,180 @@ userSchema.methods.getResetPasswordToken = function() {
   return resetToken;
 };
 
+// Soft-delete user and cascade to related collections
+userSchema.methods.softDelete = async function(deletedByUserId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const userId = this._id;
+    const now = new Date();
+    
+    // 1. Mark user as soft-deleted
+    this.deletedAt = now;
+    this.deletedBy = deletedByUserId;
+    this.isActive = false;
+    this.paymentAccessEnabled = false;
+    await this.save({ session });
+    
+    // 2. Cancel Stripe subscription if exists
+    const Subscription = mongoose.model('Subscription');
+    const subscription = await Subscription.findOne({ user: userId }).session(session);
+    if (subscription?.stripeSubscriptionId) {
+      try {
+        const { cancelSubscription } = require('../utils/stripe');
+        await cancelSubscription(subscription.stripeSubscriptionId);
+        subscription.status = 'canceled';
+        subscription.canceledAt = now;
+        await subscription.save({ session });
+      } catch (stripeError) {
+        console.warn(`Failed to cancel Stripe subscription during soft-delete: ${stripeError.message}`);
+      }
+    }
+    
+    // 3. Cascade soft-delete to related collections
+    const cascadeModels = [
+      { model: 'Payment', field: 'user' },
+      { model: 'Subscription', field: 'user' },
+      { model: 'Notification', field: 'userId' },
+      { model: 'LicensingProgress', field: 'agent' },
+      { model: 'ProductionSubmission', field: 'agent' },
+      { model: 'OnboardingDocument', field: 'agent' },
+      { model: 'AgentCarrierStatus', field: 'agent' },
+      { model: 'ExamFXProgress', field: 'agent' },
+      { model: 'NotificationPreference', field: 'userId' },
+    ];
+    
+    for (const { model, field } of cascadeModels) {
+      try {
+        const Model = mongoose.model(model);
+        await Model.updateMany(
+          { [field]: userId, deletedAt: null },
+          { $set: { deletedAt: now, deletedBy: deletedByUserId } },
+          { session }
+        );
+      } catch (err) {
+        // Model may not have deletedAt field yet — skip gracefully
+        console.warn(`Cascade soft-delete skipped for ${model}: ${err.message}`);
+      }
+    }
+    
+    // 4. Soft-delete Onboarding record
+    const Onboarding = mongoose.model('Onboarding');
+    await Onboarding.updateMany(
+      { user: userId, deletedAt: null },
+      { $set: { deletedAt: now, deletedBy: deletedByUserId } },
+      { session }
+    );
+    
+    // 5. Soft-delete APA Applications
+    const APAApplication = mongoose.model('APAApplication');
+    await APAApplication.updateMany(
+      { $or: [{ userId: userId }, { 'personalInfo.email': this.email?.toLowerCase() }], deletedAt: null },
+      { $set: { deletedAt: now, deletedBy: deletedByUserId } },
+      { session }
+    );
+    
+    // 6. Remove from parent's children cache
+    if (this.referredBy) {
+      await mongoose.model('User').updateOne(
+        { _id: this.referredBy },
+        { $pull: { children: userId } },
+        { session }
+      );
+    }
+    
+    await session.commitTransaction();
+    return { success: true, deletedAt: now };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
+// Restore a soft-deleted user and cascade restore
+userSchema.methods.restore = async function(restoredByUserId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    const userId = this._id;
+    const deletedAt = this.deletedAt;
+    
+    if (!deletedAt) {
+      throw new Error('User is not soft-deleted');
+    }
+    
+    // 1. Restore user
+    this.deletedAt = null;
+    this.deletedBy = null;
+    this.isActive = true;
+    this.updatedBy = restoredByUserId;
+    await this.save({ session });
+    
+    // 2. Cascade restore related collections (only those deleted at the same time)
+    const cascadeModels = [
+      { model: 'Payment', field: 'user' },
+      { model: 'Subscription', field: 'user' },
+      { model: 'Notification', field: 'userId' },
+      { model: 'LicensingProgress', field: 'agent' },
+      { model: 'ProductionSubmission', field: 'agent' },
+      { model: 'OnboardingDocument', field: 'agent' },
+      { model: 'AgentCarrierStatus', field: 'agent' },
+      { model: 'ExamFXProgress', field: 'agent' },
+      { model: 'NotificationPreference', field: 'userId' },
+    ];
+    
+    for (const { model, field } of cascadeModels) {
+      try {
+        const Model = mongoose.model(model);
+        await Model.updateMany(
+          { [field]: userId, deletedAt: deletedAt },
+          { $set: { deletedAt: null, deletedBy: null } },
+          { session }
+        );
+      } catch (err) {
+        console.warn(`Cascade restore skipped for ${model}: ${err.message}`);
+      }
+    }
+    
+    // 3. Restore Onboarding
+    const Onboarding = mongoose.model('Onboarding');
+    await Onboarding.updateMany(
+      { user: userId, deletedAt: deletedAt },
+      { $set: { deletedAt: null, deletedBy: null } },
+      { session }
+    );
+    
+    // 4. Restore APA Applications
+    const APAApplication = mongoose.model('APAApplication');
+    await APAApplication.updateMany(
+      { $or: [{ userId: userId }, { 'personalInfo.email': this.email?.toLowerCase() }], deletedAt: deletedAt },
+      { $set: { deletedAt: null, deletedBy: null } },
+      { session }
+    );
+    
+    // 5. Re-add to parent's children cache
+    if (this.referredBy) {
+      await mongoose.model('User').updateOne(
+        { _id: this.referredBy },
+        { $addToSet: { children: userId } },
+        { session }
+      );
+    }
+    
+    await session.commitTransaction();
+    return { success: true };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+};
+
 // Get downline tree (recursive)
 userSchema.methods.getDownlineTree = async function() {
   const User = mongoose.model('User');
@@ -247,7 +451,8 @@ userSchema.methods.getDownlineTree = async function() {
       
       const users = await User.find({ 
         referredBy: { $in: currentIds },
-        _id: { $nin: Array.from(visited) }
+        _id: { $nin: Array.from(visited) },
+        deletedAt: null
       })
       .select('_id name email role referralCode isActive createdAt referredBy')
       .lean();
@@ -291,12 +496,12 @@ userSchema.methods.getDownlineTree = async function() {
 
 // Static method to get full hierarchy for admin
 userSchema.statics.getFullHierarchy = async function() {
-  const users = await this.find({ role: { $in: ['admin', 'agent'] }, referredBy: null })
+  const users = await this.find({ role: { $in: ['admin', 'agent'] }, referredBy: null, deletedAt: null })
     .select('_id name email role referralCode isActive createdAt')
     .lean();
   
   const buildTree = async (userId) => {
-    const children = await this.find({ referredBy: userId })
+    const children = await this.find({ referredBy: userId, deletedAt: null })
       .select('_id name email role referralCode isActive createdAt')
       .lean();
     

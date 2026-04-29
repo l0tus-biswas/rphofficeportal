@@ -87,8 +87,10 @@ router.get('/users', async (req, res) => {
     const role = req.query.role;
     const isActive = req.query.isActive;
     const search = req.query.search;
+    const includeDeleted = req.query.includeDeleted === 'true';
     
     const filter = {};
+    if (!includeDeleted) filter.deletedAt = null;
     if (role) filter.role = role;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
     if (search) {
@@ -365,7 +367,7 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
 });
 
 // @route   DELETE /api/admin/users/:userId
-// @desc    Delete user (hard delete) with all associated data
+// @desc    Soft-delete user with cascading soft-delete of all associated data (transactional)
 // @access  Private (Admin only)
 router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
   try {
@@ -375,23 +377,90 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
+    if (user.deletedAt) {
+      return sendResponse(res, 400, { message: 'User is already deleted' });
+    }
+    
+    // Prevent deleting yourself
+    if (user._id.toString() === req.user._id.toString()) {
+      return sendResponse(res, 400, { message: 'Cannot delete your own account' });
+    }
+    
+    const result = await user.softDelete(req.user._id);
+    
+    console.log(`User ${req.params.userId} (${user.email}) soft-deleted by admin ${req.user._id} at ${result.deletedAt}`);
+    
+    sendResponse(res, 200, {
+      message: 'User and all related records soft-deleted successfully. Can be restored within retention period.',
+      deletedAt: result.deletedAt,
+      userId: req.params.userId
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/users/:userId/restore
+// @desc    Restore a soft-deleted user and all associated data (transactional)
+// @access  Private (Admin only)
+router.put('/users/:userId/restore', logAction('RESTORE_USER'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+    
+    if (!user.deletedAt) {
+      return sendResponse(res, 400, { message: 'User is not deleted' });
+    }
+    
+    await user.restore(req.user._id);
+    
+    console.log(`User ${req.params.userId} (${user.email}) restored by admin ${req.user._id}`);
+    
+    const restoredUser = await User.findById(req.params.userId).select('-password');
+    
+    sendResponse(res, 200, {
+      message: 'User and all related records restored successfully',
+      user: restoredUser
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/admin/users/:userId/permanent
+// @desc    Permanently delete a soft-deleted user (hard delete) — requires user to be soft-deleted first
+// @access  Private (Admin only)
+router.delete('/users/:userId/permanent', logAction('PERMANENT_DELETE_USER'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+    
+    if (!user.deletedAt) {
+      return sendResponse(res, 400, { 
+        message: 'User must be soft-deleted first before permanent deletion. Use DELETE /api/admin/users/:userId first.' 
+      });
+    }
+    
     const userId = req.params.userId;
     const userEmail = user.email;
     
-    // Cancel Stripe subscription if exists
+    // Cancel Stripe subscription if still active
     const subscription = await Subscription.findOne({ user: userId });
     if (subscription?.stripeSubscriptionId) {
       try {
         await cancelSubscription(subscription.stripeSubscriptionId);
-        console.log(`Cancelled Stripe subscription for user ${userId}`);
       } catch (stripeError) {
         console.warn(`Failed to cancel Stripe subscription: ${stripeError.message}`);
       }
     }
     
-    // Delete all related records for this user
-    
-    // Delete APAApplication records and associated files
+    // Delete APA Application files from disk
     const apaApplications = await APAApplication.find({ 
       $or: [
         { userId: userId },
@@ -400,82 +469,46 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
     });
     
     for (const app of apaApplications) {
-      // Delete signed APA document if exists
       if (app.docusign?.documentUrl) {
         const docPath = path.join(__dirname, '..', app.docusign.documentUrl);
         if (fs.existsSync(docPath)) {
-          try {
-            fs.unlinkSync(docPath);
-            console.log(`Deleted signed APA document: ${docPath}`);
-          } catch (fileErr) {
-            console.warn(`Failed to delete APA document: ${fileErr.message}`);
-          }
+          try { fs.unlinkSync(docPath); } catch (e) { console.warn(`Failed to delete APA doc: ${e.message}`); }
         }
       }
-      
-      // Delete compliance uploaded documents
       const complianceFields = ['govtIdFront', 'govtIdBack', 'residencyProof', 'ssnProof', 'w9Form', 'directDepositForm'];
       for (const field of complianceFields) {
         if (app.complianceDocuments?.[field]?.documentUrl) {
           const docPath = path.join(__dirname, '..', app.complianceDocuments[field].documentUrl);
           if (fs.existsSync(docPath)) {
-            try {
-              fs.unlinkSync(docPath);
-            } catch (fileErr) {
-              console.warn(`Failed to delete compliance doc: ${fileErr.message}`);
-            }
+            try { fs.unlinkSync(docPath); } catch (e) { console.warn(`Failed to delete compliance doc: ${e.message}`); }
           }
         }
       }
     }
-    await APAApplication.deleteMany({ 
-      $or: [
-        { userId: userId },
-        { 'personalInfo.email': userEmail?.toLowerCase() }
-      ]
-    });
     
-    // Delete Onboarding records and associated files
+    // Delete onboarding files from disk
     const onboardingDir = path.join(ONBOARDING_ROOT, userId);
     if (fs.existsSync(onboardingDir)) {
-      try {
-        fs.rmSync(onboardingDir, { recursive: true, force: true });
-        console.log(`Deleted onboarding files for user ${userId}`);
-      } catch (fileErr) {
-        console.warn(`Failed to delete onboarding files: ${fileErr.message}`);
-      }
+      try { fs.rmSync(onboardingDir, { recursive: true, force: true }); } catch (e) { console.warn(`Failed to delete onboarding files: ${e.message}`); }
     }
+    
+    // Hard delete all records
+    await APAApplication.deleteMany({ $or: [{ userId }, { 'personalInfo.email': userEmail?.toLowerCase() }] });
     await Onboarding.deleteMany({ user: userId });
-    
-    // Delete Payment records
     await Payment.deleteMany({ user: userId });
-    
-    // Delete Subscription records
     await Subscription.deleteMany({ user: userId });
-    
-    // Delete Notification records
     await Notification.deleteMany({ userId: userId });
-    
-    // Delete LicensingProgress records
     await LicensingProgress.deleteMany({ user: userId });
-    
-    // Delete ProductionSubmission records
     await ProductionSubmission.deleteMany({ agent: userId });
     
-    // Delete AuditLog records for this user (optional - you may want to keep these for compliance)
-    // await AuditLog.deleteMany({ user: userId });
-    
-    // Hard delete - permanently remove user
+    // Hard delete the user
     await User.findByIdAndDelete(userId);
     
-    console.log(`User ${userId} (${userEmail}) and all associated data deleted successfully`);
+    console.log(`User ${userId} (${userEmail}) permanently deleted by admin ${req.user._id}`);
     
     sendResponse(res, 200, {
-      message: 'User and all related records deleted successfully',
-      deletedItems: {
-        apaApplications: apaApplications.length,
-        user: 1
-      }
+      message: 'User and all related records permanently deleted',
+      deletedItems: { apaApplications: apaApplications.length, user: 1 }
     });
   } catch (error) {
     errorResponse(res, error);
@@ -537,11 +570,11 @@ router.delete('/onboarding/:userId', logAction('DELETE_ONBOARDING'), async (req,
 // @access  Private (Admin only)
 router.get('/stats', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalAdmins = await User.countDocuments({ role: 'admin' });
-    const totalAgents = await User.countDocuments({ role: 'agent' });
-    const activeUsers = await User.countDocuments({ isActive: true });
-    const inactiveUsers = await User.countDocuments({ isActive: false });
+    const totalUsers = await User.countDocuments({ deletedAt: null });
+    const totalAdmins = await User.countDocuments({ role: 'admin', deletedAt: null });
+    const totalAgents = await User.countDocuments({ role: 'agent', deletedAt: null });
+    const activeUsers = await User.countDocuments({ isActive: true, deletedAt: null });
+    const inactiveUsers = await User.countDocuments({ isActive: false, deletedAt: null });
     
     // Users created in last 30 days
     const thirtyDaysAgo = new Date();

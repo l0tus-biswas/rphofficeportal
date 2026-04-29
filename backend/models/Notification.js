@@ -99,6 +99,15 @@ const notificationSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
     index: true
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 });
 

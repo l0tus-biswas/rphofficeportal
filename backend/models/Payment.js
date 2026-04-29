@@ -42,6 +42,15 @@ const paymentSchema = new mongoose.Schema({
   },
   refundedAt: {
     type: Date
+  },
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 }, {
   timestamps: true
