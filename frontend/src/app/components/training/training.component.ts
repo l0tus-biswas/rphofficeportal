@@ -96,7 +96,7 @@ export class TrainingComponent implements OnInit {
     this.loading = true;
     this.error = '';
     
-    this.trainingService.getMaterials().subscribe({
+    this.trainingService.getMaterials({ limit: 1000 }).subscribe({
       next: (response: any) => {
         this.materials = (response.materials || []).sort((a: any, b: any) => 
           (a.order || 0) - (b.order || 0)
