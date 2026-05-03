@@ -145,6 +145,21 @@ export class ProductManagementComponent implements OnInit {
     return map[category] || 'bg-secondary';
   }
 
+  deleteProduct(product: ProductType): void {
+    if (!confirm(`Are you sure you want to delete "${product.name}"? This will deactivate the product.`)) return;
+
+    this.productTypeService.deactivateProduct(product._id!).subscribe({
+      next: () => {
+        this.success = 'Product deleted successfully';
+        this.loadProducts();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to delete product';
+      }
+    });
+  }
+
   get activeCount(): number {
     return this.products.filter(p => p.isActive).length;
   }

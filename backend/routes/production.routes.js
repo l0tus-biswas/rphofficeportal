@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const ProductionSubmission = require('../models/ProductionSubmission');
 const Carrier = require('../models/Carrier');
 const User = require('../models/User');
@@ -145,7 +146,7 @@ router.get('/', authenticate, async (req, res) => {
       query.productSold = req.query.productSold;
     }
     if (req.query.carrier) {
-      query.carrier = req.query.carrier;
+      query.carrier = new mongoose.Types.ObjectId(req.query.carrier);
     }
     if (req.query.status) {
       query.status = req.query.status;

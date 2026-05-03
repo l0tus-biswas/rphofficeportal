@@ -138,6 +138,9 @@
                     [title]="product.isActive ? 'Deactivate' : 'Re-activate'">
                     <i class="bi" [class.bi-toggle-on]="product.isActive" [class.bi-toggle-off]="!product.isActive"></i>
                   </button>
+                  <button class="btn btn-sm btn-outline-danger ms-1" (click)="deleteProduct(product)" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </td>
               </tr>
             </tbody>

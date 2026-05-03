@@ -31,7 +31,11 @@ export class ProductionComponent implements OnInit {
   // Filters
   filters: ProductionFilters = {
     page: 1,
-    limit: 20
+    limit: 20,
+    agentId: '',
+    productSold: '',
+    carrier: '',
+    status: ''
   };
   
   // 8.5: Date preset active label
@@ -168,8 +172,8 @@ export class ProductionComponent implements OnInit {
 
   loadAgents(): void {
     this.adminService.getAllAgents().subscribe({
-      next: (agents: User[]) => {
-        this.agents = agents;
+      next: (response: any) => {
+        this.agents = Array.isArray(response) ? response : (response.users || []);
       },
       error: (error: any) => {
         console.error('Error loading agents:', error);
@@ -200,7 +204,7 @@ export class ProductionComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.filters = { page: 1, limit: 20 };
+    this.filters = { page: 1, limit: 20, agentId: '', productSold: '', carrier: '', status: '' };
     this.activeDatePreset = '';
     this.loadSubmissions();
     this.loadStats();
@@ -429,6 +433,10 @@ export class ProductionComponent implements OnInit {
   openCustomFieldsConfig(): void {
     this.editingCustomFields = this.customFieldDefs.map(f => ({ ...f }));
     this.showCustomFieldsConfig = true;
+  }
+
+  trackCustomField(index: number): number {
+    return index;
   }
 
   addCustomField(): void {
