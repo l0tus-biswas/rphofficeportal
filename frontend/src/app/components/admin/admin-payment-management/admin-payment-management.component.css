@@ -2,3 +2,15 @@
   min-height: 100vh;
   background-color: #f8f9fa;
 }
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.page-link {
+  cursor: pointer;
+}
+
+.nav-link {
+  cursor: pointer;
+}

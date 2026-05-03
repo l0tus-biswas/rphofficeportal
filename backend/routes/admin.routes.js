@@ -20,6 +20,8 @@ const path = require('path');
 const fs = require('fs');
 const { ONBOARDING_ROOT } = require('../utils/storage');
 
+const SystemConfig = require('../models/SystemConfig');
+
 // All routes require admin authentication
 router.use(protect);
 router.use(authorize('admin'));
@@ -994,12 +996,54 @@ router.post('/subscriptions/:userId/cancel', logAction('CANCEL_SUBSCRIPTION'), a
 // @access  Private (Admin only)
 router.get('/payment-settings', async (req, res) => {
   try {
+    // Check DB first, fall back to env vars
+    const dbSettings = await SystemConfig.findOne({ key: 'payment_settings' }).lean();
+    const saved = dbSettings ? JSON.parse(dbSettings.value) : {};
+
     sendResponse(res, 200, {
-      oneTimePrice: parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900,
-      monthlyPrice: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
-      monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || '',
+      oneTimePrice: saved.oneTimePrice ?? (parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900),
+      monthlyPrice: saved.monthlyPrice ?? (parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000),
+      monthlyPriceId: saved.monthlyPriceId ?? (process.env.STRIPE_MONTHLY_PRICE_ID || ''),
       stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/payment-settings
+// @desc    Update payment settings
+// @access  Private (Admin only)
+router.put('/payment-settings', logAction('UPDATE_PAYMENT_SETTINGS'), async (req, res) => {
+  try {
+    const { oneTimePrice, monthlyPrice, monthlyPriceId } = req.body;
+
+    if (oneTimePrice != null && (typeof oneTimePrice !== 'number' || oneTimePrice < 0)) {
+      return sendResponse(res, 400, { message: 'oneTimePrice must be a non-negative number' });
+    }
+    if (monthlyPrice != null && (typeof monthlyPrice !== 'number' || monthlyPrice < 0)) {
+      return sendResponse(res, 400, { message: 'monthlyPrice must be a non-negative number' });
+    }
+
+    const settings = {
+      oneTimePrice: oneTimePrice ?? (parseInt(process.env.STRIPE_ONE_TIME_PRICE) || 17900),
+      monthlyPrice: monthlyPrice ?? (parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000),
+      monthlyPriceId: monthlyPriceId ?? (process.env.STRIPE_MONTHLY_PRICE_ID || '')
+    };
+
+    await SystemConfig.findOneAndUpdate(
+      { key: 'payment_settings' },
+      { 
+        key: 'payment_settings',
+        value: JSON.stringify(settings),
+        category: 'application',
+        description: 'Payment pricing configuration',
+        isEditable: true
+      },
+      { upsert: true, new: true }
+    );
+
+    sendResponse(res, 200, { message: 'Payment settings updated successfully', ...settings });
   } catch (error) {
     errorResponse(res, error);
   }

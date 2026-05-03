@@ -82,4 +82,9 @@ export class PaymentService {
   getPaymentSettings(): Observable<any> {
     return this.http.get(`${this.apiUrl}/admin/payment-settings`, this.getHeaders());
   }
+
+  // Admin - Update payment settings
+  updatePaymentSettings(settings: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/payment-settings`, settings, this.getHeaders());
+  }
 }

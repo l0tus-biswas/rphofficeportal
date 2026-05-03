@@ -49,7 +49,7 @@ export class ProductionComponent implements OnInit {
   // Form for new/edit submission
   showForm = false;
   editMode = false;
-  currentSubmission: Partial<ProductionSubmission> = {};
+  currentSubmission: Partial<ProductionSubmission> = { customFields: {} };
   
   // Stats
   stats: any = null;
@@ -271,7 +271,7 @@ export class ProductionComponent implements OnInit {
   cancelForm(): void {
     this.showForm = false;
     this.editMode = false;
-    this.currentSubmission = {};
+    this.currentSubmission = { customFields: {} };
   }
 
   saveSubmission(): void {

@@ -6,40 +6,52 @@
     <div class="row mb-4">
       <div class="col-12">
         <h1 class="h3 mb-1">Payment Management</h1>
-        <p class="text-muted mb-0">Manage payments, subscriptions, and user access</p>
+        <p class="text-muted mb-0">Manage payments, subscriptions, and payment settings</p>
       </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alert alert-danger alert-dismissible fade show" *ngIf="error">
+      <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+      <button type="button" class="btn-close" (click)="dismissAlert()"></button>
+    </div>
+    <div class="alert alert-success alert-dismissible fade show" *ngIf="successMsg">
+      <i class="bi bi-check-circle me-2"></i>{{ successMsg }}
+      <button type="button" class="btn-close" (click)="dismissAlert()"></button>
     </div>
 
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4">
       <li class="nav-item">
-        <a class="nav-link" [class.active]="activeTab === 'payments'" (click)="setTab('payments')">
+        <a class="nav-link cursor-pointer" [class.active]="activeTab === 'payments'" (click)="setTab('payments')">
           <i class="bi bi-cash me-2"></i>Payments
+          <span class="badge bg-secondary ms-1" *ngIf="paymentTotal > 0">{{ paymentTotal }}</span>
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" [class.active]="activeTab === 'subscriptions'" (click)="setTab('subscriptions')">
+        <a class="nav-link cursor-pointer" [class.active]="activeTab === 'subscriptions'" (click)="setTab('subscriptions')">
           <i class="bi bi-arrow-repeat me-2"></i>Subscriptions
+          <span class="badge bg-secondary ms-1" *ngIf="subscriptionTotal > 0">{{ subscriptionTotal }}</span>
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" [class.active]="activeTab === 'settings'" (click)="setTab('settings')">
+        <a class="nav-link cursor-pointer" [class.active]="activeTab === 'settings'" (click)="setTab('settings')">
           <i class="bi bi-gear me-2"></i>Settings
         </a>
       </li>
     </ul>
 
-    <!-- Payments Tab -->
+    <!-- ============== PAYMENTS TAB ============== -->
     <div *ngIf="activeTab === 'payments'">
       
       <!-- Stats -->
       <div class="row g-3 mb-4" *ngIf="paymentStats.length > 0">
         <div class="col-md-3" *ngFor="let stat of paymentStats">
-          <div class="card shadow-sm">
+          <div class="card shadow-sm border-0">
             <div class="card-body text-center">
-              <h6 class="text-muted">{{ stat._id | titlecase }}</h6>
-              <h3>{{ stat.count }}</h3>
-              <small>{{ formatAmount(stat.totalAmount) }}</small>
+              <h6 class="text-muted text-uppercase small">{{ stat._id || 'Unknown' | titlecase }}</h6>
+              <h3 class="mb-1">{{ stat.count }}</h3>
+              <small class="text-muted">{{ formatAmount(stat.totalAmount) }} total</small>
             </div>
           </div>
         </div>
@@ -48,9 +60,9 @@
       <!-- Filters -->
       <div class="card shadow-sm mb-4">
         <div class="card-body">
-          <div class="row g-3">
+          <div class="row g-3 align-items-end">
             <div class="col-md-3">
-              <label class="form-label">Type</label>
+              <label class="form-label small fw-semibold">Type</label>
               <select class="form-select" [(ngModel)]="paymentFilters.type">
                 <option value="">All Types</option>
                 <option value="setup_fee">Setup Fee</option>
@@ -58,31 +70,46 @@
               </select>
             </div>
             <div class="col-md-3">
-              <label class="form-label">Status</label>
+              <label class="form-label small fw-semibold">Status</label>
               <select class="form-select" [(ngModel)]="paymentFilters.status">
                 <option value="">All Statuses</option>
                 <option value="succeeded">Succeeded</option>
+                <option value="completed">Completed</option>
                 <option value="pending">Pending</option>
                 <option value="failed">Failed</option>
+                <option value="refunded">Refunded</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label">Search Agent</label>
-              <input type="text" class="form-control" [(ngModel)]="paymentFilters.search" placeholder="Search by name or email">
+              <label class="form-label small fw-semibold">Search Agent</label>
+              <input type="text" class="form-control" [(ngModel)]="paymentFilters.search" 
+                     placeholder="Search by name or email" (keyup.enter)="applyPaymentFilters()">
             </div>
-            <div class="col-md-2 d-flex align-items-end gap-2">
-              <button class="btn btn-primary flex-grow-1" (click)="applyPaymentFilters()">Apply</button>
-              <button class="btn btn-outline-secondary" (click)="clearPaymentFilters()">Clear</button>
+            <div class="col-md-2 d-flex gap-2">
+              <button class="btn btn-primary flex-grow-1" (click)="applyPaymentFilters()" [disabled]="loading">
+                <i class="bi bi-search me-1"></i>Apply
+              </button>
+              <button class="btn btn-outline-secondary" (click)="clearPaymentFilters()" [disabled]="loading">
+                Clear
+              </button>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- Loading -->
+      <div class="text-center py-5" *ngIf="loading">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2">Loading payments...</p>
+      </div>
+
       <!-- Table -->
-      <div class="card shadow-sm">
+      <div class="card shadow-sm" *ngIf="!loading">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle">
               <thead class="table-light">
                 <tr>
                   <th>Date</th>
@@ -95,41 +122,65 @@
               </thead>
               <tbody>
                 <tr *ngFor="let payment of payments">
-                  <td>{{ formatDate(payment.createdAt) }}</td>
-                  <td>{{ payment.user?.name || 'N/A' }}<br><small class="text-muted">{{ payment.user?.email }}</small></td>
+                  <td class="text-nowrap">{{ formatDate(payment.createdAt) }}</td>
                   <td>
-                    <span 
-                      class="badge"
+                    <div class="fw-semibold">{{ payment.user?.name || 'Deleted User' }}</div>
+                    <small class="text-muted">{{ payment.user?.email || '' }}</small>
+                  </td>
+                  <td>
+                    <span class="badge" 
                       [class.bg-primary]="payment.type === 'setup_fee' || payment.type === 'one-time'"
-                      [class.bg-info]="payment.type === 'subscription'"
-                    >
+                      [class.bg-info]="payment.type === 'subscription'">
                       {{ (payment.type === 'setup_fee' || payment.type === 'one-time') ? 'Setup Fee' : (payment.type | titlecase) }}
                     </span>
                   </td>
-                  <td>{{ formatAmount(payment.amount) }}</td>
+                  <td class="fw-semibold">{{ formatAmount(payment.amount) }}</td>
                   <td><span [ngClass]="getStatusBadge(payment.status)">{{ payment.status | titlecase }}</span></td>
-                  <td>{{ payment.description }}</td>
+                  <td><small>{{ payment.description || '—' }}</small></td>
                 </tr>
                 <tr *ngIf="payments.length === 0">
-                  <td colspan="6" class="text-center py-5 text-muted">No payments found</td>
+                  <td colspan="6" class="text-center py-5">
+                    <i class="bi bi-cash-stack fs-1 text-muted d-block mb-2"></i>
+                    <span class="text-muted">No payments found</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+
+        <!-- Pagination -->
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center" *ngIf="paymentPages > 1">
+          <small class="text-muted">
+            Showing {{ ((paymentPage - 1) * paymentLimit) + 1 }}–{{ paymentPage * paymentLimit > paymentTotal ? paymentTotal : paymentPage * paymentLimit }} of {{ paymentTotal }}
+          </small>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="paymentPage === 1">
+                <a class="page-link" (click)="goToPaymentPage(paymentPage - 1)">Previous</a>
+              </li>
+              <li class="page-item" *ngFor="let p of paymentPageNumbers" [class.active]="p === paymentPage">
+                <a class="page-link" (click)="goToPaymentPage(p)">{{ p }}</a>
+              </li>
+              <li class="page-item" [class.disabled]="paymentPage === paymentPages">
+                <a class="page-link" (click)="goToPaymentPage(paymentPage + 1)">Next</a>
+              </li>
+            </ul>
+          </nav>
+        </div>
       </div>
     </div>
 
-    <!-- Subscriptions Tab -->
+    <!-- ============== SUBSCRIPTIONS TAB ============== -->
     <div *ngIf="activeTab === 'subscriptions'">
       
       <!-- Stats -->
       <div class="row g-3 mb-4" *ngIf="subscriptionStats.length > 0">
         <div class="col-md-3" *ngFor="let stat of subscriptionStats">
-          <div class="card shadow-sm">
+          <div class="card shadow-sm border-0">
             <div class="card-body text-center">
-              <h6 class="text-muted">{{ stat._id | titlecase }}</h6>
-              <h3>{{ stat.count }}</h3>
+              <h6 class="text-muted text-uppercase small">{{ stat._id || 'Unknown' | titlecase }}</h6>
+              <h3 class="mb-0">{{ stat.count }}</h3>
             </div>
           </div>
         </div>
@@ -138,26 +189,43 @@
       <!-- Filter -->
       <div class="card shadow-sm mb-4">
         <div class="card-body">
-          <div class="row g-3">
+          <div class="row g-3 align-items-end">
             <div class="col-md-4">
-              <label class="form-label">Status</label>
-              <select class="form-select" [(ngModel)]="subscriptionFilter" (change)="applySubscriptionFilter()">
+              <label class="form-label small fw-semibold">Status</label>
+              <select class="form-select" [(ngModel)]="subscriptionFilter">
                 <option value="">All Statuses</option>
                 <option value="active">Active</option>
                 <option value="past_due">Past Due</option>
                 <option value="canceled">Canceled</option>
                 <option value="unpaid">Unpaid</option>
+                <option value="incomplete">Incomplete</option>
               </select>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+              <button class="btn btn-primary" (click)="applySubscriptionFilter()" [disabled]="subsLoading">
+                <i class="bi bi-search me-1"></i>Apply
+              </button>
+              <button class="btn btn-outline-secondary" (click)="clearSubscriptionFilter()" [disabled]="subsLoading">
+                Clear
+              </button>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- Loading -->
+      <div class="text-center py-5" *ngIf="subsLoading">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2">Loading subscriptions...</p>
+      </div>
+
       <!-- Table -->
-      <div class="card shadow-sm">
+      <div class="card shadow-sm" *ngIf="!subsLoading">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle">
               <thead class="table-light">
                 <tr>
                   <th>User</th>
@@ -165,68 +233,189 @@
                   <th>Amount</th>
                   <th>Period</th>
                   <th>Access</th>
-                  <th>Actions</th>
+                  <th class="text-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let sub of subscriptions">
-                  <td>{{ sub.user?.name || 'N/A' }}<br><small class="text-muted">{{ sub.user?.email }}</small></td>
-                  <td><span [ngClass]="getStatusBadge(sub.status)">{{ sub.status | titlecase }}</span></td>
-                  <td>{{ formatAmount(sub.amount) }}/{{ sub.interval }}</td>
-                  <td>{{ formatDate(sub.currentPeriodStart) }} - {{ formatDate(sub.currentPeriodEnd) }}</td>
                   <td>
-                    <span class="badge bg-success" *ngIf="sub.user?.paymentAccessEnabled">Enabled</span>
-                    <span class="badge bg-danger" *ngIf="!sub.user?.paymentAccessEnabled">Disabled</span>
+                    <div class="fw-semibold">{{ sub.user?.name || 'Deleted User' }}</div>
+                    <small class="text-muted">{{ sub.user?.email || '' }}</small>
+                  </td>
+                  <td><span [ngClass]="getStatusBadge(sub.status)">{{ sub.status | titlecase }}</span></td>
+                  <td class="fw-semibold">{{ formatAmount(sub.amount) }}<small class="text-muted">/{{ sub.interval || 'month' }}</small></td>
+                  <td class="text-nowrap">
+                    <small>{{ formatDate(sub.currentPeriodStart) }} – {{ formatDate(sub.currentPeriodEnd) }}</small>
                   </td>
                   <td>
-                    <div class="btn-group" role="group">
-                      <button class="btn btn-sm btn-outline-success" (click)="enableAccess(sub.user._id, sub.user.name)" [disabled]="sub.user?.paymentAccessEnabled" title="Enable Access">
+                    <span class="badge bg-success" *ngIf="sub.user?.paymentAccessEnabled">
+                      <i class="bi bi-check-circle me-1"></i>Enabled
+                    </span>
+                    <span class="badge bg-danger" *ngIf="!sub.user?.paymentAccessEnabled">
+                      <i class="bi bi-x-circle me-1"></i>Disabled
+                    </span>
+                  </td>
+                  <td class="text-end">
+                    <div class="btn-group" role="group" *ngIf="sub.user?._id">
+                      <button class="btn btn-sm btn-outline-success" 
+                              (click)="enableAccess(sub)" 
+                              [disabled]="sub.user?.paymentAccessEnabled" 
+                              title="Enable Access">
                         <i class="bi bi-check-circle"></i>
                       </button>
-                      <button class="btn btn-sm btn-outline-warning" (click)="disableAccess(sub.user._id, sub.user.name)" [disabled]="!sub.user?.paymentAccessEnabled" title="Disable Access">
+                      <button class="btn btn-sm btn-outline-warning" 
+                              (click)="disableAccess(sub)" 
+                              [disabled]="!sub.user?.paymentAccessEnabled" 
+                              title="Disable Access">
                         <i class="bi bi-x-circle"></i>
                       </button>
-                      <button class="btn btn-sm btn-outline-danger" (click)="cancelSubscription(sub.user._id, sub.user.name)" [disabled]="sub.status === 'canceled'" title="Cancel Subscription">
-                        <i class="bi bi-trash"></i>
+                      <button class="btn btn-sm btn-outline-danger" 
+                              (click)="cancelSubscription(sub)" 
+                              [disabled]="sub.status === 'canceled'" 
+                              title="Cancel Subscription">
+                        <i class="bi bi-slash-circle"></i>
                       </button>
                     </div>
+                    <span *ngIf="!sub.user?._id" class="text-muted small">N/A</span>
                   </td>
                 </tr>
                 <tr *ngIf="subscriptions.length === 0">
-                  <td colspan="6" class="text-center py-5 text-muted">No subscriptions found</td>
+                  <td colspan="6" class="text-center py-5">
+                    <i class="bi bi-arrow-repeat fs-1 text-muted d-block mb-2"></i>
+                    <span class="text-muted">No subscriptions found</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+
+        <!-- Pagination -->
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center" *ngIf="subscriptionPages > 1">
+          <small class="text-muted">
+            Showing {{ ((subscriptionPage - 1) * subscriptionLimit) + 1 }}–{{ subscriptionPage * subscriptionLimit > subscriptionTotal ? subscriptionTotal : subscriptionPage * subscriptionLimit }} of {{ subscriptionTotal }}
+          </small>
+          <nav>
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="subscriptionPage === 1">
+                <a class="page-link" (click)="goToSubscriptionPage(subscriptionPage - 1)">Previous</a>
+              </li>
+              <li class="page-item" *ngFor="let p of subscriptionPageNumbers" [class.active]="p === subscriptionPage">
+                <a class="page-link" (click)="goToSubscriptionPage(p)">{{ p }}</a>
+              </li>
+              <li class="page-item" [class.disabled]="subscriptionPage === subscriptionPages">
+                <a class="page-link" (click)="goToSubscriptionPage(subscriptionPage + 1)">Next</a>
+              </li>
+            </ul>
+          </nav>
+        </div>
       </div>
     </div>
 
-    <!-- Settings Tab -->
+    <!-- ============== SETTINGS TAB ============== -->
     <div *ngIf="activeTab === 'settings'">
-      <div class="row">
+
+      <!-- Loading -->
+      <div class="text-center py-5" *ngIf="settingsLoading">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+      </div>
+
+      <div class="row" *ngIf="!settingsLoading">
         <div class="col-md-6">
           <div class="card shadow-sm">
-            <div class="card-header bg-white">
-              <h5 class="mb-0">Payment Settings</h5>
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Payment Configuration</h5>
+              <button class="btn btn-sm btn-outline-primary" (click)="startEditSettings()" *ngIf="!editSettings && paymentSettings">
+                <i class="bi bi-pencil me-1"></i>Edit
+              </button>
             </div>
-            <div class="card-body" *ngIf="paymentSettings">
+
+            <!-- View Mode -->
+            <div class="card-body" *ngIf="paymentSettings && !editSettings">
+              <div class="mb-3 pb-3 border-bottom">
+                <label class="form-label text-muted small">Setup Fee (One-Time)</label>
+                <p class="mb-0 fs-5 fw-semibold">{{ formatAmount(paymentSettings.oneTimePrice) }}</p>
+              </div>
+              <div class="mb-3 pb-3 border-bottom">
+                <label class="form-label text-muted small">Monthly Subscription</label>
+                <p class="mb-0 fs-5 fw-semibold">{{ formatAmount(paymentSettings.monthlyPrice) }}<small class="text-muted fw-normal">/month</small></p>
+              </div>
+              <div class="mb-3 pb-3 border-bottom">
+                <label class="form-label text-muted small">Stripe Monthly Price ID</label>
+                <p class="mb-0"><code>{{ paymentSettings.monthlyPriceId || 'Not configured' }}</code></p>
+              </div>
+              <div class="mb-0">
+                <label class="form-label text-muted small">Stripe Publishable Key</label>
+                <p class="mb-0"><code>{{ paymentSettings.stripePublishableKey ? '••••' + paymentSettings.stripePublishableKey.slice(-8) : 'Not configured' }}</code></p>
+              </div>
+            </div>
+
+            <!-- Edit Mode -->
+            <div class="card-body" *ngIf="editSettings">
               <div class="mb-3">
-                <label class="form-label"><strong>Setup Fee:</strong></label>
-                <p class="mb-0">{{ formatAmount(paymentSettings.oneTimePrice) }}</p>
+                <label class="form-label fw-semibold">Setup Fee ($)</label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input type="number" class="form-control" [(ngModel)]="editSettings.oneTimePrice" min="0" step="0.01">
+                </div>
               </div>
               <div class="mb-3">
-                <label class="form-label"><strong>Monthly Subscription:</strong></label>
-                <p class="mb-0">{{ formatAmount(paymentSettings.monthlyPrice) }}/month</p>
+                <label class="form-label fw-semibold">Monthly Subscription ($)</label>
+                <div class="input-group">
+                  <span class="input-group-text">$</span>
+                  <input type="number" class="form-control" [(ngModel)]="editSettings.monthlyPrice" min="0" step="0.01">
+                </div>
               </div>
               <div class="mb-3">
-                <label class="form-label"><strong>Stripe Price ID:</strong></label>
-                <p class="mb-0"><code>{{ paymentSettings.monthlyPriceId }}</code></p>
+                <label class="form-label fw-semibold">Stripe Monthly Price ID</label>
+                <input type="text" class="form-control" [(ngModel)]="editSettings.monthlyPriceId" placeholder="price_...">
+                <small class="form-text text-muted">From your Stripe dashboard</small>
               </div>
-              <div class="alert alert-info">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>Note:</strong> Update these settings in your .env file on the server.
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary" (click)="saveSettings()" [disabled]="savingSettings">
+                  <span class="spinner-border spinner-border-sm me-1" *ngIf="savingSettings"></span>
+                  Save Changes
+                </button>
+                <button class="btn btn-outline-secondary" (click)="cancelEditSettings()" [disabled]="savingSettings">
+                  Cancel
+                </button>
               </div>
+            </div>
+
+            <!-- No settings -->
+            <div class="card-body text-center py-4" *ngIf="!paymentSettings && !settingsLoading">
+              <p class="text-muted mb-0">Payment settings not available</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="col-md-6">
+          <div class="card shadow-sm border-info">
+            <div class="card-header bg-info bg-opacity-10 border-info">
+              <h5 class="mb-0 text-info"><i class="bi bi-info-circle me-2"></i>Stripe Integration</h5>
+            </div>
+            <div class="card-body">
+              <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                  <i class="bi bi-check-circle text-success me-2"></i>
+                  <strong>Setup Fee:</strong> One-time payment charged during registration
+                </li>
+                <li class="mb-2">
+                  <i class="bi bi-check-circle text-success me-2"></i>
+                  <strong>Subscription:</strong> Monthly recurring charge for platform access
+                </li>
+                <li class="mb-2">
+                  <i class="bi bi-check-circle text-success me-2"></i>
+                  <strong>Webhooks:</strong> Stripe events auto-update payment status
+                </li>
+                <li class="mb-0">
+                  <i class="bi bi-shield-check text-success me-2"></i>
+                  <strong>Security:</strong> All card data handled by Stripe — never stored locally
+                </li>
+              </ul>
             </div>
           </div>
         </div>
