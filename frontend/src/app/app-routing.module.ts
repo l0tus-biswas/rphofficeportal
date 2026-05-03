@@ -272,7 +272,7 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  // TASK 025 — Vistaprint Business Cards
+  // TASK 025 — Printful Business Cards
   {
     path: 'business-cards',
     component: BusinessCardsComponent,

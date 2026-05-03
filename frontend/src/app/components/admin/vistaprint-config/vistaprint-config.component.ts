@@ -1,6 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { BusinessCardsService, VistaprintConfig } from '../../../services/business-cards.service';
-import { environment } from '../../../../environments/environment';
+import { BusinessCardsService, PrintfulAdminConfig, OptionField } from '../../../services/business-cards.service';
 
 @Component({
   selector: 'app-vistaprint-config',
@@ -9,26 +8,24 @@ import { environment } from '../../../../environments/environment';
 })
 export class VistaprintConfigComponent implements OnInit {
   // Form model
-  englishUrl = '';
-  spanishUrl = '';
-  affiliateId = '';
+  apiKey = '';
+  storeId = '';
+  enabled = false;
+
+  // Text fields for personalization
+  textFields: OptionField[] = [];
 
   // Current saved config
-  config: VistaprintConfig | null = null;
+  config: PrintfulAdminConfig | null = null;
 
   // State
   loading = true;
   saving = false;
-  uploadingEnglish = false;
-  uploadingSpanish = false;
+  testing = false;
   error = '';
   successMessage = '';
-  uploadSuccessEnglish = '';
-  uploadSuccessSpanish = '';
-  uploadErrorEnglish = '';
-  uploadErrorSpanish = '';
-
-  private baseUrl = environment.apiUrl.replace('/api', '');
+  testMessage = '';
+  testError = '';
 
   constructor(private businessCardsService: BusinessCardsService) {}
 
@@ -38,12 +35,12 @@ export class VistaprintConfigComponent implements OnInit {
 
   loadConfig(): void {
     this.loading = true;
-    this.businessCardsService.getConfig().subscribe({
+    this.businessCardsService.getAdminConfig().subscribe({
       next: (res) => {
         this.config = res.config;
-        this.englishUrl = res.config.englishUrl || '';
-        this.spanishUrl = res.config.spanishUrl || '';
-        this.affiliateId = res.config.affiliateId || '';
+        this.storeId = res.config.storeId || '';
+        this.enabled = res.config.enabled;
+        this.textFields = res.config.textFields || [];
         this.loading = false;
       },
       error: (err) => {
@@ -58,15 +55,23 @@ export class VistaprintConfigComponent implements OnInit {
     this.error = '';
     this.successMessage = '';
 
-    this.businessCardsService.updateConfig({
-      englishUrl: this.englishUrl,
-      spanishUrl: this.spanishUrl,
-      affiliateId: this.affiliateId
-    }).subscribe({
+    const body: any = {
+      storeId: this.storeId,
+      enabled: this.enabled,
+      textFields: this.textFields
+    };
+
+    if (this.apiKey) {
+      body.apiKey = this.apiKey;
+    }
+
+    this.businessCardsService.updateConfig(body).subscribe({
       next: (res) => {
         this.config = res.config;
-        this.successMessage = 'Configuration saved successfully.';
+        this.textFields = res.config.textFields || [];
+        this.successMessage = 'Configuration saved.';
         this.saving = false;
+        this.apiKey = '';
         setTimeout(() => this.successMessage = '', 4000);
       },
       error: (err) => {
@@ -76,57 +81,29 @@ export class VistaprintConfigComponent implements OnInit {
     });
   }
 
-  uploadPreview(event: Event, lang: 'english' | 'spanish'): void {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || !input.files[0]) return;
-
-    const formData = new FormData();
-    formData.append('preview', input.files[0]);
-    formData.append('language', lang);
-
-    if (lang === 'english') {
-      this.uploadingEnglish = true;
-      this.uploadSuccessEnglish = '';
-      this.uploadErrorEnglish = '';
-    } else {
-      this.uploadingSpanish = true;
-      this.uploadSuccessSpanish = '';
-      this.uploadErrorSpanish = '';
-    }
-
-    this.businessCardsService.uploadPreview(formData).subscribe({
-      next: (res) => {
-        if (this.config) {
-          if (lang === 'english') {
-            this.config.englishPreview = res.path;
-            this.uploadSuccessEnglish = 'English preview uploaded.';
-            this.uploadingEnglish = false;
-            setTimeout(() => this.uploadSuccessEnglish = '', 4000);
-          } else {
-            this.config.spanishPreview = res.path;
-            this.uploadSuccessSpanish = 'Spanish preview uploaded.';
-            this.uploadingSpanish = false;
-            setTimeout(() => this.uploadSuccessSpanish = '', 4000);
-          }
-        }
-        input.value = '';
-      },
-      error: (err) => {
-        const msg = err?.error?.message || 'Upload failed.';
-        if (lang === 'english') {
-          this.uploadErrorEnglish = msg;
-          this.uploadingEnglish = false;
-        } else {
-          this.uploadErrorSpanish = msg;
-          this.uploadingSpanish = false;
-        }
-        input.value = '';
-      }
-    });
+  addTextField(): void {
+    this.textFields.push({ id: Date.now().toString(), label: '', required: false });
   }
 
-  getPreviewUrl(path: string): string {
-    if (!path) return '';
-    return `${this.baseUrl}/${path}`;
+  removeTextField(index: number): void {
+    this.textFields.splice(index, 1);
+  }
+
+  testConnection(): void {
+    this.testing = true;
+    this.testMessage = '';
+    this.testError = '';
+
+    this.businessCardsService.testConnection().subscribe({
+      next: (res) => {
+        this.testMessage = `${res.message} Store: ${res.store?.name || 'N/A'}`;
+        this.testing = false;
+        setTimeout(() => this.testMessage = '', 6000);
+      },
+      error: (err) => {
+        this.testError = err?.error?.message || 'Connection test failed.';
+        this.testing = false;
+      }
+    });
   }
 }

@@ -6,99 +6,124 @@
     <div class="page-header mb-4">
       <h2 class="page-title mb-1">
         <i class="bi bi-card-heading me-2 text-primary"></i>
-        Vistaprint Configuration
+        Printful Configuration
       </h2>
       <p class="text-muted mb-0">
-        Manage business card template links and preview images for the agent portal.
+        Connect your Printful store. Products from your store will be displayed to agents automatically.
       </p>
     </div>
 
     <!-- Loading -->
     <div *ngIf="loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
+      <div class="spinner-border text-primary" role="status"></div>
       <p class="mt-3 text-muted">Loading configuration...</p>
     </div>
 
-    <!-- Global Error -->
+    <!-- Error -->
     <div *ngIf="!loading && error" class="alert alert-danger d-flex align-items-center mb-4">
       <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
     </div>
 
     <div *ngIf="!loading" class="row g-4">
 
-      <!-- ── URL / Affiliate Configuration Card ── -->
-      <div class="col-12 col-lg-8">
+      <!-- Main Config -->
+      <div class="col-12 col-lg-7">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-bottom py-3">
             <h5 class="mb-0 fw-semibold">
-              <i class="bi bi-link-45deg me-2 text-primary"></i>
-              Order Links & Affiliate Settings
+              <i class="bi bi-gear me-2 text-primary"></i>
+              API Settings
             </h5>
           </div>
           <div class="card-body p-4">
 
-            <!-- Success Message -->
+            <!-- Success -->
             <div *ngIf="successMessage" class="alert alert-success d-flex align-items-center">
               <i class="bi bi-check-circle-fill me-2"></i>{{ successMessage }}
             </div>
 
-            <!-- English URL -->
+            <!-- Enable Toggle -->
+            <div class="mb-4 p-3 rounded border bg-light">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="enabledSwitch" [(ngModel)]="enabled">
+                <label class="form-check-label fw-semibold" for="enabledSwitch">
+                  Enable Business Cards for Agents
+                </label>
+              </div>
+              <small class="text-muted">When enabled, agents see products from your Printful store and can place orders.</small>
+            </div>
+
+            <!-- API Key -->
             <div class="mb-4">
               <label class="form-label fw-semibold">
-                <span class="badge bg-primary me-2">EN</span>English Template URL
+                <i class="bi bi-key me-1"></i> API Key
               </label>
-              <input
-                type="url"
-                class="form-control"
-                [(ngModel)]="englishUrl"
-                placeholder="https://www.vistaprint.com/...">
+              <input type="password" class="form-control" [(ngModel)]="apiKey"
+                     placeholder="Enter new API key (leave blank to keep current)">
               <div class="form-text">
-                Full Vistaprint product URL for the English business card template
-                (include any affiliate parameters).
+                <span *ngIf="config?.hasApiKey" class="text-success">
+                  <i class="bi bi-check-circle me-1"></i>Configured ({{ config?.apiKey }})
+                </span>
+                <span *ngIf="!config?.hasApiKey" class="text-warning">
+                  <i class="bi bi-exclamation-triangle me-1"></i>Not configured
+                </span>
+                — Get from <a href="https://www.printful.com/dashboard/developer/api-keys" target="_blank" rel="noopener">Printful Dashboard</a>
               </div>
             </div>
 
-            <!-- Spanish URL -->
+            <!-- Store ID -->
             <div class="mb-4">
-              <label class="form-label fw-semibold">
-                <span class="badge bg-success me-2">ES</span>Spanish Template URL
-              </label>
-              <input
-                type="url"
-                class="form-control"
-                [(ngModel)]="spanishUrl"
-                placeholder="https://www.vistaprint.com/...">
-              <div class="form-text">
-                Full Vistaprint product URL for the Spanish business card template
-                (include any affiliate parameters).
-              </div>
+              <label class="form-label fw-semibold">Store ID</label>
+              <input type="text" class="form-control" [(ngModel)]="storeId" placeholder="Required if you have multiple stores">
+              <div class="form-text">Find this in Printful → Dashboard → Settings → Stores.</div>
             </div>
 
-            <!-- Affiliate ID -->
+            <!-- Test Connection -->
             <div class="mb-4">
-              <label class="form-label fw-semibold">
-                <i class="bi bi-tag me-1"></i>Affiliate ID
-              </label>
-              <input
-                type="text"
-                class="form-control"
-                [(ngModel)]="affiliateId"
-                placeholder="e.g. rhp-affiliate-001">
-              <div class="form-text">
-                Your Vistaprint affiliate tracking ID (obtain from the Vistaprint affiliate dashboard).
-                Account: Rhpinsurance&#64;gmail.com
-              </div>
+              <button class="btn btn-outline-info btn-sm" (click)="testConnection()" [disabled]="testing || !config?.hasApiKey">
+                <span *ngIf="testing" class="spinner-border spinner-border-sm me-1"></span>
+                <i *ngIf="!testing" class="bi bi-wifi me-1"></i>
+                Test Connection
+              </button>
+              <span *ngIf="testMessage" class="ms-2 text-success small">
+                <i class="bi bi-check-circle me-1"></i>{{ testMessage }}
+              </span>
+              <span *ngIf="testError" class="ms-2 text-danger small">
+                <i class="bi bi-x-circle me-1"></i>{{ testError }}
+              </span>
             </div>
 
-            <!-- Save Button -->
+            <hr class="my-4">
+
+            <!-- Personalization Text Fields -->
+            <h6 class="fw-semibold mb-2">
+              <i class="bi bi-pencil-square me-1 text-primary"></i> Card Personalization Fields
+            </h6>
+            <p class="text-muted small mb-3">
+              Define what text agents need to fill in when ordering (e.g. Name, Phone, Email, Title).
+              These values appear on the order's packing slip for you to apply to the card design.
+            </p>
+
+            <div *ngFor="let field of textFields; let i = index" class="d-flex align-items-center gap-2 mb-2">
+              <input type="text" class="form-control form-control-sm" [(ngModel)]="field.label" placeholder="Field label (e.g. Full Name)">
+              <div class="form-check form-check-inline mb-0">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="field.required" [id]="'req_' + i">
+                <label class="form-check-label small" [for]="'req_' + i">Required</label>
+              </div>
+              <button class="btn btn-outline-danger btn-sm" (click)="removeTextField(i)" title="Remove">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" (click)="addTextField()">
+              <i class="bi bi-plus-circle me-1"></i> Add Field
+            </button>
+
+            <hr class="my-4">
+
+            <!-- Save -->
             <div class="d-flex justify-content-end">
-              <button
-                class="btn btn-primary px-4"
-                (click)="saveConfig()"
-                [disabled]="saving">
-                <span *ngIf="saving" class="spinner-border spinner-border-sm me-2" role="status"></span>
+              <button class="btn btn-primary px-4" (click)="saveConfig()" [disabled]="saving">
+                <span *ngIf="saving" class="spinner-border spinner-border-sm me-2"></span>
                 <i *ngIf="!saving" class="bi bi-floppy-fill me-2"></i>
                 {{ saving ? 'Saving…' : 'Save Configuration' }}
               </button>
@@ -108,89 +133,35 @@
         </div>
       </div>
 
-      <!-- ── Preview Image Uploads ── -->
-      <div class="col-12 col-lg-4">
-        <div class="card border-0 shadow-sm mb-4">
+      <!-- Setup Guide -->
+      <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-bottom py-3">
-            <h5 class="mb-0 fw-semibold">
-              <i class="bi bi-image me-2 text-primary"></i>
-              Template Previews
-            </h5>
+            <h6 class="mb-0 fw-semibold">
+              <i class="bi bi-question-circle me-2 text-info"></i>
+              How It Works
+            </h6>
           </div>
           <div class="card-body p-4">
+            <ol class="small text-muted mb-0 ps-3">
+              <li class="mb-2">Create a <a href="https://www.printful.com" target="_blank" rel="noopener">Printful</a> account and set up a store</li>
+              <li class="mb-2">Add your business card products to the store (with designs already applied)</li>
+              <li class="mb-2">Generate an API key: Dashboard → Developer → API Keys</li>
+              <li class="mb-2">Paste the API key and store ID here, then save</li>
+              <li class="mb-2">Test the connection to confirm it works</li>
+              <li class="mb-2">Enable the feature — agents will immediately see your store products</li>
+            </ol>
 
-            <!-- English Preview -->
-            <div class="preview-section mb-4">
-              <p class="fw-semibold text-primary mb-2">
-                <span class="badge bg-primary me-1">EN</span> English Preview
-              </p>
+            <hr class="my-3">
 
-              <div class="preview-thumb-wrapper mb-2">
-                <img
-                  *ngIf="config?.englishPreview"
-                  [src]="getPreviewUrl(config!.englishPreview)"
-                  class="img-fluid rounded border preview-thumb"
-                  alt="English Preview">
-                <div *ngIf="!config?.englishPreview" class="preview-empty rounded border d-flex align-items-center justify-content-center text-muted">
-                  <div class="text-center p-3">
-                    <i class="bi bi-image-fill display-6 opacity-40"></i>
-                    <p class="small mb-0 mt-1">No preview</p>
-                  </div>
-                </div>
-              </div>
-
-              <div *ngIf="uploadSuccessEnglish" class="alert alert-success alert-sm py-1 px-2 mb-2 small">
-                <i class="bi bi-check-circle me-1"></i>{{ uploadSuccessEnglish }}
-              </div>
-              <div *ngIf="uploadErrorEnglish" class="alert alert-danger alert-sm py-1 px-2 mb-2 small">
-                <i class="bi bi-exclamation-triangle me-1"></i>{{ uploadErrorEnglish }}
-              </div>
-
-              <label class="btn btn-outline-primary btn-sm w-100" [class.disabled]="uploadingEnglish">
-                <span *ngIf="uploadingEnglish" class="spinner-border spinner-border-sm me-1" role="status"></span>
-                <i *ngIf="!uploadingEnglish" class="bi bi-upload me-1"></i>
-                {{ uploadingEnglish ? 'Uploading…' : 'Upload English Preview' }}
-                <input type="file" accept="image/*" class="d-none" (change)="uploadPreview($event, 'english')" [disabled]="uploadingEnglish">
-              </label>
+            <div class="small text-muted">
+              <strong>How agents use it:</strong>
+              <ul class="ps-3 mt-1 mb-0">
+                <li>They browse your Printful store products (with images & pricing)</li>
+                <li>Select a variant and enter shipping address</li>
+                <li>Orders go to your Printful dashboard as drafts for you to confirm</li>
+              </ul>
             </div>
-
-            <hr>
-
-            <!-- Spanish Preview -->
-            <div class="preview-section">
-              <p class="fw-semibold text-success mb-2">
-                <span class="badge bg-success me-1">ES</span> Spanish Preview
-              </p>
-
-              <div class="preview-thumb-wrapper mb-2">
-                <img
-                  *ngIf="config?.spanishPreview"
-                  [src]="getPreviewUrl(config!.spanishPreview)"
-                  class="img-fluid rounded border preview-thumb"
-                  alt="Spanish Preview">
-                <div *ngIf="!config?.spanishPreview" class="preview-empty rounded border d-flex align-items-center justify-content-center text-muted">
-                  <div class="text-center p-3">
-                    <i class="bi bi-image-fill display-6 opacity-40"></i>
-                    <p class="small mb-0 mt-1">No preview</p>
-                  </div>
-                </div>
-              </div>
-
-              <div *ngIf="uploadSuccessSpanish" class="alert alert-success alert-sm py-1 px-2 mb-2 small">
-                <i class="bi bi-check-circle me-1"></i>{{ uploadSuccessSpanish }}
-              </div>
-              <div *ngIf="uploadErrorSpanish" class="alert alert-danger alert-sm py-1 px-2 mb-2 small">
-                <i class="bi bi-exclamation-triangle me-1"></i>{{ uploadErrorSpanish }}
-              </div>
-
-              <label class="btn btn-outline-success btn-sm w-100" [class.disabled]="uploadingSpanish">
-                <span *ngIf="uploadingSpanish" class="spinner-border spinner-border-sm me-1" role="status"></span>
-                <i *ngIf="!uploadingSpanish" class="bi bi-upload me-1"></i>
-                {{ uploadingSpanish ? 'Uploading…' : 'Upload Spanish Preview' }}
-                <input type="file" accept="image/*" class="d-none" (change)="uploadPreview($event, 'spanish')" [disabled]="uploadingSpanish">
-              </label>
-            </div>
-
           </div>
         </div>
       </div>

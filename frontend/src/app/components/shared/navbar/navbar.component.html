@@ -92,7 +92,7 @@
           </a>
         </li>
 
-        <li class="nav-item" *ngIf="authService.isAgent() && !authService.isAdmin()">
+        <li class="nav-item">
           <a class="nav-link px-xl-3" routerLink="/business-cards" routerLinkActive="active">
             <i class="bi bi-card-heading me-2"></i>
             <span>Business Cards</span>
@@ -168,7 +168,7 @@
             </li>
             <li>
               <a class="dropdown-item" routerLink="/admin/vistaprint-config">
-                <i class="bi bi-card-heading me-2"></i>Vistaprint Config
+                <i class="bi bi-card-heading me-2"></i>Printful Config
               </a>
             </li>
             <li>
