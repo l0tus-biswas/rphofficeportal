@@ -463,6 +463,54 @@ router.delete('/folders/:id/thumbnail', logAction('DELETE_FOLDER_THUMBNAIL'), as
   }
 });
 
+// ========== MATERIAL THUMBNAIL ==========
+
+// @route   POST /api/training/materials/:id/thumbnail
+// @desc    Upload or replace material thumbnail image
+// @access  Private (Admin only)
+router.post('/materials/:id/thumbnail', uploadThumbnail.single('thumbnail'), logAction('UPDATE_MATERIAL_THUMBNAIL'), async (req, res) => {
+  try {
+    const material = await TrainingMaterial.findById(req.params.id);
+    if (!material || !material.isActive) {
+      return sendResponse(res, 404, { message: 'Material not found' });
+    }
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No image file provided' });
+    }
+    // Delete old thumbnail if it exists
+    if (material.thumbnail) {
+      const oldPath = path.join(__dirname, '..', material.thumbnail);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
+    }
+    material.thumbnail = `/uploads/training-thumbnails/${req.file.filename}`;
+    await material.save();
+    sendResponse(res, 200, { message: 'Thumbnail uploaded successfully', material });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/training/materials/:id/thumbnail
+// @desc    Remove material thumbnail
+// @access  Private (Admin only)
+router.delete('/materials/:id/thumbnail', logAction('DELETE_MATERIAL_THUMBNAIL'), async (req, res) => {
+  try {
+    const material = await TrainingMaterial.findById(req.params.id);
+    if (!material || !material.isActive) {
+      return sendResponse(res, 404, { message: 'Material not found' });
+    }
+    if (material.thumbnail) {
+      const oldPath = path.join(__dirname, '..', material.thumbnail);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
+      material.thumbnail = null;
+      await material.save();
+    }
+    sendResponse(res, 200, { message: 'Thumbnail removed', material });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // ========== MATERIAL CRUD (Admin) ==========
 
 // @route   POST /api/training/materials

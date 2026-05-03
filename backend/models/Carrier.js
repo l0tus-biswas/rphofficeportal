@@ -80,7 +80,6 @@ const carrierSchema = new mongoose.Schema({
 });
 
 // Index for quick lookups
-carrierSchema.index({ name: 1 });
 carrierSchema.index({ isActive: 1 });
 carrierSchema.index({ category: 1, isActive: 1 });
 

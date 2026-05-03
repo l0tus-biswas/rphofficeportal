@@ -38,6 +38,5 @@ const configSchema = new mongoose.Schema({
 
 // Index for faster queries
 configSchema.index({ category: 1 });
-configSchema.index({ key: 1 });
 
 module.exports = mongoose.model('SystemConfig', configSchema);

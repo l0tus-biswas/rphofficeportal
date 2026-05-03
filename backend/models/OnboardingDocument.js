@@ -30,6 +30,12 @@ const onboardingDocumentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Optional notes from uploader
+  notes: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   // Soft-delete: set when agent or admin deletes the document
   deletedAt: {
     type: Date,

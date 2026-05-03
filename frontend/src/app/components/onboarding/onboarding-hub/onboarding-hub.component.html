@@ -134,6 +134,12 @@
                        [id]="'file-' + card.docType._id">
                 <small class="text-muted">PDF, image, or doc file</small>
               </div>
+              <div class="mb-2">
+                <input type="text" class="form-control form-control-sm"
+                       [(ngModel)]="uploadNotes[card.docType._id!]"
+                       [name]="'notes-' + card.docType._id"
+                       placeholder="Notes (optional)">
+              </div>
               <button class="btn btn-primary btn-sm w-100"
                       [disabled]="!selectedFiles[card.docType._id!] || uploadingDocTypeId === card.docType._id"
                       (click)="uploadDocument(card.docType)">

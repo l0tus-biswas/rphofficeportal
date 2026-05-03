@@ -67,12 +67,15 @@ export class DocumentHubComponent implements OnInit {
   uploadFiles: File[] = [];
   uploadName = '';
   uploadDescription = '';
-  uploadVisibility: 'all' | 'admin' = 'all';
+  uploadNotes = '';
+  uploadVisibility: 'all' | 'admin' | 'restricted' = 'all';
+  uploadRestrictedTo: string[] = [];
   uploading = false;
 
   // Admin: Edit file
   showFileEditForm = false;
   editingFile: Partial<DocHubFile> = {};
+  editRestrictedTo: string[] = [];
   fileEditSaving = false;
 
   // Document requests
@@ -86,6 +89,7 @@ export class DocumentHubComponent implements OnInit {
   // Agent: respond to request
   respondingRequestId = '';
   responseFile: File | null = null;
+  responseNotes = '';
 
   constructor(
     private docHubService: DocumentHubService,
@@ -193,13 +197,20 @@ export class DocumentHubComponent implements OnInit {
 
   openFileEdit(file: DocHubFile): void {
     this.editingFile = { ...file, folder: file.folder?._id || file.folder || null };
+    this.editRestrictedTo = (file.restrictedTo || []).map((u: any) => u._id || u);
     this.showFileEditForm = true;
   }
 
   saveFileEdit(): void {
     if (!this.editingFile._id) return;
     this.fileEditSaving = true;
-    this.docHubService.updateFile(this.editingFile._id, this.editingFile).subscribe({
+    const payload: any = { ...this.editingFile };
+    if (payload.visibility === 'restricted') {
+      payload.restrictedTo = this.editRestrictedTo;
+    } else {
+      payload.restrictedTo = [];
+    }
+    this.docHubService.updateFile(this.editingFile._id, payload).subscribe({
       next: () => {
         this.success = 'File updated';
         this.showFileEditForm = false;
@@ -214,7 +225,7 @@ export class DocumentHubComponent implements OnInit {
   // --- Admin: Folder CRUD ---
   openNewFolder(): void {
     const nextOrder = this.subfolders.length;
-    this.editingFolder = { name: '', description: '', parent: this.currentFolderId, sortOrder: nextOrder };
+    this.editingFolder = { name: '', description: '', parent: this.currentFolderId, sortOrder: nextOrder, visibility: 'all' };
     this.folderEditMode = false;
     this.showFolderForm = true;
   }
@@ -261,7 +272,9 @@ export class DocumentHubComponent implements OnInit {
     this.uploadFiles = [];
     this.uploadName = '';
     this.uploadDescription = '';
+    this.uploadNotes = '';
     this.uploadVisibility = 'all';
+    this.uploadRestrictedTo = [];
     this.showUploadForm = true;
   }
 
@@ -280,7 +293,11 @@ export class DocumentHubComponent implements OnInit {
     if (this.currentFolderId) formData.append('folder', this.currentFolderId);
     if (this.uploadName) formData.append('name', this.uploadName);
     formData.append('description', this.uploadDescription);
+    formData.append('notes', this.uploadNotes);
     formData.append('visibility', this.uploadVisibility);
+    if (this.uploadVisibility === 'restricted' && this.uploadRestrictedTo.length > 0) {
+      formData.append('restrictedTo', JSON.stringify(this.uploadRestrictedTo));
+    }
 
     this.docHubService.uploadFiles(formData).subscribe({
       next: (res: any) => {
@@ -364,6 +381,7 @@ export class DocumentHubComponent implements OnInit {
   startRespond(requestId: string): void {
     this.respondingRequestId = requestId;
     this.responseFile = null;
+    this.responseNotes = '';
   }
 
   onResponseFileSelected(event: Event): void {
@@ -373,11 +391,12 @@ export class DocumentHubComponent implements OnInit {
 
   submitResponse(requestId: string): void {
     if (!this.responseFile) { this.error = 'Select a file'; return; }
-    this.docHubService.respondToRequest(requestId, this.responseFile).subscribe({
+    this.docHubService.respondToRequest(requestId, this.responseFile, this.responseNotes).subscribe({
       next: () => {
         this.success = 'Document submitted';
         this.respondingRequestId = '';
         this.responseFile = null;
+        this.responseNotes = '';
         this.loadRequests();
         setTimeout(() => this.success = '', 3000);
       },

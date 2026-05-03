@@ -280,8 +280,9 @@ router.get('/referral-link', async (req, res) => {
 // @access  Private (Agent/Admin)
 router.get('/dashboard/checklist', async (req, res) => {
   try {
-    const agent = await User.findById(req.user._id).select('isLicensed');
-    const isLicensed = agent ? agent.isLicensed : false;
+    // Check LicensingProgress record (authoritative source for licensing status)
+    const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed checklist.preLicenseCourse.completed').lean();
+    const isLicensed = lp ? lp.isLicensed : false;
 
     // Fetch QuickBooks invite URL from SystemConfig
     let quickbooksUrl = '#';
@@ -291,10 +292,12 @@ router.get('/dashboard/checklist', async (req, res) => {
     } catch (e) { /* ignore */ }
 
     if (!isLicensed) {
+      // Show dynamic progress based on actual licensing checklist
+      const hasStartedStudy = lp && lp.checklist ? lp.checklist.preLicenseCourse?.completed : false;
       return sendResponse(res, 200, {
         checklist: [
-          { label: 'Get your insurance license', completed: false, link: null },
-          { label: 'Study on ExamFX', completed: false, link: 'https://www.examfx.com' }
+          { label: 'Study on ExamFX', completed: !!hasStartedStudy, link: 'https://www.examfx.com' },
+          { label: 'Get your insurance license', completed: false, link: '/licensing' }
         ]
       });
     }

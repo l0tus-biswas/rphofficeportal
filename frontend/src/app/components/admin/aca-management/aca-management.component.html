@@ -107,6 +107,19 @@
               </div>
             </div>
 
+            <!-- Notes (optional) -->
+            <div class="mb-3">
+              <label for="uploadNotes" class="form-label small fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
+              <input
+                type="text"
+                id="uploadNotes"
+                class="form-control form-control-sm"
+                placeholder="Add any notes about this upload..."
+                [(ngModel)]="uploadNotes"
+                [disabled]="uploading"
+              />
+            </div>
+
             <!-- Upload button -->
             <button
               class="btn btn-primary w-100"

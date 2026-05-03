@@ -115,9 +115,15 @@
               <div class="drag-handle-wrapper" cdkDragHandle>
                 <i class="bi bi-grip-vertical drag-handle"></i>
               </div>
+              <!-- Thumbnail Preview -->
+              <img *ngIf="getMaterialThumbnail(material)" 
+                   [src]="getMaterialThumbnail(material)" 
+                   class="card-img-top" 
+                   style="height: 120px; object-fit: cover;" 
+                   alt="{{ material.title }} thumbnail">
               <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                  <div class="material-icon">
+                  <div class="material-icon" *ngIf="!getMaterialThumbnail(material)">
                     <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
                   </div>
                   <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">
@@ -387,6 +393,18 @@
             <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
             <small class="text-muted">Upload a PDF resource to accompany this material (max 20 MB)</small>
           </div>
+
+          <div class="mb-3">
+            <label class="form-label">
+              <i class="bi bi-image me-1 text-success"></i>Thumbnail Image
+              <small class="text-muted ms-2">(Optional)</small>
+            </label>
+            <input type="file" class="form-control" accept="image/*" (change)="onMaterialThumbnailSelected($event)">
+            <small class="text-muted">Upload a thumbnail image for this material (max 5 MB)</small>
+            <div *ngIf="materialThumbnailPreview" class="mt-2">
+              <img [src]="materialThumbnailPreview" class="img-thumbnail" style="max-height: 100px;" alt="Thumbnail preview">
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" (click)="closeModals()">Cancel</button>
@@ -483,6 +501,23 @@
             <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
             <small class="text-muted">
               {{ selectedMaterial?.pdfAttachment?.filePath ? 'Upload a new PDF to replace the current one' : 'Attach a PDF resource (max 20 MB)' }}
+            </small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">
+              <i class="bi bi-image me-1 text-success"></i>Thumbnail Image
+            </label>
+            <!-- Existing Thumbnail -->
+            <div *ngIf="materialThumbnailPreview" class="mb-2">
+              <img [src]="materialThumbnailPreview" class="img-thumbnail" style="max-height: 100px;" alt="Thumbnail preview">
+              <button *ngIf="selectedMaterial?.thumbnail" type="button" class="btn btn-sm btn-outline-danger ms-2" (click)="removeMaterialThumbnail(selectedMaterial)">
+                <i class="bi bi-trash"></i> Remove
+              </button>
+            </div>
+            <input type="file" class="form-control" accept="image/*" (change)="onMaterialThumbnailSelected($event)">
+            <small class="text-muted">
+              {{ selectedMaterial?.thumbnail ? 'Upload a new image to replace the current thumbnail' : 'Add a thumbnail image (max 5 MB)' }}
             </small>
           </div>
         </div>

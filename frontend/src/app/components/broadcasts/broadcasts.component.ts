@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { BroadcastService, Broadcast } from '../../services/broadcast.service';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-broadcasts',
@@ -14,6 +15,8 @@ export class BroadcastsComponent implements OnInit {
   totalPages = 1;
   total = 0;
   selectedBroadcast: Broadcast | null = null;
+  showNewAlert = false;
+  newAlertCount = 0;
 
   constructor(
     private broadcastService: BroadcastService,
@@ -33,6 +36,13 @@ export class BroadcastsComponent implements OnInit {
         this.totalPages = pagination?.pages || 1;
         this.total = pagination?.total || 0;
         this.loading = false;
+
+        // Show pop-up alert if there are unread announcements
+        const unread = this.broadcasts.filter(b => !b.isRead).length;
+        if (unread > 0 && this.page === 1) {
+          this.newAlertCount = unread;
+          this.showNewAlert = true;
+        }
       },
       error: () => {
         this.broadcasts = [];
@@ -41,12 +51,17 @@ export class BroadcastsComponent implements OnInit {
     });
   }
 
+  dismissAlert(): void {
+    this.showNewAlert = false;
+  }
+
   viewBroadcast(broadcast: Broadcast): void {
     this.selectedBroadcast = broadcast;
     // Mark as read on backend
     this.broadcastService.getBroadcast(broadcast._id).subscribe({
       next: () => {
         broadcast.isRead = true;
+        this.broadcastService.refreshUnreadCount();
       }
     });
   }
@@ -73,5 +88,11 @@ export class BroadcastsComponent implements OnInit {
     const days = Math.floor(hrs / 24);
     if (days < 7) return `${days}d ago`;
     return new Date(dateStr).toLocaleDateString();
+  }
+
+  getImageUrl(imagePath: string): string {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('http')) return imagePath;
+    return `${environment.baseUrl}${imagePath}`;
   }
 }

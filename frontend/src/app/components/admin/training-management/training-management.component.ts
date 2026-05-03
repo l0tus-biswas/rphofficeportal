@@ -23,6 +23,8 @@ export class TrainingManagementComponent implements OnInit {
   selectedMaterial: any = null;
   selectedPdfFile: File | null = null;
   pdfUploading = false;
+  selectedMaterialThumbnailFile: File | null = null;
+  materialThumbnailPreview: string | null = null;
   
   typeFilter = 'all';
   searchTerm = '';
@@ -441,6 +443,8 @@ export class TrainingManagementComponent implements OnInit {
   openCreateModal(): void {
     this.trainingForm.reset({ type: 'video', category: 'General', folder: '' });
     this.selectedMaterial = null;
+    this.selectedMaterialThumbnailFile = null;
+    this.materialThumbnailPreview = null;
     this.showCreateModal = true;
   }
 
@@ -450,6 +454,8 @@ export class TrainingManagementComponent implements OnInit {
       ...material,
       folder: material.folder?._id || material.folder || ''
     });
+    this.selectedMaterialThumbnailFile = null;
+    this.materialThumbnailPreview = material.thumbnail ? this.getThumbnailUrl(material.thumbnail) : null;
     this.showEditModal = true;
   }
 
@@ -458,6 +464,8 @@ export class TrainingManagementComponent implements OnInit {
     this.showEditModal = false;
     this.selectedMaterial = null;
     this.selectedPdfFile = null;
+    this.selectedMaterialThumbnailFile = null;
+    this.materialThumbnailPreview = null;
     this.trainingForm.reset();
   }
 
@@ -499,6 +507,56 @@ export class TrainingManagementComponent implements OnInit {
     });
   }
 
+  // ========== MATERIAL THUMBNAIL ==========
+
+  onMaterialThumbnailSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (!file.type.startsWith('image/')) {
+        this.error = 'Only image files are allowed.';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        this.error = 'Image must be under 5MB.';
+        return;
+      }
+      this.selectedMaterialThumbnailFile = file;
+      const reader = new FileReader();
+      reader.onload = () => this.materialThumbnailPreview = reader.result as string;
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeMaterialThumbnail(material: any): void {
+    if (!confirm('Remove the thumbnail image from this material?')) return;
+    this.trainingService.removeMaterialThumbnail(material._id).subscribe({
+      next: () => {
+        this.success = 'Thumbnail removed.';
+        this.materialThumbnailPreview = null;
+        this.loadMaterials();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: () => {
+        this.error = 'Failed to remove thumbnail.';
+      }
+    });
+  }
+
+  private uploadMaterialThumbnailIfSelected(materialId: string, callback: () => void): void {
+    if (!this.selectedMaterialThumbnailFile) {
+      callback();
+      return;
+    }
+    this.trainingService.uploadMaterialThumbnail(materialId, this.selectedMaterialThumbnailFile).subscribe({
+      next: () => callback(),
+      error: (err: any) => {
+        this.error = err.error?.message || 'Material saved but thumbnail upload failed';
+        callback();
+      }
+    });
+  }
+
   createMaterial(): void {
     if (this.trainingForm.invalid) {
       return;
@@ -516,11 +574,13 @@ export class TrainingManagementComponent implements OnInit {
       next: (response: any) => {
         const newId = response.material?._id || response._id;
         this.uploadPdfIfSelected(newId, () => {
-          this.success = 'Training material created successfully!';
-          this.loadMaterials();
-          this.closeModals();
-          this.loading = false;
-          setTimeout(() => this.success = '', 3000);
+          this.uploadMaterialThumbnailIfSelected(newId, () => {
+            this.success = 'Training material created successfully!';
+            this.loadMaterials();
+            this.closeModals();
+            this.loading = false;
+            setTimeout(() => this.success = '', 3000);
+          });
         });
       },
       error: (error) => {
@@ -541,11 +601,13 @@ export class TrainingManagementComponent implements OnInit {
     this.trainingService.updateMaterial(this.selectedMaterial._id, updateData).subscribe({
       next: () => {
         this.uploadPdfIfSelected(this.selectedMaterial._id, () => {
-          this.success = 'Training material updated successfully!';
-          this.loadMaterials();
-          this.closeModals();
-          this.loading = false;
-          setTimeout(() => this.success = '', 3000);
+          this.uploadMaterialThumbnailIfSelected(this.selectedMaterial._id, () => {
+            this.success = 'Training material updated successfully!';
+            this.loadMaterials();
+            this.closeModals();
+            this.loading = false;
+            setTimeout(() => this.success = '', 3000);
+          });
         });
       },
       error: (error) => {
@@ -701,5 +763,18 @@ export class TrainingManagementComponent implements OnInit {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return `${environment.baseUrl}${path}`;
+  }
+
+  /** Returns the best thumbnail URL for a material: uploaded thumbnail > YouTube auto-thumbnail > null */
+  getMaterialThumbnail(material: any): string | null {
+    if (material.thumbnail) {
+      return this.getFileUrl(material.thumbnail);
+    }
+    const url: string = material.url || '';
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+    if (ytMatch) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/mqdefault.jpg`;
+    }
+    return null;
   }
 }

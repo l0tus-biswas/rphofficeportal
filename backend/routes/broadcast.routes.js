@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs').promises;
+const multer = require('multer');
 const Broadcast = require('../models/Broadcast');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -15,6 +18,34 @@ const EMAIL_BATCH_DELAY_MS = 61000; // 61s — just over the 60s rate-limit wind
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// Configure multer for broadcast image uploads
+const imageStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads/broadcast-images');
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `broadcast-img-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadBroadcastImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(jpeg|jpg|png|gif|webp)$/.test(file.mimetype)) {
+      return cb(null, true);
+    }
+    cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed'));
+  }
+});
 
 // All routes require authentication
 router.use(protect);
@@ -69,6 +100,36 @@ router.get('/', async (req, res) => {
       broadcasts: enriched,
       pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/broadcasts/unread-count
+// @desc    Get count of unread broadcasts for current user
+// @access  Private
+router.get('/unread-count', async (req, res) => {
+  try {
+    const query = { isActive: true };
+    query.$or = [
+      { targetRoles: { $size: 0 } },
+      { targetRoles: req.user.role }
+    ];
+
+    const broadcasts = await Broadcast.find(query).select('_id').lean();
+    const broadcastIds = broadcasts.map(b => b._id.toString());
+
+    const readNotifications = await Notification.find({
+      userId: req.user._id,
+      type: 'admin_broadcast',
+      'data.broadcastId': { $in: broadcastIds },
+      isRead: true
+    }).select('data.broadcastId').lean();
+
+    const readSet = new Set(readNotifications.map(n => n.data?.broadcastId?.toString()));
+    const unreadCount = broadcastIds.filter(id => !readSet.has(id)).length;
+
+    sendResponse(res, 200, { unreadCount });
   } catch (error) {
     errorResponse(res, error);
   }
@@ -211,7 +272,7 @@ router.post('/', authorize('admin'), async (req, res) => {
             toEmail: user.email,
             title: broadcast.title,
             message: broadcast.message,
-            link: broadcast.link || null,
+            link: broadcast.link || '/broadcasts',
             actionLabel: 'View Announcement'
           });
           emailCount++;
@@ -230,7 +291,7 @@ router.post('/', authorize('admin'), async (req, res) => {
                 toEmail: user.email,
                 title: broadcast.title,
                 message: broadcast.message,
-                link: broadcast.link || null,
+                link: broadcast.link || '/broadcasts',
                 actionLabel: 'View Announcement'
               });
               emailCount++;
@@ -297,6 +358,52 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
 
     await Broadcast.deleteOne({ _id: broadcast._id });
     sendResponse(res, 200, { message: 'Broadcast deleted' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/broadcasts/:id/image
+// @desc    Upload or replace broadcast image
+// @access  Admin only
+router.post('/:id/image', authorize('admin'), uploadBroadcastImage.single('image'), async (req, res) => {
+  try {
+    const broadcast = await Broadcast.findById(req.params.id);
+    if (!broadcast) {
+      return sendResponse(res, 404, { message: 'Broadcast not found' });
+    }
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No image file provided' });
+    }
+    // Delete old image if exists
+    if (broadcast.image) {
+      const oldPath = path.join(__dirname, '..', broadcast.image);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore */ }
+    }
+    broadcast.image = `/uploads/broadcast-images/${req.file.filename}`;
+    await broadcast.save();
+    sendResponse(res, 200, { message: 'Image uploaded', broadcast });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/broadcasts/:id/image
+// @desc    Remove broadcast image
+// @access  Admin only
+router.delete('/:id/image', authorize('admin'), async (req, res) => {
+  try {
+    const broadcast = await Broadcast.findById(req.params.id);
+    if (!broadcast) {
+      return sendResponse(res, 404, { message: 'Broadcast not found' });
+    }
+    if (broadcast.image) {
+      const oldPath = path.join(__dirname, '..', broadcast.image);
+      try { await fs.unlink(oldPath); } catch (e) { /* ignore */ }
+      broadcast.image = null;
+      await broadcast.save();
+    }
+    sendResponse(res, 200, { message: 'Image removed', broadcast });
   } catch (error) {
     errorResponse(res, error);
   }
@@ -374,7 +481,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
             toEmail: user.email,
             title: broadcast.title,
             message: broadcast.message,
-            link: broadcast.link || null,
+            link: broadcast.link || '/broadcasts',
             actionLabel: 'View Announcement'
           });
           emailCount++;
@@ -392,7 +499,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
                 toEmail: user.email,
                 title: broadcast.title,
                 message: broadcast.message,
-                link: broadcast.link || null,
+                link: broadcast.link || '/broadcasts',
                 actionLabel: 'View Announcement'
               });
               emailCount++;

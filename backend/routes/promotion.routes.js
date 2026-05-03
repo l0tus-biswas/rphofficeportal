@@ -23,35 +23,101 @@ async function getSortedLevels() {
 // ============================================================================
 // Helper: compute premium for a set of agent IDs since a date or rolling window
 // If sinceDate is provided, use it; otherwise fall back to rolling windowDays
+// Supports per-agent transfer filtering via transferDates map
 // ============================================================================
-async function sumQualifyingPremium(agentIds, windowDays, sinceDate) {
-  const cutoff = sinceDate ? new Date(sinceDate) : new Date();
+async function sumQualifyingPremium(agentIds, windowDays, sinceDate, transferDates) {
+  if (!agentIds || agentIds.length === 0) return 0;
+
+  const baseCutoff = sinceDate ? new Date(sinceDate) : new Date();
   if (!sinceDate) {
-    cutoff.setDate(cutoff.getDate() - windowDays);
+    baseCutoff.setDate(baseCutoff.getDate() - windowDays);
   }
 
-  const result = await ProductionSubmission.aggregate([
-    {
-      $match: {
-        agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
-        status: 'In Force',
-        productCategory: { $in: QUALIFYING_CATEGORIES },
-        submissionDate: { $gte: cutoff }
-      }
-    },
-    { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
-  ]);
-  return result.length > 0 ? result[0].total : 0;
+  // If no transfer dates, use single aggregation with global cutoff
+  if (!transferDates || transferDates.size === 0) {
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          submissionDate: { $gte: baseCutoff },
+          deletedAt: null
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+    ]);
+    return result.length > 0 ? result[0].total : 0;
+  }
+
+  // With transfer dates: separate agents into transferred (with later cutoff) and non-transferred
+  const nonTransferredIds = [];
+  const transferredGroups = []; // { ids: [], cutoff: Date }
+
+  for (const id of agentIds) {
+    const idStr = id.toString();
+    const transferDate = transferDates.get(idStr);
+    if (transferDate && new Date(transferDate) > baseCutoff) {
+      // This agent was transferred after baseCutoff; only count production since transfer
+      transferredGroups.push({ id: new mongoose.Types.ObjectId(id), cutoff: new Date(transferDate) });
+    } else {
+      nonTransferredIds.push(new mongoose.Types.ObjectId(id));
+    }
+  }
+
+  let total = 0;
+
+  // Sum non-transferred agents with global cutoff
+  if (nonTransferredIds.length > 0) {
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: { $in: nonTransferredIds },
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          submissionDate: { $gte: baseCutoff },
+          deletedAt: null
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+    ]);
+    if (result.length > 0) total += result[0].total;
+  }
+
+  // Sum transferred agents with their individual cutoffs
+  if (transferredGroups.length > 0) {
+    const orConditions = transferredGroups.map(g => ({
+      agent: g.id,
+      submissionDate: { $gte: g.cutoff }
+    }));
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          $or: orConditions,
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          deletedAt: null
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+    ]);
+    if (result.length > 0) total += result[0].total;
+  }
+
+  return total;
 }
 
 // ============================================================================
 // Helper: count distinct producing agents since a date or rolling window
 // Only counts LICENSED agents (LicensingProgress.isLicensed === true)
+// Supports per-agent transfer filtering via transferDates map
 // ============================================================================
-async function countProducingAgents(agentIds, windowDays, sinceDate) {
-  const cutoff = sinceDate ? new Date(sinceDate) : new Date();
+async function countProducingAgents(agentIds, windowDays, sinceDate, transferDates) {
+  if (!agentIds || agentIds.length === 0) return 0;
+
+  const baseCutoff = sinceDate ? new Date(sinceDate) : new Date();
   if (!sinceDate) {
-    cutoff.setDate(cutoff.getDate() - windowDays);
+    baseCutoff.setDate(baseCutoff.getDate() - windowDays);
   }
 
   // Get licensed agent IDs first
@@ -64,13 +130,60 @@ async function countProducingAgents(agentIds, windowDays, sinceDate) {
 
   if (licensedIds.length === 0) return 0;
 
+  // If no transfer dates, use single aggregation
+  if (!transferDates || transferDates.size === 0) {
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: { $in: licensedIds },
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          submissionDate: { $gte: baseCutoff },
+          deletedAt: null
+        }
+      },
+      { $group: { _id: '$agent' } }
+    ]);
+    return result.length;
+  }
+
+  // With transfer dates: build per-agent cutoff conditions
+  const nonTransferredIds = [];
+  const transferredConditions = [];
+
+  for (const id of licensedIds) {
+    const idStr = id.toString();
+    const transferDate = transferDates.get(idStr);
+    if (transferDate && new Date(transferDate) > baseCutoff) {
+      transferredConditions.push({
+        agent: id,
+        submissionDate: { $gte: new Date(transferDate) }
+      });
+    } else {
+      nonTransferredIds.push(id);
+    }
+  }
+
+  const matchConditions = [];
+  if (nonTransferredIds.length > 0) {
+    matchConditions.push({
+      agent: { $in: nonTransferredIds },
+      submissionDate: { $gte: baseCutoff }
+    });
+  }
+  if (transferredConditions.length > 0) {
+    matchConditions.push(...transferredConditions);
+  }
+
+  if (matchConditions.length === 0) return 0;
+
   const result = await ProductionSubmission.aggregate([
     {
       $match: {
-        agent: { $in: licensedIds },
+        $or: matchConditions,
         status: 'In Force',
         productCategory: { $in: QUALIFYING_CATEGORIES },
-        submissionDate: { $gte: cutoff }
+        deletedAt: null
       }
     },
     { $group: { _id: '$agent' } }
@@ -132,6 +245,107 @@ function checkBuilderLegCap(legPremiums, totalPremium) {
 }
 
 // ============================================================================
+// Helper: build a Map of downlineId → transferredAt for agents that were
+// transferred into the current tree. Used to ensure only post-transfer
+// production counts toward the new upline's builder track.
+// ============================================================================
+async function getTransferDatesForDownline(downlineIds) {
+  if (!downlineIds || downlineIds.length === 0) return new Map();
+
+  const transferred = await User.find({
+    _id: { $in: downlineIds },
+    transferredAt: { $ne: null }
+  }).select('_id transferredAt').lean();
+
+  const map = new Map();
+  for (const agent of transferred) {
+    map.set(agent._id.toString(), agent.transferredAt);
+  }
+  return map;
+}
+
+// ============================================================================
+// Helper: walk up the referredBy chain to get all upline ancestor IDs
+// Used to propagate promotion checks up the hierarchy
+// ============================================================================
+async function getUplineChainIds(userId, maxDepth = 10) {
+  const chain = [];
+  let currentId = userId;
+  let depth = 0;
+  while (depth < maxDepth) {
+    const u = await User.findById(currentId).select('referredBy').lean();
+    if (!u || !u.referredBy) break;
+    chain.push(u.referredBy);
+    currentId = u.referredBy;
+    depth++;
+  }
+  return chain;
+}
+
+// ============================================================================
+// Helper: run a promotion eligibility check for a single agent and notify admins
+// Called for both the submitting agent AND all upline ancestors
+// ============================================================================
+async function checkAndNotifyPromotion(agentId) {
+  try {
+    const agent = await User.findById(agentId).select('level name promotedAt').lean();
+    if (!agent) return;
+
+    const levels = await PromotionLevel.find({ isActive: true }).sort({ rank: 1 }).lean();
+    if (!levels.length) return;
+
+    const userLevelLower = (agent.level || '').toLowerCase();
+    const currentIdx = levels.findIndex(l => l.name.toLowerCase() === userLevelLower);
+    if (currentIdx < 0 || currentIdx >= levels.length - 1) return;
+
+    const next = levels[currentIdx + 1];
+    const promotedAt = agent.promotedAt || null;
+
+    // Check Producer track (personal production)
+    const producerPremium = await sumQualifyingPremium([agentId], next.producerWindowDays, promotedAt);
+    const producerMet = producerPremium >= next.producerPremiumThreshold;
+
+    // Check Builder track (downline production)
+    const downlineIds = await getDownlineIds(agentId);
+    if (downlineIds.length > 0 || producerMet) {
+      const transferDates = await getTransferDatesForDownline(downlineIds);
+      const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+      const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+      const builderMet = builderPremium >= next.builderPremiumThreshold &&
+                         activeAgents >= next.builderAgentCountThreshold;
+
+      if (producerMet || builderMet) {
+        // Deduplicate: skip if already notified in past 7 days
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const recentNotif = await Notification.findOne({
+          type: 'promotion_eligible',
+          'data.agentId': String(agentId),
+          'data.nextLevel': next.name,
+          createdAt: { $gte: sevenDaysAgo }
+        }).lean();
+
+        if (!recentNotif) {
+          const admins = await User.find({ role: 'admin' }).select('_id').lean();
+          const track = producerMet ? 'producer' : 'builder';
+          for (const admin of admins) {
+            await Notification.createNotification({
+              userId: admin._id,
+              type: 'promotion_eligible',
+              title: 'Agent Promotion Eligible',
+              message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
+              data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
+              link: '/admin/user-management'
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Promotion Check] Error for agent', agentId, ':', err.message);
+  }
+}
+
+// ============================================================================
 // @route   GET /api/promotion/tracker
 // @desc    Dashboard promotion tracker — Producer + Builder tracks
 // @access  Authenticated (any agent or admin)
@@ -171,13 +385,15 @@ router.get('/tracker', authenticate, async (req, res) => {
     // ---- Builder Track ----
     const downlineIds = await getDownlineIds(userId);
     const builderWindow = windowParam || (next ? next.builderWindowDays : current.builderWindowDays);
-    const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow, promotedAt);
+    // Get transfer dates for downline agents to ensure only post-transfer production counts
+    const transferDates = await getTransferDatesForDownline(downlineIds);
+    const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow, promotedAt, transferDates);
     const builderTarget = next ? next.builderPremiumThreshold : current.builderPremiumThreshold;
     const builderProgress = builderTarget > 0
       ? Math.min(Math.round((builderPremium / builderTarget) * 100), 100)
       : 100;
 
-    const activeAgents = await countProducingAgents(downlineIds, builderWindow, promotedAt);
+    const activeAgents = await countProducingAgents(downlineIds, builderWindow, promotedAt, transferDates);
     const targetAgentCount = next ? next.builderAgentCountThreshold : current.builderAgentCountThreshold;
     const agentProgress = targetAgentCount > 0
       ? Math.min(Math.round((activeAgents / targetAgentCount) * 100), 100)
@@ -407,8 +623,9 @@ router.post('/check-advancement', authenticate, async (req, res) => {
 
     // Check Builder track
     const downlineIds = await getDownlineIds(userId);
-    const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt);
-    const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt);
+    const transferDates = await getTransferDatesForDownline(downlineIds);
+    const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+    const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt, transferDates);
     const builderMet = builderPremium >= next.builderPremiumThreshold &&
                        activeAgents >= next.builderAgentCountThreshold;
 
@@ -448,3 +665,5 @@ router.post('/check-advancement', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.checkAndNotifyPromotion = checkAndNotifyPromotion;
+module.exports.getUplineChainIds = getUplineChainIds;

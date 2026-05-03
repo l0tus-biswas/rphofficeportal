@@ -76,16 +76,24 @@
           <input type="date" class="form-control" [(ngModel)]="uploadPayPeriod" name="uploadPayPeriod">
         </div>
 
-        <!-- 6.5: File picker with remove button -->
+        <!-- 6.5: File picker with remove button — supports multiple files -->
         <div class="col-md-6">
-          <label class="form-label">Statement PDF *</label>
-          <div class="d-flex align-items-center gap-2">
-            <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv" name="statementFile">
-            <button *ngIf="uploadFile" type="button" class="btn btn-outline-danger btn-sm" (click)="removeFile()" title="Remove file">
-              <i class="bi bi-x-lg"></i>
-            </button>
+          <label class="form-label">Statement File(s) *</label>
+          <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv" name="statementFile" multiple>
+          <div *ngIf="uploadFiles.length > 0" class="mt-1">
+            <small *ngFor="let f of uploadFiles; let i = index" class="d-flex align-items-center gap-1 text-muted">
+              <i class="bi bi-file-earmark"></i> {{ f.name }} ({{ (f.size / 1024).toFixed(1) }} KB)
+              <button type="button" class="btn btn-link btn-sm text-danger p-0" (click)="removeFile(i)" title="Remove">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </small>
           </div>
-          <small *ngIf="uploadFile" class="text-muted">{{ uploadFile.name }} ({{ (uploadFile.size / 1024).toFixed(1) }} KB)</small>
+        </div>
+
+        <!-- Notes during upload -->
+        <div class="col-md-6">
+          <label class="form-label">Notes <small class="text-muted">(optional)</small></label>
+          <input type="text" class="form-control" [(ngModel)]="uploadNotes" name="uploadNotes" placeholder="Add a note...">
         </div>
       </div>
       <div class="mt-3 d-flex gap-2">
@@ -162,6 +170,9 @@
                   <button class="btn btn-outline-primary btn-sm" (click)="downloadStatement(stmt)" title="Download">
                     <i class="bi bi-download"></i>
                   </button>
+                  <button class="btn btn-outline-warning btn-sm" (click)="openEdit(stmt)" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </button>
                   <button class="btn btn-outline-danger btn-sm" (click)="deleteStatement(stmt._id)" title="Delete">
                     <i class="bi bi-trash"></i>
                   </button>
@@ -214,6 +225,92 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" (click)="closeNotes()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Statement Modal -->
+<div class="modal d-block" tabindex="-1" *ngIf="showEditModal" style="background: rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Commission Statement</h5>
+        <button type="button" class="btn-close" (click)="closeEdit()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <!-- Agent search -->
+          <div class="col-md-6">
+            <label class="form-label">Agent</label>
+            <div class="position-relative">
+              <input type="text" class="form-control" placeholder="Search agent by name..."
+                     [ngModel]="editAgentSearchQuery" (ngModelChange)="onEditAgentSearch($event)" name="editAgentSearch"
+                     (focus)="editAgentSearchQuery.length >= 2 && (showEditAgentDropdown = true)"
+                     (blur)="showEditAgentDropdown = false" autocomplete="off">
+              <button *ngIf="editAgentId" class="btn btn-sm btn-link position-absolute top-50 end-0 translate-middle-y text-danger"
+                      (click)="clearEditAgent()" type="button">
+                <i class="bi bi-x-circle"></i>
+              </button>
+              <div class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; max-height: 200px; overflow-y: auto;"
+                   *ngIf="showEditAgentDropdown && editFilteredAgents.length > 0">
+                <button *ngFor="let agent of editFilteredAgents" type="button"
+                        class="list-group-item list-group-item-action py-1 small"
+                        (mousedown)="selectEditAgent(agent)">
+                  <strong>{{ agent.name }}</strong> <span class="text-muted">— {{ agent.email }}</span>
+                </button>
+              </div>
+            </div>
+            <small *ngIf="editSelectedAgentName" class="text-success"><i class="bi bi-check-circle me-1"></i>{{ editSelectedAgentName }}</small>
+          </div>
+
+          <!-- Pay period -->
+          <div class="col-md-6">
+            <label class="form-label">Pay Period (Week Ending)</label>
+            <input type="date" class="form-control" [(ngModel)]="editPayPeriod" name="editPayPeriod">
+          </div>
+
+          <!-- Carriers -->
+          <div class="col-md-6">
+            <label class="form-label">Carriers</label>
+            <div class="d-flex gap-1 flex-wrap mb-1" *ngIf="editCarriers.length > 0">
+              <span *ngFor="let c of editCarriers; let i = index" class="badge bg-primary d-flex align-items-center gap-1">
+                {{ c }}
+                <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.6rem;" (click)="removeEditCarrier(i)"></button>
+              </span>
+            </div>
+            <div class="input-group">
+              <input type="text" class="form-control" [(ngModel)]="editCarrierInput" name="editCarrierInput"
+                     placeholder="Type carrier &amp; press Enter" (keydown)="addEditCarrierOnKey($event)">
+              <button class="btn btn-outline-primary" type="button" (click)="addEditCarrier()">
+                <i class="bi bi-plus"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Replace file -->
+          <div class="col-md-6">
+            <label class="form-label">Replace File <small class="text-muted">(optional)</small></label>
+            <input type="file" class="form-control" (change)="onEditFileChange($event)" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv">
+            <small class="text-muted" *ngIf="editStatement?.originalFileName">
+              Current: {{ editStatement?.originalFileName }}
+            </small>
+          </div>
+
+          <!-- Add notes -->
+          <div class="col-12">
+            <label class="form-label">Add Note <small class="text-muted">(optional)</small></label>
+            <input type="text" class="form-control" [(ngModel)]="editNotes" name="editNotes" placeholder="Add a note to this statement...">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeEdit()">Cancel</button>
+        <button class="btn btn-primary" (click)="saveEdit()" [disabled]="saving">
+          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+          <i *ngIf="!saving" class="bi bi-check-lg me-1"></i>
+          {{ saving ? 'Saving...' : 'Save Changes' }}
+        </button>
       </div>
     </div>
   </div>

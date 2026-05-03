@@ -87,9 +87,12 @@ export class LicensingService {
   }
 
   // Upload document for checklist item
-  uploadDocument(agentId: string, checklistItem: string, file: File): Observable<any> {
+  uploadDocument(agentId: string, checklistItem: string, file: File, notes?: string): Observable<any> {
     const formData = new FormData();
     formData.append('document', file);
+    if (notes) {
+      formData.append('notes', notes);
+    }
     
     return this.http.post(`${this.apiUrl}/${agentId}/upload/${checklistItem}`, formData);
   }

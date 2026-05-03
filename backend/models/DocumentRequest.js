@@ -47,6 +47,7 @@ const documentRequestSchema = new mongoose.Schema({
     },
     filePath: String,
     originalFileName: String,
+    notes: { type: String, trim: true, default: '' },
     submittedAt: Date,
     reviewedBy: {
       type: mongoose.Schema.Types.ObjectId,

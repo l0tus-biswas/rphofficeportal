@@ -147,7 +147,7 @@ router.get('/documents/:agentId', authenticate, async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/documents', authenticate, docUpload.single('docFile'), async (req, res) => {
   try {
-    const { docTypeId, agentId, externalLink } = req.body;
+    const { docTypeId, agentId, externalLink, notes } = req.body;
     if (!docTypeId) return res.status(400).json({ message: 'docTypeId is required' });
 
     const docType = await OnboardingDocType.findById(docTypeId);
@@ -169,7 +169,8 @@ router.post('/documents', authenticate, docUpload.single('docFile'), async (req,
       agent: targetAgentId,
       docType: docTypeId,
       uploadedBy: req.user._id,
-      uploadedAt: new Date()
+      uploadedAt: new Date(),
+      notes: notes || ''
     };
 
     if (req.file) {

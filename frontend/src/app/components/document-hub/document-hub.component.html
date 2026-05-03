@@ -73,7 +73,9 @@
           <div class="card-body d-flex align-items-center gap-3 py-3">
             <i class="bi bi-folder-fill fs-3 text-warning"></i>
             <div class="overflow-hidden">
-              <div class="fw-semibold text-truncate">{{ folder.name }}</div>
+              <div class="fw-semibold text-truncate">{{ folder.name }}
+                <span *ngIf="folder.visibility === 'admin'" class="badge bg-secondary ms-1" style="font-size: 0.65em;">Admin Only</span>
+              </div>
               <small *ngIf="folder.description" class="text-muted text-truncate d-block">{{ folder.description }}</small>
             </div>
           </div>
@@ -135,9 +137,12 @@
               <small *ngIf="file.uploadedBy" class="d-block text-muted">by {{ file.uploadedBy.name }}</small>
             </td>
             <td *ngIf="isAdmin">
-              <span class="badge" [class]="file.visibility === 'admin' ? 'bg-secondary' : 'bg-success'">
-                {{ file.visibility === 'admin' ? 'Admin Only' : 'Everyone' }}
+              <span class="badge" [class]="file.visibility === 'admin' ? 'bg-secondary' : file.visibility === 'restricted' ? 'bg-info' : 'bg-success'">
+                {{ file.visibility === 'admin' ? 'Admin Only' : file.visibility === 'restricted' ? 'Restricted' : 'Everyone' }}
               </span>
+              <small *ngIf="file.visibility === 'restricted' && file.restrictedTo?.length" class="d-block text-muted mt-1">
+                {{ file.restrictedTo!.length }} agent(s)
+              </small>
             </td>
             <td>
               <button class="btn btn-sm btn-outline-primary me-1" (click)="downloadFile(file)" title="Download">
@@ -239,13 +244,17 @@
                       <i class="bi bi-upload me-1"></i>{{ resp.status === 'rejected' ? 'Re-submit' : 'Upload Document' }}
                     </button>
                   </div>
-                  <div *ngIf="respondingRequestId === req._id" class="d-flex gap-2 align-items-center">
-                    <input type="file" class="form-control form-control-sm" style="max-width: 300px;"
-                           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" (change)="onResponseFileSelected($event)">
-                    <button class="btn btn-sm btn-primary" [disabled]="!responseFile" (click)="submitResponse(req._id!)">
-                      Submit
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" (click)="respondingRequestId = ''">Cancel</button>
+                  <div *ngIf="respondingRequestId === req._id" class="mt-2">
+                    <div class="d-flex gap-2 align-items-center mb-2">
+                      <input type="file" class="form-control form-control-sm" style="max-width: 300px;"
+                             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" (change)="onResponseFileSelected($event)">
+                      <button class="btn btn-sm btn-primary" [disabled]="!responseFile" (click)="submitResponse(req._id!)">
+                        Submit
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary" (click)="respondingRequestId = ''">Cancel</button>
+                    </div>
+                    <input type="text" class="form-control form-control-sm" style="max-width: 400px;"
+                           [(ngModel)]="responseNotes" placeholder="Notes (optional)">
                   </div>
                 </div>
               </div>
@@ -280,6 +289,14 @@
             <option [ngValue]="null">Root (top level)</option>
             <option *ngFor="let f of folderPathOptions" [ngValue]="f._id">{{ f.path }}</option>
           </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Visibility</label>
+          <select class="form-select" [(ngModel)]="editingFolder.visibility">
+            <option value="all">Everyone (agents + admin)</option>
+            <option value="admin">Admin Only</option>
+          </select>
+          <small class="text-muted">Admin-only folders are hidden from agents.</small>
         </div>
       </div>
       <div class="modal-footer">
@@ -318,11 +335,29 @@
           <textarea class="form-control" rows="2" [(ngModel)]="uploadDescription"></textarea>
         </div>
         <div class="mb-3">
+          <label class="form-label">Notes <small class="text-muted">(optional)</small></label>
+          <input type="text" class="form-control" [(ngModel)]="uploadNotes" placeholder="Add a note...">
+        </div>
+        <div class="mb-3">
           <label class="form-label">Visibility</label>
           <select class="form-select" [(ngModel)]="uploadVisibility">
             <option value="all">Everyone (agents + admin)</option>
             <option value="admin">Admin Only</option>
+            <option value="restricted">Specific Agent(s) Only</option>
           </select>
+        </div>
+        <div *ngIf="uploadVisibility === 'restricted'" class="mb-3">
+          <label class="form-label">Restrict to Agents</label>
+          <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+            <div *ngFor="let agent of agents" class="form-check">
+              <input class="form-check-input" type="checkbox" [value]="agent._id"
+                     [checked]="uploadRestrictedTo.includes(agent._id!)"
+                     (change)="$event.target && uploadRestrictedTo.includes(agent._id!) ? uploadRestrictedTo.splice(uploadRestrictedTo.indexOf(agent._id!), 1) : uploadRestrictedTo.push(agent._id!)">
+              <label class="form-check-label">{{ agent.name }}</label>
+            </div>
+            <div *ngIf="agents.length === 0" class="text-muted small">No agents found</div>
+          </div>
+          <small class="text-muted">Only selected agents (+ admin) can see this file.</small>
         </div>
         <div *ngIf="currentFolderId" class="mb-3">
           <small class="text-muted"><i class="bi bi-folder me-1"></i>Uploading to: <strong>{{ breadcrumb.length > 0 ? breadcrumb[breadcrumb.length - 1].name : 'Root' }}</strong></small>
@@ -369,7 +404,21 @@
           <select class="form-select" [(ngModel)]="editingFile.visibility">
             <option value="all">Everyone</option>
             <option value="admin">Admin Only</option>
+            <option value="restricted">Specific Agent(s) Only</option>
           </select>
+        </div>
+        <div *ngIf="editingFile.visibility === 'restricted'" class="mb-3">
+          <label class="form-label">Restrict to Agents</label>
+          <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+            <div *ngFor="let agent of agents" class="form-check">
+              <input class="form-check-input" type="checkbox" [value]="agent._id"
+                     [checked]="editRestrictedTo.includes(agent._id!)"
+                     (change)="$event.target && editRestrictedTo.includes(agent._id!) ? editRestrictedTo.splice(editRestrictedTo.indexOf(agent._id!), 1) : editRestrictedTo.push(agent._id!)">
+              <label class="form-check-label">{{ agent.name }}</label>
+            </div>
+            <div *ngIf="agents.length === 0" class="text-muted small">No agents found</div>
+          </div>
+          <small class="text-muted">Only selected agents (+ admin) can see and download this file.</small>
         </div>
       </div>
       <div class="modal-footer">

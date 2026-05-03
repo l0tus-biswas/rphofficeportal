@@ -212,4 +212,19 @@ export class TrainingComponent implements OnInit {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return `${environment.baseUrl}${path}`;
   }
+
+  /** Returns the best thumbnail URL for a material: uploaded thumbnail > YouTube auto-thumbnail > null */
+  getMaterialThumbnail(material: any): string | null {
+    // If a manually uploaded thumbnail exists, use it
+    if (material.thumbnail) {
+      return this.getFileUrl(material.thumbnail);
+    }
+    // Auto-generate YouTube thumbnail from URL
+    const url: string = material.url || '';
+    const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+    if (ytMatch) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/mqdefault.jpg`;
+    }
+    return null;
+  }
 }

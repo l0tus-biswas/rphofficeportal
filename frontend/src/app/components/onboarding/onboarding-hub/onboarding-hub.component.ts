@@ -22,6 +22,7 @@ export class OnboardingHubComponent implements OnInit {
   uploadingDocTypeId = '';
   deletingDocId = '';
   selectedFiles: { [docTypeId: string]: File } = {};
+  uploadNotes: { [docTypeId: string]: string } = {};
 
   currentUser: any;
 
@@ -92,12 +93,16 @@ export class OnboardingHubComponent implements OnInit {
     const formData = new FormData();
     formData.append('docTypeId', docType._id);
     formData.append('docFile', file);
+    if (this.uploadNotes[docType._id]) {
+      formData.append('notes', this.uploadNotes[docType._id]);
+    }
 
     this.onboardingHubService.uploadDocument(formData).subscribe({
       next: () => {
         this.success = `${docType.name} uploaded successfully`;
         this.uploadingDocTypeId = '';
         delete this.selectedFiles[docType._id!];
+        delete this.uploadNotes[docType._id!];
         this.loadData();
         setTimeout(() => this.success = '', 4000);
       },

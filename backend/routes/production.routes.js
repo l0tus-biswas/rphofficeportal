@@ -122,7 +122,7 @@ const upload = multer({
 // @access  Private
 router.get('/', authenticate, async (req, res) => {
   try {
-    let query = {};
+    let query = { deletedAt: null };
     let isTeamScope = false;
 
     // If not admin, only show own submissions (or team if scope=team)
@@ -145,7 +145,7 @@ router.get('/', authenticate, async (req, res) => {
     if (req.query.productSold) {
       query.productSold = req.query.productSold;
     }
-    if (req.query.carrier) {
+    if (req.query.carrier && mongoose.Types.ObjectId.isValid(req.query.carrier)) {
       query.carrier = new mongoose.Types.ObjectId(req.query.carrier);
     }
     if (req.query.status) {
@@ -159,7 +159,9 @@ router.get('/', authenticate, async (req, res) => {
         query.submissionDate.$gte = new Date(req.query.startDate);
       }
       if (req.query.endDate) {
-        query.submissionDate.$lte = new Date(req.query.endDate);
+        // Set to end of day (23:59:59.999 UTC) to include all records from that date
+        const endDate = new Date(req.query.endDate + 'T23:59:59.999Z');
+        query.submissionDate.$lte = endDate;
       }
     }
 
@@ -238,7 +240,8 @@ router.get('/team-report', authenticate, async (req, res) => {
       ProductionSubmission.find({
         agent: { $in: agentIds },
         status: 'In Force',
-        submissionDate: { $gte: since }
+        submissionDate: { $gte: since },
+        deletedAt: null
       }).select('premiumAmount agent'),
       User.countDocuments({
         referredBy: { $in: agentIds },
@@ -270,7 +273,7 @@ router.get('/team-report', authenticate, async (req, res) => {
 // @access  Private
 router.get('/export', authenticate, async (req, res) => {
   try {
-    let query = {};
+    let query = { deletedAt: null };
 
     // Agents only see their own data
     if (req.user.role !== 'admin') {
@@ -289,7 +292,9 @@ router.get('/export', authenticate, async (req, res) => {
     if (req.query.startDate || req.query.endDate) {
       query.submissionDate = {};
       if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate);
-      if (req.query.endDate) query.submissionDate.$lte = new Date(req.query.endDate);
+      if (req.query.endDate) {
+        query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+      }
     }
 
     const submissions = await ProductionSubmission.find(query)
@@ -342,13 +347,13 @@ router.get('/export', authenticate, async (req, res) => {
 // @access  Private
 router.get('/stats/summary', authenticate, async (req, res) => {
   try {
-    let matchQuery = {};
+    let matchQuery = { deletedAt: null };
     
     // If not admin, only show own stats
     if (req.user.role !== 'admin') {
       matchQuery.agent = req.user._id;
     } else if (req.query.agentId) {
-      matchQuery.agent = req.query.agentId;
+      matchQuery.agent = new mongoose.Types.ObjectId(req.query.agentId);
     }
     
     // Date range filter
@@ -358,7 +363,7 @@ router.get('/stats/summary', authenticate, async (req, res) => {
         matchQuery.submissionDate.$gte = new Date(req.query.startDate);
       }
       if (req.query.endDate) {
-        matchQuery.submissionDate.$lte = new Date(req.query.endDate);
+        matchQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
       }
     }
     
@@ -407,7 +412,7 @@ router.get('/ranking', authenticate, async (req, res) => {
     const windowDays = parseInt(req.query.window) || 0; // 0 = all time
     const limitCount = parseInt(req.query.limit) || 25;
 
-    const matchFilter = {};
+    const matchFilter = { deletedAt: null };
     if (windowDays > 0) {
       matchFilter.submissionDate = { $gte: new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000) };
     }
@@ -571,7 +576,7 @@ router.post('/', authenticate, async (req, res) => {
     } = req.body;
     
     // Validate required fields
-    if (!clientName || !productSold || !carrier || !premiumAmount) {
+    if (!clientName || !productSold || !carrier || (premiumAmount == null && premiumAmount !== 0)) {
       return res.status(400).json({ 
         message: 'Missing required fields: clientName, productSold, carrier, premiumAmount' 
       });
@@ -806,89 +811,20 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
         '/production'
       ).catch(() => {});
 
-      // Trigger promotion check for the agent (async, non-blocking)
+      // Trigger promotion check for the agent AND the entire upline chain (async, non-blocking)
+      const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
       (async () => {
         try {
-          const PromotionLevel = require('../models/PromotionLevel');
-          const LicensingProgress = require('../models/LicensingProgress');
-          const mongoose = require('mongoose');
+          // Check the submitting agent first
+          await checkAndNotifyPromotion(agentId);
 
-          const QUALIFYING_CATEGORIES = ['Life Insurance', 'Supplemental Insurance', 'Retirement / Annuities'];
-          const agent = await User.findById(agentId).select('level name promotedAt').lean();
-          if (!agent) return;
-
-          const levels = await PromotionLevel.find({ isActive: true }).sort({ rank: 1 }).lean();
-          if (!levels.length) return;
-
-          const userLevelLower = (agent.level || '').toLowerCase();
-          const currentIdx = levels.findIndex(l => l.name.toLowerCase() === userLevelLower);
-          if (currentIdx < 0 || currentIdx >= levels.length - 1) return;
-
-          const next = levels[currentIdx + 1];
-          const promotedAt = agent.promotedAt || null;
-          const cutoff = promotedAt ? new Date(promotedAt) : new Date();
-          if (!promotedAt) cutoff.setDate(cutoff.getDate() - (next.producerWindowDays || 365));
-
-          // Check producer track
-          const producerResult = await ProductionSubmission.aggregate([
-            { $match: { agent: new mongoose.Types.ObjectId(agentId), status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: cutoff } } },
-            { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
-          ]);
-          const producerPremium = producerResult.length > 0 ? producerResult[0].total : 0;
-          const producerMet = producerPremium >= next.producerPremiumThreshold;
-
-          // Check builder track
-          const downlineIds = await getDownlineIds(agentId);
-          const builderCutoff = promotedAt ? new Date(promotedAt) : new Date();
-          if (!promotedAt) builderCutoff.setDate(builderCutoff.getDate() - (next.builderWindowDays || 365));
-
-          const builderResult = await ProductionSubmission.aggregate([
-            { $match: { agent: { $in: downlineIds.map(id => new mongoose.Types.ObjectId(id)) }, status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: builderCutoff } } },
-            { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
-          ]);
-          const builderPremium = builderResult.length > 0 ? builderResult[0].total : 0;
-
-          // Count licensed producing agents
-          const licensedRecords = await LicensingProgress.find({ agent: { $in: downlineIds.map(id => new mongoose.Types.ObjectId(id)) }, isLicensed: true }).select('agent').lean();
-          const licensedIds = licensedRecords.map(r => r.agent);
-          let activeAgents = 0;
-          if (licensedIds.length > 0) {
-            const agentResult = await ProductionSubmission.aggregate([
-              { $match: { agent: { $in: licensedIds }, status: 'In Force', productCategory: { $in: QUALIFYING_CATEGORIES }, submissionDate: { $gte: builderCutoff } } },
-              { $group: { _id: '$agent' } }
-            ]);
-            activeAgents = agentResult.length;
-          }
-
-          const builderMet = builderPremium >= next.builderPremiumThreshold && activeAgents >= next.builderAgentCountThreshold;
-
-          if (producerMet || builderMet) {
-            // Deduplicate: skip if already notified in past 7 days
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const recentNotif = await Notification.findOne({
-              type: 'promotion_eligible',
-              'data.agentId': String(agentId),
-              'data.nextLevel': next.name,
-              createdAt: { $gte: sevenDaysAgo }
-            }).lean();
-
-            if (!recentNotif) {
-              const admins = await User.find({ role: 'admin' }).select('_id').lean();
-              const track = producerMet ? 'producer' : 'builder';
-              for (const admin of admins) {
-                await Notification.createNotification({
-                  userId: admin._id,
-                  type: 'promotion_eligible',
-                  title: 'Agent Promotion Eligible',
-                  message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
-                  data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
-                  link: '/admin/user-management'
-                });
-              }
-            }
+          // Propagate builder track check up the entire upline chain
+          const uplineIds = await getUplineChainIds(agentId);
+          for (const uplineId of uplineIds) {
+            await checkAndNotifyPromotion(uplineId);
           }
         } catch (promoErr) {
-          console.error('[Production Review] Promotion check error:', promoErr.message);
+          console.error('[Production Review] Promotion chain check error:', promoErr.message);
         }
       })();
     }

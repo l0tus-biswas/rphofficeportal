@@ -7,6 +7,7 @@ const DocumentFolder = require('../models/DocumentFolder');
 const DocumentHubFile = require('../models/DocumentHubFile');
 const DocumentRequest = require('../models/DocumentRequest');
 const Notification = require('../models/Notification');
+const { sendNotificationEmail } = require('../utils/neuzmail');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 
 // ---------------------------------------------------------------------------
@@ -14,6 +15,28 @@ const { protect: authenticate, authorize } = require('../middleware/auth.middlew
 // ---------------------------------------------------------------------------
 const uploadDir = path.join(__dirname, '../uploads/document-hub');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// Allowed MIME types mapped to extensions
+const ALLOWED_MIMES = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-powerpoint': 'ppt',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+  'application/zip': 'zip',
+  'application/x-zip-compressed': 'zip',
+  'application/octet-stream': null // allow if extension matches
+};
+
+const ALLOWED_EXTENSIONS = /\.(pdf|jpg|jpeg|png|gif|doc|docx|xls|xlsx|ppt|pptx|csv|txt|zip)$/i;
+const REQUEST_ALLOWED_EXTENSIONS = /\.(pdf|jpg|jpeg|png|doc|docx|xls|xlsx|ppt|pptx|csv|txt|zip)$/i;
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
@@ -26,10 +49,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
   fileFilter: (req, file, cb) => {
-    const allowed = /pdf|jpg|jpeg|png|gif|doc|docx|xls|xlsx|ppt|pptx|csv|txt|zip/;
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    if (ext) cb(null, true);
-    else cb(new Error('File type not allowed'), false);
+    const extMatch = ALLOWED_EXTENSIONS.test(file.originalname);
+    const mimeKnown = file.mimetype in ALLOWED_MIMES;
+    if (extMatch && (mimeKnown || file.mimetype === 'application/octet-stream')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed: ${file.originalname}`), false);
+    }
   }
 });
 
@@ -48,12 +74,32 @@ const requestUpload = multer({
   storage: requestStorage,
   limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /pdf|jpg|jpeg|png|doc|docx|xls|xlsx/;
-    const ext = allowed.test(path.extname(file.originalname).toLowerCase());
-    if (ext) cb(null, true);
-    else cb(new Error('File type not allowed'), false);
+    const extMatch = REQUEST_ALLOWED_EXTENSIONS.test(file.originalname);
+    const mimeKnown = file.mimetype in ALLOWED_MIMES;
+    if (extMatch && (mimeKnown || file.mimetype === 'application/octet-stream')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed: ${file.originalname}`), false);
+    }
   }
 });
+
+// Multer error handler wrapper
+function handleMulterError(multerMiddleware) {
+  return (req, res, next) => {
+    multerMiddleware(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File too large. Maximum size is 25MB.' });
+        }
+        return res.status(400).json({ message: `Upload error: ${err.message}` });
+      } else if (err) {
+        return res.status(400).json({ message: err.message || 'File upload failed' });
+      }
+      next();
+    });
+  };
+}
 
 // =====================================================================
 //  FOLDERS
@@ -64,9 +110,15 @@ const requestUpload = multer({
 // @access  Private
 router.get('/folders', authenticate, async (req, res) => {
   try {
-    const query = req.user.role === 'admin' && req.query.all === 'true'
-      ? {}
-      : { isActive: true };
+    let query;
+    if (req.user.role === 'admin' && req.query.all === 'true') {
+      query = {};
+    } else if (req.user.role === 'admin') {
+      query = { isActive: true };
+    } else {
+      // Non-admin: only active folders with visibility 'all'
+      query = { isActive: true, visibility: { $in: ['all', null] } };
+    }
     const folders = await DocumentFolder.find(query)
       .populate('createdBy', 'name')
       .sort({ sortOrder: 1, name: 1 });
@@ -82,7 +134,7 @@ router.get('/folders', authenticate, async (req, res) => {
 // @access  Admin
 router.post('/folders', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { name, parent, description, sortOrder } = req.body;
+    const { name, parent, description, sortOrder, visibility } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ message: 'Folder name is required' });
     }
@@ -96,6 +148,7 @@ router.post('/folders', authenticate, authorize('admin'), async (req, res) => {
       parent: parent || null,
       description: description || '',
       sortOrder: sortOrder || 0,
+      visibility: visibility || 'all',
       createdBy: req.user._id
     });
     await folder.populate('createdBy', 'name');
@@ -117,7 +170,7 @@ router.put('/folders/:id', authenticate, authorize('admin'), async (req, res) =>
     const folder = await DocumentFolder.findById(req.params.id);
     if (!folder) return res.status(404).json({ message: 'Folder not found' });
 
-    const { name, parent, description, sortOrder, isActive } = req.body;
+    const { name, parent, description, sortOrder, isActive, visibility } = req.body;
     if (name !== undefined) folder.name = name.trim();
     if (parent !== undefined) {
       // Prevent setting parent to self or descendant
@@ -129,6 +182,7 @@ router.put('/folders/:id', authenticate, authorize('admin'), async (req, res) =>
     if (description !== undefined) folder.description = description;
     if (sortOrder !== undefined) folder.sortOrder = sortOrder;
     if (isActive !== undefined) folder.isActive = isActive;
+    if (visibility !== undefined) folder.visibility = visibility;
 
     await folder.save();
     await folder.populate('createdBy', 'name');
@@ -184,9 +238,13 @@ router.get('/files', authenticate, async (req, res) => {
     } else if (req.query.folder === '' || req.query.root === 'true') {
       query.folder = null; // root-level files
     }
-    // Non-admin only sees 'all' visibility
+    // Non-admin: only sees files they have access to
     if (req.user.role !== 'admin') {
-      query.visibility = 'all';
+      // visibility='all' OR (visibility='restricted' AND user is in restrictedTo)
+      query.$or = [
+        { visibility: 'all' },
+        { visibility: 'restricted', restrictedTo: req.user._id }
+      ];
     }
     if (req.query.search) {
       query.$text = { $search: req.query.search };
@@ -195,6 +253,7 @@ router.get('/files', authenticate, async (req, res) => {
     const files = await DocumentHubFile.find(query)
       .populate('uploadedBy', 'name')
       .populate('folder', 'name')
+      .populate('restrictedTo', 'name')
       .sort({ sortOrder: 1, name: 1 });
     res.json(files);
   } catch (error) {
@@ -206,7 +265,7 @@ router.get('/files', authenticate, async (req, res) => {
 // @route   POST /api/document-hub/files
 // @desc    Upload file(s) to document hub (admin)
 // @access  Admin
-router.post('/files', authenticate, authorize('admin'), upload.array('files', 10), async (req, res) => {
+router.post('/files', authenticate, authorize('admin'), handleMulterError(upload.array('files', 10)), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
@@ -215,6 +274,16 @@ router.post('/files', authenticate, authorize('admin'), upload.array('files', 10
     const folder = req.body.folder || null;
     const visibility = req.body.visibility || 'all';
     const description = req.body.description || '';
+    const notes = req.body.notes || '';
+    // Parse restrictedTo: comma-separated IDs or JSON array
+    let restrictedTo = [];
+    if (req.body.restrictedTo) {
+      try {
+        restrictedTo = JSON.parse(req.body.restrictedTo);
+      } catch (e) {
+        restrictedTo = req.body.restrictedTo.split(',').map(id => id.trim()).filter(Boolean);
+      }
+    }
 
     // Validate folder if provided
     if (folder) {
@@ -234,7 +303,9 @@ router.post('/files', authenticate, authorize('admin'), upload.array('files', 10
         mimeType: file.mimetype,
         fileSize: file.size,
         description,
+        notes,
         visibility,
+        restrictedTo: visibility === 'restricted' ? restrictedTo : [],
         uploadedBy: req.user._id
       });
       created.push(doc);
@@ -255,13 +326,18 @@ router.put('/files/:id', authenticate, authorize('admin'), async (req, res) => {
     const file = await DocumentHubFile.findById(req.params.id);
     if (!file) return res.status(404).json({ message: 'File not found' });
 
-    const { name, folder, description, visibility, isActive, sortOrder } = req.body;
+    const { name, folder, description, visibility, isActive, sortOrder, restrictedTo } = req.body;
     if (name !== undefined) file.name = name;
     if (folder !== undefined) file.folder = folder || null;
     if (description !== undefined) file.description = description;
     if (visibility !== undefined) file.visibility = visibility;
     if (isActive !== undefined) file.isActive = isActive;
     if (sortOrder !== undefined) file.sortOrder = sortOrder;
+    if (restrictedTo !== undefined) file.restrictedTo = restrictedTo;
+    // Clear restrictedTo if visibility changed away from 'restricted'
+    if (visibility !== undefined && visibility !== 'restricted') {
+      file.restrictedTo = [];
+    }
 
     await file.save();
     res.json(file);
@@ -301,8 +377,19 @@ router.get('/files/:id/download', authenticate, async (req, res) => {
     const file = await DocumentHubFile.findById(req.params.id);
     if (!file || !file.isActive) return res.status(404).json({ message: 'File not found' });
 
-    if (req.user.role !== 'admin' && file.visibility === 'admin') {
-      return res.status(403).json({ message: 'Access denied' });
+    // Access control for non-admins
+    if (req.user.role !== 'admin') {
+      if (file.visibility === 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+      if (file.visibility === 'restricted') {
+        const hasAccess = file.restrictedTo.some(
+          id => id.toString() === req.user._id.toString()
+        );
+        if (!hasAccess) {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
     }
 
     const fullPath = path.join(__dirname, '..', file.filePath);
@@ -388,7 +475,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
     await request.populate('requestedFrom', 'name email');
     await request.populate('responses.agent', 'name email');
 
-    // Notify each agent
+    // Notify each agent (in-app + email)
     for (const agentId of requestedFrom) {
       Notification.createNotification({
         userId: agentId,
@@ -397,6 +484,21 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
         message: `Admin has requested: "${title}". ${dueDate ? 'Due: ' + new Date(dueDate).toLocaleDateString() : ''}`,
         link: '/document-hub'
       }, false).catch(() => {});
+    }
+
+    // Send email to each requested agent
+    const populatedAgents = request.requestedFrom || [];
+    for (const agent of populatedAgents) {
+      if (agent && agent.email) {
+        const dueLine = dueDate ? `\nDue date: ${new Date(dueDate).toLocaleDateString()}` : '';
+        sendNotificationEmail({
+          toEmail: agent.email,
+          title: 'Document Requested',
+          message: `Hello ${agent.name},\n\nA document has been requested from you: "${title}".${dueLine}\n\n${description || ''}`.trim(),
+          link: '/document-hub',
+          actionLabel: 'Upload Document'
+        }).catch(err => console.error('Failed to send document request email:', err.message));
+      }
     }
 
     res.status(201).json(request);
@@ -409,7 +511,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
 // @route   POST /api/document-hub/requests/:id/respond
 // @desc    Agent submits a file in response to a request
 // @access  Private (targeted agent)
-router.post('/requests/:id/respond', authenticate, requestUpload.single('file'), async (req, res) => {
+router.post('/requests/:id/respond', authenticate, handleMulterError(requestUpload.single('file')), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'File is required' });
 
@@ -428,6 +530,7 @@ router.post('/requests/:id/respond', authenticate, requestUpload.single('file'),
 
     resp.filePath = `uploads/document-requests/${req.file.filename}`;
     resp.originalFileName = req.file.originalname;
+    resp.notes = req.body.notes || '';
     resp.status = 'submitted';
     resp.submittedAt = new Date();
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable, interval, EMPTY } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
 
@@ -9,6 +10,7 @@ export interface Broadcast {
   title: string;
   message: string;
   link?: string;
+  image?: string;
   targetRoles: string[];
   sentCount: number;
   emailsSent: number;
@@ -25,8 +27,34 @@ export interface Broadcast {
 })
 export class BroadcastService {
   private apiUrl = `${environment.apiUrl}/broadcasts`;
+  private unreadCountSubject = new BehaviorSubject<number>(0);
+  public unreadCount$ = this.unreadCountSubject.asObservable();
 
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(private http: HttpClient, private authService: AuthService) {
+    // Poll unread broadcast count every 30s while logged in
+    this.authService.currentUser$.pipe(
+      switchMap(user => (user ? interval(30000) : EMPTY))
+    ).subscribe(() => {
+      this.refreshUnreadCount();
+    });
+
+    this.authService.currentUser$.subscribe(user => {
+      if (!user) {
+        this.unreadCountSubject.next(0);
+      }
+    });
+  }
+
+  refreshUnreadCount(): void {
+    if (!this.authService.isLoggedIn()) return;
+    this.http.get(`${this.apiUrl}/unread-count`, this.getHeaders()).subscribe({
+      next: (res: any) => {
+        const count = res?.unreadCount ?? res?.data?.unreadCount ?? 0;
+        this.unreadCountSubject.next(count);
+      },
+      error: () => this.unreadCountSubject.next(0)
+    });
+  }
 
   private getHeaders() {
     return {
@@ -70,5 +98,18 @@ export class BroadcastService {
   // Admin: resend to new users
   resendBroadcast(id: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/${id}/resend`, {}, this.getHeaders());
+  }
+
+  // Admin: upload broadcast image
+  uploadBroadcastImage(id: string, file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const headers = new HttpHeaders({ 'Authorization': `Bearer ${this.authService.getToken()}` });
+    return this.http.post(`${this.apiUrl}/${id}/image`, formData, { headers });
+  }
+
+  // Admin: remove broadcast image
+  removeBroadcastImage(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${id}/image`, this.getHeaders());
   }
 }

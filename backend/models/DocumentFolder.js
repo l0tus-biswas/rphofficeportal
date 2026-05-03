@@ -17,6 +17,12 @@ const documentFolderSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  // Visibility: 'all' = everyone, 'admin' = admin only
+  visibility: {
+    type: String,
+    enum: ['all', 'admin'],
+    default: 'all'
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

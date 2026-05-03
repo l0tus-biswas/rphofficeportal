@@ -43,6 +43,22 @@ const stmtUpload = multer({
   limits: { fileSize: 20 * 1024 * 1024 } // 20 MB
 });
 
+// Multer error handler wrapper
+const handleMulterError = (upload) => (req, res, next) => {
+  upload(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File too large. Maximum size is 20MB.' });
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        return res.status(400).json({ message: 'Too many files. Maximum 20 files per upload.' });
+      }
+      return res.status(400).json({ message: err.message || 'File upload error' });
+    }
+    next();
+  });
+};
+
 // ---------------------------------------------------------------------------
 // @route   GET /api/commission-statements/agents/search
 // @desc    Search agents by name (for admin agent picker with search) (6.4)
@@ -68,15 +84,15 @@ router.get('/agents/search', authenticate, authorize('admin'), async (req, res) 
 
 // ---------------------------------------------------------------------------
 // @route   POST /api/commission-statements
-// @desc    Admin: upload a commission statement for an agent
-//          6.1: Fixed upload, 6.2: supports carriers[] array
+// @desc    Admin: upload commission statement(s) for an agent
+//          Supports multiple files in a single upload
 // @access  Admin only
 // ---------------------------------------------------------------------------
-router.post('/', authenticate, authorize('admin'), stmtUpload.single('statementFile'), async (req, res) => {
+router.post('/', authenticate, authorize('admin'), handleMulterError(stmtUpload.array('statementFile', 20)), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: 'Statement PDF is required' });
+    if (!req.files || req.files.length === 0) return res.status(400).json({ message: 'At least one file is required' });
 
-    const { agentId, carrier, carriers, payPeriod } = req.body;
+    const { agentId, carrier, carriers, payPeriod, notes } = req.body;
     if (!agentId) return res.status(400).json({ message: 'agentId is required' });
     if (!payPeriod) return res.status(400).json({ message: 'payPeriod is required' });
 
@@ -95,17 +111,32 @@ router.post('/', authenticate, authorize('admin'), stmtUpload.single('statementF
     const agent = await User.findById(agentId).select('name email');
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
-    const stmt = await CommissionStatement.create({
-      agent: agentId,
-      carrier: carriersArr.join(', '), // legacy field for backward compat
-      carriers: carriersArr,
-      payPeriod: new Date(payPeriod),
-      filePath: `uploads/commission-statements/${req.file.filename}`,
-      originalFileName: req.file.originalname,
-      uploadedBy: req.user._id
-    });
+    // Parse initial notes if provided
+    let initialNotes = [];
+    if (notes && notes.trim()) {
+      initialNotes = [{ text: notes.trim(), addedBy: req.user._id, addedAt: new Date() }];
+    }
 
-    res.status(201).json({ message: 'Commission statement uploaded', statement: stmt });
+    // Create a statement record for each uploaded file
+    const created = [];
+    for (const file of req.files) {
+      const stmt = await CommissionStatement.create({
+        agent: agentId,
+        carrier: carriersArr.join(', '),
+        carriers: carriersArr,
+        payPeriod: new Date(payPeriod),
+        filePath: `uploads/commission-statements/${file.filename}`,
+        originalFileName: file.originalname,
+        uploadedBy: req.user._id,
+        notes: initialNotes
+      });
+      created.push(stmt);
+    }
+
+    res.status(201).json({
+      message: `${created.length} commission statement(s) uploaded`,
+      statements: created
+    });
   } catch (error) {
     console.error('Error uploading commission statement:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -227,11 +258,85 @@ router.get('/:id/download', authenticate, async (req, res) => {
     const fileExt = path.extname(stmt.originalFileName || stmt.filePath).toLowerCase();
     const contentType = extMap[fileExt] || 'application/octet-stream';
 
-    res.setHeader('Content-Disposition', `attachment; filename="${stmt.originalFileName || 'statement.pdf'}"`);
+    // Encode filename for Content-Disposition (handles special characters)
+    const fileName = stmt.originalFileName || 'statement.pdf';
+    const encodedFileName = encodeURIComponent(fileName).replace(/'/g, '%27');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodedFileName}`);
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     fs.createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('Error downloading statement:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/commission-statements/:id
+// @desc    Admin: edit a commission statement (agent, carriers, payPeriod, notes, file)
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.put('/:id', authenticate, authorize('admin'), handleMulterError(stmtUpload.single('statementFile')), async (req, res) => {
+  try {
+    const stmt = await CommissionStatement.findById(req.params.id);
+    if (!stmt) return res.status(404).json({ message: 'Statement not found' });
+
+    const { agentId, carrier, carriers, payPeriod, notes } = req.body;
+
+    // Update agent if provided
+    if (agentId) {
+      const agent = await User.findById(agentId).select('name email');
+      if (!agent) return res.status(404).json({ message: 'Agent not found' });
+      stmt.agent = agentId;
+    }
+
+    // Update carriers
+    if (carriers !== undefined) {
+      let carriersArr = [];
+      try {
+        carriersArr = JSON.parse(carriers);
+      } catch {
+        carriersArr = carriers.split(',').map(c => c.trim()).filter(Boolean);
+      }
+      stmt.carriers = carriersArr;
+      stmt.carrier = carriersArr.join(', ');
+    } else if (carrier !== undefined) {
+      const carriersArr = carrier.split(',').map(c => c.trim()).filter(Boolean);
+      stmt.carriers = carriersArr;
+      stmt.carrier = carrier;
+    }
+
+    // Update pay period
+    if (payPeriod) {
+      stmt.payPeriod = new Date(payPeriod);
+    }
+
+    // Update/add notes
+    if (notes !== undefined && notes.trim()) {
+      stmt.notes.push({ text: notes.trim(), addedBy: req.user._id, addedAt: new Date() });
+    }
+
+    // Replace file if a new one is uploaded
+    if (req.file) {
+      // Remove old file
+      const oldPath = path.join(__dirname, '..', stmt.filePath);
+      if (fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch (e) { /* ignore */ }
+      }
+      stmt.filePath = `uploads/commission-statements/${req.file.filename}`;
+      stmt.originalFileName = req.file.originalname;
+    }
+
+    await stmt.save();
+
+    // Populate for response
+    await stmt.populate('agent', 'name email');
+    await stmt.populate('uploadedBy', 'name');
+    await stmt.populate('notes.addedBy', 'name');
+
+    res.json({ message: 'Statement updated', statement: stmt });
+  } catch (error) {
+    console.error('Error updating commission statement:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

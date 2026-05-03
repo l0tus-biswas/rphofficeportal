@@ -16,6 +16,10 @@ const broadcastSchema = new mongoose.Schema({
     default: null,
     trim: true
   },
+  image: {
+    type: String,
+    default: null
+  },
   targetRoles: {
     type: [String],
     enum: ['admin', 'agent'],

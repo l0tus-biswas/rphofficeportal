@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { BroadcastService, Broadcast } from '../../../services/broadcast.service';
+import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-broadcast-management',
@@ -23,6 +24,8 @@ export class BroadcastManagementComponent implements OnInit {
   formMessage = '';
   formLink = '';
   formRoles: string[] = [];
+  selectedImageFile: File | null = null;
+  imagePreview: string | null = null;
 
   success = '';
   error = '';
@@ -59,6 +62,8 @@ export class BroadcastManagementComponent implements OnInit {
     this.formMessage = '';
     this.formLink = '';
     this.formRoles = [];
+    this.selectedImageFile = null;
+    this.imagePreview = null;
     this.error = '';
     this.showModal = true;
   }
@@ -70,6 +75,8 @@ export class BroadcastManagementComponent implements OnInit {
     this.formMessage = broadcast.message;
     this.formLink = broadcast.link || '';
     this.formRoles = [...(broadcast.targetRoles || [])];
+    this.selectedImageFile = null;
+    this.imagePreview = broadcast.image ? this.getImageUrl(broadcast.image) : null;
     this.error = '';
     this.showModal = true;
   }
@@ -77,6 +84,8 @@ export class BroadcastManagementComponent implements OnInit {
   closeModal(): void {
     this.showModal = false;
     this.selectedBroadcast = null;
+    this.selectedImageFile = null;
+    this.imagePreview = null;
   }
 
   toggleRole(role: string): void {
@@ -109,11 +118,13 @@ export class BroadcastManagementComponent implements OnInit {
     if (this.editMode && this.selectedBroadcast) {
       this.broadcastService.updateBroadcast(this.selectedBroadcast._id, data).subscribe({
         next: () => {
-          this.success = 'Broadcast updated.';
-          this.saving = false;
-          this.closeModal();
-          this.loadBroadcasts();
-          setTimeout(() => this.success = '', 3000);
+          this.uploadImageIfSelected(this.selectedBroadcast!._id, () => {
+            this.success = 'Broadcast updated.';
+            this.saving = false;
+            this.closeModal();
+            this.loadBroadcasts();
+            setTimeout(() => this.success = '', 3000);
+          });
         },
         error: (err: any) => {
           this.error = err.error?.message || 'Failed to update broadcast.';
@@ -123,11 +134,14 @@ export class BroadcastManagementComponent implements OnInit {
     } else {
       this.broadcastService.createBroadcast(data).subscribe({
         next: (res: any) => {
-          this.success = res?.message || res?.data?.message || 'Broadcast sent!';
-          this.saving = false;
-          this.closeModal();
-          this.loadBroadcasts();
-          setTimeout(() => this.success = '', 5000);
+          const newId = res?.broadcast?._id || res?.data?.broadcast?._id;
+          this.uploadImageIfSelected(newId, () => {
+            this.success = res?.message || res?.data?.message || 'Broadcast sent!';
+            this.saving = false;
+            this.closeModal();
+            this.loadBroadcasts();
+            setTimeout(() => this.success = '', 5000);
+          });
         },
         error: (err: any) => {
           this.error = err.error?.message || 'Failed to send broadcast.';
@@ -186,5 +200,62 @@ export class BroadcastManagementComponent implements OnInit {
 
   nextPage(): void {
     if (this.page < this.totalPages) { this.page++; this.loadBroadcasts(); }
+  }
+
+  // === Image Handling ===
+
+  onImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (!file.type.startsWith('image/')) {
+        this.error = 'Only image files are allowed.';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        this.error = 'Image must be under 5MB.';
+        return;
+      }
+      this.selectedImageFile = file;
+      const reader = new FileReader();
+      reader.onload = () => this.imagePreview = reader.result as string;
+      reader.readAsDataURL(file);
+    }
+  }
+
+  removeImage(broadcast: Broadcast): void {
+    if (!confirm('Remove the image from this broadcast?')) return;
+    this.broadcastService.removeBroadcastImage(broadcast._id).subscribe({
+      next: () => {
+        this.imagePreview = null;
+        broadcast.image = undefined;
+        this.success = 'Image removed.';
+        this.loadBroadcasts();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: () => {
+        this.error = 'Failed to remove image.';
+      }
+    });
+  }
+
+  private uploadImageIfSelected(broadcastId: string, callback: () => void): void {
+    if (!this.selectedImageFile) {
+      callback();
+      return;
+    }
+    this.broadcastService.uploadBroadcastImage(broadcastId, this.selectedImageFile).subscribe({
+      next: () => callback(),
+      error: () => {
+        this.error = 'Broadcast saved but image upload failed.';
+        callback();
+      }
+    });
+  }
+
+  getImageUrl(imagePath: string): string {
+    if (!imagePath) return '';
+    if (imagePath.startsWith('http')) return imagePath;
+    return `${environment.baseUrl}${imagePath}`;
   }
 }

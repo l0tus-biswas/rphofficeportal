@@ -13,6 +13,7 @@ export class OnboardingUploadComponent implements OnInit {
   steps: OnboardingStepMeta[] = ONBOARDING_STEPS;
   
   selectedFiles: Map<string, File> = new Map();
+  uploadNotes: Map<string, string> = new Map();
   uploadProgress: Map<string, number> = new Map();
   
   loading = false;
@@ -133,6 +134,13 @@ export class OnboardingUploadComponent implements OnInit {
     // Append all selected files
     this.selectedFiles.forEach((file, key) => {
       formData.append(key, file);
+    });
+
+    // Append notes for each step
+    this.uploadNotes.forEach((note, key) => {
+      if (note.trim()) {
+        formData.append(`notes_${key}`, note.trim());
+      }
     });
 
     this.onboardingService.uploadMyDocuments(formData).subscribe({

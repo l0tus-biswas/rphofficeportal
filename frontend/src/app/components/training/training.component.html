@@ -126,10 +126,16 @@
       <div *ngIf="!loading && filteredMaterials.length > 0 && (currentFolder || selectedFolder !== 'all' || searchTerm || selectedCategory !== 'all' || selectedType !== 'all')" class="materials-grid">
         <div *ngFor="let material of filteredMaterials" class="material-card-wrapper">
           <div class="card h-100 shadow-sm material-card">
+            <!-- Thumbnail Preview -->
+            <img *ngIf="getMaterialThumbnail(material)" 
+                 [src]="getMaterialThumbnail(material)" 
+                 class="card-img-top" 
+                 style="height: 160px; object-fit: cover;" 
+                 alt="{{ material.title }} thumbnail">
             <div class="card-body">
               <!-- Type Badge & Icon -->
               <div class="d-flex justify-content-between align-items-start mb-3">
-                <div class="material-icon">
+                <div class="material-icon" *ngIf="!getMaterialThumbnail(material)">
                   <i class="bi fs-1" [ngClass]="getTypeIcon(material.type)"></i>
                 </div>
                 <span class="badge text-capitalize" [ngClass]="getTypeBadgeClass(material.type)">

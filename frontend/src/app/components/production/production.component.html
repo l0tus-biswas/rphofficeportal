@@ -392,7 +392,7 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">Premium Amount *</label>
-            <input type="number" class="form-control" [(ngModel)]="currentSubmission.premiumAmount" required min="0" step="0.01">
+            <input type="number" class="form-control" [(ngModel)]="currentSubmission.premiumAmount" min="0" step="0.01">
           </div>
           <!-- 8.1: Number of Members -->
           <div class="col-md-6">
@@ -415,6 +415,8 @@
               <input *ngIf="cf.type === 'text'" type="text" class="form-control"
                      [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
               <input *ngIf="cf.type === 'number'" type="number" class="form-control"
+                     [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
+              <input *ngIf="cf.type === 'date'" type="date" class="form-control"
                      [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
               <select *ngIf="cf.type === 'select'" class="form-select"
                       [(ngModel)]="currentSubmission.customFields![cf.key]" [required]="cf.required || false">
@@ -470,6 +472,7 @@
                   <option value="text">Text</option>
                   <option value="number">Number</option>
                   <option value="select">Dropdown</option>
+                  <option value="date">Date</option>
                   <option value="checkbox">Checkbox</option>
                 </select>
               </td>
@@ -492,11 +495,16 @@
           </tbody>
         </table>
         <div *ngIf="editingCustomFields.length === 0" class="text-center text-muted py-3">
-          No custom fields configured. Click "Add Field" to create one.
+          No custom fields configured. Click "Add Field" below to create one.
         </div>
-        <button class="btn btn-sm btn-outline-primary" (click)="addCustomField()">
-          <i class="bi bi-plus-circle me-1"></i>Add Field
-        </button>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-sm btn-outline-primary" (click)="addCustomField()">
+            <i class="bi bi-plus-circle me-1"></i>Add Field
+          </button>
+          <button *ngIf="editingCustomFields.length > 0" class="btn btn-sm btn-outline-danger" (click)="editingCustomFields = []">
+            <i class="bi bi-trash me-1"></i>Remove All
+          </button>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" (click)="cancelCustomFieldsConfig()">Cancel</button>

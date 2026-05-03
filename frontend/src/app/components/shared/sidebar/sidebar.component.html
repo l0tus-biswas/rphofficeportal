@@ -93,7 +93,7 @@
       </a>
     </li>
 
-    <li class="nav-item">
+    <li class="nav-item" *ngIf="!authService.isAdmin()">
       <a class="nav-link" routerLink="/transactions" routerLinkActive="active">
         <i class="bi bi-credit-card me-2"></i>Billing
       </a>
@@ -108,6 +108,7 @@
     <li class="nav-item">
       <a class="nav-link" routerLink="/broadcasts" routerLinkActive="active">
         <i class="bi bi-broadcast-pin me-2"></i>Announcements
+        <span *ngIf="unreadBroadcasts > 0" class="badge bg-danger ms-auto">{{ unreadBroadcasts > 99 ? '99+' : unreadBroadcasts }}</span>
       </a>
     </li>
     
@@ -177,7 +178,7 @@
 
       <li class="nav-item">
         <a class="nav-link" routerLink="/admin/payments" routerLinkActive="active">
-          <i class="bi bi-cash-stack me-2"></i>Payment Management
+          <i class="bi bi-cash-stack me-2"></i>Billing & Payments
         </a>
       </li>
 

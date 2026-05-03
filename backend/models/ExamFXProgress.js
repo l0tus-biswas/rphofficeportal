@@ -160,7 +160,6 @@ examFXProgressSchema.set('toJSON', { virtuals: true });
 examFXProgressSchema.set('toObject', { virtuals: true });
 
 // Index for efficient lookups
-examFXProgressSchema.index({ examfxUserId: 1 });
 examFXProgressSchema.index({ examfxEmail: 1 });
 
 module.exports = mongoose.model('ExamFXProgress', examFXProgressSchema);

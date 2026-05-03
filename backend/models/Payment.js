@@ -65,8 +65,6 @@ paymentSchema.pre('validate', function(next) {
 });
 
 paymentSchema.index({ user: 1, createdAt: -1 });
-paymentSchema.index({ stripePaymentIntentId: 1 });
-paymentSchema.index({ stripeInvoiceId: 1 });
 paymentSchema.index({ status: 1 });
 
 module.exports = mongoose.model('Payment', paymentSchema);

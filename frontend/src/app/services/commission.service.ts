@@ -32,9 +32,14 @@ export class CommissionService {
 
   constructor(private http: HttpClient) {}
 
-  // Upload statement (admin)
+  // Upload statement (admin) — supports multiple files
   uploadStatement(formData: FormData): Observable<any> {
     return this.http.post(this.apiUrl, formData);
+  }
+
+  // Update/edit statement (admin)
+  updateStatement(id: string, formData: FormData): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${id}`, formData);
   }
 
   // List statements (agent sees own; admin sees all)

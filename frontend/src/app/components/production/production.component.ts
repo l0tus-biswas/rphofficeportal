@@ -99,7 +99,7 @@ export class ProductionComponent implements OnInit {
   loadProductTypes(): void {
     this.productTypeService.getProducts(true).subscribe({
       next: (response) => {
-        this.productTypes = response.products.map((p: ProductType) => p.name);
+        this.productTypes = response.products.map((p: ProductType) => p.name).sort((a, b) => a.localeCompare(b));
         this.productCategoryMap = {};
         response.products.forEach((p: ProductType) => {
           this.productCategoryMap[p.name] = p.category;
@@ -240,7 +240,7 @@ export class ProductionComponent implements OnInit {
     const cf: Record<string, any> = {};
     this.customFieldDefs.forEach(d => cf[d.key] = d.type === 'checkbox' ? false : '');
     this.currentSubmission = {
-      submissionDate: new Date(),
+      submissionDate: new Date().toISOString().split('T')[0] as any,
       clientName: '',
       productSold: '',
       productCategory: 'Life Insurance',
@@ -263,6 +263,7 @@ export class ProductionComponent implements OnInit {
     this.editMode = true;
     this.currentSubmission = {
       ...submission,
+      submissionDate: submission.submissionDate ? new Date(submission.submissionDate).toISOString().split('T')[0] as any : '',
       carrier: submission.carrier._id,
       customFields: submission.customFields || {}
     };
@@ -275,8 +276,9 @@ export class ProductionComponent implements OnInit {
   }
 
   saveSubmission(): void {
+    const premiumMissing = this.currentSubmission.premiumAmount == null || String(this.currentSubmission.premiumAmount) === '';
     if (!this.currentSubmission.clientName || !this.currentSubmission.productSold || 
-        !this.currentSubmission.carrier || !this.currentSubmission.premiumAmount) {
+        !this.currentSubmission.carrier || premiumMissing) {
       this.error = 'Please fill in all required fields';
       return;
     }

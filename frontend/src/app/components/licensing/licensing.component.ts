@@ -22,6 +22,7 @@ export class LicensingComponent implements OnInit {
   // Checklist item being edited
   editingItem: string | null = null;
   uploadingFile: { [key: string]: boolean } = {};
+  uploadFileNotes: { [key: string]: string } = {};
 
   constructor(
     private licensingService: LicensingService,
@@ -113,7 +114,8 @@ export class LicensingComponent implements OnInit {
     this.licensingService.uploadDocument(
       this.selectedAgent.agent._id,
       item,
-      file
+      file,
+      this.uploadFileNotes[item] || ''
     ).subscribe({
       next: (response) => {
         this.selectedAgent = response.licensingProgress;
@@ -125,6 +127,7 @@ export class LicensingComponent implements OnInit {
           this.licensingProgress[index] = response.licensingProgress;
         }
         this.uploadingFile[item] = false;
+        this.uploadFileNotes[item] = '';
         alert('Document uploaded successfully');
       },
       error: (error) => {

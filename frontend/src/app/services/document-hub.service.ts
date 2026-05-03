@@ -8,6 +8,7 @@ export interface DocFolder {
   name: string;
   parent: string | null;
   description?: string;
+  visibility?: 'all' | 'admin';
   createdBy?: any;
   sortOrder?: number;
   isActive?: boolean;
@@ -24,7 +25,8 @@ export interface DocHubFile {
   fileSize?: number;
   description?: string;
   uploadedBy?: any;
-  visibility?: 'all' | 'admin';
+  visibility?: 'all' | 'admin' | 'restricted';
+  restrictedTo?: any[];
   isActive?: boolean;
   createdAt?: string;
 }
@@ -117,9 +119,10 @@ export class DocumentHubService {
     return this.http.post<DocRequest>(`${this.apiUrl}/requests`, data);
   }
 
-  respondToRequest(requestId: string, file: File): Observable<any> {
+  respondToRequest(requestId: string, file: File, notes?: string): Observable<any> {
     const formData = new FormData();
     formData.append('file', file);
+    if (notes) formData.append('notes', notes);
     return this.http.post(`${this.apiUrl}/requests/${requestId}/respond`, formData);
   }
 

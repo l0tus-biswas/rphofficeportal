@@ -150,6 +150,7 @@
                   Completed: {{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
+                  <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['preLicenseCourse']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Certificate
                     <input type="file" hidden (change)="onFileSelected($event, 'preLicenseCourse')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
@@ -203,6 +204,7 @@
                   </div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
+                  <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateExam']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
                     <input type="file" hidden (change)="onFileSelected($event, 'stateExam')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
@@ -244,6 +246,7 @@
                   Appointment: {{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
+                  <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['fingerprinting']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
                     <input type="file" hidden (change)="onFileSelected($event, 'fingerprinting')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
@@ -285,6 +288,7 @@
                   Submitted: {{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
+                  <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['diceApplication']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
                     <input type="file" hidden (change)="onFileSelected($event, 'diceApplication')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
@@ -327,6 +331,7 @@
                   Approved: {{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
+                  <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateAppointment']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
                     <input type="file" hidden (change)="onFileSelected($event, 'stateAppointment')" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">

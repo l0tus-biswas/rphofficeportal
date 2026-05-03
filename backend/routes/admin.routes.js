@@ -1097,6 +1097,23 @@ router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, r
       link: '/profile'
     }, false).catch(() => {});
 
+    // Trigger promotion re-check for the new upline chain (async, non-blocking)
+    // This ensures the new upline's builder track reflects the transferred agent's production
+    (async () => {
+      try {
+        const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+        // Check new upline
+        await checkAndNotifyPromotion(newUplineId);
+        // Check ancestors of new upline
+        const uplineChain = await getUplineChainIds(newUplineId);
+        for (const ancestorId of uplineChain) {
+          await checkAndNotifyPromotion(ancestorId);
+        }
+      } catch (err) {
+        console.error('[Transfer] Post-transfer promotion check error:', err.message);
+      }
+    })();
+
     // Audit logging handled by logAction('TRANSFER_AGENT') middleware on this route
 
     sendResponse(res, 200, {

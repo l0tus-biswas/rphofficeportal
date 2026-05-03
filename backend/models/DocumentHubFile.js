@@ -32,17 +32,27 @@ const documentHubFileSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  notes: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  // Visibility: 'all' (everyone), 'admin' (admin only)
+  // Visibility: 'all' (everyone), 'admin' (admin only), 'restricted' (specific agents only)
   visibility: {
     type: String,
-    enum: ['all', 'admin'],
+    enum: ['all', 'admin', 'restricted'],
     default: 'all'
   },
+  // When visibility='restricted', only these users (+ admin) can see/download
+  restrictedTo: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   sortOrder: {
     type: Number,
     default: 0

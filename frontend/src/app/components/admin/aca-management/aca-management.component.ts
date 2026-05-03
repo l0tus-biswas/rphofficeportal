@@ -10,6 +10,7 @@ export class AcaManagementComponent implements OnInit {
   // ── Upload state ──
   selectedFiles: File[] = [];
   uploadBatchInput = '';
+  uploadNotes = '';
   replaceBatch = false;
   uploading = false;
   uploadResult: AcaUploadResult | null = null;
@@ -99,6 +100,9 @@ export class AcaManagementComponent implements OnInit {
     if (this.replaceBatch) {
       formData.append('replaceBatch', 'true');
     }
+    if (this.uploadNotes.trim()) {
+      formData.append('notes', this.uploadNotes.trim());
+    }
 
     this.uploading = true;
     this.uploadResult = null;
@@ -110,6 +114,7 @@ export class AcaManagementComponent implements OnInit {
         this.uploading = false;
         this.selectedFiles = [];
         this.replaceBatch = false;
+        this.uploadNotes = '';
         const input = document.getElementById('fileInput') as HTMLInputElement;
         if (input) input.value = '';
         this.loadBatches();
