@@ -246,6 +246,7 @@ export class AcaManagementComponent implements OnInit {
           { tier: 3, label: 'Tier 3', threshold: 3000, rate: 3 }
         ];
         this.tiersLoading = false;
+        this.loadAgentOverrides();
       }
     });
   }
