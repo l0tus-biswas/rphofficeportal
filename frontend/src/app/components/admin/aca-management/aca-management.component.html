@@ -464,6 +464,7 @@
                     <td>
                       <div class="fw-semibold">{{ ov.agent?.name || 'Unknown' }}</div>
                       <div class="small text-muted">{{ ov.agent?.email || '' }}</div>
+                      <div *ngIf="ov.agent?.referralCode" class="small"><span class="badge bg-light text-dark">{{ ov.agent.referralCode }}</span></div>
                     </td>
                     <td class="small">
                       <span *ngFor="let t of ov.tiers; let last = last" class="badge bg-light text-dark me-1">
@@ -501,9 +502,36 @@
       </div>
       <div class="modal-body">
         <div class="mb-3">
-          <label class="form-label small fw-semibold">Agent ID</label>
-          <input type="text" class="form-control" [(ngModel)]="overrideAgentId" placeholder="Paste agent's MongoDB _id" [disabled]="overrideSaving" />
-          <div class="form-text">You can find the Agent ID in the batch records or user management.</div>
+          <label class="form-label small fw-semibold">Search Agent</label>
+          <div *ngIf="overrideAgentSelected" class="d-flex align-items-center border rounded p-2 mb-2 bg-light">
+            <div class="flex-grow-1">
+              <span class="fw-semibold">{{ overrideAgentSelected.name }}</span>
+              <span class="text-muted small ms-2">{{ overrideAgentSelected.email }}</span>
+              <span *ngIf="overrideAgentSelected.referralCode" class="badge bg-secondary ms-2">{{ overrideAgentSelected.referralCode }}</span>
+            </div>
+            <button class="btn btn-sm btn-outline-danger ms-2" (click)="clearSelectedAgent()" [disabled]="overrideSaving">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+          <div *ngIf="!overrideAgentSelected" class="position-relative">
+            <input type="text" class="form-control" [(ngModel)]="overrideAgentSearch"
+              (input)="searchAgents()" placeholder="Type agent name, email, or referral code..."
+              [disabled]="overrideSaving" autocomplete="off" />
+            <div *ngIf="overrideSearching" class="position-absolute end-0 top-50 translate-middle-y me-3">
+              <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+            </div>
+            <div *ngIf="overrideAgentResults.length > 0" class="position-absolute w-100 bg-white border rounded shadow-sm mt-1" style="z-index:1050; max-height:200px; overflow-y:auto;">
+              <div *ngFor="let a of overrideAgentResults" class="px-3 py-2 border-bottom cursor-pointer hover-bg-light"
+                style="cursor:pointer;" (click)="selectAgent(a)">
+                <div class="fw-semibold small">{{ a.name }}</div>
+                <div class="text-muted" style="font-size:0.75rem;">{{ a.email }} <span *ngIf="a.referralCode" class="badge bg-light text-dark ms-1">{{ a.referralCode }}</span></div>
+              </div>
+            </div>
+            <div *ngIf="overrideAgentSearch.length >= 2 && !overrideSearching && overrideAgentResults.length === 0" class="form-text text-danger">
+              No agents found matching "{{ overrideAgentSearch }}"
+            </div>
+          </div>
+          <div class="form-text" *ngIf="!overrideAgentSelected">Search by name, email, or referral code to find the agent.</div>
         </div>
 
         <div class="table-responsive">

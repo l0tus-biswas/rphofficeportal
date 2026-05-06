@@ -91,7 +91,7 @@ export interface AcaUploadResult {
 
 export interface AcaTierOverride {
   _id: string;
-  agent: { _id: string; name: string; email: string };
+  agent: { _id: string; name: string; email: string; referralCode?: string };
   tiers: TierEntry[];
   updatedAt: string;
 }
@@ -149,6 +149,10 @@ export class AcaService {
   // ── Admin: per-agent tier overrides (5.13) ──
   getAgentTierOverrides(): Observable<{ overrides: AcaTierOverride[] }> {
     return this.http.get<any>(`${this.apiUrl}/admin/aca-tiers/agent-overrides`);
+  }
+
+  searchAgentsForOverride(query: string): Observable<{ agents: any[] }> {
+    return this.http.get<any>(`${this.apiUrl}/admin/aca-tiers/agents/search`, { params: { q: query } });
   }
 
   setAgentTierOverride(agentId: string, tiers: TierEntry[]): Observable<any> {

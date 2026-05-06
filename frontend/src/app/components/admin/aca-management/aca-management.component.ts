@@ -43,6 +43,10 @@ export class AcaManagementComponent implements OnInit {
   overridesLoading = false;
   showOverrideModal = false;
   overrideAgentId = '';
+  overrideAgentSearch = '';
+  overrideAgentResults: any[] = [];
+  overrideAgentSelected: any = null;
+  overrideSearching = false;
   overrideTiers: TierEntry[] = [];
   overrideSaving = false;
   overrideError = '';
@@ -292,11 +296,17 @@ export class AcaManagementComponent implements OnInit {
   openOverrideModal(override?: AcaTierOverride): void {
     this.showOverrideModal = true;
     this.overrideError = '';
+    this.overrideAgentResults = [];
+    this.overrideSearching = false;
     if (override) {
       this.overrideAgentId = override.agent._id;
+      this.overrideAgentSelected = override.agent;
+      this.overrideAgentSearch = override.agent.name || override.agent.email || '';
       this.overrideTiers = JSON.parse(JSON.stringify(override.tiers));
     } else {
       this.overrideAgentId = '';
+      this.overrideAgentSelected = null;
+      this.overrideAgentSearch = '';
       this.overrideTiers = JSON.parse(JSON.stringify(this.tiers));
     }
   }
@@ -304,13 +314,49 @@ export class AcaManagementComponent implements OnInit {
   closeOverrideModal(): void {
     this.showOverrideModal = false;
     this.overrideAgentId = '';
+    this.overrideAgentSearch = '';
+    this.overrideAgentSelected = null;
+    this.overrideAgentResults = [];
     this.overrideTiers = [];
     this.overrideError = '';
   }
 
+  searchAgents(): void {
+    const q = this.overrideAgentSearch.trim();
+    if (q.length < 2) {
+      this.overrideAgentResults = [];
+      return;
+    }
+    this.overrideSearching = true;
+    this.acaService.searchAgentsForOverride(q).subscribe({
+      next: (res: any) => {
+        this.overrideAgentResults = res.agents || [];
+        this.overrideSearching = false;
+      },
+      error: () => {
+        this.overrideAgentResults = [];
+        this.overrideSearching = false;
+      }
+    });
+  }
+
+  selectAgent(agent: any): void {
+    this.overrideAgentId = agent._id;
+    this.overrideAgentSelected = agent;
+    this.overrideAgentSearch = agent.name + (agent.referralCode ? ` (${agent.referralCode})` : '');
+    this.overrideAgentResults = [];
+  }
+
+  clearSelectedAgent(): void {
+    this.overrideAgentId = '';
+    this.overrideAgentSelected = null;
+    this.overrideAgentSearch = '';
+    this.overrideAgentResults = [];
+  }
+
   saveOverride(): void {
     if (!this.overrideAgentId.trim()) {
-      this.overrideError = 'Please enter an Agent ID.';
+      this.overrideError = 'Please search and select an agent.';
       return;
     }
     this.overrideSaving = true;

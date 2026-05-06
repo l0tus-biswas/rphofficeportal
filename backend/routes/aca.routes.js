@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const { parse } = require('csv-parse/sync');
 const XLSX = require('xlsx');
 const User = require('../models/User');
@@ -614,9 +615,41 @@ router.put('/admin/aca-tiers', authenticate, authorize('admin'), async (req, res
 router.get('/admin/aca-tiers/agent-overrides', authenticate, authorize('admin'), async (req, res) => {
   try {
     const overrides = await AcaTierConfig.find({ agent: { $ne: null } })
-      .populate('agent', 'name email')
+      .populate('agent', 'name email referralCode')
       .lean();
     return sendResponse(res, 200, { overrides });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/admin/aca-tiers/agents/search
+// @desc    Search agents by name, email, or referralCode for override picker
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.get('/admin/aca-tiers/agents/search', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      return sendResponse(res, 200, { agents: [] });
+    }
+    const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const filter = {
+      role: 'agent',
+      deletedAt: null,
+      $or: [
+        { name: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+        { referralCode: { $regex: escaped, $options: 'i' } }
+      ]
+    };
+    const agents = await User.find(filter)
+      .select('_id name email referralCode')
+      .sort({ name: 1 })
+      .limit(20)
+      .lean();
+    return sendResponse(res, 200, { agents });
   } catch (err) {
     return errorResponse(res, err);
   }
@@ -639,9 +672,23 @@ router.put('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), 
         return sendResponse(res, 400, { message: 'Each tier must have: tier, label, threshold, rate.' });
       }
     }
+    // Resolve agent: accept ObjectId or referralCode
+    let resolvedId = agentId;
+    if (!mongoose.Types.ObjectId.isValid(agentId)) {
+      const user = await User.findOne({ referralCode: { $regex: new RegExp(`^${agentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }).select('_id').lean();
+      if (!user) {
+        return sendResponse(res, 404, { message: 'Agent not found. Check the Agent ID or referral code.' });
+      }
+      resolvedId = user._id;
+    } else {
+      const exists = await User.exists({ _id: agentId, role: 'agent' });
+      if (!exists) {
+        return sendResponse(res, 404, { message: 'Agent not found with that ID.' });
+      }
+    }
     const config = await AcaTierConfig.findOneAndUpdate(
-      { agent: agentId },
-      { agent: agentId, tiers, updatedBy: req.user._id, updatedAt: new Date() },
+      { agent: resolvedId },
+      { agent: resolvedId, tiers, updatedBy: req.user._id, updatedAt: new Date() },
       { upsert: true, new: true }
     );
     return sendResponse(res, 200, { message: 'Agent tier override saved.', config });
@@ -657,7 +704,17 @@ router.put('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), 
 // ---------------------------------------------------------------------------
 router.delete('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
-    await AcaTierConfig.deleteOne({ agent: req.params.agentId });
+    const { agentId } = req.params;
+    // Resolve agent: accept ObjectId or referralCode
+    let resolvedId = agentId;
+    if (!mongoose.Types.ObjectId.isValid(agentId)) {
+      const user = await User.findOne({ referralCode: { $regex: new RegExp(`^${agentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }).select('_id').lean();
+      if (!user) {
+        return sendResponse(res, 404, { message: 'Agent not found.' });
+      }
+      resolvedId = user._id;
+    }
+    await AcaTierConfig.deleteOne({ agent: resolvedId });
     return sendResponse(res, 200, { message: 'Agent tier override removed. Agent will use global tiers.' });
   } catch (err) {
     return errorResponse(res, err);
