@@ -82,14 +82,14 @@ router.get('/', authenticate, async (req, res) => {
       query.isActive = true;
     }
 
-    // Optional category filter
+    // Optional category filter — category is now an array, use $in
     if (req.query.category) {
-      query.category = req.query.category;
+      query.category = { $in: [req.query.category] };
     }
 
     const carriers = await Carrier.find(query)
       .select('-__v')
-      .sort({ category: 1, name: 1 });
+      .sort({ name: 1 });
 
     res.json(carriers);
   } catch (error) {
@@ -130,13 +130,23 @@ router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuid
     } = req.body;
 
     if (!name) return res.status(400).json({ message: 'Carrier name is required' });
-    if (!category) return res.status(400).json({ message: 'Carrier category is required' });
 
-    const existing = await Carrier.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+    // category is now an array — parse if sent as JSON string
+    let categoryArr = category;
+    if (typeof categoryArr === 'string') {
+      try { categoryArr = JSON.parse(categoryArr); } catch (e) { categoryArr = [categoryArr]; }
+    }
+    if (!categoryArr || !Array.isArray(categoryArr) || categoryArr.length === 0) {
+      return res.status(400).json({ message: 'At least one carrier category is required' });
+    }
+
+    const existing = await Carrier.findOne({
+      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
     if (existing) return res.status(400).json({ message: 'Carrier with this name already exists' });
 
     const carrierData = {
-      name, category,
+      name, category: categoryArr,
       isActive: isActive !== undefined ? isActive : true,
       contractingLink, contractingInstructions, whatToExpect, notes,
       addedBy: req.user._id, lastModifiedBy: req.user._id
@@ -179,14 +189,23 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
 
     if (name && name !== carrier.name) {
       const existing = await Carrier.findOne({
-        name: { $regex: new RegExp(`^${name}$`, 'i') },
+        name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         _id: { $ne: carrier._id }
       });
       if (existing) return res.status(400).json({ message: 'Carrier with this name already exists' });
       carrier.name = name;
     }
 
-    if (category) carrier.category = category;
+    // category is now an array — parse if sent as JSON string
+    if (category) {
+      let categoryArr = category;
+      if (typeof categoryArr === 'string') {
+        try { categoryArr = JSON.parse(categoryArr); } catch (e) { categoryArr = [categoryArr]; }
+      }
+      if (Array.isArray(categoryArr) && categoryArr.length > 0) {
+        carrier.category = categoryArr;
+      }
+    }
     if (isActive !== undefined) carrier.isActive = isActive;
     if (factor !== undefined && factor !== '') carrier.factor = parseFloat(factor);
     if (productFactors) {

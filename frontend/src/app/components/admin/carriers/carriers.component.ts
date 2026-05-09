@@ -10,6 +10,8 @@ export class CarriersComponent implements OnInit {
   carriers: Carrier[] = [];
   filteredCarriers: Carrier[] = [];
   filterCategory = '';
+  sortField: 'name' | 'status' | '' = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
   loading = true;
   error = '';
   success = '';
@@ -53,15 +55,40 @@ export class CarriersComponent implements OnInit {
 
   applyFilter(): void {
     this.filteredCarriers = this.filterCategory
-      ? this.carriers.filter(c => c.category === this.filterCategory)
+      ? this.carriers.filter(c => c.category && c.category.includes(this.filterCategory))
       : [...this.carriers];
+    this.applySort();
+  }
+
+  toggleSort(field: 'name' | 'status'): void {
+    if (this.sortField === field) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortField = field;
+      this.sortDirection = 'asc';
+    }
+    this.applySort();
+  }
+
+  applySort(): void {
+    if (!this.sortField) return;
+    const dir = this.sortDirection === 'asc' ? 1 : -1;
+    this.filteredCarriers.sort((a, b) => {
+      if (this.sortField === 'name') {
+        return dir * a.name.localeCompare(b.name);
+      }
+      if (this.sortField === 'status') {
+        return dir * (Number(b.isActive) - Number(a.isActive));
+      }
+      return 0;
+    });
   }
 
   openNewForm(): void {
     this.showForm = true;
     this.editMode = false;
     this.currentCarrier = {
-      name: '', category: 'Life Insurance', isActive: true, notes: '',
+      name: '', category: [], isActive: true, notes: '',
       productFactors: [], newProductFactor: { productName: '', factor: null, level: '' }
     };
     this.levelGuideFile = null;
@@ -72,6 +99,7 @@ export class CarriersComponent implements OnInit {
     this.editMode = true;
     this.currentCarrier = {
       ...carrier,
+      category: carrier.category ? [...carrier.category] : [],
       productFactors: carrier.productFactors ? [...carrier.productFactors] : [],
       newProductFactor: { productName: '', factor: null, level: '' }
     };
@@ -83,6 +111,20 @@ export class CarriersComponent implements OnInit {
     this.editMode = false;
     this.currentCarrier = {};
     this.levelGuideFile = null;
+  }
+
+  toggleCategory(cat: string): void {
+    if (!this.currentCarrier.category) this.currentCarrier.category = [];
+    const idx = this.currentCarrier.category.indexOf(cat);
+    if (idx > -1) {
+      this.currentCarrier.category.splice(idx, 1);
+    } else {
+      this.currentCarrier.category.push(cat);
+    }
+  }
+
+  isCategorySelected(cat: string): boolean {
+    return !!this.currentCarrier.category && this.currentCarrier.category.includes(cat);
   }
 
   onFileChange(event: Event): void {
@@ -104,11 +146,11 @@ export class CarriersComponent implements OnInit {
 
   saveCarrier(): void {
     if (!this.currentCarrier.name) { this.error = 'Carrier name is required'; return; }
-    if (!this.currentCarrier.category) { this.error = 'Carrier category is required'; return; }
+    if (!this.currentCarrier.category || this.currentCarrier.category.length === 0) { this.error = 'At least one carrier category is required'; return; }
 
     const formData = new FormData();
     formData.append('name', this.currentCarrier.name);
-    formData.append('category', this.currentCarrier.category);
+    formData.append('category', JSON.stringify(this.currentCarrier.category));
     formData.append('isActive', String(this.currentCarrier.isActive ?? true));
     if (this.currentCarrier.factor != null) formData.append('factor', String(this.currentCarrier.factor));
     if (this.currentCarrier.productFactors?.length) {

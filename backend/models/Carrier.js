@@ -10,15 +10,17 @@ const carrierSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Carrier name is required'],
-    trim: true,
-    unique: true
+    trim: true
   },
 
-  // Product category this carrier belongs to
+  // Product categories this carrier belongs to (supports multiple)
   category: {
-    type: String,
+    type: [String],
     enum: ['Life Insurance', 'Health Insurance', 'Medicare', 'Supplemental Insurance'],
-    required: [true, 'Carrier category is required']
+    validate: {
+      validator: function(v) { return v && v.length > 0; },
+      message: 'At least one carrier category is required'
+    }
   },
 
   isActive: {
@@ -82,5 +84,7 @@ const carrierSchema = new mongoose.Schema({
 // Index for quick lookups
 carrierSchema.index({ isActive: 1 });
 carrierSchema.index({ category: 1, isActive: 1 });
+// Unique per name (now that category is an array, one carrier entry per name)
+carrierSchema.index({ name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Carrier', carrierSchema);

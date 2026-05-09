@@ -12,7 +12,7 @@ export interface ProductFactor {
 export interface Carrier {
   _id?: string;
   name: string;
-  category: string;
+  category: string[];
   isActive: boolean;
   factor?: number | null;
   productFactors?: ProductFactor[];

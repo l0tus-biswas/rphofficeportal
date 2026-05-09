@@ -50,7 +50,9 @@ export class AgentCarriersComponent implements OnInit {
       next: (carriers) => {
         this.carriersByCategory = {};
         for (const tab of this.TABS) {
-          this.carriersByCategory[tab.category] = carriers.filter(c => c.category === tab.category);
+          this.carriersByCategory[tab.category] = carriers.filter(c =>
+            c.category && c.category.includes(tab.category)
+          );
         }
         carriersLoaded = true;
         checkDone();

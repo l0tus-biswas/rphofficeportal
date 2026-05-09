@@ -20,6 +20,15 @@
   color: #6c757d;
 }
 
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-th:hover {
+  color: #0d6efd;
+}
+
 .btn-group-sm .btn {
   padding: 0.25rem 0.5rem;
 }

@@ -36,11 +36,13 @@
             <input type="text" class="form-control" [(ngModel)]="currentCarrier.name" name="name" placeholder="e.g. Mutual of Omaha" required>
           </div>
           <div class="col-md-4 mb-3">
-            <label class="form-label">Category *</label>
-            <select class="form-select" [(ngModel)]="currentCarrier.category" name="category">
-              <option value="" disabled>Select category</option>
-              <option *ngFor="let cat of CATEGORIES" [value]="cat">{{ cat }}</option>
-            </select>
+            <label class="form-label">Categories * <small class="text-muted">(select all that apply)</small></label>
+            <div class="d-flex flex-wrap gap-2">
+              <div *ngFor="let cat of CATEGORIES" class="form-check">
+                <input class="form-check-input" type="checkbox" [id]="'cat-' + cat" [checked]="isCategorySelected(cat)" (change)="toggleCategory(cat)">
+                <label class="form-check-label" [for]="'cat-' + cat">{{ cat }}</label>
+              </div>
+            </div>
           </div>
           <div class="col-md-2 mb-3">
             <label class="form-label">Status</label>
@@ -111,7 +113,7 @@
         </div>
 
         <!-- Supplemental Level Guide PDF -->
-        <div class="mb-3" *ngIf="currentCarrier.category === 'Supplemental Insurance'">
+        <div class="mb-3" *ngIf="currentCarrier.category && currentCarrier.category.includes('Supplemental Insurance')">
           <label class="form-label">Supplemental Level Guide PDF</label>
           <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf" name="levelGuideFile">
           <small class="text-muted" *ngIf="currentCarrier.supplementalLevelGuide">
@@ -163,10 +165,24 @@
         <table class="table table-hover align-middle">
           <thead class="table-light">
             <tr>
-              <th>Name</th>
+              <th role="button" (click)="toggleSort('name')" class="sortable-th">
+                Name
+                <i class="bi ms-1" [ngClass]="{
+                  'bi-sort-alpha-down': sortField === 'name' && sortDirection === 'asc',
+                  'bi-sort-alpha-up': sortField === 'name' && sortDirection === 'desc',
+                  'bi-arrow-down-up text-muted': sortField !== 'name'
+                }"></i>
+              </th>
               <th>Category</th>
               <th>Factor</th>
-              <th>Status</th>
+              <th role="button" (click)="toggleSort('status')" class="sortable-th">
+                Status
+                <i class="bi ms-1" [ngClass]="{
+                  'bi-sort-down': sortField === 'status' && sortDirection === 'asc',
+                  'bi-sort-up': sortField === 'status' && sortDirection === 'desc',
+                  'bi-arrow-down-up text-muted': sortField !== 'status'
+                }"></i>
+              </th>
               <th>Contracting</th>
               <th>Notes</th>
               <th>Actions</th>
@@ -175,7 +191,9 @@
           <tbody>
             <tr *ngFor="let carrier of filteredCarriers">
               <td><strong>{{ carrier.name }}</strong></td>
-              <td><span class="badge bg-info text-dark">{{ carrier.category }}</span></td>
+              <td>
+                <span *ngFor="let cat of carrier.category" class="badge bg-info text-dark me-1">{{ cat }}</span>
+              </td>
               <td>
                 <span *ngIf="carrier.factor != null">{{ carrier.factor }}%</span>
                 <span *ngIf="carrier.productFactors && carrier.productFactors.length > 0" class="ms-1">
