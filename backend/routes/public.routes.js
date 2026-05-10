@@ -9,6 +9,7 @@ const { generatePassword, sendResponse, errorResponse } = require('../utils/help
 const { createPaymentIntent } = require('../utils/stripe');
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance. Please check back shortly.';
 
 // @route   GET /api/public/branding
 // @desc    Get branding configuration (public)
@@ -22,6 +23,25 @@ router.get('/branding', async (req, res) => {
       appName: appName?.value || 'Escape',
       appLogo: appLogo?.value || null
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/public/site-access
+// @desc    Get emergency site access state and message
+// @access  Public
+router.get('/site-access', async (req, res) => {
+  try {
+    const [enabledConfig, messageConfig] = await Promise.all([
+      SystemConfig.findOne({ key: 'site_access_enabled' }).lean(),
+      SystemConfig.findOne({ key: 'site_access_message' }).lean()
+    ]);
+
+    const siteAccessEnabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
+    const siteAccessMessage = messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE;
+
+    sendResponse(res, 200, { siteAccessEnabled, siteAccessMessage });
   } catch (error) {
     errorResponse(res, error);
   }

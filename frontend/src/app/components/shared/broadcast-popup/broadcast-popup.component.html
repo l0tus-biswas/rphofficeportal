@@ -1,0 +1,44 @@
+<div *ngIf="isVisible && currentBroadcast" class="broadcast-popup-overlay">
+  <div class="broadcast-popup-container">
+    <!-- Popup Content -->
+    <div class="popup-content">
+      <!-- Icon -->
+      <div class="popup-icon">
+        <i class="bi bi-broadcast-pin"></i>
+      </div>
+
+      <!-- Title -->
+      <h2 class="popup-title">{{ currentBroadcast.title }}</h2>
+
+      <!-- Image (if available) -->
+      <div *ngIf="currentBroadcast.image" class="popup-image">
+        <img [src]="getImageUrl(currentBroadcast.image)" alt="Announcement image">
+      </div>
+
+      <!-- Message -->
+      <p class="popup-message" [style.white-space]="'pre-line'">
+        {{ currentBroadcast.message }}
+      </p>
+
+      <!-- Metadata -->
+      <div class="popup-metadata">
+        <span class="metadata-item">
+          <i class="bi bi-person me-1"></i>{{ currentBroadcast.postedBy || 'Admin' }}
+        </span>
+        <span class="metadata-item">
+          <i class="bi bi-calendar me-1"></i>{{ currentBroadcast.createdAt | date:'short' }}
+        </span>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="popup-actions">
+        <button class="btn btn-dismiss" (click)="dismiss()">
+          <i class="bi bi-x me-2"></i>Dismiss
+        </button>
+        <button class="btn btn-primary" (click)="navigateToAnnouncement()">
+          <i class="bi bi-arrow-right me-2"></i>View Details
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

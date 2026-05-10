@@ -29,8 +29,13 @@ export class SystemConfigComponent implements OnInit {
   loading: boolean = false;
   saving: boolean = false;
   syncing: boolean = false;
+  siteAccessLoading: boolean = false;
+  siteAccessSaving: boolean = false;
   error: string = '';
   success: string = '';
+
+  siteAccessEnabled: boolean = true;
+  siteAccessMessage: string = 'RHP Office is temporarily under maintenance. Please check back shortly.';
   
   editingConfig: SystemConfig | null = null;
   editValue: string = '';
@@ -52,6 +57,50 @@ export class SystemConfigComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadConfigs();
+    this.loadSiteAccess();
+  }
+
+  loadSiteAccess(): void {
+    this.siteAccessLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/admin/config/site-access`).subscribe({
+      next: (response) => {
+        const enabled = response?.siteAccessEnabled ?? response?.data?.siteAccessEnabled;
+        const message = response?.siteAccessMessage ?? response?.data?.siteAccessMessage;
+        this.siteAccessEnabled = enabled !== false;
+        if (message) {
+          this.siteAccessMessage = message;
+        }
+        this.siteAccessLoading = false;
+      },
+      error: () => {
+        this.siteAccessLoading = false;
+      }
+    });
+  }
+
+  saveSiteAccess(): void {
+    this.siteAccessSaving = true;
+    this.error = '';
+    this.success = '';
+
+    this.http.put<any>(`${environment.apiUrl}/admin/config/site-access`, {
+      enabled: this.siteAccessEnabled,
+      message: this.siteAccessMessage
+    }).subscribe({
+      next: (response) => {
+        this.success = response?.message || 'Site access settings updated';
+        this.siteAccessSaving = false;
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to update site access settings';
+        this.siteAccessSaving = false;
+      }
+    });
+  }
+
+  onSiteAccessToggle(): void {
+    this.saveSiteAccess();
   }
 
   loadConfigs(): void {

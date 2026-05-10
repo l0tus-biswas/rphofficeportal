@@ -136,6 +136,9 @@ export class BroadcastManagementComponent implements OnInit {
         next: (res: any) => {
           const newId = res?.broadcast?._id || res?.data?.broadcast?._id;
           this.uploadImageIfSelected(newId, () => {
+            // Emit socket notification AFTER image upload completes so the popup
+            // shows the full broadcast including any attached image and link.
+            this.broadcastService.notifyBroadcast(newId).subscribe();
             this.success = res?.message || res?.data?.message || 'Broadcast sent!';
             this.saving = false;
             this.closeModal();

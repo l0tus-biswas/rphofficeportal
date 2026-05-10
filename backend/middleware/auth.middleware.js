@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const SystemConfig = require('../models/SystemConfig');
+
+const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance. Please check back shortly.';
 
 exports.protect = async (req, res, next) => {
   try {
@@ -46,6 +49,21 @@ exports.protect = async (req, res, next) => {
       if (req.user.role === 'admin') {
         next();
         return;
+      }
+
+      // Emergency maintenance mode: block non-admin access when site access is disabled
+      const [enabledConfig, messageConfig] = await Promise.all([
+        SystemConfig.findOne({ key: 'site_access_enabled' }).lean(),
+        SystemConfig.findOne({ key: 'site_access_message' }).lean()
+      ]);
+
+      const siteAccessEnabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
+      if (!siteAccessEnabled) {
+        return res.status(503).json({
+          success: false,
+          maintenanceMode: true,
+          message: messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE
+        });
       }
       
       // PAYMENT CHECK TEMPORARILY DISABLED - Agents can access without payment

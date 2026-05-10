@@ -17,6 +17,57 @@
     </div>
   </div>
 
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card border-warning">
+        <div class="card-header bg-warning-subtle d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-shield-exclamation me-2"></i>Emergency Site Access</h5>
+          <span class="badge" [ngClass]="siteAccessEnabled ? 'bg-success' : 'bg-danger'">
+            {{ siteAccessEnabled ? 'ON' : 'OFF' }}
+          </span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-3">
+            Toggle emergency maintenance mode. When OFF, non-admin users cannot log in or use the portal.
+          </p>
+
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <span class="fw-semibold">Site Access</span>
+            <div class="form-check form-switch m-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="siteAccessToggle"
+                [checked]="siteAccessEnabled"
+                (change)="siteAccessEnabled = !siteAccessEnabled; onSiteAccessToggle()"
+                [disabled]="siteAccessLoading || siteAccessSaving">
+              <label class="form-check-label" for="siteAccessToggle">
+                {{ siteAccessEnabled ? 'Enabled' : 'Disabled (Maintenance Mode)' }}
+              </label>
+            </div>
+            <span *ngIf="siteAccessSaving" class="text-muted small">
+              <i class="bi bi-arrow-repeat spin me-1"></i>Saving...
+            </span>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label"><strong>User Message During Maintenance</strong></label>
+            <textarea
+              class="form-control"
+              rows="2"
+              [(ngModel)]="siteAccessMessage"
+              [disabled]="siteAccessLoading || siteAccessSaving"
+              placeholder="RHP Office is temporarily under maintenance. Please check back shortly."></textarea>
+          </div>
+
+          <button class="btn btn-outline-warning" (click)="saveSiteAccess()" [disabled]="siteAccessLoading || siteAccessSaving">
+            <i class="bi bi-save me-1"></i>Save Message
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Alerts -->
   <div class="row" *ngIf="error || success">
     <div class="col-md-12">

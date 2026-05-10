@@ -16,6 +16,10 @@
         <h2 class="mb-4 text-center">{{ "Welcome Back" }}</h2>
         <p class="text-muted text-center mb-4">{{ "Sign in to your account" }}</p>
 
+        <div *ngIf="maintenanceMode" class="alert alert-warning" role="alert">
+          <i class="bi bi-tools me-2"></i>{{ maintenanceMessage }}
+        </div>
+
         <div *ngIf="error" class="alert alert-danger alert-dismissible fade show" role="alert">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
           <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>

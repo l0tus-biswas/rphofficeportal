@@ -4,6 +4,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const User = require('./models/User');
+const SystemConfig = require('./models/SystemConfig');
 const { protect: authMiddleware } = require('./middleware/auth.middleware');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -110,8 +114,76 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Create HTTP server with Socket.IO
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  path: '/socket.io/',
+  cors: {
+    origin: process.env.APP_URL || 'http://localhost:4200',
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 60000,
+  allowEIO3: true
 });
 
-module.exports = app;
+// Middleware: Authenticate socket connections
+io.use((socket, next) => {
+  (async () => {
+    const token = socket.handshake.auth.token;
+    if (!token) {
+      console.warn('[Socket] Connection rejected: No token provided');
+      return next(new Error('Authentication required'));
+    }
+
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select('role isActive deletedAt').lean();
+
+      if (!user || !user.isActive || user.deletedAt) {
+        return next(new Error('User is not allowed to connect'));
+      }
+
+      if (user.role !== 'admin') {
+        const enabledConfig = await SystemConfig.findOne({ key: 'site_access_enabled' }).lean();
+        const siteAccessEnabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
+        if (!siteAccessEnabled) {
+          return next(new Error('Maintenance mode active'));
+        }
+      }
+
+      socket.user = decoded;
+      socket.userId = decoded.id;
+      console.log(`[Socket] User ${socket.userId} authenticated`);
+      next();
+    } catch (error) {
+      console.warn(`[Socket] Authentication failed: ${error.message}`);
+      next(new Error('Invalid token: ' + error.message));
+    }
+  })();
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`[Socket] User ${socket.userId} connected:`, socket.id);
+
+  // Join a user-specific room
+  socket.join(`user:${socket.userId}`);
+
+  // Listen for disconnect
+  socket.on('disconnect', () => {
+    console.log(`[Socket] User ${socket.userId} disconnected:`, socket.id);
+  });
+});
+
+// Make io available to routes
+app.locals.io = io;
+
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT} with Socket.IO enabled`);
+});
+
+module.exports = { app, httpServer, io };

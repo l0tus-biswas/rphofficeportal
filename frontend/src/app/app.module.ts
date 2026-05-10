@@ -48,6 +48,7 @@ import { TranslationComponent } from './components/user/translation.component';
 import { NotificationsComponent } from './components/user/notifications.component';
 import { BroadcastsComponent } from './components/broadcasts/broadcasts.component';
 import { BroadcastManagementComponent } from './components/admin/broadcast-management/broadcast-management.component';
+import { BroadcastPopupComponent } from './components/shared/broadcast-popup/broadcast-popup.component';
 import { ApplicationSuccessComponent } from './components/apply/application-success.component';
 import { AgentCarriersComponent } from './components/carriers/agent-carriers/agent-carriers.component';
 import { CarrierAppointmentsComponent } from './components/admin/carrier-appointments/carrier-appointments.component';
@@ -109,6 +110,7 @@ import { SafePipe } from './pipes/safe.pipe';
     NotificationsComponent,
     BroadcastsComponent,
     BroadcastManagementComponent,
+    BroadcastPopupComponent,
     SafePipe,
     AgentCarriersComponent,
     CarrierAppointmentsComponent,

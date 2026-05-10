@@ -1,23 +1,31 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Title, Meta } from '@angular/platform-browser';
 import { Router, NavigationEnd } from '@angular/router';
 import { BrandingService } from './services/branding.service';
+import { BroadcastService } from './services/broadcast.service';
+import { BroadcastPopupService } from './services/broadcast-popup.service';
+import { SocketService } from './services/socket.service';
 import { filter } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css']
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = 'RHP Office - Recruiting Platform';
   private currentBrandingName = 'RHP Office';
+  private broadcastSubscription?: Subscription;
 
   constructor(
     private titleService: Title,
     private metaService: Meta,
     private router: Router,
-    private brandingService: BrandingService
+    private brandingService: BrandingService,
+    private broadcastService: BroadcastService,
+    private broadcastPopupService: BroadcastPopupService,
+    private socketService: SocketService
   ) {}
 
   ngOnInit(): void {
@@ -50,6 +58,17 @@ export class AppComponent implements OnInit {
     ).subscribe((event: any) => {
       this.updateMetaForRoute(event.url);
     });
+
+    // Listen for new broadcasts and trigger popup
+    this.broadcastSubscription = this.broadcastService.newBroadcast$.subscribe(broadcast => {
+      if (broadcast) {
+        this.broadcastPopupService.showBroadcastPopup(broadcast);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.broadcastSubscription?.unsubscribe();
   }
 
   private updateMetaForRoute(url: string): void {

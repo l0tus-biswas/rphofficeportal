@@ -222,7 +222,6 @@ router.post('/', authorize('admin'), async (req, res) => {
 
     const users = await User.find(filter).select('_id email name').lean();
     let sentCount = 0;
-    let emailsSent = 0;
 
     // First: create all in-app notifications (fast, no rate limit)
     const notificationMap = new Map();
@@ -245,73 +244,17 @@ router.post('/', authorize('admin'), async (req, res) => {
       }
     }
 
-    // Second: send emails with rate-limit pacing
-    // Respond to admin immediately, send emails in background
+    // Respond to admin immediately.
+    // Emails and real-time socket popup are sent from POST /:id/notify,
+    // which is called after image upload completes.
     broadcast.sentCount = sentCount;
+    broadcast.emailsSent = 0;
     await broadcast.save();
 
     sendResponse(res, 201, {
-      message: `Broadcast sent to ${sentCount} users. Emails are being delivered...`,
+      message: `Broadcast created for ${sentCount} users. Delivery starts when notify is triggered.`,
       broadcast
     });
-
-    // Background email sending (after response)
-    (async () => {
-      let emailCount = 0;
-      for (let i = 0; i < users.length; i++) {
-        const user = users[i];
-        if (!user.email) continue;
-
-        // Pause before hitting rate limit
-        if (emailCount > 0 && emailCount % EMAIL_BATCH_SIZE === 0) {
-          await delay(EMAIL_BATCH_DELAY_MS);
-        }
-
-        try {
-          await sendNotificationEmail({
-            toEmail: user.email,
-            title: broadcast.title,
-            message: broadcast.message,
-            link: broadcast.link || '/broadcasts',
-            actionLabel: 'View Announcement'
-          });
-          emailCount++;
-          const notif = notificationMap.get(user._id.toString());
-          if (notif) {
-            notif.emailSent = true;
-            await notif.save();
-          }
-        } catch (emailErr) {
-          console.error(`[Broadcast] Email failed for ${user.email}:`, emailErr.message);
-          // If rate limited, wait and retry once
-          if (emailErr.message && emailErr.message.includes('rate limit')) {
-            await delay(EMAIL_BATCH_DELAY_MS);
-            try {
-              await sendNotificationEmail({
-                toEmail: user.email,
-                title: broadcast.title,
-                message: broadcast.message,
-                link: broadcast.link || '/broadcasts',
-                actionLabel: 'View Announcement'
-              });
-              emailCount++;
-              const notif = notificationMap.get(user._id.toString());
-              if (notif) {
-                notif.emailSent = true;
-                await notif.save();
-              }
-            } catch (retryErr) {
-              console.error(`[Broadcast] Email retry failed for ${user.email}:`, retryErr.message);
-            }
-          }
-        }
-      }
-
-      // Update final email count
-      broadcast.emailsSent = emailCount;
-      await broadcast.save();
-      console.log(`[Broadcast] ${broadcast.title}: ${emailCount} emails delivered to ${sentCount} users`);
-    })();
   } catch (error) {
     errorResponse(res, error);
   }
@@ -409,6 +352,108 @@ router.delete('/:id/image', authorize('admin'), async (req, res) => {
   }
 });
 
+// @route   POST /api/broadcasts/:id/notify
+// @desc    Emit socket event for this broadcast (called after image upload completes)
+// @access  Admin only
+router.post('/:id/notify', authorize('admin'), async (req, res) => {
+  try {
+    const broadcast = await Broadcast.findById(req.params.id)
+      .populate('createdBy', 'name')
+      .lean();
+    if (!broadcast) {
+      return sendResponse(res, 404, { message: 'Broadcast not found' });
+    }
+
+    const filter = { isActive: true };
+    if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
+      filter.role = { $in: broadcast.targetRoles };
+    }
+    const users = await User.find(filter).select('_id email').lean();
+
+    const enrichedBroadcast = {
+      ...broadcast,
+      postedBy: broadcast.createdBy?.name || req.user.name || 'Admin'
+    };
+
+    const io = req.app.locals.io;
+    if (io) {
+      users.forEach(user => {
+        io.to(`user:${user._id.toString()}`).emit('new_broadcast', enrichedBroadcast);
+      });
+      console.log(`[Broadcast] Socket notified ${users.length} users for: ${broadcast.title}`);
+    }
+
+    sendResponse(res, 200, { message: `Notified ${users.length} users. Emails are being delivered...` });
+
+    // Background email sending with current broadcast data (includes image if uploaded)
+    (async () => {
+      const userIds = users.map(u => u._id);
+      const existingNotifications = await Notification.find({
+        type: 'admin_broadcast',
+        'data.broadcastId': broadcast._id.toString(),
+        userId: { $in: userIds }
+      }).select('_id userId emailSent');
+
+      const notificationMap = new Map();
+      existingNotifications.forEach(n => notificationMap.set(n.userId.toString(), n));
+
+      let emailCount = 0;
+
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        const notif = notificationMap.get(user._id.toString());
+
+        if (!user.email || !notif || notif.emailSent) continue;
+
+        if (emailCount > 0 && emailCount % EMAIL_BATCH_SIZE === 0) {
+          await delay(EMAIL_BATCH_DELAY_MS);
+        }
+
+        try {
+          await sendNotificationEmail({
+            toEmail: user.email,
+            title: broadcast.title,
+            message: broadcast.message,
+            link: broadcast.link || '/broadcasts',
+            imageUrl: broadcast.image || null,
+            actionLabel: 'View Announcement'
+          });
+          emailCount++;
+          notif.emailSent = true;
+          await notif.save();
+        } catch (emailErr) {
+          console.error(`[Broadcast Notify] Email failed for ${user.email}:`, emailErr.message);
+          if (emailErr.message && emailErr.message.includes('rate limit')) {
+            await delay(EMAIL_BATCH_DELAY_MS);
+            try {
+              await sendNotificationEmail({
+                toEmail: user.email,
+                title: broadcast.title,
+                message: broadcast.message,
+                link: broadcast.link || '/broadcasts',
+                imageUrl: broadcast.image || null,
+                actionLabel: 'View Announcement'
+              });
+              emailCount++;
+              notif.emailSent = true;
+              await notif.save();
+            } catch (retryErr) {
+              console.error(`[Broadcast Notify] Email retry failed for ${user.email}:`, retryErr.message);
+            }
+          }
+        }
+      }
+
+      if (emailCount > 0) {
+        await Broadcast.findByIdAndUpdate(broadcast._id, { $inc: { emailsSent: emailCount } });
+      }
+      console.log(`[Broadcast Notify] ${broadcast.title}: ${emailCount} emails delivered`);
+    })();
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   POST /api/broadcasts/:id/resend
 // @desc    Resend an existing broadcast to users who haven't received it
 // @access  Admin only
@@ -460,6 +505,19 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
     broadcast.sentCount += sentCount;
     await broadcast.save();
 
+    // Emit Socket.IO event to new users for real-time popup
+    const enrichedBroadcast = {
+      ...broadcast.toObject(),
+      postedBy: broadcast.createdBy?.name || 'Admin'
+    };
+
+    newUsers.forEach(user => {
+      const io = req.app.locals.io;
+      if (io) {
+        io.to(`user:${user._id.toString()}`).emit('new_broadcast', enrichedBroadcast);
+      }
+    });
+
     sendResponse(res, 200, {
       message: `Resent to ${sentCount} new users. Emails are being delivered...`,
       broadcast
@@ -482,6 +540,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
             title: broadcast.title,
             message: broadcast.message,
             link: broadcast.link || '/broadcasts',
+            imageUrl: broadcast.image || null,
             actionLabel: 'View Announcement'
           });
           emailCount++;
@@ -500,6 +559,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
                 title: broadcast.title,
                 message: broadcast.message,
                 link: broadcast.link || '/broadcasts',
+                imageUrl: broadcast.image || null,
                 actionLabel: 'View Announcement'
               });
               emailCount++;

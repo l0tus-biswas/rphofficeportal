@@ -4,6 +4,7 @@ import { BehaviorSubject, Observable, interval, EMPTY } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
+import { SocketService } from './socket.service';
 
 export interface Broadcast {
   _id: string;
@@ -29,18 +30,111 @@ export class BroadcastService {
   private apiUrl = `${environment.apiUrl}/broadcasts`;
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
+  
+  private newBroadcastSubject = new BehaviorSubject<Broadcast | null>(null);
+  public newBroadcast$ = this.newBroadcastSubject.asObservable();
 
-  constructor(private http: HttpClient, private authService: AuthService) {
-    // Poll unread broadcast count every 30s while logged in
+  // localStorage key for broadcasts the user has explicitly dismissed/confirmed
+  private readonly DISMISSED_KEY = 'rph_broadcast_dismissed_ids';
+  // in-memory guard: prevents showing the same popup twice in one session
+  private shownInSession = new Set<string>();
+
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService,
+    private socketService: SocketService
+  ) {
+    // Poll unread broadcast count every 60s while logged in
     this.authService.currentUser$.pipe(
-      switchMap(user => (user ? interval(30000) : EMPTY))
+      switchMap(user => (user ? interval(60000) : EMPTY))
     ).subscribe(() => {
       this.refreshUnreadCount();
     });
 
+    // Listen for real-time broadcasts via WebSocket
+    this.setupSocketListeners();
+
+    // When user logs in, check for any unread broadcasts they missed while offline
     this.authService.currentUser$.subscribe(user => {
-      if (!user) {
+      if (user) {
+        this.checkOfflineBroadcasts();
+      } else {
         this.unreadCountSubject.next(0);
+      }
+    });
+
+    // Also check on every socket reconnect (handles network drops)
+    this.socketService.connectionState$.subscribe(state => {
+      if (state === 'connected') {
+        this.checkOfflineBroadcasts();
+      }
+    });
+  }
+
+  /**
+   * Fetch unread broadcasts the user may have missed while offline and show
+   * a popup for the most recent one not already shown.
+   */
+  private checkOfflineBroadcasts(): void {
+    if (!this.authService.isLoggedIn()) return;
+    this.getBroadcasts(1, 20).subscribe({
+      next: (res: any) => {
+        const broadcasts: Broadcast[] = res?.broadcasts || res?.data?.broadcasts || [];
+        // Find the newest unread broadcast we haven't popped up yet
+        const toShow = broadcasts.find(b => !b.isRead && !this.isBroadcastDismissed(b._id));
+        if (toShow) {
+          this.emitForPopup(toShow);
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  /** Emit a broadcast to the popup subject.
+   *  - Skips if user already dismissed/confirmed this broadcast (localStorage).
+   *  - Skips if already shown in this browser session (in-memory guard).
+   *  - Does NOT mark dismissed here; that only happens when user acts. */
+  private emitForPopup(broadcast: Broadcast): void {
+    if (this.isBroadcastDismissed(broadcast._id)) return;
+    if (this.shownInSession.has(broadcast._id)) return;
+    this.shownInSession.add(broadcast._id);
+    this.newBroadcastSubject.next(broadcast);
+  }
+
+  /** Called by the popup component when user explicitly dismisses, confirms, or opens the link. */
+  public markBroadcastDismissed(id: string): void {
+    this.shownInSession.delete(id);
+    const dismissed = this.getDismissedIds();
+    dismissed.add(id);
+    const trimmed = Array.from(dismissed).slice(-100);
+    try { localStorage.setItem(this.DISMISSED_KEY, JSON.stringify(trimmed)); } catch {}
+  }
+
+  private isBroadcastDismissed(id: string): boolean {
+    return this.getDismissedIds().has(id);
+  }
+
+  private getDismissedIds(): Set<string> {
+    try {
+      const raw = localStorage.getItem(this.DISMISSED_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  /**
+   * Setup Socket.IO listeners for real-time broadcast notifications
+   */
+  private setupSocketListeners(): void {
+    this.socketService.on<Broadcast>('new_broadcast').subscribe({
+      next: (broadcast: Broadcast) => {
+        console.log('[Broadcast] New broadcast received via WebSocket:', broadcast.title);
+        this.emitForPopup(broadcast);
+        this.refreshUnreadCount();
+      },
+      error: (err) => {
+        console.error('[Broadcast] Socket listener error:', err);
       }
     });
   }
@@ -111,5 +205,10 @@ export class BroadcastService {
   // Admin: remove broadcast image
   removeBroadcastImage(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${id}/image`, this.getHeaders());
+  }
+
+  // Admin: trigger socket notification after broadcast is fully ready (incl. image)
+  notifyBroadcast(id: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${id}/notify`, {}, this.getHeaders());
   }
 }

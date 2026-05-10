@@ -37,6 +37,22 @@ const upload = multer({
   }
 });
 
+const SITE_ACCESS_KEY = 'site_access_enabled';
+const SITE_ACCESS_MESSAGE_KEY = 'site_access_message';
+const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance. Please check back shortly.';
+
+async function getSiteAccessState() {
+  const [enabledConfig, messageConfig] = await Promise.all([
+    SystemConfig.findOne({ key: SITE_ACCESS_KEY }).lean(),
+    SystemConfig.findOne({ key: SITE_ACCESS_MESSAGE_KEY }).lean()
+  ]);
+
+  const enabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
+  const message = messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE;
+
+  return { enabled, message };
+}
+
 // @route   GET /api/admin/config/branding
 // @desc    Get branding configuration (public)
 // @access  Public
@@ -48,6 +64,86 @@ router.get('/branding', async (req, res) => {
     sendResponse(res, 200, {
       appName: appName?.value || 'Escape',
       appLogo: appLogo?.value || null
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/config/site-access/public
+// @desc    Get site access status for public pages
+// @access  Public
+router.get('/site-access/public', async (req, res) => {
+  try {
+    const siteAccess = await getSiteAccessState();
+    sendResponse(res, 200, {
+      siteAccessEnabled: siteAccess.enabled,
+      siteAccessMessage: siteAccess.message
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/config/site-access
+// @desc    Get site access status (admin)
+// @access  Private/Admin
+router.get('/site-access', protect, authorize('admin'), async (req, res) => {
+  try {
+    const siteAccess = await getSiteAccessState();
+    sendResponse(res, 200, {
+      siteAccessEnabled: siteAccess.enabled,
+      siteAccessMessage: siteAccess.message
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/config/site-access
+// @desc    Toggle emergency site access and update maintenance message
+// @access  Private/Admin
+router.put('/site-access', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { enabled, message } = req.body;
+
+    if (typeof enabled !== 'boolean') {
+      return sendResponse(res, 400, { message: 'enabled (boolean) is required' });
+    }
+
+    const sanitizedMessage = (message || '').trim() || DEFAULT_SITE_ACCESS_MESSAGE;
+
+    await Promise.all([
+      SystemConfig.findOneAndUpdate(
+        { key: SITE_ACCESS_KEY },
+        {
+          key: SITE_ACCESS_KEY,
+          value: String(enabled),
+          category: 'application',
+          description: 'Emergency switch to allow/deny non-admin portal access',
+          isEditable: true,
+          updatedBy: req.user._id
+        },
+        { upsert: true, new: true }
+      ),
+      SystemConfig.findOneAndUpdate(
+        { key: SITE_ACCESS_MESSAGE_KEY },
+        {
+          key: SITE_ACCESS_MESSAGE_KEY,
+          value: sanitizedMessage,
+          category: 'application',
+          description: 'Message shown when site access is temporarily disabled',
+          isEditable: true,
+          updatedBy: req.user._id
+        },
+        { upsert: true, new: true }
+      )
+    ]);
+
+    sendResponse(res, 200, {
+      message: enabled ? 'Site access enabled for users' : 'Site access disabled (maintenance mode active)',
+      siteAccessEnabled: enabled,
+      siteAccessMessage: sanitizedMessage
     });
   } catch (error) {
     errorResponse(res, error);

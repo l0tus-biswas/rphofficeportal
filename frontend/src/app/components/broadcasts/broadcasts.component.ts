@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { BroadcastService, Broadcast } from '../../services/broadcast.service';
 import { AuthService } from '../../services/auth.service';
+import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -20,11 +21,37 @@ export class BroadcastsComponent implements OnInit {
 
   constructor(
     private broadcastService: BroadcastService,
+    private route: ActivatedRoute,
+    private router: Router,
     public authService: AuthService
   ) {}
 
   ngOnInit(): void {
+    this.route.queryParamMap.subscribe(params => {
+      const broadcastId = params.get('open');
+      if (broadcastId) {
+        this.openBroadcastById(broadcastId);
+      }
+    });
     this.loadBroadcasts();
+  }
+
+  openBroadcastById(broadcastId: string): void {
+    this.broadcastService.getBroadcast(broadcastId).subscribe({
+      next: (res: any) => {
+        const broadcast = res?.broadcast || res?.data?.broadcast;
+        if (!broadcast) return;
+        this.selectedBroadcast = {
+          ...broadcast,
+          isRead: true,
+          postedBy: broadcast.postedBy || (broadcast.createdBy?.name || 'Admin')
+        };
+        this.broadcastService.refreshUnreadCount();
+      },
+      error: () => {
+        // Ignore invalid/deleted IDs silently
+      }
+    });
   }
 
   loadBroadcasts(): void {
@@ -68,6 +95,13 @@ export class BroadcastsComponent implements OnInit {
 
   closeBroadcast(): void {
     this.selectedBroadcast = null;
+    if (this.route.snapshot.queryParamMap.has('open')) {
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams: { open: null },
+        queryParamsHandling: 'merge'
+      });
+    }
   }
 
   prevPage(): void {

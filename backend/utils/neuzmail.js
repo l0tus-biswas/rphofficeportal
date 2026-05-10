@@ -12,6 +12,36 @@ const axios = require('axios');
 const NEUZMAIL_API_URL = 'https://app.neuzmail.in/api/v1/transactional/send';
 const NEUZMAIL_API_TOKEN = process.env.NEUZMAIL_API_TOKEN;
 
+function isAbsoluteUrl(url) {
+  return /^https?:\/\//i.test(url || '');
+}
+
+function toAbsoluteUrl(url, appUrl) {
+  if (!url) return '';
+  if (isAbsoluteUrl(url)) return url;
+
+  const base = (appUrl || '').replace(/\/+$/, '');
+  const relative = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${relative}`;
+}
+
+function withEmailFallbackContent(message, actionUrl, imageUrl) {
+  const safeMessage = message || '';
+  const extras = [];
+
+  if (actionUrl) {
+    extras.push(`View Announcement: ${actionUrl}`);
+  }
+  if (imageUrl) {
+    extras.push(`Announcement Image: ${imageUrl}`);
+    // Also include an image tag for templates that render HTML in body merge tags.
+    extras.push(`<br><img src="${imageUrl}" alt="Announcement Image" style="max-width:100%;height:auto;border-radius:8px;" />`);
+  }
+
+  if (!extras.length) return safeMessage;
+  return `${safeMessage}<br><br>${extras.join('<br>')}`;
+}
+
 /**
  * Template UIDs - Update these after creating templates in Neuzmail dashboard
  * The user will create each template in Neuzmail and paste the UID here.
@@ -75,10 +105,11 @@ async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}
 // ── Helper to get common merge fields ──────────────────────────────────────────
 
 function commonFields() {
+  const appUrl = (process.env.APP_URL || 'https://rhpoffice.com').replace(/\/+$/, '');
   return {
     APP_NAME: process.env.SMTP_FROM_NAME || 'RHP Office',
-    APP_URL: process.env.APP_URL || 'https://rhpoffice.com',
-    LOGIN_URL: `${process.env.APP_URL || 'https://rhpoffice.com'}/login`,
+    APP_URL: appUrl,
+    LOGIN_URL: `${appUrl}/login`,
     CURRENT_YEAR: new Date().getFullYear().toString(),
   };
 }
@@ -219,8 +250,18 @@ exports.sendAccountActivatedEmail = async (user, password) => {
  * 07 - System Notification (Generic)
  * Trigger: Various system events (login, password change, recruit added, etc.)
  */
-exports.sendNotificationEmail = async ({ toEmail, title, message, link = null, actionLabel = 'View Details' }) => {
+exports.sendNotificationEmail = async ({
+  toEmail,
+  title,
+  message,
+  link = null,
+  imageUrl = null,
+  actionLabel = 'View Details'
+}) => {
   const common = commonFields();
+  const actionUrl = link ? toAbsoluteUrl(link, common.APP_URL) : '';
+  const resolvedImageUrl = imageUrl ? toAbsoluteUrl(imageUrl, common.APP_URL) : '';
+  const notificationMessage = withEmailFallbackContent(message, actionUrl, resolvedImageUrl);
 
   await sendViaNeuzmail({
     templateUid: TEMPLATE_UIDS.SYSTEM_NOTIFICATION,
@@ -229,9 +270,11 @@ exports.sendNotificationEmail = async ({ toEmail, title, message, link = null, a
     mergeFields: {
       ...common,
       NOTIFICATION_TITLE: title,
-      NOTIFICATION_MESSAGE: message,
-      ACTION_URL: link ? `${common.APP_URL}${link}` : '',
+      NOTIFICATION_MESSAGE: notificationMessage,
+      ACTION_URL: actionUrl,
       ACTION_LABEL: actionLabel,
+      IMAGE_URL: resolvedImageUrl,
+      NOTIFICATION_IMAGE_URL: resolvedImageUrl,
     },
   });
 };

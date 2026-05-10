@@ -27,6 +27,19 @@ export class AuthInterceptor implements HttpInterceptor {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           this.router.navigate(['/login']);
+        } else if (error.status === 503 && error.error?.maintenanceMode) {
+          // Emergency maintenance mode: force non-admin users back to login
+          const userRaw = localStorage.getItem('user');
+          const user = userRaw ? JSON.parse(userRaw) : null;
+          if (!user || user.role !== 'admin') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            this.router.navigate(['/login'], {
+              queryParams: {
+                maintenanceMessage: error.error?.message || 'RHP Office is temporarily under maintenance. Please check back shortly.'
+              }
+            });
+          }
         }
         return throwError(() => error);
       })

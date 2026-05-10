@@ -7,6 +7,9 @@ const { authLimiter, resetLimiter } = require('../middleware/rateLimiter.middlew
 const { sendPasswordResetEmail } = require('../utils/neuzmail');
 const { generateToken, sendResponse, errorResponse } = require('../utils/helpers');
 const crypto = require('crypto');
+const SystemConfig = require('../models/SystemConfig');
+
+const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance. Please check back shortly.';
 
 // @route   POST /api/auth/login
 // @desc    Login user
@@ -33,6 +36,23 @@ router.post('/login', authLimiter, validateRequest(schemas.login), async (req, r
     
     if (!isMatch) {
       return sendResponse(res, 401, { message: 'Invalid credentials' });
+    }
+
+    // Emergency maintenance mode: non-admin users cannot log in when disabled
+    if (user.role !== 'admin') {
+      const [enabledConfig, messageConfig] = await Promise.all([
+        SystemConfig.findOne({ key: 'site_access_enabled' }).lean(),
+        SystemConfig.findOne({ key: 'site_access_message' }).lean()
+      ]);
+
+      const siteAccessEnabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
+      if (!siteAccessEnabled) {
+        return res.status(503).json({
+          success: false,
+          maintenanceMode: true,
+          message: messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE
+        });
+      }
     }
     
     // Update last login
