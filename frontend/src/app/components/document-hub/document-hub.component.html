@@ -29,8 +29,52 @@
     <button type="button" class="btn-close" (click)="success = ''"></button>
   </div>
 
+  <div class="row g-3 mb-4" *ngIf="!loading">
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 stat-card">
+        <div class="card-body">
+          <div class="text-muted small">Subfolders Here</div>
+          <div class="h4 mb-0">{{ totalSubfolders }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 stat-card">
+        <div class="card-body">
+          <div class="text-muted small">Files Here</div>
+          <div class="h4 mb-0">{{ totalFiles }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 stat-card">
+        <div class="card-body">
+          <div class="text-muted small">Requests With Pending Work</div>
+          <div class="h4 mb-0">{{ pendingRequestCount }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 stat-card">
+        <div class="card-body">
+          <div class="text-muted small">Overdue Requests</div>
+          <div class="h4 mb-0 text-danger">{{ overdueRequestCount }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3" *ngIf="!loading">
+    <button class="btn btn-sm" [class.btn-primary]="activeSection === 'library'" [class.btn-outline-primary]="activeSection !== 'library'" (click)="switchSection('library')">
+      <i class="bi bi-archive me-1"></i>Library
+    </button>
+    <button class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
+      <i class="bi bi-send me-1"></i>Requests
+    </button>
+  </div>
+
   <!-- Breadcrumb + Search -->
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-3" *ngIf="activeSection === 'library'">
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-0">
         <li class="breadcrumb-item" [class.active]="!currentFolderId">
@@ -60,7 +104,7 @@
   </div>
 
   <!-- Folders -->
-  <div *ngIf="!loading && subfolders.length > 0" class="mb-4">
+  <div *ngIf="!loading && activeSection === 'library' && subfolders.length > 0" class="mb-4">
     <h6 class="text-muted text-uppercase small fw-bold mb-2">
       <i class="bi bi-folder me-1"></i>Folders
     </h6>
@@ -93,7 +137,7 @@
   </div>
 
   <!-- Files -->
-  <div *ngIf="!loading">
+  <div *ngIf="!loading && activeSection === 'library'">
     <h6 class="text-muted text-uppercase small fw-bold mb-2">
       <i class="bi bi-file-earmark me-1"></i>Files
     </h6>
@@ -164,15 +208,25 @@
   </div>
 
   <!-- Document Requests Section -->
-  <div *ngIf="requests.length > 0" class="mt-4">
+  <div *ngIf="!loading && activeSection === 'requests'" class="mt-4">
     <h5 class="mb-3"><i class="bi bi-send me-2"></i>Document Requests</h5>
+    <div *ngIf="requests.length === 0" class="card border-0 shadow-sm">
+      <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+        <div class="fw-semibold mb-1">No document requests yet</div>
+        <small *ngIf="isAdmin">Use "Request Document" to ask agents for files.</small>
+        <small *ngIf="!isAdmin">Any new requests from admin will appear here.</small>
+      </div>
+    </div>
     <div class="row g-3">
       <div *ngFor="let req of requests" class="col-12">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <div>
               <strong>{{ req.title }}</strong>
-              <span *ngIf="req.dueDate" class="badge bg-warning text-dark ms-2">Due: {{ formatDate(req.dueDate) }}</span>
+              <span *ngIf="req.dueDate" class="badge ms-2" [class.bg-danger]="isOverdue(req.dueDate)" [class.bg-warning]="!isOverdue(req.dueDate)" [class.text-dark]="!isOverdue(req.dueDate)">
+                {{ isOverdue(req.dueDate) ? 'Overdue' : 'Due' }}: {{ formatDate(req.dueDate) }}
+              </span>
               <span *ngIf="req.saveToFolder" class="badge bg-info text-dark ms-2">
                 <i class="bi bi-folder me-1"></i>{{ req.saveToFolder?.name || 'Folder' }}
               </span>
@@ -213,10 +267,10 @@
                     <td>{{ formatDate(resp.submittedAt) }}</td>
                     <td>
                       <ng-container *ngIf="resp.status === 'submitted'">
-                        <button class="btn btn-sm btn-success me-1" (click)="reviewResponse(req._id!, resp.agent?._id || resp.agent, 'approved')">
+                        <button class="btn btn-sm btn-success me-1" (click)="openReviewModal(req, resp, 'approved')">
                           <i class="bi bi-check"></i>
                         </button>
-                        <button class="btn btn-sm btn-danger" (click)="reviewResponse(req._id!, resp.agent?._id || resp.agent, 'rejected')">
+                        <button class="btn btn-sm btn-danger" (click)="openReviewModal(req, resp, 'rejected')">
                           <i class="bi bi-x"></i>
                         </button>
                       </ng-container>
@@ -231,17 +285,44 @@
 
             <!-- Agent: see own response -->
             <div *ngIf="!isAdmin">
-              <div *ngFor="let resp of req.responses">
-                <div class="d-flex align-items-center gap-3">
-                  <span class="badge" [class]="getRequestStatusBadge(resp.status)">{{ resp.status }}</span>
-                  <span *ngIf="resp.originalFileName" class="text-muted small">{{ resp.originalFileName }}</span>
-                  <span *ngIf="resp.reviewNotes" class="text-muted small"><i class="bi bi-chat-left-text me-1"></i>{{ resp.reviewNotes }}</span>
+              <div *ngIf="getMyResponse(req) as myResp">
+                <div class="card border my-submission-card mb-3">
+                  <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                      <div class="fw-semibold"><i class="bi bi-person-badge me-1"></i>My Submission</div>
+                      <span class="badge" [class]="getRequestStatusBadge(myResp.status)">{{ myResp.status }}</span>
+                    </div>
+
+                    <div class="small text-muted mb-2" *ngIf="myResp.originalFileName">
+                      <i class="bi bi-paperclip me-1"></i>{{ myResp.originalFileName }}
+                    </div>
+
+                    <div class="small text-muted mb-2" *ngIf="myResp.submittedAt">
+                      <i class="bi bi-clock-history me-1"></i>Submitted: {{ formatDate(myResp.submittedAt) }}
+                    </div>
+
+                    <div class="small text-muted mb-2" *ngIf="myResp.reviewNotes">
+                      <i class="bi bi-chat-left-text me-1"></i>{{ myResp.reviewNotes }}
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap" *ngIf="canViewUploadedFile(myResp)">
+                      <button class="btn btn-sm btn-outline-primary"
+                              (click)="viewUploadedFile(req._id!, myResp.agent?._id || myResp.agent, myResp.originalFileName || 'document')">
+                        <i class="bi bi-eye me-1"></i>View Uploaded File
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary"
+                              (click)="downloadResponse(req._id!, myResp.agent?._id || myResp.agent, myResp.originalFileName || 'document')">
+                        <i class="bi bi-download me-1"></i>Download
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
                 <!-- Upload form for pending/rejected -->
-                <div *ngIf="resp.status === 'pending' || resp.status === 'rejected'" class="mt-2">
+                <div *ngIf="myResp.status === 'pending' || myResp.status === 'rejected'" class="mt-2">
                   <div *ngIf="respondingRequestId !== req._id" class="d-inline">
                     <button class="btn btn-sm btn-primary" (click)="startRespond(req._id!)">
-                      <i class="bi bi-upload me-1"></i>{{ resp.status === 'rejected' ? 'Re-submit' : 'Upload Document' }}
+                      <i class="bi bi-upload me-1"></i>{{ myResp.status === 'rejected' ? 'Re-submit' : 'Upload Document' }}
                     </button>
                   </div>
                   <div *ngIf="respondingRequestId === req._id" class="mt-2">
@@ -256,6 +337,12 @@
                     <input type="text" class="form-control form-control-sm" style="max-width: 400px;"
                            [(ngModel)]="responseNotes" placeholder="Notes (optional)">
                   </div>
+                </div>
+              </div>
+              <div *ngIf="!getMyResponse(req)" class="card border my-submission-card mb-3">
+                <div class="card-body py-3">
+                  <div class="fw-semibold mb-2"><i class="bi bi-person-badge me-1"></i>My Submission</div>
+                  <div class="small text-muted">No submission record found yet for this request.</div>
                 </div>
               </div>
             </div>
@@ -496,3 +583,33 @@
   </div>
 </div>
 <div class="modal-backdrop fade" [class.show]="showRequestForm" *ngIf="showRequestForm"></div>
+
+<!-- Review Response Modal -->
+<div class="modal fade" [class.show]="showReviewModal" [style.display]="showReviewModal ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi" [class.bi-check-circle]="reviewStatus === 'approved'" [class.bi-x-circle]="reviewStatus === 'rejected'" class="me-2"></i>
+          {{ reviewStatus === 'approved' ? 'Approve' : 'Reject' }} Document
+        </h5>
+        <button type="button" class="btn-close" (click)="closeReviewModal()"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">You are reviewing a submission from <strong>{{ reviewAgentName }}</strong>.</p>
+        <div class="mb-3">
+          <label class="form-label">Notes {{ reviewStatus === 'rejected' ? '(recommended)' : '(optional)' }}</label>
+          <textarea class="form-control" rows="3" [(ngModel)]="reviewNotes" placeholder="Add context for the agent..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeReviewModal()" [disabled]="reviewSaving">Cancel</button>
+        <button class="btn" [class.btn-success]="reviewStatus === 'approved'" [class.btn-danger]="reviewStatus === 'rejected'" (click)="submitReview()" [disabled]="reviewSaving">
+          <span *ngIf="reviewSaving" class="spinner-border spinner-border-sm me-1"></span>
+          {{ reviewStatus === 'approved' ? 'Approve' : 'Reject' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showReviewModal" *ngIf="showReviewModal"></div>

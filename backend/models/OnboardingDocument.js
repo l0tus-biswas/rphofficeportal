@@ -30,6 +30,46 @@ const onboardingDocumentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  status: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected', 'missing'],
+    default: 'pending'
+  },
+  adminComment: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  reviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  reviewedAt: {
+    type: Date,
+    default: null
+  },
+  history: [{
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'missing'],
+      required: true
+    },
+    comment: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   // Optional notes from uploader
   notes: {
     type: String,
@@ -53,5 +93,6 @@ const onboardingDocumentSchema = new mongoose.Schema({
 // Indexes
 onboardingDocumentSchema.index({ agent: 1, docType: 1 });
 onboardingDocumentSchema.index({ agent: 1, deletedAt: 1 });
+onboardingDocumentSchema.index({ status: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('OnboardingDocument', onboardingDocumentSchema);

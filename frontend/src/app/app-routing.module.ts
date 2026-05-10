@@ -44,6 +44,8 @@ import { CommissionStatementsComponent } from './components/admin/commission-sta
 import { OnboardingHubComponent } from './components/onboarding/onboarding-hub/onboarding-hub.component';
 import { DocumentHubComponent } from './components/document-hub/document-hub.component';
 import { OnboardingDocTypesComponent } from './components/admin/onboarding-doc-types/onboarding-doc-types.component';
+import { AdminOnboardingListComponent } from './components/admin/onboarding-management/admin-onboarding-list/admin-onboarding-list.component';
+import { AdminOnboardingDetailComponent } from './components/admin/onboarding-management/admin-onboarding-detail/admin-onboarding-detail.component';
 import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
@@ -262,6 +264,18 @@ const routes: Routes = [
   {
     path: 'admin/onboarding-doc-types',
     component: OnboardingDocTypesComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  {
+    path: 'admin/onboarding',
+    component: AdminOnboardingListComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  {
+    path: 'admin/onboarding/:userId',
+    component: AdminOnboardingDetailComponent,
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },

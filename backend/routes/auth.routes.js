@@ -16,7 +16,8 @@ const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance
 // @access  Public
 router.post('/login', authLimiter, validateRequest(schemas.login), async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
     
     const user = await User.findOne({ email }).select('+password');
     

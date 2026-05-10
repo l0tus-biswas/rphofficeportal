@@ -1,9 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
-import { DocumentHubService, DocFolder, DocHubFile, DocRequest } from '../../services/document-hub.service';
+import { DocumentHubService, DocFolder, DocHubFile, DocRequest, DocRequestResponse } from '../../services/document-hub.service';
 import { AuthService } from '../../services/auth.service';
 import { AdminService } from '../../services/admin.service';
 import { User } from '../../models/user.model';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-document-hub',
@@ -15,6 +16,7 @@ export class DocumentHubComponent implements OnInit {
   loading = true;
   error = '';
   success = '';
+  activeSection: 'library' | 'requests' = 'library';
 
   // Folder tree
   allFolders: DocFolder[] = [];
@@ -91,6 +93,15 @@ export class DocumentHubComponent implements OnInit {
   responseFile: File | null = null;
   responseNotes = '';
 
+  // Admin: review response modal
+  showReviewModal = false;
+  reviewRequestId = '';
+  reviewAgentId = '';
+  reviewAgentName = '';
+  reviewStatus: 'approved' | 'rejected' = 'approved';
+  reviewNotes = '';
+  reviewSaving = false;
+
   constructor(
     private docHubService: DocumentHubService,
     private authService: AuthService,
@@ -100,6 +111,7 @@ export class DocumentHubComponent implements OnInit {
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
     this.isAdmin = user?.role === 'admin';
+    this.activeSection = this.isAdmin ? 'library' : 'requests';
     this.loadFolders();
     this.loadFiles();
     this.loadRequests();
@@ -113,6 +125,7 @@ export class DocumentHubComponent implements OnInit {
 
   // --- Navigation ---
   loadFolders(): void {
+    this.error = '';
     this.docHubService.getFolders(this.isAdmin).subscribe({
       next: (folders) => { this.allFolders = folders; this.loading = false; },
       error: () => { this.error = 'Failed to load folders'; this.loading = false; }
@@ -121,6 +134,7 @@ export class DocumentHubComponent implements OnInit {
 
   loadFiles(): void {
     this.filesLoading = true;
+    this.error = '';
     const search = this.searchQuery.trim() || undefined;
     this.docHubService.getFiles(this.currentFolderId, search).subscribe({
       next: (files) => { this.files = files; this.filesLoading = false; },
@@ -149,6 +163,10 @@ export class DocumentHubComponent implements OnInit {
 
   onSearch(): void {
     this.loadFiles();
+  }
+
+  switchSection(section: 'library' | 'requests'): void {
+    this.activeSection = section;
   }
 
   clearSearch(): void {
@@ -287,6 +305,10 @@ export class DocumentHubComponent implements OnInit {
 
   submitUpload(): void {
     if (this.uploadFiles.length === 0) { this.error = 'Select at least one file'; return; }
+    if (this.uploadVisibility === 'restricted' && this.uploadRestrictedTo.length === 0) {
+      this.error = 'Select at least one agent for restricted visibility';
+      return;
+    }
     this.uploading = true;
     const formData = new FormData();
     this.uploadFiles.forEach(f => formData.append('files', f));
@@ -313,6 +335,7 @@ export class DocumentHubComponent implements OnInit {
 
   // --- Document Requests ---
   loadRequests(): void {
+    this.error = '';
     this.docHubService.getRequests().subscribe({
       next: (r) => this.requests = r,
       error: () => {}
@@ -356,6 +379,16 @@ export class DocumentHubComponent implements OnInit {
   submitRequest(): void {
     if (!this.requestForm.title.trim()) { this.error = 'Title is required'; return; }
     if (this.requestForm.requestedFrom.length === 0) { this.error = 'Select at least one agent'; return; }
+    if (this.requestForm.dueDate) {
+      const due = new Date(this.requestForm.dueDate);
+      due.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (due < today) {
+        this.error = 'Due date cannot be in the past';
+        return;
+      }
+    }
     this.requestSaving = true;
     this.docHubService.createRequest(this.requestForm).subscribe({
       next: () => {
@@ -405,15 +438,41 @@ export class DocumentHubComponent implements OnInit {
   }
 
   // Admin: review a response
-  reviewResponse(requestId: string, agentId: string, status: string): void {
-    const notes = status === 'rejected' ? prompt('Rejection notes (optional):') || '' : '';
-    this.docHubService.reviewResponse(requestId, agentId, status, notes).subscribe({
+  openReviewModal(req: DocRequest, resp: any, status: 'approved' | 'rejected'): void {
+    this.reviewRequestId = String(req._id || '');
+    this.reviewAgentId = String(resp.agent?._id || resp.agent || '');
+    this.reviewAgentName = String(resp.agent?.name || 'Agent');
+    this.reviewStatus = status;
+    this.reviewNotes = '';
+    this.showReviewModal = true;
+  }
+
+  closeReviewModal(): void {
+    this.showReviewModal = false;
+    this.reviewRequestId = '';
+    this.reviewAgentId = '';
+    this.reviewAgentName = '';
+    this.reviewNotes = '';
+    this.reviewSaving = false;
+  }
+
+  submitReview(): void {
+    if (!this.reviewRequestId || !this.reviewAgentId) {
+      this.error = 'Invalid response target';
+      return;
+    }
+    this.reviewSaving = true;
+    this.docHubService.reviewResponse(this.reviewRequestId, this.reviewAgentId, this.reviewStatus, this.reviewNotes).subscribe({
       next: () => {
-        this.success = `Response ${status}`;
+        this.success = `Response ${this.reviewStatus}`;
+        this.closeReviewModal();
         this.loadRequests();
         setTimeout(() => this.success = '', 3000);
       },
-      error: () => { this.error = 'Failed to review response'; }
+      error: (err: any) => {
+        this.reviewSaving = false;
+        this.error = err.error?.message || 'Failed to review response';
+      }
     });
   }
 
@@ -433,46 +492,96 @@ export class DocumentHubComponent implements OnInit {
     });
   }
 
-  // --- Drag & Drop ---
-  dropFolder(event: CdkDragDrop<any[]>): void {
-    if (event.previousIndex === event.currentIndex) return;
-    const folders = this.subfolders;
-    moveItemInArray(folders, event.previousIndex, event.currentIndex);
-    const updates: Promise<any>[] = [];
-    folders.forEach((folder, index) => {
-      folder.sortOrder = index;
-      updates.push(
-        this.docHubService.updateFolder(folder._id!, { sortOrder: index } as any).toPromise()
-      );
-    });
-    Promise.all(updates).then(() => {
-      this.success = 'Folders reordered successfully!';
-      setTimeout(() => this.success = '', 3000);
-    }).catch(() => {
-      this.error = 'Failed to reorder folders.';
-      setTimeout(() => this.error = '', 5000);
-      this.loadFolders();
+  getMyResponse(req: DocRequest): DocRequestResponse | null {
+    if (!req.responses || req.responses.length === 0) {
+      return null;
+    }
+    return req.responses[0] || null;
+  }
+
+  canViewUploadedFile(resp: DocRequestResponse | null): boolean {
+    return !!(resp?.filePath && resp.agent);
+  }
+
+  viewUploadedFile(requestId: string, agentId: string, fileName: string): void {
+    this.docHubService.downloadResponse(requestId, agentId).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      },
+      error: () => { this.error = 'Failed to open uploaded file'; }
     });
   }
 
-  dropFile(event: CdkDragDrop<any[]>): void {
+  // --- Drag & Drop ---
+  async dropFolder(event: CdkDragDrop<any[]>): Promise<void> {
+    if (event.previousIndex === event.currentIndex) return;
+    const folders = this.subfolders;
+    moveItemInArray(folders, event.previousIndex, event.currentIndex);
+    const updates: Array<Promise<any>> = [];
+    folders.forEach((folder, index) => {
+      folder.sortOrder = index;
+      updates.push(
+        firstValueFrom(this.docHubService.updateFolder(folder._id!, { sortOrder: index } as any))
+      );
+    });
+    try {
+      await Promise.all(updates);
+      this.success = 'Folders reordered successfully!';
+      setTimeout(() => this.success = '', 3000);
+    } catch {
+      this.error = 'Failed to reorder folders.';
+      setTimeout(() => this.error = '', 5000);
+      this.loadFolders();
+    }
+  }
+
+  async dropFile(event: CdkDragDrop<any[]>): Promise<void> {
     if (event.previousIndex === event.currentIndex) return;
     moveItemInArray(this.files, event.previousIndex, event.currentIndex);
-    const updates: Promise<any>[] = [];
+    const updates: Array<Promise<any>> = [];
     this.files.forEach((file, index) => {
       (file as any).sortOrder = index;
       updates.push(
-        this.docHubService.updateFile(file._id!, { sortOrder: index } as any).toPromise()
+        firstValueFrom(this.docHubService.updateFile(file._id!, { sortOrder: index } as any))
       );
     });
-    Promise.all(updates).then(() => {
+    try {
+      await Promise.all(updates);
       this.success = 'Files reordered successfully!';
       setTimeout(() => this.success = '', 3000);
-    }).catch(() => {
+    } catch {
       this.error = 'Failed to reorder files.';
       setTimeout(() => this.error = '', 5000);
       this.loadFiles();
-    });
+    }
+  }
+
+  get totalFiles(): number {
+    return this.files.length;
+  }
+
+  get totalSubfolders(): number {
+    return this.subfolders.length;
+  }
+
+  get pendingRequestCount(): number {
+    return this.requests.filter(req =>
+      (req.responses || []).some((resp: any) => resp.status === 'pending' || resp.status === 'submitted')
+    ).length;
+  }
+
+  get overdueRequestCount(): number {
+    const now = new Date();
+    now.setHours(23, 59, 59, 999);
+    return this.requests.filter(r => !!r.dueDate && new Date(r.dueDate) < now).length;
+  }
+
+  isOverdue(dueDate?: string): boolean {
+    if (!dueDate) return false;
+    const due = new Date(dueDate);
+    due.setHours(23, 59, 59, 999);
+    return due < new Date();
   }
 
   getRequestStatusBadge(status: string): string {

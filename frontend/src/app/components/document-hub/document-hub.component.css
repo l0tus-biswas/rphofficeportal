@@ -2,6 +2,19 @@
   cursor: pointer;
 }
 
+.stat-card {
+  border-left: 4px solid #0d6efd;
+}
+
+.stat-card .h4 {
+  font-weight: 700;
+}
+
+.my-submission-card {
+  border-color: #dbeafe;
+  background: #f8fbff;
+}
+
 /* Drag & Drop: Folder card */
 .folder-card {
   position: relative;

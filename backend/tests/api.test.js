@@ -1,7 +1,18 @@
+process.env.NODE_ENV = 'test';
+
 const request = require('supertest');
-const app = require('../server');
+const { app } = require('../server');
 const mongoose = require('mongoose');
 const User = require('../models/User');
+
+const TEST_DB_URI = process.env.MONGODB_URI_TEST;
+
+function assertSafeTestDatabase() {
+  const dbName = mongoose.connection?.db?.databaseName || '';
+  if (!dbName || !/test/i.test(dbName)) {
+    throw new Error(`Refusing to run destructive test cleanup against non-test database: ${dbName || 'unknown'}`);
+  }
+}
 
 describe('Auth API Tests', () => {
   let adminToken;
@@ -9,12 +20,17 @@ describe('Auth API Tests', () => {
   let testUser;
 
   beforeAll(async () => {
-    // Connect to test database
-    await mongoose.connect(process.env.MONGODB_URI_TEST || 'mongodb://localhost:27017/rhpoffice_test');
+    if (!TEST_DB_URI) {
+      throw new Error('MONGODB_URI_TEST must be set before running backend tests');
+    }
+
+    await mongoose.connect(TEST_DB_URI);
+    assertSafeTestDatabase();
   });
 
   afterAll(async () => {
     // Clean up and close connection
+    assertSafeTestDatabase();
     await User.deleteMany({});
     await mongoose.connection.close();
   });

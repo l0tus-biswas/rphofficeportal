@@ -58,6 +58,8 @@ import { OnboardingHubComponent } from './components/onboarding/onboarding-hub/o
 import { DocumentHubComponent } from './components/document-hub/document-hub.component';
 import { NextStepsChecklistComponent } from './components/dashboard/next-steps-checklist/next-steps-checklist.component';
 import { OnboardingDocTypesComponent } from './components/admin/onboarding-doc-types/onboarding-doc-types.component';
+import { AdminOnboardingListComponent } from './components/admin/onboarding-management/admin-onboarding-list/admin-onboarding-list.component';
+import { AdminOnboardingDetailComponent } from './components/admin/onboarding-management/admin-onboarding-detail/admin-onboarding-detail.component';
 import { AcaTrackerComponent } from './components/dashboard/aca-tracker/aca-tracker.component';
 import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
@@ -120,6 +122,8 @@ import { SafePipe } from './pipes/safe.pipe';
     DocumentHubComponent,
     NextStepsChecklistComponent,
     OnboardingDocTypesComponent,
+    AdminOnboardingListComponent,
+    AdminOnboardingDetailComponent,
     AcaTrackerComponent,
     AcaManagementComponent,
     BusinessCardsComponent,

@@ -1,0 +1,20 @@
+{
+  "users": [
+    {
+      "email": "lotushotmail111@gmail.com"
+    },
+    {
+      "email": "contracting@rhpoffice.com",
+      "originalUserId": "6939d1974c487ff1012830e6",
+      "role": "admin",
+      "name": "RHP Office Contracting",
+      "phone": "recovery-required",
+      "isActive": true,
+      "isEmailVerified": true,
+      "metadata": {
+        "recoveryReason": "manual_admin_anchor_restore",
+        "recoveryNote": "Restored as the missing admin anchor for surviving admin-authored records; review profile fields after first login."
+      }
+    }
+  ]
+}

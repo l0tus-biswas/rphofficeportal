@@ -24,7 +24,27 @@ export interface OnboardingDocument {
   externalLink?: string;
   uploadedBy?: any;
   uploadedAt?: Date;
+  status?: 'pending' | 'approved' | 'rejected' | 'missing';
+  adminComment?: string;
+  reviewedBy?: any;
+  reviewedAt?: Date;
   deletedAt?: Date;
+}
+
+export interface AdminOnboardingOverviewRow {
+  agent: { _id: string; name: string; email: string; role: string };
+  status: 'not-started' | 'pending' | 'approved' | 'rejected' | 'missing';
+  totalRequired: number;
+  uploadedRequired: number;
+  approvedRequired: number;
+  documentsCount: number;
+  lastUploadedAt?: string | Date | null;
+}
+
+export interface AdminOnboardingAgentDetail {
+  agent: { _id: string; name: string; email: string; role: string };
+  cards: Array<{ docType: OnboardingDocType; document: OnboardingDocument | null }>;
+  status: 'not-started' | 'pending' | 'approved' | 'rejected' | 'missing';
 }
 
 @Injectable({
@@ -71,5 +91,21 @@ export class OnboardingHubService {
 
   deleteDocType(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/admin/doc-types/${id}`);
+  }
+
+  // Admin onboarding management (hub-based)
+  getAdminOverview(page = 1, limit = 20, status?: string, search?: string): Observable<any> {
+    const params: any = { page, limit };
+    if (status) params.status = status;
+    if (search) params.search = search;
+    return this.http.get<any>(`${this.apiUrl}/admin/overview`, { params });
+  }
+
+  getAdminAgentDetail(agentId: string): Observable<AdminOnboardingAgentDetail> {
+    return this.http.get<AdminOnboardingAgentDetail>(`${this.apiUrl}/admin/agents/${agentId}`);
+  }
+
+  updateAdminDocumentStatus(documentId: string, status: 'pending' | 'approved' | 'rejected' | 'missing', comment?: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/documents/${documentId}/status`, { status, comment });
   }
 }

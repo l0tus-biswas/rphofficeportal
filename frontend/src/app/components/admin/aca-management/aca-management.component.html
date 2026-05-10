@@ -462,8 +462,8 @@
                 <tbody>
                   <tr *ngFor="let ov of agentOverrides">
                     <td>
-                      <div class="fw-semibold">{{ ov.agent?.name || 'Unknown' }}</div>
-                      <div class="small text-muted">{{ ov.agent?.email || '' }}</div>
+                      <div class="fw-semibold">{{ ov.agent.name || 'Unknown' }}</div>
+                      <div class="small text-muted">{{ ov.agent.email || '' }}</div>
                       <div *ngIf="ov.agent?.referralCode" class="small"><span class="badge bg-light text-dark">{{ ov.agent.referralCode }}</span></div>
                     </td>
                     <td class="small">

@@ -161,13 +161,13 @@
                   <div class="d-flex align-items-center">
                     <i class="bi bi-person-circle text-muted me-2" style="font-size: 1.5rem;"></i>
                     <div>
-                      <div class="fw-semibold">{{ onboarding.user?.name || 'N/A' }}</div>
-                      <small class="text-muted">{{ onboarding.user?.role || 'agent' | titlecase }}</small>
+                      <div class="fw-semibold">{{ onboarding.agent.name || 'N/A' }}</div>
+                      <small class="text-muted">{{ onboarding.agent.role || 'agent' | titlecase }}</small>
                     </div>
                   </div>
                 </td>
                 <td>
-                  <small>{{ onboarding.user?.email || 'N/A' }}</small>
+                  <small>{{ onboarding.agent.email || 'N/A' }}</small>
                 </td>
                 <td>
                   <span [ngClass]="getStatusBadgeClass(onboarding.status)">
@@ -180,34 +180,34 @@
                     <div class="progress flex-grow-1 me-2" style="height: 8px; min-width: 80px;">
                       <div 
                         class="progress-bar"
-                        [class.bg-success]="getCompletedSteps(onboarding) === 5"
-                        [class.bg-warning]="getCompletedSteps(onboarding) > 0 && getCompletedSteps(onboarding) < 5"
+                        [class.bg-success]="getCompletedSteps(onboarding) === getTotalRequired(onboarding) && getTotalRequired(onboarding) > 0"
+                        [class.bg-warning]="getCompletedSteps(onboarding) > 0 && getCompletedSteps(onboarding) < getTotalRequired(onboarding)"
                         [class.bg-secondary]="getCompletedSteps(onboarding) === 0"
-                        [style.width.%]="(getCompletedSteps(onboarding) / 5) * 100">
+                        [style.width.%]="getTotalRequired(onboarding) > 0 ? (getCompletedSteps(onboarding) / getTotalRequired(onboarding)) * 100 : 0">
                       </div>
                     </div>
-                    <small class="text-muted">{{ getCompletedSteps(onboarding) }}/5</small>
+                    <small class="text-muted">{{ getCompletedSteps(onboarding) }}/{{ getTotalRequired(onboarding) }}</small>
                   </div>
                 </td>
                 <td>
-                  <small>{{ formatDate(onboarding.submittedAt) }}</small>
+                  <small>{{ formatDate(onboarding.lastUploadedAt) }}</small>
                 </td>
                 <td>
-                  <small>{{ formatDate(onboarding.reviewedAt) }}</small>
+                  <small>{{ onboarding.approvedRequired }}/{{ onboarding.totalRequired }} required approved</small>
                 </td>
                 <td>
                   <div class="btn-group" role="group">
                     <button 
                       class="btn btn-sm btn-outline-primary"
-                      (click)="viewDetails(onboarding.userId || onboarding.user?._id)"
-                      [disabled]="!onboarding.userId && !onboarding.user?._id"
+                      (click)="viewDetails(onboarding.agent._id)"
+                      [disabled]="!onboarding.agent._id"
                       title="Review Details">
                       <i class="bi bi-eye"></i>
                     </button>
                     <button 
                       class="btn btn-sm btn-outline-danger"
-                      (click)="deleteOnboarding(onboarding.userId || onboarding.user?._id, onboarding.user?.name || 'this user')"
-                      [disabled]="!onboarding.userId && !onboarding.user?._id"
+                      (click)="deleteOnboarding(onboarding.agent._id, onboarding.agent.name || 'this user')"
+                      [disabled]="!onboarding.agent._id"
                       title="Delete Onboarding">
                       <i class="bi bi-trash"></i>
                     </button>

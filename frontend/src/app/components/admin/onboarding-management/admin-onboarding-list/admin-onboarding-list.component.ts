@@ -1,7 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { OnboardingService } from '../../../../services/onboarding.service';
-import { AdminService } from '../../../../services/admin.service';
+import { OnboardingHubService, AdminOnboardingOverviewRow } from '../../../../services/onboarding-hub.service';
 
 @Component({
   selector: 'app-admin-onboarding-list',
@@ -9,7 +8,7 @@ import { AdminService } from '../../../../services/admin.service';
   styleUrls: ['./admin-onboarding-list.component.css']
 })
 export class AdminOnboardingListComponent implements OnInit {
-  onboardings: any[] = [];
+  onboardings: AdminOnboardingOverviewRow[] = [];
   loading = true;
   error = '';
   
@@ -46,8 +45,7 @@ export class AdminOnboardingListComponent implements OnInit {
   ];
 
   constructor(
-    private onboardingService: OnboardingService,
-    private adminService: AdminService,
+    private onboardingHubService: OnboardingHubService,
     private router: Router
   ) { }
 
@@ -59,14 +57,14 @@ export class AdminOnboardingListComponent implements OnInit {
     this.loading = true;
     this.error = '';
     
-    this.onboardingService.getAllOnboardings(
+    this.onboardingHubService.getAdminOverview(
       this.currentPage,
       this.pageSize,
       this.statusFilter || undefined,
       this.searchQuery || undefined
     ).subscribe({
       next: (response) => {
-        this.onboardings = response.onboardings || [];
+        this.onboardings = response.rows || [];
         this.totalItems = response.pagination.total;
         this.totalPages = response.pagination.pages;
         this.loading = false;
@@ -80,7 +78,6 @@ export class AdminOnboardingListComponent implements OnInit {
   }
 
   calculateStats(): void {
-    // This is client-side calculation, ideally stats should come from backend
     this.stats.total = this.onboardings.length;
     this.stats.pending = this.onboardings.filter(o => o.status === 'pending').length;
     this.stats.approved = this.onboardings.filter(o => o.status === 'approved').length;
@@ -127,23 +124,37 @@ export class AdminOnboardingListComponent implements OnInit {
     }
   }
 
-  viewDetails(userId: string): void {
+  viewDetails(userId?: string): void {
+    if (!userId) return;
     this.router.navigate(['/admin/onboarding', userId]);
   }
 
   getStatusBadgeClass(status: string): string {
-    return this.onboardingService.getStatusClass(status);
+    switch (status) {
+      case 'approved': return 'badge bg-success';
+      case 'rejected': return 'badge bg-danger';
+      case 'missing': return 'badge bg-warning text-dark';
+      case 'pending': return 'badge bg-info';
+      default: return 'badge bg-secondary';
+    }
   }
 
   getStatusIcon(status: string): string {
-    return this.onboardingService.getStatusIcon(status);
+    switch (status) {
+      case 'approved': return 'bi-check-circle-fill';
+      case 'rejected': return 'bi-x-circle-fill';
+      case 'missing': return 'bi-exclamation-triangle-fill';
+      case 'pending': return 'bi-clock-fill';
+      default: return 'bi-circle';
+    }
   }
 
-  getCompletedSteps(onboarding: any): number {
-    if (!onboarding?.steps) return 0;
-    return Object.values(onboarding.steps).filter((step: any) => 
-      step && step.fileName
-    ).length;
+  getCompletedSteps(onboarding: AdminOnboardingOverviewRow): number {
+    return onboarding.uploadedRequired || 0;
+  }
+
+  getTotalRequired(onboarding: AdminOnboardingOverviewRow): number {
+    return onboarding.totalRequired || 0;
   }
 
   formatDate(date: any): string {
@@ -172,24 +183,8 @@ export class AdminOnboardingListComponent implements OnInit {
     return range;
   }
 
-  deleteOnboarding(userId: string, userName: string): void {
-    if (!userId || userId === 'null' || userId === 'undefined') {
-      alert('Cannot delete: Invalid user ID');
-      return;
-    }
-
-    if (!confirm(`Are you sure you want to delete the onboarding record for ${userName}? The user will need to upload all documents again.`)) {
-      return;
-    }
-
-    this.adminService.deleteOnboarding(userId).subscribe({
-      next: (response) => {
-        alert(response.message || 'Onboarding record deleted successfully');
-        this.loadOnboardings(); // Reload the list
-      },
-      error: (error) => {
-        alert(error.error?.message || 'Failed to delete onboarding record');
-      }
-    });
+  deleteOnboarding(userId?: string, userName = 'this user'): void {
+    if (!userId) return;
+    alert(`Delete action is not available in this list for onboarding-hub records. Open ${userName}'s detail page for document-level management.`);
   }
 }

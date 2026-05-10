@@ -7,6 +7,7 @@ const DocumentFolder = require('../models/DocumentFolder');
 const DocumentHubFile = require('../models/DocumentHubFile');
 const DocumentRequest = require('../models/DocumentRequest');
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { sendNotificationEmail } = require('../utils/neuzmail');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 
@@ -99,6 +100,70 @@ function handleMulterError(multerMiddleware) {
       next();
     });
   };
+}
+
+async function publishApprovedRequestResponse(request, response, uploadedBy) {
+  if (!request || !response?.filePath) {
+    return null;
+  }
+
+  let targetFolderId = null;
+  if (request.saveToFolder) {
+    const targetFolder = await DocumentFolder.findOne({
+      _id: request.saveToFolder,
+      isActive: true,
+    }).select('_id');
+    targetFolderId = targetFolder?._id || null;
+  }
+
+  const absolutePath = path.join(__dirname, '..', response.filePath);
+  let fileSize = 0;
+  if (fs.existsSync(absolutePath)) {
+    try {
+      fileSize = fs.statSync(absolutePath).size;
+    } catch (_) {
+      fileSize = 0;
+    }
+  }
+
+  const extension = path.extname(response.originalFileName || response.filePath || '').toLowerCase();
+  const mimeType = ({
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.csv': 'text/csv',
+    '.txt': 'text/plain',
+    '.zip': 'application/zip',
+  })[extension] || '';
+
+  const update = {
+    name: request.title,
+    folder: targetFolderId,
+    filePath: response.filePath,
+    originalFileName: response.originalFileName || path.basename(response.filePath),
+    mimeType,
+    fileSize,
+    description: `Approved response from document request: ${request.title}`,
+    notes: response.notes || '',
+    visibility: 'admin',
+    restrictedTo: [],
+    uploadedBy,
+    isActive: true,
+  };
+
+  return DocumentHubFile.findOneAndUpdate(
+    { filePath: response.filePath },
+    { $set: update },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
 }
 
 // =====================================================================
@@ -243,6 +308,8 @@ router.get('/files', authenticate, async (req, res) => {
       // visibility='all' OR (visibility='restricted' AND user is in restrictedTo)
       query.$or = [
         { visibility: 'all' },
+        { visibility: { $exists: false } },
+        { visibility: null },
         { visibility: 'restricted', restrictedTo: req.user._id }
       ];
     }
@@ -284,11 +351,17 @@ router.post('/files', authenticate, authorize('admin'), handleMulterError(upload
         restrictedTo = req.body.restrictedTo.split(',').map(id => id.trim()).filter(Boolean);
       }
     }
+    if (!['all', 'admin', 'restricted'].includes(visibility)) {
+      return res.status(400).json({ message: 'Invalid visibility' });
+    }
+    if (visibility === 'restricted' && (!Array.isArray(restrictedTo) || restrictedTo.length === 0)) {
+      return res.status(400).json({ message: 'Restricted files must include at least one user in restrictedTo' });
+    }
 
     // Validate folder if provided
     if (folder) {
       const folderExists = await DocumentFolder.findById(folder);
-      if (!folderExists) return res.status(400).json({ message: 'Folder not found' });
+      if (!folderExists || !folderExists.isActive) return res.status(400).json({ message: 'Folder not found' });
     }
 
     const created = [];
@@ -327,16 +400,37 @@ router.put('/files/:id', authenticate, authorize('admin'), async (req, res) => {
     if (!file) return res.status(404).json({ message: 'File not found' });
 
     const { name, folder, description, visibility, isActive, sortOrder, restrictedTo } = req.body;
-    if (name !== undefined) file.name = name;
-    if (folder !== undefined) file.folder = folder || null;
+    if (name !== undefined) file.name = String(name || '').trim();
+    if (folder !== undefined) {
+      if (folder) {
+        const folderExists = await DocumentFolder.findById(folder);
+        if (!folderExists || !folderExists.isActive) {
+          return res.status(400).json({ message: 'Folder not found' });
+        }
+      }
+      file.folder = folder || null;
+    }
     if (description !== undefined) file.description = description;
-    if (visibility !== undefined) file.visibility = visibility;
+    if (visibility !== undefined) {
+      if (!['all', 'admin', 'restricted'].includes(visibility)) {
+        return res.status(400).json({ message: 'Invalid visibility' });
+      }
+      file.visibility = visibility;
+    }
     if (isActive !== undefined) file.isActive = isActive;
     if (sortOrder !== undefined) file.sortOrder = sortOrder;
-    if (restrictedTo !== undefined) file.restrictedTo = restrictedTo;
+    if (restrictedTo !== undefined) {
+      if (!Array.isArray(restrictedTo)) {
+        return res.status(400).json({ message: 'restrictedTo must be an array' });
+      }
+      file.restrictedTo = restrictedTo;
+    }
     // Clear restrictedTo if visibility changed away from 'restricted'
     if (visibility !== undefined && visibility !== 'restricted') {
       file.restrictedTo = [];
+    }
+    if (file.visibility === 'restricted' && (!Array.isArray(file.restrictedTo) || file.restrictedTo.length === 0)) {
+      return res.status(400).json({ message: 'Restricted files must include at least one user in restrictedTo' });
     }
 
     await file.save();
@@ -355,10 +449,17 @@ router.delete('/files/:id', authenticate, authorize('admin'), async (req, res) =
     const file = await DocumentHubFile.findById(req.params.id);
     if (!file) return res.status(404).json({ message: 'File not found' });
 
-    // Remove physical file
-    const fullPath = path.join(__dirname, '..', file.filePath);
-    if (fs.existsSync(fullPath)) {
-      fs.unlinkSync(fullPath);
+    const linkedRequestResponse = await DocumentRequest.findOne({
+      'responses.filePath': file.filePath,
+      isActive: true
+    }).select('_id');
+
+    // Remove physical file only when it is not still referenced by a document request response.
+    if (!linkedRequestResponse) {
+      const fullPath = path.join(__dirname, '..', file.filePath);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
     }
 
     await file.deleteOne();
@@ -430,7 +531,13 @@ router.get('/requests', authenticate, async (req, res) => {
     if (req.user.role !== 'admin') {
       requests.forEach(r => {
         r.responses = r.responses.filter(
-          resp => resp.agent && resp.agent._id.toString() === req.user._id.toString()
+          resp => {
+            if (!resp.agent) return false;
+            const respAgentId = typeof resp.agent === 'object' && resp.agent._id
+              ? resp.agent._id.toString()
+              : resp.agent.toString();
+            return respAgentId === req.user._id.toString();
+          }
         );
       });
     }
@@ -455,18 +562,51 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: 'At least one agent is required' });
     }
 
+    const uniqueAgentIds = [...new Set(requestedFrom.map(id => String(id)).filter(Boolean))];
+    const validAgents = await User.find({
+      _id: { $in: uniqueAgentIds },
+      role: 'agent',
+      isActive: true,
+      deletedAt: null
+    }).select('_id name email');
+    if (validAgents.length !== uniqueAgentIds.length) {
+      return res.status(400).json({ message: 'One or more selected users are invalid or inactive agents' });
+    }
+
+    let normalizedDueDate = null;
+    if (dueDate) {
+      const parsedDueDate = new Date(dueDate);
+      if (Number.isNaN(parsedDueDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid due date' });
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      parsedDueDate.setHours(0, 0, 0, 0);
+      if (parsedDueDate < today) {
+        return res.status(400).json({ message: 'Due date cannot be in the past' });
+      }
+      normalizedDueDate = parsedDueDate;
+    }
+
+    if (saveToFolder) {
+      const folder = await DocumentFolder.findOne({ _id: saveToFolder, isActive: true });
+      if (!folder) {
+        return res.status(400).json({ message: 'Save-to folder not found' });
+      }
+    }
+
     // Create response slots for each agent
-    const responses = requestedFrom.map(agentId => ({
+    const responses = uniqueAgentIds.map(agentId => ({
       agent: agentId,
       status: 'pending'
     }));
 
     const request = await DocumentRequest.create({
       requestedBy: req.user._id,
-      requestedFrom,
+      requestedFrom: uniqueAgentIds,
       title: title.trim(),
       description: description || '',
-      dueDate: dueDate || null,
+      dueDate: normalizedDueDate,
       saveToFolder: saveToFolder || null,
       responses
     });
@@ -476,7 +616,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
     await request.populate('responses.agent', 'name email');
 
     // Notify each agent (in-app + email)
-    for (const agentId of requestedFrom) {
+    for (const agentId of uniqueAgentIds) {
       Notification.createNotification({
         userId: agentId,
         type: 'document_request',
@@ -527,6 +667,11 @@ router.post('/requests/:id/respond', authenticate, handleMulterError(requestUplo
     if (!resp) {
       return res.status(403).json({ message: 'This request is not for you' });
     }
+    if (resp.status === 'approved') {
+      return res.status(400).json({ message: 'This response is already approved and cannot be replaced' });
+    }
+
+    const previousFilePath = resp.filePath;
 
     resp.filePath = `uploads/document-requests/${req.file.filename}`;
     resp.originalFileName = req.file.originalname;
@@ -535,6 +680,16 @@ router.post('/requests/:id/respond', authenticate, handleMulterError(requestUplo
     resp.submittedAt = new Date();
 
     await request.save();
+
+    if (previousFilePath && previousFilePath !== resp.filePath) {
+      const isPublishedInHub = await DocumentHubFile.exists({ filePath: previousFilePath, isActive: true });
+      if (!isPublishedInHub) {
+        const previousFullPath = path.join(__dirname, '..', previousFilePath);
+        if (fs.existsSync(previousFullPath)) {
+          fs.unlink(previousFullPath, () => {});
+        }
+      }
+    }
 
     // Notify admin
     Notification.createNotification({
@@ -569,6 +724,9 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
     if (!['approved', 'rejected'].includes(status)) {
       return res.status(400).json({ message: 'Status must be approved or rejected' });
     }
+    if (status === 'approved' && !resp.filePath) {
+      return res.status(400).json({ message: 'Cannot approve without a submitted file' });
+    }
 
     resp.status = status;
     resp.reviewedBy = req.user._id;
@@ -576,6 +734,15 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
     resp.reviewNotes = reviewNotes || '';
 
     await request.save();
+
+    // If approved and a file exists, publish it into Document Hub files so admins can manage it there too.
+    if (status === 'approved' && resp.filePath) {
+      try {
+        await publishApprovedRequestResponse(request, resp, req.user._id);
+      } catch (hubErr) {
+        console.error('Failed to publish approved request file into document hub:', hubErr.message);
+      }
+    }
 
     // Notify agent
     Notification.createNotification({

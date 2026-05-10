@@ -49,7 +49,10 @@ export class OnboardingHubComponent implements OnInit {
       const docMap: { [docTypeId: string]: OnboardingDocument } = {};
       for (const doc of documents) {
         const typeId = typeof doc.docType === 'object' ? (doc.docType as OnboardingDocType)._id! : doc.docType as string;
-        docMap[typeId] = doc;
+        // Keep first occurrence only (API returns newest first)
+        if (!docMap[typeId]) {
+          docMap[typeId] = doc;
+        }
       }
       this.docCards = docTypes.map(dt => ({
         docType: dt,

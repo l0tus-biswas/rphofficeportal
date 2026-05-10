@@ -49,10 +49,15 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
-// Database Connection
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log('MongoDB connected successfully'))
-.catch(err => console.error('MongoDB connection error:', err));
+async function connectDatabase() {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  await mongoose.connect(process.env.MONGODB_URI);
+  console.log('MongoDB connected successfully');
+  return mongoose.connection;
+}
 
 // Routes
 app.use('/api/auth', require('./routes/auth.routes'));
@@ -182,8 +187,30 @@ io.on('connection', (socket) => {
 // Make io available to routes
 app.locals.io = io;
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} with Socket.IO enabled`);
-});
+async function startServer(port = PORT) {
+  await connectDatabase();
 
-module.exports = { app, httpServer, io };
+  if (httpServer.listening) {
+    return httpServer;
+  }
+
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject);
+    httpServer.listen(port, () => {
+      httpServer.removeListener('error', reject);
+      console.log(`Server running on port ${port} with Socket.IO enabled`);
+      resolve();
+    });
+  });
+
+  return httpServer;
+}
+
+if (require.main === module) {
+  startServer().catch(err => {
+    console.error('Server startup error:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { app, httpServer, io, connectDatabase, startServer };

@@ -162,7 +162,7 @@
               <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
               <td>
                 <button class="btn btn-outline-secondary btn-sm" (click)="openNotes(stmt)">
-                  <i class="bi bi-chat-left-text me-1"></i>{{ stmt.notes?.length || 0 }}
+                  <i class="bi bi-chat-left-text me-1"></i>{{ stmt.notes.length || 0 }}
                 </button>
               </td>
               <td>
