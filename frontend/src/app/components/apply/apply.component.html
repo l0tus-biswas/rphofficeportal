@@ -175,7 +175,7 @@
               <div class="row g-3">
                 <div class="col-md-4">
                   <label class="form-label">Legal First Name <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" formControlName="legalFirstName">
+                  <input type="text" class="form-control" formControlName="legalFirstName" maxlength="50">
                   <div *ngIf="section1Form.get('legalFirstName')?.invalid && section1Form.get('legalFirstName')?.touched" class="text-danger small">
                     First name is required (min 2 characters)
                   </div>
@@ -183,12 +183,12 @@
                 
                 <div class="col-md-4">
                   <label class="form-label">Legal Middle Name</label>
-                  <input type="text" class="form-control" formControlName="legalMiddleName">
+                  <input type="text" class="form-control" formControlName="legalMiddleName" maxlength="50">
                 </div>
                 
                 <div class="col-md-4">
                   <label class="form-label">Legal Last Name <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" formControlName="legalLastName">
+                  <input type="text" class="form-control" formControlName="legalLastName" maxlength="50">
                   <div *ngIf="section1Form.get('legalLastName')?.invalid && section1Form.get('legalLastName')?.touched" class="text-danger small">
                     Last name is required (min 2 characters)
                   </div>

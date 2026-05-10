@@ -149,17 +149,15 @@ export class HierarchyComponent implements OnInit {
     this.flattenedHierarchy.forEach(node => node.expanded = false);
   }
 
-  // Role display: "Admin", "Agent (Licensed)", or "Recruit (Unlicensed)" (§21.3)
+  // Role display: show actual role with licensing status (§21.3)
   getDisplayRole(node: TreeNode): string {
     if (node.role === 'admin') return 'Admin';
-    if (node.isLicensed) return 'Agent';
-    return 'Recruit';
+    return 'Agent';
   }
 
   getRoleBadgeClass(node: TreeNode): string {
     if (node.role === 'admin') return 'bg-danger';
-    if (node.isLicensed) return 'bg-primary';
-    return 'bg-secondary';
+    return 'bg-primary';
   }
 
   getLicenseBadgeClass(node: TreeNode): string {

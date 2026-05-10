@@ -42,3 +42,13 @@ temp/
 
 # OS files
 Thumbs.db
+
+# Claude governance (local only)
+.claude/
+CLAUDE.md
+.githooks/
+scripts/claude-preflight.js
+scripts/git-hook.js
+scripts/install-git-hooks.js
+scripts/auto-history.js
+history/

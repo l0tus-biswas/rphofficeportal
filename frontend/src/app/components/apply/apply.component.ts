@@ -798,7 +798,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
   }
 
   get progressPercentage(): number {
-    return (this.currentSection / this.totalSections) * 100;
+    return ((this.currentSection - 1) / this.totalSections) * 100;
   }
 
   showSigningInstructions(url: string): void {

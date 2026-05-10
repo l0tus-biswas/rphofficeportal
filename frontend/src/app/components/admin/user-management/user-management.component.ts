@@ -66,11 +66,12 @@ export class UserManagementComponent implements OnInit {
   }
 
   applyFilters(): void {
+    const trimmedSearch = this.searchTerm?.trim() || '';
     this.filteredUsers = this.users.filter(user => {
-      const matchesSearch = !this.searchTerm || 
-        user.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        user.referralCode?.toLowerCase().includes(this.searchTerm.toLowerCase());
+      const matchesSearch = !trimmedSearch || 
+        user.name?.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
+        user.email?.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
+        user.referralCode?.toLowerCase().includes(trimmedSearch.toLowerCase());
       
       const matchesRole = this.roleFilter === 'all' || user.role === this.roleFilter;
       const matchesStatus = this.statusFilter === 'all' || 

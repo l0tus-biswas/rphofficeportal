@@ -52,6 +52,7 @@ import { VistaprintConfigComponent } from './components/admin/vistaprint-config/
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
+import { NotFoundComponent } from './components/not-found/not-found.component';
 
 const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -317,7 +318,7 @@ const routes: Routes = [
     component: ExamfxProgressComponent,
     canActivate: [AuthGuard]
   },
-  { path: '**', redirectTo: '/dashboard' }
+  { path: '**', component: NotFoundComponent }
 ];
 
 @NgModule({

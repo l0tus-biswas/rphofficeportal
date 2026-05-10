@@ -80,7 +80,7 @@ export class AppComponent implements OnInit, OnDestroy {
       title = `Apply Now - ${brandName} Recruiting`;
       description = 'Start your insurance career today. Complete your APA application and join our growing team of successful insurance agents.';
     } else if (url.includes('/login')) {
-      title = `Agent Login - ${brandName}`;
+      title = `Sign In - ${brandName}`;
       description = `Access your ${brandName} agent portal. Manage your downline, track production, and access training resources.`;
     } else if (url.includes('/dashboard')) {
       title = `Dashboard - ${brandName}`;

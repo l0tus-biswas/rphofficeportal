@@ -29,7 +29,7 @@
     <div class="row">
       <div class="col-md-4 mb-3">
         <label class="form-label">Legal First Name <span class="text-danger">*</span></label>
-        <input type="text" class="form-control" formControlName="legalFirstName"
+        <input type="text" class="form-control" formControlName="legalFirstName" maxlength="50"
                [class.is-invalid]="section1Form.get('legalFirstName')?.invalid && section1Form.get('legalFirstName')?.touched">
         <div class="invalid-feedback" *ngIf="section1Form.get('legalFirstName')?.errors?.['required']">
           First name is required
@@ -37,11 +37,11 @@
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Legal Middle Name</label>
-        <input type="text" class="form-control" formControlName="legalMiddleName">
+        <input type="text" class="form-control" formControlName="legalMiddleName" maxlength="50">
       </div>
       <div class="col-md-4 mb-3">
         <label class="form-label">Legal Last Name <span class="text-danger">*</span></label>
-        <input type="text" class="form-control" formControlName="legalLastName"
+        <input type="text" class="form-control" formControlName="legalLastName" maxlength="50"
                [class.is-invalid]="section1Form.get('legalLastName')?.invalid && section1Form.get('legalLastName')?.touched">
         <div class="invalid-feedback" *ngIf="section1Form.get('legalLastName')?.errors?.['required']">
           Last name is required

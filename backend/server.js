@@ -47,7 +47,19 @@ app.use('/uploads', (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Access-Control-Allow-Origin', process.env.APP_URL || 'http://localhost:4200');
   next();
-}, express.static(path.join(__dirname, 'uploads')));
+}, express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp',
+      '.pdf': 'application/pdf', '.ico': 'image/x-icon'
+    };
+    if (mimeTypes[ext]) {
+      res.setHeader('Content-Type', mimeTypes[ext]);
+    }
+  }
+}));
 
 async function connectDatabase() {
   if (mongoose.connection.readyState === 1) {
@@ -65,11 +77,11 @@ app.use('/api/public', require('./routes/public.routes'));
 app.use('/api/public', require('./routes/apa.routes')); // APA application routes
 app.use('/api/agent', require('./routes/agent.routes'));
 app.use('/api/onboarding', require('./routes/onboarding.routes'));
-app.use('/api/admin', require('./routes/admin.routes'));
-app.use('/api/admin', require('./routes/admin-apa.routes')); // Admin APA management
+app.use('/api/admin/products', require('./routes/admin-products.routes'));
 app.use('/api/admin/coupons', require('./routes/coupon.routes'));
 app.use('/api/admin/config', require('./routes/config.routes'));
-app.use('/api/admin/products', require('./routes/admin-products.routes'));
+app.use('/api/admin', require('./routes/admin.routes'));
+app.use('/api/admin', require('./routes/admin-apa.routes')); // Admin APA management
 app.use('/api/training', require('./routes/training.routes'));
 app.use('/api/payments', require('./routes/payment.routes'));
 app.use('/api/user', require('./routes/user.routes'));

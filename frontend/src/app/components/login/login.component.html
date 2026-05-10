@@ -64,6 +64,10 @@
             <a routerLink="/forgot-password" class="text-decoration-none">{{ "Forgot Password?" }}</a>
           </div>
 
+          <div *ngIf="loginForm.invalid && (f['email'].touched || f['password'].touched)" class="alert alert-warning py-2 small mb-3">
+            <i class="bi bi-info-circle me-1"></i>Please enter your email and password to sign in.
+          </div>
+
           <button 
             type="submit" 
             class="btn btn-primary w-100 py-2" 
