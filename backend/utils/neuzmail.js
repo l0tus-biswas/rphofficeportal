@@ -30,10 +30,9 @@ function withEmailFallbackContent(message, actionUrl, imageUrl) {
   const extras = [];
 
   if (actionUrl) {
-    extras.push(`View Announcement: ${actionUrl}`);
+    extras.push(`Link: ${actionUrl}`);
   }
   if (imageUrl) {
-    extras.push(`Announcement Image: ${imageUrl}`);
     // Also include an image tag for templates that render HTML in body merge tags.
     extras.push(`<br><img src="${imageUrl}" alt="Announcement Image" style="max-width:100%;height:auto;border-radius:8px;" />`);
   }
