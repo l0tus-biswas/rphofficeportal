@@ -240,8 +240,11 @@
 
     <!-- Submissions Table -->
     <div class="card shadow-sm">
-      <div class="card-header bg-light">
-        <i class="bi bi-table me-2"></i>Production Submissions ({{ totalSubmissions }})
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-table me-2"></i>Production Submissions ({{ totalSubmissions }})</span>
+        <span *ngIf="customFieldDefs.length > 0" class="text-muted small">
+          <i class="bi bi-arrows-expand me-1"></i>Scroll right to see custom fields
+        </span>
       </div>
       <div class="card-body p-0">
         <div *ngIf="loading" class="p-5 text-center">
@@ -253,27 +256,28 @@
           No production submissions found
         </div>
 
-        <div *ngIf="!loading && submissions.length > 0" class="table-responsive">
-          <table class="table table-hover mb-0">
+        <div *ngIf="!loading && submissions.length > 0" class="table-responsive" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+          <table class="table table-hover mb-0" style="min-width: 900px;">
             <thead class="table-light">
               <tr>
-                <th>Date</th>
-                <th *ngIf="isAdmin">Agent</th>
-                <th>Client</th>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Carrier</th>
-                <th class="text-end">Premium</th>
-                <th class="text-end">Members</th>
-                <th>Status</th>
-                <th>Notes</th>
-                <th>Actions</th>
+                <th style="white-space: nowrap;">Date</th>
+                <th *ngIf="isAdmin" style="white-space: nowrap;">Agent</th>
+                <th style="white-space: nowrap;">Client</th>
+                <th style="white-space: nowrap;">Product</th>
+                <th style="white-space: nowrap;">Category</th>
+                <th style="white-space: nowrap;">Carrier</th>
+                <th class="text-end" style="white-space: nowrap;">Premium</th>
+                <th class="text-end" style="white-space: nowrap;">Members</th>
+                <th style="white-space: nowrap;">Status</th>
+                <th *ngFor="let cf of customFieldDefs" style="white-space: nowrap;">{{ cf.label }}</th>
+                <th style="white-space: nowrap;">Notes</th>
+                <th style="white-space: nowrap; position: sticky; right: 0; background: #f8f9fa; z-index: 1;">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let submission of submissions">
                 <td>{{ formatDate(submission.submissionDate) }}</td>
-                <td *ngIf="isAdmin">{{ submission.agent.name }}</td>
+                <td *ngIf="isAdmin">{{ submission.agent?.name || '—' }}</td>
                 <td>{{ submission.clientName }}</td>
                 <td>
                   {{ submission.productSold }}
@@ -286,9 +290,9 @@
                     {{ submission.productCategory || '—' }}
                   </span>
                 </td>
-                <td>{{ submission.carrier.name }}</td>
+                <td>{{ submission.carrier?.name || '—' }}</td>
                 <td class="text-end">{{ formatCurrency(submission.premiumAmount) }}</td>
-                <td class="text-end">{{ submission.numberOfMembers || 1 }}</td>
+                <td class="text-end">{{ submission.numberOfMembers != null ? submission.numberOfMembers : '—' }}</td>
                 <td>
                   <span class="badge" [class]="getStatusBadgeClass(submission.status)">
                     {{ submission.status }}
@@ -297,13 +301,17 @@
                     <i class="bi bi-mortarboard-fill"></i> Training
                   </span>
                 </td>
+                <!-- Custom field cells -->
+                <td *ngFor="let cf of customFieldDefs" style="white-space: nowrap;">
+                  {{ getCustomFieldValue(submission, cf.key) }}
+                </td>
                 <td>
                   <span *ngIf="submission.notes" class="text-truncate d-inline-block" style="max-width: 200px;" [title]="submission.notes">
                     {{ submission.notes }}
                   </span>
                   <span *ngIf="!submission.notes" class="text-muted">—</span>
                 </td>
-                <td>
+                <td style="white-space: nowrap; position: sticky; right: 0; background: #fff; z-index: 1;">
                   <button class="btn btn-sm btn-outline-primary me-1" 
                           (click)="editSubmission(submission)"
                           title="Edit">
@@ -327,10 +335,14 @@
               <li class="page-item" [class.disabled]="currentPage === 1">
                 <a class="page-link" href="javascript:void(0)" (click)="changePage(currentPage - 1)">Previous</a>
               </li>
-              <li class="page-item" *ngFor="let page of [].constructor(totalPages); let i = index"
-                  [class.active]="currentPage === i + 1">
-                <a class="page-link" href="javascript:void(0)" (click)="changePage(i + 1)">{{ i + 1 }}</a>
-              </li>
+              <ng-container *ngFor="let page of paginationPages">
+                <li *ngIf="page === '...'" class="page-item disabled">
+                  <span class="page-link">…</span>
+                </li>
+                <li *ngIf="page !== '...'" class="page-item" [class.active]="currentPage === page">
+                  <a class="page-link" href="javascript:void(0)" (click)="changePage(+page)">{{ page }}</a>
+                </li>
+              </ng-container>
               <li class="page-item" [class.disabled]="currentPage === totalPages">
                 <a class="page-link" href="javascript:void(0)" (click)="changePage(currentPage + 1)">Next</a>
               </li>
@@ -397,7 +409,8 @@
           <!-- 8.1: Number of Members -->
           <div class="col-md-6">
             <label class="form-label">Number of Members</label>
-            <input type="number" class="form-control" [(ngModel)]="currentSubmission.numberOfMembers" min="1" step="1">
+            <input type="number" class="form-control" [(ngModel)]="currentSubmission.numberOfMembers" min="0" step="1"
+                   placeholder="Leave blank if not applicable">
           </div>
           <!-- 8.8: Training period -->
           <div class="col-md-6 d-flex align-items-end">

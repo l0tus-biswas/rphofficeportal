@@ -24,8 +24,8 @@ const productionSubmissionSchema = new mongoose.Schema({
   // 8.1: Number of members (for ACA / health policies)
   numberOfMembers: {
     type: Number,
-    default: 1,
-    min: 1
+    default: null,
+    min: 0
   },
 
   // Product sold — no hardcoded enum; valid values are driven by the ProductType collection

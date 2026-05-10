@@ -201,6 +201,10 @@ export class ProductionComponent implements OnInit {
     this.filters.page = 1;
     this.loadSubmissions();
     this.loadStats();
+    // Refresh team report to stay in sync with visible records
+    if (this.showTeamReport) {
+      this.loadTeamReport();
+    }
   }
 
   clearFilters(): void {
@@ -208,6 +212,9 @@ export class ProductionComponent implements OnInit {
     this.activeDatePreset = '';
     this.loadSubmissions();
     this.loadStats();
+    if (this.showTeamReport) {
+      this.loadTeamReport();
+    }
   }
 
   exportCsv(): void {
@@ -248,7 +255,7 @@ export class ProductionComponent implements OnInit {
       premiumAmount: 0,
       notes: '',
       status: 'Submitted',
-      numberOfMembers: 1,
+      numberOfMembers: null,
       isTrainingPeriod: false,
       customFields: cf
     };
@@ -348,7 +355,14 @@ export class ProductionComponent implements OnInit {
 
   loadTeamReport(): void {
     this.teamReportLoading = true;
-    this.http.get<any>(`${environment.apiUrl}/production/team-report?window=${this.teamReportWindow}`).subscribe({
+    let url = `${environment.apiUrl}/production/team-report?window=${this.teamReportWindow}`;
+    // Pass the same filters the table uses so totals match visible records
+    if (this.filters.agentId) url += `&agentId=${this.filters.agentId}`;
+    if (this.filters.productSold) url += `&productSold=${encodeURIComponent(this.filters.productSold)}`;
+    if (this.filters.carrier) url += `&carrier=${this.filters.carrier}`;
+    if (this.filters.startDate) url += `&startDate=${this.filters.startDate}`;
+    if (this.filters.endDate) url += `&endDate=${this.filters.endDate}`;
+    this.http.get<any>(url).subscribe({
       next: (data) => { this.teamReport = data; this.teamReportLoading = false; },
       error: () => { this.teamReportLoading = false; }
     });
@@ -479,5 +493,30 @@ export class ProductionComponent implements OnInit {
 
   setOptionsFromString(f: CustomFieldDef, value: string): void {
     f.options = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  getCustomFieldValue(submission: ProductionSubmission, key: string): string {
+    if (!submission.customFields) return '—';
+    const val = submission.customFields[key];
+    if (val == null || val === '') return '—';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    return String(val);
+  }
+
+  /** Generate pagination page numbers with ellipsis support */
+  get paginationPages(): (number | string)[] {
+    const total = this.totalPages;
+    const current = this.currentPage;
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const pages: (number | string)[] = [1];
+    if (current > 3) pages.push('...');
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push('...');
+    pages.push(total);
+    return pages;
   }
 }

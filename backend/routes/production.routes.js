@@ -209,6 +209,7 @@ router.get('/', authenticate, async (req, res) => {
 
 // @route   GET /api/production/team-report
 // @desc    Rolling team report: total premium, active agents, new recruits for full downline
+//          Accepts same filters as the production list so totals match visible records
 // @access  Private
 router.get('/team-report', authenticate, async (req, res) => {
   try {
@@ -216,12 +217,18 @@ router.get('/team-report', authenticate, async (req, res) => {
     const windowDays = parseInt(req.query.window) || 30;
     const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
 
-    let agentIds;
+    let agentIds = null; // null = no agent filter (admin sees all)
     if (req.user.role === 'admin') {
-      // Admin can query any upline's tree by passing ?uplineId=
-      const rootId = req.query.uplineId || req.user._id;
-      const downlineIds = await getDownlineIds(rootId);
-      agentIds = [rootId, ...downlineIds];
+      if (req.query.agentId) {
+        // Admin filtered to a specific agent — report only that agent's tree
+        const targetDownline = await getDownlineIds(req.query.agentId);
+        agentIds = [req.query.agentId, ...targetDownline];
+      } else if (req.query.uplineId) {
+        // Admin can query any upline's tree
+        const downlineIds = await getDownlineIds(req.query.uplineId);
+        agentIds = [req.query.uplineId, ...downlineIds];
+      }
+      // If neither agentId nor uplineId, agentIds stays null → query all agents
     } else {
       const downlineIds = await getDownlineIds(req.user._id);
       if (downlineIds.length === 0) {
@@ -236,24 +243,53 @@ router.get('/team-report', authenticate, async (req, res) => {
       agentIds = [req.user._id, ...downlineIds];
     }
 
+    // Build production query — match the same filters the table uses
+    const productionQuery = {
+      status: 'In Force',
+      deletedAt: null
+    };
+
+    // Only restrict by agent if we have a specific set of agents
+    if (agentIds) {
+      productionQuery.agent = { $in: agentIds };
+    }
+
+    // Date filter: use explicit date range if provided, else fall back to window
+    if (req.query.startDate || req.query.endDate) {
+      productionQuery.submissionDate = {};
+      if (req.query.startDate) {
+        productionQuery.submissionDate.$gte = new Date(req.query.startDate);
+      }
+      if (req.query.endDate) {
+        productionQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+      }
+    } else {
+      productionQuery.submissionDate = { $gte: since };
+    }
+
+    // Optional product / carrier / status filters (status already forced to 'In Force')
+    if (req.query.productSold) {
+      productionQuery.productSold = req.query.productSold;
+    }
+    if (req.query.carrier && mongoose.Types.ObjectId.isValid(req.query.carrier)) {
+      productionQuery.carrier = new mongoose.Types.ObjectId(req.query.carrier);
+    }
+
+    // Build recruits/active-agent queries based on whether we have a specific agent set
+    const recruitsQuery = { createdAt: { $gte: since } };
+    const activeQuery = { isActive: true, role: 'agent', deletedAt: null };
+    if (agentIds) {
+      recruitsQuery.referredBy = { $in: agentIds };
+      activeQuery._id = { $in: agentIds };
+    }
+
     const [submissions, newRecruits] = await Promise.all([
-      ProductionSubmission.find({
-        agent: { $in: agentIds },
-        status: 'In Force',
-        submissionDate: { $gte: since },
-        deletedAt: null
-      }).select('premiumAmount agent'),
-      User.countDocuments({
-        referredBy: { $in: agentIds },
-        createdAt: { $gte: since }
-      })
+      ProductionSubmission.find(productionQuery).select('premiumAmount agent'),
+      User.countDocuments(recruitsQuery)
     ]);
 
     const totalPremiumInForce = submissions.reduce((sum, s) => sum + (s.premiumAmount || 0), 0);
-    const activeAgentCount = await User.countDocuments({
-      _id: { $in: agentIds },
-      isActive: true
-    });
+    const activeAgentCount = await User.countDocuments(activeQuery);
 
     res.json({
       totalPremiumInForce,
@@ -427,7 +463,7 @@ router.get('/ranking', authenticate, async (req, res) => {
       _id: '$agent',
       totalPremium: { $sum: '$premiumAmount' },
       totalPolicies: { $sum: 1 },
-      totalMembers: { $sum: { $ifNull: ['$numberOfMembers', 1] } },
+      totalMembers: { $sum: { $ifNull: ['$numberOfMembers', 0] } },
       inForceCount: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, 1, 0] } },
       inForcePremium: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, '$premiumAmount', 0] } }
     };
@@ -582,6 +618,11 @@ router.post('/', authenticate, async (req, res) => {
       });
     }
     
+    // Validate premium is non-negative
+    if (premiumAmount < 0) {
+      return res.status(400).json({ message: 'Premium amount cannot be negative' });
+    }
+    
     // If product is "Other", require description
     if (productSold === 'Other' && !productOtherDescription) {
       return res.status(400).json({ 
@@ -602,7 +643,7 @@ router.post('/', authenticate, async (req, res) => {
       agent: req.user._id,
       submissionDate: submissionDate || Date.now(),
       clientName,
-      numberOfMembers: numberOfMembers || 1,
+      numberOfMembers: numberOfMembers != null ? numberOfMembers : null,
       productSold,
       productOtherDescription,
       productCategory: resolvedCategory,
@@ -681,9 +722,18 @@ router.put('/:id', authenticate, async (req, res) => {
     if (isTrainingPeriod !== undefined) submission.isTrainingPeriod = isTrainingPeriod;
     if (customFields !== undefined) submission.customFields = customFields;
     
-    // Both agents and admins can change status
+    // Status changes: admins can set any status; agents can only set Submitted/Pending
     if (status) {
-      submission.status = status;
+      if (req.user.role === 'admin') {
+        submission.status = status;
+      } else {
+        // Agents can only set Submitted or Pending (cannot self-approve)
+        const agentAllowedStatuses = ['Submitted', 'Pending'];
+        if (agentAllowedStatuses.includes(status)) {
+          submission.status = status;
+        }
+        // Silently ignore disallowed status changes by agents
+      }
     }
     
     await submission.save();

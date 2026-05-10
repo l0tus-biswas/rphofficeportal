@@ -1,0 +1,32 @@
+/* Ensure the table scrolls horizontally when custom fields push width */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sticky Actions column: stays pinned on the right while scrolling */
+.table thead th:last-child,
+.table tbody td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -2px 0 4px rgba(0, 0, 0, 0.06);
+}
+
+.table thead th:last-child {
+  background: #f8f9fa;
+}
+
+.table tbody td:last-child {
+  background: #fff;
+}
+
+.table tbody tr:hover td:last-child {
+  background: #f8f9fa;
+}
+
+/* Prevent column wrapping for data density */
+.table td,
+.table th {
+  white-space: nowrap;
+}

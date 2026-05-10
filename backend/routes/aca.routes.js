@@ -482,6 +482,54 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
     const totalVerifiedPremium = personalVerifiedPremium + teamVerifiedPremium;
     const hasData = totalReportedClients > 0 || totalVerifiedClients > 0;
 
+    // ── TOP 5 LEADERBOARDS (global, for agent visibility) ────────────
+    let topPersonalACA = [];
+    let topTeamACA = [];
+
+    // Use global latest batch (not just agent's team batch)
+    const globalLatestBatchDoc = await ACAClientRecord.findOne(
+      {},
+      { uploadBatch: 1 }
+    ).sort({ uploadedAt: -1 }).lean();
+
+    if (globalLatestBatchDoc) {
+      const globalBatch = globalLatestBatchDoc.uploadBatch;
+
+      // Top 5 personal (individual agent client count across entire org)
+      topPersonalACA = await ACAClientRecord.aggregate([
+        { $match: { uploadBatch: globalBatch } },
+        { $sort: { clientCount: -1 } },
+        { $limit: 5 },
+        { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
+        { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+        { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
+      ]);
+
+      // Top 5 team (agent + their downline total)
+      const allGlobalRecords = await ACAClientRecord.find({ uploadBatch: globalBatch }).lean();
+      const allAgentsForTeam = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+      const childrenMapGlobal = {};
+      allAgentsForTeam.forEach(u => {
+        const pid = u.referredBy?.toString();
+        if (pid) {
+          if (!childrenMapGlobal[pid]) childrenMapGlobal[pid] = [];
+          childrenMapGlobal[pid].push(u._id.toString());
+        }
+      });
+      const recordMapGlobal = {};
+      allGlobalRecords.forEach(r => { recordMapGlobal[r.agent.toString()] = r.clientCount; });
+      function sumTreeGlobal(id) {
+        let total = recordMapGlobal[id] || 0;
+        (childrenMapGlobal[id] || []).forEach(cid => { total += sumTreeGlobal(cid); });
+        return total;
+      }
+      const teamTotalsGlobal = allAgentsForTeam.map(u => ({
+        agentName: u.name, teamClientCount: sumTreeGlobal(u._id.toString())
+      }));
+      teamTotalsGlobal.sort((a, b) => b.teamClientCount - a.teamClientCount);
+      topTeamACA = teamTotalsGlobal.slice(0, 5);
+    }
+
     // ── TIERS — configurable (5.11-5.12) + per-agent (5.13) ──────────
     const tiers = await AcaTierConfig.getTiersForAgent(userId);
     const tierInfo = AcaTierConfig.calcTierFromList(totalVerifiedClients, tiers);
@@ -536,7 +584,10 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       uploadedAt,
       // Agent breakdown (5.14)
       agentBreakdown,
-      teamSize: downlineIds.length
+      teamSize: downlineIds.length,
+      // Top 5 leaderboards (global)
+      topPersonalACA,
+      topTeamACA
     });
   } catch (err) {
     return errorResponse(res, err);

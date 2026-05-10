@@ -8,7 +8,7 @@ export interface ProductionSubmission {
   agent: any;
   submissionDate: Date;
   clientName: string;
-  numberOfMembers?: number;
+  numberOfMembers?: number | null;
   productSold: string;
   productOtherDescription?: string;
   productCategory?: 'Life Insurance' | 'Health Insurance' | 'Medicare' | 'Supplemental Insurance' | 'Retirement / Annuities' | 'Property & Casualty - Personal' | 'Property & Casualty - Commercial';

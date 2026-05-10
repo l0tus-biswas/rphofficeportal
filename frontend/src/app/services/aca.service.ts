@@ -54,6 +54,9 @@ export interface AcaTrackerData {
   // Team breakdown
   agentBreakdown: AgentBreakdownEntry[];
   teamSize: number;
+  // Top 5 leaderboards (global)
+  topPersonalACA: { agentName: string; clientCount: number }[];
+  topTeamACA: { agentName: string; teamClientCount: number }[];
 }
 
 export interface AcaBatch {
