@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { ExamfxService, ExamFXProgress, ExamFXSummary, ExamFXConfigStatus } from '../../services/examfx.service';
+import { ActivatedRoute } from '@angular/router';
+import { ExamfxService, ExamFXProgress, ExamFXSummary, ExamFXCsvUploadResult, ExamFXImportBatch } from '../../services/examfx.service';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -9,12 +10,12 @@ import { AuthService } from '../../services/auth.service';
 })
 export class ExamfxProgressComponent implements OnInit {
   isAdmin = false;
+  isAdminRoute = false; // true when on /admin/examfx, false on /examfx-progress
   currentUserId = '';
   loading = true;
   error = '';
   successMessage = '';
 
-  configStatus: ExamFXConfigStatus | null = null;
   summary: ExamFXSummary | null = null;
   allProgress: ExamFXProgress[] = [];
   selectedAgent: ExamFXProgress | null = null;
@@ -22,31 +23,34 @@ export class ExamfxProgressComponent implements OnInit {
   // Filter
   filterStatus: string = 'all';
 
-  // Link account form
-  showLinkForm = false;
-  linkFormAgentId = '';
-  linkFormExamFxId = '';
-  linkFormEmail = '';
-
   // Manual update form
   showManualForm = false;
   manualEnrollmentStatus = 'not_enrolled';
   manualOverallPercent = 0;
   manualAdminNotes = '';
 
-  // Syncing
-  syncing = false;
-  syncingAll = false;
+  // CSV Upload
+  uploading = false;
+  csvUploadResult: ExamFXCsvUploadResult | null = null;
+  showUploadResults = false;
+
+  // Import History (admin)
+  importHistory: ExamFXImportBatch[] = [];
+  activeTab: 'progress' | 'history' = 'progress';
 
   constructor(
     private examfxService: ExamfxService,
-    private authService: AuthService
+    private authService: AuthService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
     this.isAdmin = user?.role === 'admin';
     this.currentUserId = user?._id || '';
+
+    // Detect if this is the admin management route
+    this.isAdminRoute = this.route.snapshot.data['roles']?.includes('admin') || false;
 
     this.loadData();
   }
@@ -59,8 +63,8 @@ export class ExamfxProgressComponent implements OnInit {
     this.examfxService.getAllProgress().subscribe({
       next: (data) => {
         this.allProgress = data;
-        // Auto-select for agents
-        if (!this.isAdmin && data.length > 0) {
+        // Auto-select for agent view (non-admin route) or when only one record
+        if (!this.isAdminRoute && data.length > 0) {
           this.selectedAgent = data.find(r => r.agent._id === this.currentUserId) || data[0];
         }
         this.loading = false;
@@ -72,15 +76,14 @@ export class ExamfxProgressComponent implements OnInit {
       }
     });
 
-    // Admin: also load summary and config
-    if (this.isAdmin) {
+    // Admin route: also load summary and import history
+    if (this.isAdminRoute) {
       this.examfxService.getSummary().subscribe({
         next: (summary) => this.summary = summary,
         error: () => {} // Non-critical
       });
-
-      this.examfxService.getConfigStatus().subscribe({
-        next: (config) => this.configStatus = config,
+      this.examfxService.getImportHistory().subscribe({
+        next: (history) => this.importHistory = history,
         error: () => {} // Non-critical
       });
     }
@@ -93,87 +96,14 @@ export class ExamfxProgressComponent implements OnInit {
 
   selectAgent(record: ExamFXProgress): void {
     this.selectedAgent = record;
-    this.showLinkForm = false;
     this.showManualForm = false;
     this.successMessage = '';
-  }
-
-  // ── Sync ──
-  syncAgent(): void {
-    if (!this.selectedAgent) return;
-    this.syncing = true;
-    this.error = '';
-    this.successMessage = '';
-
-    this.examfxService.syncAgent(this.selectedAgent.agent._id).subscribe({
-      next: (res) => {
-        this.selectedAgent = res.record;
-        this.successMessage = 'Sync completed successfully';
-        this.syncing = false;
-        this.loadData();
-      },
-      error: (err) => {
-        this.error = err.error?.message || 'Sync failed';
-        this.syncing = false;
-      }
-    });
-  }
-
-  syncAllAgents(): void {
-    this.syncingAll = true;
-    this.error = '';
-    this.successMessage = '';
-
-    this.examfxService.syncAll().subscribe({
-      next: (res) => {
-        this.successMessage = res.message;
-        this.syncingAll = false;
-        this.loadData();
-      },
-      error: (err) => {
-        this.error = err.error?.message || 'Bulk sync failed';
-        this.syncingAll = false;
-      }
-    });
-  }
-
-  // ── Link Account ──
-  openLinkForm(): void {
-    if (!this.selectedAgent) return;
-    this.showLinkForm = true;
-    this.showManualForm = false;
-    this.linkFormAgentId = this.selectedAgent.agent._id;
-    this.linkFormExamFxId = this.selectedAgent.examfxUserId || '';
-    this.linkFormEmail = this.selectedAgent.examfxEmail || this.selectedAgent.agent.email || '';
-  }
-
-  submitLink(): void {
-    if (!this.linkFormExamFxId && !this.linkFormEmail) {
-      this.error = 'Provide ExamFX User ID or email';
-      return;
-    }
-
-    this.examfxService.linkAccount(this.linkFormAgentId, {
-      examfxUserId: this.linkFormExamFxId || undefined,
-      examfxEmail: this.linkFormEmail || undefined
-    }).subscribe({
-      next: (res) => {
-        this.successMessage = 'ExamFX account linked successfully';
-        this.showLinkForm = false;
-        this.selectedAgent = res.record;
-        this.loadData();
-      },
-      error: (err) => {
-        this.error = err.error?.message || 'Failed to link account';
-      }
-    });
   }
 
   // ── Manual Update ──
   openManualForm(): void {
     if (!this.selectedAgent) return;
     this.showManualForm = true;
-    this.showLinkForm = false;
     this.manualEnrollmentStatus = this.selectedAgent.enrollmentStatus;
     this.manualOverallPercent = this.selectedAgent.overallPercentComplete;
     this.manualAdminNotes = this.selectedAgent.adminNotes || '';
@@ -197,6 +127,45 @@ export class ExamfxProgressComponent implements OnInit {
         this.error = err.error?.message || 'Failed to update progress';
       }
     });
+  }
+
+  // ── CSV Upload ──
+  onCsvFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      this.error = 'Please select a CSV file';
+      input.value = '';
+      return;
+    }
+
+    this.uploading = true;
+    this.error = '';
+    this.successMessage = '';
+    this.csvUploadResult = null;
+
+    this.examfxService.uploadCsv(file).subscribe({
+      next: (result) => {
+        this.csvUploadResult = result;
+        this.showUploadResults = true;
+        this.successMessage = result.message;
+        this.uploading = false;
+        input.value = '';
+        this.loadData();
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'CSV upload failed';
+        this.uploading = false;
+        input.value = '';
+      }
+    });
+  }
+
+  dismissUploadResults(): void {
+    this.showUploadResults = false;
+    this.csvUploadResult = null;
   }
 
   // ── Helpers ──
@@ -245,15 +214,6 @@ export class ExamfxProgressComponent implements OnInit {
     if (percent >= 80) return 'bg-success';
     if (percent >= 40) return 'bg-warning';
     return 'bg-danger';
-  }
-
-  getSyncStatusClass(status: string): string {
-    switch (status) {
-      case 'success': return 'text-success';
-      case 'failed': return 'text-danger';
-      case 'pending': return 'text-warning';
-      default: return 'text-muted';
-    }
   }
 
   formatMinutes(minutes: number): string {

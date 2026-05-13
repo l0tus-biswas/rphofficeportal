@@ -76,6 +76,20 @@ const onboardingDocumentSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  // Direct Deposit fields (AES-256-GCM encrypted at rest)
+  bankRoutingNumber: {
+    type: String,
+    default: null
+  },
+  bankAccountNumber: {
+    type: String,
+    default: null
+  },
+  bankAccountType: {
+    type: String,
+    enum: ['checking', 'savings', null],
+    default: null
+  },
   // Soft-delete: set when agent or admin deletes the document
   deletedAt: {
     type: Date,

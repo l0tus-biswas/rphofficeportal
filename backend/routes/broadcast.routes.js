@@ -179,11 +179,22 @@ router.get('/:id', async (req, res) => {
       return sendResponse(res, 404, { message: 'Broadcast not found' });
     }
 
-    // Mark the user's notification for this broadcast as read
-    await Notification.updateMany(
+    // Mark the user's notification for this broadcast as read (or create one if missing)
+    const result = await Notification.updateMany(
       { userId: req.user._id, type: 'admin_broadcast', 'data.broadcastId': broadcast._id.toString() },
       { isRead: true }
     );
+    // If no notification existed, create one marked as read so this broadcast is tracked
+    if (result.matchedCount === 0) {
+      await Notification.create({
+        userId: req.user._id,
+        type: 'admin_broadcast',
+        title: broadcast.title,
+        message: broadcast.message,
+        data: { broadcastId: broadcast._id.toString() },
+        isRead: true
+      });
+    }
 
     sendResponse(res, 200, { broadcast });
   } catch (error) {

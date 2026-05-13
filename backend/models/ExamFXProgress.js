@@ -53,7 +53,45 @@ const courseProgressSchema = new mongoose.Schema({
       default: 0
     },
     completedDate: Date
-  }]
+  }],
+  // ── CSV Import Fields ──
+  scoreTrend: { type: Number, default: null },
+  activeAlerts: { type: Number, default: null },
+  courseExpirationDate: { type: Date, default: null },
+  licensingExamDate: { type: Date, default: null },
+  quizStats: {
+    chapterQuizCount: { type: Number, default: null },
+    chapterQuizzesPassed: { type: Number, default: null },
+    quizPassRate: { type: Number, default: null },
+    overallQuizAverage: { type: Number, default: null }
+  },
+  practiceExamScores: {
+    examMode: {
+      best: { type: Number, default: null },
+      average: { type: Number, default: null },
+      latest: { type: Number, default: null },
+      attempts: { type: Number, default: null }
+    },
+    learningMode: {
+      best: { type: Number, default: null },
+      average: { type: Number, default: null },
+      latest: { type: Number, default: null },
+      attempts: { type: Number, default: null }
+    }
+  },
+  readinessExamScores: {
+    best: { type: Number, default: null },
+    average: { type: Number, default: null },
+    latest: { type: Number, default: null },
+    attempts: { type: Number, default: null }
+  },
+  certificateExam: {
+    status: { type: String, default: null },
+    best: { type: Number, default: null },
+    average: { type: Number, default: null },
+    latest: { type: Number, default: null },
+    attempts: { type: Number, default: null }
+  }
 }, { _id: false });
 
 const examFXProgressSchema = new mongoose.Schema({
@@ -126,6 +164,16 @@ const examFXProgressSchema = new mongoose.Schema({
   lastUpdatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  // CSV import tracking
+  lastCsvImportDate: {
+    type: Date,
+    default: null
+  },
+  csvImportedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   },
   deletedAt: {
     type: Date,

@@ -30,6 +30,11 @@ const onboardingDocTypeSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // True for Direct Deposit — shows routing/account number form alongside file upload
+  hasDirectDepositFields: {
+    type: Boolean,
+    default: false
+  },
   sortOrder: {
     type: Number,
     default: 0

@@ -40,6 +40,10 @@ export class BroadcastPopupComponent implements OnInit, OnDestroy {
     if (this.currentBroadcast) {
       this.broadcastService.markBroadcastDismissed(this.currentBroadcast._id);
       this.broadcastPopupService.dismissBroadcast(this.currentBroadcast._id);
+      // Also mark as read on server so it doesn't reappear on next login
+      this.broadcastService.getBroadcast(this.currentBroadcast._id).subscribe({
+        next: () => this.broadcastService.refreshUnreadCount()
+      });
     }
     this.close();
   }

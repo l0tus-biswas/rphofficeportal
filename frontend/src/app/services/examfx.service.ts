@@ -11,6 +11,20 @@ export interface ExamFXCourseModule {
   completedDate?: Date;
 }
 
+export interface ExamFXQuizStats {
+  chapterQuizCount: number | null;
+  chapterQuizzesPassed: number | null;
+  quizPassRate: number | null;
+  overallQuizAverage: number | null;
+}
+
+export interface ExamFXExamScoreSet {
+  best: number | null;
+  average: number | null;
+  latest: number | null;
+  attempts: number | null;
+}
+
 export interface ExamFXCourse {
   courseId: string;
   courseName: string;
@@ -24,6 +38,24 @@ export interface ExamFXCourse {
   passed: boolean;
   timeSpentMinutes: number;
   modules: ExamFXCourseModule[];
+  // CSV import fields
+  scoreTrend?: number | null;
+  activeAlerts?: number | null;
+  courseExpirationDate?: Date | null;
+  licensingExamDate?: Date | null;
+  quizStats?: ExamFXQuizStats;
+  practiceExamScores?: {
+    examMode: ExamFXExamScoreSet;
+    learningMode: ExamFXExamScoreSet;
+  };
+  readinessExamScores?: ExamFXExamScoreSet;
+  certificateExam?: {
+    status: string | null;
+    best: number | null;
+    average: number | null;
+    latest: number | null;
+    attempts: number | null;
+  };
 }
 
 export interface ExamFXPracticeExam {
@@ -51,6 +83,8 @@ export interface ExamFXProgress {
   manualOverride: boolean;
   adminNotes?: string;
   lastUpdatedBy?: any;
+  lastCsvImportDate?: Date;
+  csvImportedBy?: any;
   isComplete?: boolean;
   stats?: {
     total: number;
@@ -82,11 +116,22 @@ export interface ExamFXSummary {
   }[];
 }
 
-export interface ExamFXConfigStatus {
-  configured: boolean;
-  hasWebhookSecret: boolean;
-  apiUrl: string;
-  orgId: string;
+export interface ExamFXCsvUploadResult {
+  message: string;
+  totalRows: number;
+  matched: number;
+  created: number;
+  updated: number;
+  unmatched: { rowIndex: number; candidate: string; email: string; course: string; reason: string }[];
+  matchedDetails: { agentId: string; agentName: string; agentEmail: string; course: string; progress: number; enrollmentStatus: string; certificateStatus: string | null }[];
+  errors: { rowIndex: number; candidate: string; reason: string }[];
+  completedAgents: { agentId: string; agentName: string; course: string }[];
+}
+
+export interface ExamFXImportBatch {
+  importDate: string;
+  importedBy: { _id: string; name: string; email: string } | null;
+  agents: { agentId: string; agentName: string; agentEmail: string; enrollmentStatus: string; overallPercentComplete: number; courseCount: number }[];
 }
 
 @Injectable({
@@ -97,11 +142,6 @@ export class ExamfxService {
 
   constructor(private http: HttpClient) {}
 
-  // Get config status (admin only)
-  getConfigStatus(): Observable<ExamFXConfigStatus> {
-    return this.http.get<ExamFXConfigStatus>(`${this.apiUrl}/config-status`);
-  }
-
   // Get all progress records (admin: all, agent: own + downline)
   getAllProgress(): Observable<ExamFXProgress[]> {
     return this.http.get<ExamFXProgress[]>(this.apiUrl);
@@ -110,6 +150,11 @@ export class ExamfxService {
   // Get dashboard summary
   getSummary(): Observable<ExamFXSummary> {
     return this.http.get<ExamFXSummary>(`${this.apiUrl}/summary`);
+  }
+
+  // Get CSV import history (admin only)
+  getImportHistory(): Observable<ExamFXImportBatch[]> {
+    return this.http.get<ExamFXImportBatch[]>(`${this.apiUrl}/import-history`);
   }
 
   // Get specific agent's progress
@@ -122,23 +167,15 @@ export class ExamfxService {
     return this.http.put<ExamFXProgress>(`${this.apiUrl}/${agentId}`, data);
   }
 
-  // Admin: link agent to ExamFX account
-  linkAccount(agentId: string, data: { examfxUserId?: string; examfxEmail?: string }): Observable<any> {
-    return this.http.post(`${this.apiUrl}/${agentId}/link`, data);
-  }
-
-  // Admin: trigger sync for one agent
-  syncAgent(agentId: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/${agentId}/sync`, {});
-  }
-
-  // Admin: trigger bulk sync for all linked agents
-  syncAll(): Observable<any> {
-    return this.http.post(`${this.apiUrl}/sync/all`, {});
-  }
-
   // Admin: delete an agent's ExamFX record
   deleteRecord(agentId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${agentId}`);
+  }
+
+  // Admin: upload ExamFX CSV export to sync progress
+  uploadCsv(file: File): Observable<ExamFXCsvUploadResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<ExamFXCsvUploadResult>(`${this.apiUrl}/upload-csv`, formData);
   }
 }

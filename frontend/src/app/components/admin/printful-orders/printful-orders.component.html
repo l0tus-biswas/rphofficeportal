@@ -1,0 +1,448 @@
+
+<div class="printful-orders-page py-4">
+  <div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header mb-4">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+          <h2 class="page-title mb-1">
+            <i class="bi bi-bag-check me-2 text-primary"></i>
+            Store Order Management
+          </h2>
+          <p class="text-muted mb-0">Review, approve, and manage Printful product orders.</p>
+        </div>
+        <button class="btn btn-outline-primary btn-sm" (click)="loadOrders()">
+          <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center" style="cursor:pointer;" (click)="filterStatus = 'pending_review'; applyFilter()">
+          <div class="card-body py-3">
+            <div class="h3 fw-bold text-warning mb-0">{{ counts.pending }}</div>
+            <small class="text-muted">Pending Review</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center" style="cursor:pointer;" (click)="filterStatus = 'approved'; applyFilter()">
+          <div class="card-body py-3">
+            <div class="h3 fw-bold text-success mb-0">{{ counts.approved }}</div>
+            <small class="text-muted">Approved</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center" style="cursor:pointer;" (click)="filterStatus = 'rejected'; applyFilter()">
+          <div class="card-body py-3">
+            <div class="h3 fw-bold text-danger mb-0">{{ counts.rejected }}</div>
+            <small class="text-muted">Rejected</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center" style="cursor:pointer;" (click)="filterStatus = 'all'; applyFilter()">
+          <div class="card-body py-3">
+            <div class="h3 fw-bold text-primary mb-0">{{ counts.total }}</div>
+            <small class="text-muted">Total Orders</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <label class="small text-muted mb-0">Status:</label>
+            <select class="form-select form-select-sm" [(ngModel)]="filterStatus" (change)="applyFilter()" style="width: auto;">
+              <option value="all">All</option>
+              <option value="pending_review">Pending Review</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <label class="small text-muted mb-0">Payment:</label>
+            <select class="form-select form-select-sm" [(ngModel)]="filterPayment" (change)="applyFilter()" style="width: auto;">
+              <option value="all">All</option>
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="refunded">Refunded</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div class="flex-grow-1">
+            <input type="text" class="form-control form-control-sm" [(ngModel)]="searchQuery"
+                   placeholder="Search by name, email, product..." (keyup.enter)="applyFilter()">
+          </div>
+          <button class="btn btn-primary btn-sm" (click)="applyFilter()">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success / Error Messages -->
+    <div *ngIf="actionSuccess" class="alert alert-success d-flex align-items-center mb-3">
+      <i class="bi bi-check-circle-fill me-2"></i>{{ actionSuccess }}
+      <button class="btn-close ms-auto" (click)="actionSuccess = ''"></button>
+    </div>
+    <div *ngIf="actionError" class="alert alert-danger d-flex align-items-center mb-3">
+      <i class="bi bi-x-circle-fill me-2"></i>{{ actionError }}
+      <button class="btn-close ms-auto" (click)="actionError = ''"></button>
+    </div>
+
+    <!-- Loading -->
+    <div *ngIf="loading" class="text-center py-5">
+      <div class="spinner-border text-primary"></div>
+      <p class="mt-3 text-muted">Loading orders...</p>
+    </div>
+
+    <!-- Error -->
+    <div *ngIf="!loading && error" class="alert alert-danger">
+      <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    </div>
+
+    <!-- Orders Table -->
+    <div *ngIf="!loading && !error && !showDetail" class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div *ngIf="orders.length === 0" class="text-center py-5 text-muted">
+          <i class="bi bi-inbox display-3 opacity-50"></i>
+          <p class="mt-3">No orders found.</p>
+        </div>
+        <div *ngIf="orders.length > 0" class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width: 50px;"></th>
+                <th>Agent</th>
+                <th>Product</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Total</th>
+                <th class="text-center">Payment</th>
+                <th class="text-center">Status</th>
+                <th>Date</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let order of orders" class="order-row" style="cursor: pointer;">
+                <td (click)="viewOrder(order)">
+                  <img *ngIf="order.product?.thumbnail || order.mockupUrl"
+                       [src]="order.mockupUrl || order.product?.thumbnail" class="rounded" style="width: 36px; height: 36px; object-fit: cover;">
+                  <div *ngIf="!order.product?.thumbnail && !order.mockupUrl" class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                    <i class="bi bi-box text-muted small"></i>
+                  </div>
+                </td>
+                <td (click)="viewOrder(order)">
+                  <div class="fw-semibold small">{{ order.user?.name || 'Unknown' }}</div>
+                  <div class="text-muted" style="font-size: 0.7rem;">{{ order.user?.email }}</div>
+                </td>
+                <td (click)="viewOrder(order)">
+                  <div class="small">{{ order.product?.name || 'Product' }}</div>
+                  <div class="text-muted" style="font-size: 0.7rem;">{{ order.product?.variantName }}</div>
+                </td>
+                <td class="text-center" (click)="viewOrder(order)">{{ order.product?.quantity || 1 }}</td>
+                <td class="text-end fw-semibold" (click)="viewOrder(order)">${{ order.total?.toFixed(2) }}</td>
+                <td class="text-center" (click)="viewOrder(order)">
+                  <span class="badge" [ngClass]="getStatusClass(order.paymentStatus)">{{ getStatusLabel(order.paymentStatus) }}</span>
+                </td>
+                <td class="text-center" (click)="viewOrder(order)">
+                  <span class="badge" [ngClass]="getStatusClass(order.adminStatus)">{{ getStatusLabel(order.adminStatus) }}</span>
+                </td>
+                <td class="text-nowrap small" (click)="viewOrder(order)">{{ formatDate(order.created) }}</td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm">
+                    <button *ngIf="order.adminStatus === 'pending_review'" class="btn btn-outline-success" title="Approve"
+                            (click)="approveOrder(order)" [disabled]="actionLoading === order.id">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                    <button *ngIf="order.adminStatus === 'pending_review'" class="btn btn-outline-danger" title="Reject"
+                            (click)="rejectOrder(order)" [disabled]="actionLoading === order.id">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" title="View Details" (click)="viewOrder(order)">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div *ngIf="totalPages > 1" class="card-footer bg-white d-flex justify-content-between align-items-center py-2">
+        <small class="text-muted">Showing {{ orders.length }} of {{ totalOrders }} orders</small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item" [class.disabled]="currentPage === 1">
+              <button class="page-link" (click)="changePage(currentPage - 1)">‹</button>
+            </li>
+            <li *ngFor="let p of [].constructor(totalPages); let i = index"
+                class="page-item" [class.active]="currentPage === i + 1">
+              <button class="page-link" (click)="changePage(i + 1)">{{ i + 1 }}</button>
+            </li>
+            <li class="page-item" [class.disabled]="currentPage === totalPages">
+              <button class="page-link" (click)="changePage(currentPage + 1)">›</button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </div>
+
+    <!-- ═══════════ ORDER DETAIL PANEL ═══════════ -->
+    <div *ngIf="showDetail && selectedOrder" class="order-detail-panel">
+      <button class="btn btn-outline-secondary btn-sm mb-3" (click)="closeDetail()">
+        <i class="bi bi-arrow-left me-1"></i> Back to Orders
+      </button>
+
+      <div class="row g-4">
+        <!-- Left: Order Info -->
+        <div class="col-12 col-lg-8">
+          <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+              <h5 class="mb-0 fw-semibold">
+                <i class="bi bi-bag me-2 text-primary"></i>
+                Order Details
+              </h5>
+              <div class="d-flex gap-2">
+                <span class="badge" [ngClass]="getStatusClass(selectedOrder!.adminStatus)">{{ getStatusLabel(selectedOrder!.adminStatus) }}</span>
+                <span class="badge" [ngClass]="getStatusClass(selectedOrder!.paymentStatus)">{{ getStatusLabel(selectedOrder!.paymentStatus) }}</span>
+              </div>
+            </div>
+            <div class="card-body p-4">
+
+              <!-- Product Info -->
+              <div class="d-flex align-items-start gap-3 mb-4">
+                <img *ngIf="selectedOrder!.mockupUrl || selectedOrder!.product?.thumbnail"
+                     [src]="selectedOrder!.mockupUrl || selectedOrder!.product?.thumbnail"
+                     class="rounded shadow-sm" style="width: 100px; height: 100px; object-fit: cover;">
+                <div>
+                  <h6 class="fw-bold mb-1">{{ selectedOrder!.product?.name }}</h6>
+                  <div class="text-muted small">{{ selectedOrder!.product?.variantName }}</div>
+                  <div class="text-muted small">SKU: {{ selectedOrder!.product?.sku }}</div>
+                  <div class="mt-1">
+                    <span class="fw-semibold">Qty: {{ selectedOrder!.product?.quantity }}</span>
+                    <span class="mx-2">×</span>
+                    <span>${{ selectedOrder!.product?.unitPrice?.toFixed(2) }}</span>
+                    <span class="mx-2">=</span>
+                    <span class="fw-bold text-success">${{ selectedOrder!.total?.toFixed(2) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Personalization -->
+              <div *ngIf="selectedOrder.textValues && (selectedOrder.textValues | json) !== '{}'" class="mb-4">
+                <h6 class="fw-semibold mb-2"><i class="bi bi-pencil-square me-1 text-primary"></i> Customization</h6>
+                <div class="bg-light rounded p-3">
+                  <div *ngFor="let item of selectedOrder.textValues | keyvalue" class="d-flex mb-1">
+                    <span class="fw-semibold small me-2">{{ item.key }}:</span>
+                    <span class="small">{{ item.value }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Agent Info -->
+              <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                  <h6 class="fw-semibold mb-2"><i class="bi bi-person me-1 text-primary"></i> Agent</h6>
+                  <div class="small">{{ selectedOrder!.user?.name }}</div>
+                  <div class="small text-muted">{{ selectedOrder!.user?.email }}</div>
+                </div>
+                <div class="col-md-6">
+                  <h6 class="fw-semibold mb-2"><i class="bi bi-truck me-1 text-primary"></i> Ship To</h6>
+                  <div class="small">
+                    {{ selectedOrder!.shippingAddress?.name }}<br>
+                    {{ selectedOrder!.shippingAddress?.address1 }}
+                    <span *ngIf="selectedOrder!.shippingAddress?.address2"><br>{{ selectedOrder!.shippingAddress?.address2 }}</span><br>
+                    {{ selectedOrder!.shippingAddress?.city }}, {{ selectedOrder!.shippingAddress?.state }} {{ selectedOrder!.shippingAddress?.zip }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Payment Info -->
+              <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                  <div class="small text-muted">Printful Order</div>
+                  <div class="fw-semibold">{{ selectedOrder!.printfulOrderId || 'Not submitted' }}</div>
+                </div>
+                <div class="col-md-4">
+                  <div class="small text-muted">Printful Status</div>
+                  <span class="badge" [ngClass]="getStatusClass(selectedOrder!.printfulStatus)">{{ getStatusLabel(selectedOrder!.printfulStatus) }}</span>
+                </div>
+                <div class="col-md-4">
+                  <div class="small text-muted">Paid At</div>
+                  <div class="small">{{ selectedOrder!.paidAt ? formatDateTime(selectedOrder!.paidAt) : '—' }}</div>
+                </div>
+              </div>
+
+              <!-- Receipt Button -->
+              <div *ngIf="selectedOrder.paymentStatus === 'paid' || selectedOrder.stripePaymentIntentId" class="mb-4">
+                <button class="btn btn-outline-primary btn-sm" (click)="viewReceipt(selectedOrder!)">
+                  <i class="bi bi-receipt me-1"></i> View Payment Receipt
+                </button>
+                <a *ngIf="selectedOrder!.receiptUrl" [href]="selectedOrder!.receiptUrl" target="_blank" class="btn btn-outline-secondary btn-sm ms-2">
+                  <i class="bi bi-box-arrow-up-right me-1"></i> Stripe Receipt
+                </a>
+              </div>
+
+              <!-- Dates -->
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <div class="small text-muted">Created</div>
+                  <div class="small">{{ formatDateTime(selectedOrder!.created) }}</div>
+                </div>
+                <div class="col-md-4" *ngIf="selectedOrder!.reviewedBy">
+                  <div class="small text-muted">Reviewed By</div>
+                  <div class="small">{{ selectedOrder!.reviewedBy }}</div>
+                </div>
+                <div class="col-md-4" *ngIf="selectedOrder!.reviewedAt">
+                  <div class="small text-muted">Reviewed At</div>
+                  <div class="small">{{ formatDateTime(selectedOrder!.reviewedAt) }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Actions + Notes -->
+        <div class="col-12 col-lg-4">
+          <!-- Actions Card -->
+          <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+              <h6 class="mb-0 fw-semibold"><i class="bi bi-gear me-2 text-primary"></i> Actions</h6>
+            </div>
+            <div class="card-body">
+              <div *ngIf="actionSuccess" class="alert alert-success small py-2">{{ actionSuccess }}</div>
+              <div *ngIf="actionError" class="alert alert-danger small py-2">{{ actionError }}</div>
+
+              <div class="d-grid gap-2">
+                <button *ngIf="selectedOrder.adminStatus === 'pending_review'" class="btn btn-success"
+                        (click)="approveOrder(selectedOrder!)" [disabled]="actionLoading === selectedOrder!.id">
+                  <span *ngIf="actionLoading === selectedOrder!.id" class="spinner-border spinner-border-sm me-1"></span>
+                  <i *ngIf="actionLoading !== selectedOrder!.id" class="bi bi-check-circle me-1"></i> Approve Order
+                </button>
+                <button *ngIf="selectedOrder!.adminStatus === 'pending_review'" class="btn btn-outline-danger"
+                        (click)="rejectOrder(selectedOrder!)" [disabled]="actionLoading === selectedOrder!.id">
+                  <i class="bi bi-x-circle me-1"></i> Reject Order
+                </button>
+                <button class="btn btn-outline-dark" (click)="deleteOrder(selectedOrder!)" [disabled]="actionLoading === selectedOrder!.id">
+                  <i class="bi bi-trash me-1"></i> Delete Order
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes Card -->
+          <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom py-3">
+              <h6 class="mb-0 fw-semibold"><i class="bi bi-sticky me-2 text-primary"></i> Admin Notes</h6>
+            </div>
+            <div class="card-body">
+              <textarea class="form-control mb-3" rows="4" [(ngModel)]="notesInput" placeholder="Add notes about this order..."></textarea>
+              <button class="btn btn-primary btn-sm w-100" (click)="saveNotes(selectedOrder!)" [disabled]="actionLoading === selectedOrder!.id">
+                <i class="bi bi-floppy me-1"></i> Save Notes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ RECEIPT MODAL ═══════════ -->
+    <div *ngIf="showReceipt" class="modal-backdrop-custom" (click)="closeReceipt()"></div>
+    <div *ngIf="showReceipt" class="receipt-modal">
+      <div class="card border-0 shadow-lg" style="max-width: 500px; width: 100%;">
+        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0 fw-semibold"><i class="bi bi-receipt me-2 text-primary"></i> Payment Receipt</h6>
+          <button class="btn-close" (click)="closeReceipt()"></button>
+        </div>
+        <div class="card-body p-4">
+          <div *ngIf="loadingReceipt" class="text-center py-4">
+            <div class="spinner-border text-primary"></div>
+          </div>
+
+          <div *ngIf="!loadingReceipt && receipt">
+            <div class="text-center mb-4">
+              <i class="bi bi-check-circle-fill text-success" style="font-size: 2.5rem;"></i>
+              <h5 class="mt-2 fw-bold">Payment Confirmed</h5>
+            </div>
+
+            <div class="border rounded p-3 mb-3">
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Agent</span>
+                <span>{{ receipt.user?.name }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Email</span>
+                <span>{{ receipt.user?.email }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Product</span>
+                <span>{{ receipt.product?.name }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Variant</span>
+                <span>{{ receipt.product?.variantName }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Quantity</span>
+                <span>{{ receipt.product?.quantity }}</span>
+              </div>
+              <hr class="my-2">
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Subtotal</span>
+                <span>${{ receipt.subtotal?.toFixed(2) }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Shipping</span>
+                <span>${{ receipt.shipping?.toFixed(2) }}</span>
+              </div>
+              <hr class="my-2">
+              <div class="d-flex justify-content-between fw-bold">
+                <span>Total</span>
+                <span class="text-success">${{ receipt.total?.toFixed(2) }}</span>
+              </div>
+            </div>
+
+            <div *ngIf="receipt.stripe?.charge" class="border rounded p-3 mb-3">
+              <h6 class="small fw-semibold mb-2">Stripe Details</h6>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Payment ID</span>
+                <span class="text-truncate ms-2" style="max-width: 200px;">{{ receipt.stripe.paymentIntentId }}</span>
+              </div>
+              <div *ngIf="receipt.stripe.charge.cardBrand" class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Card</span>
+                <span>{{ toUpper(receipt.stripe.charge.cardBrand) }} •••• {{ receipt.stripe.charge.cardLast4 }}</span>
+              </div>
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">Status</span>
+                <span class="badge bg-success">{{ receipt.stripe.charge.status }}</span>
+              </div>
+              <div class="d-flex justify-content-between small">
+                <span class="text-muted">Date</span>
+                <span>{{ formatDateTime(receipt.stripe.charge.created) }}</span>
+              </div>
+            </div>
+
+            <div *ngIf="receipt.stripeReceiptUrl" class="text-center">
+              <a [href]="receipt.stripeReceiptUrl" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-box-arrow-up-right me-1"></i> View Stripe Receipt
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -173,10 +173,10 @@ router.get('/:agentId', authenticate, async (req, res) => {
       .populate('checklist.stateAppointment.documents.uploadedBy', 'name');
     
     if (!licensingProgress) {
-      // Auto-create licensing progress if agent exists
+      // Auto-create licensing progress if user exists
       const agent = await User.findById(req.params.agentId);
-      if (!agent || agent.role !== 'agent') {
-        return res.status(404).json({ message: 'Agent not found' });
+      if (!agent) {
+        return res.status(404).json({ message: 'User not found' });
       }
       
       // Create with default 30-day deadline

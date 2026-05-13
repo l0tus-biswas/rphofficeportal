@@ -32,6 +32,9 @@ build/
 coverage/
 .nyc_output/
 
+# Backups
+backend/backup-*/
+
 # Uploads
 uploads/
 temp/

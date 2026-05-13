@@ -1,0 +1,54 @@
+.printful-orders-page {
+  min-height: calc(100vh - 70px);
+  background-color: #f8f9fa;
+}
+
+.page-header {
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 1rem;
+}
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.card {
+  border-radius: 12px;
+}
+
+.order-row:hover {
+  background-color: #f8f9fa;
+}
+
+/* Receipt Modal */
+.modal-backdrop-custom {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+}
+
+.receipt-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1050;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.receipt-modal .card {
+  border-radius: 16px;
+}
+
+@media (max-width: 575px) {
+  .receipt-modal {
+    width: 95%;
+  }
+}

@@ -11,6 +11,7 @@ export interface OnboardingDocType {
   agentCanUpload: boolean;
   agentCanDelete: boolean;
   isReadOnlyLink: boolean;
+  hasDirectDepositFields: boolean;
   sortOrder: number;
   isActive: boolean;
 }
@@ -29,6 +30,13 @@ export interface OnboardingDocument {
   reviewedBy?: any;
   reviewedAt?: Date;
   deletedAt?: Date;
+  hasBankingData?: boolean;
+  history?: Array<{
+    status: string;
+    comment?: string;
+    updatedBy?: any;
+    updatedAt?: Date;
+  }>;
 }
 
 export interface AdminOnboardingOverviewRow {
@@ -107,5 +115,11 @@ export class OnboardingHubService {
 
   updateAdminDocumentStatus(documentId: string, status: 'pending' | 'approved' | 'rejected' | 'missing', comment?: string): Observable<any> {
     return this.http.put(`${this.apiUrl}/admin/documents/${documentId}/status`, { status, comment });
+  }
+
+  getBankInfo(documentId: string): Observable<{ routingNumber: string; accountNumber: string; accountType: string }> {
+    return this.http.get<{ routingNumber: string; accountNumber: string; accountType: string }>(
+      `${this.apiUrl}/admin/documents/${documentId}/bank-info`
+    );
   }
 }

@@ -573,13 +573,14 @@ const verifyPaymentHandler = async (req, res) => {
     }
 
     let referredById = null;
+    let referringAgent = null;
     if (application.recruitingInfo?.referralCode) {
-      const referringUser = await User.findOne({
+      referringAgent = await User.findOne({
         referralCode: application.recruitingInfo.referralCode,
         isActive: true
-      }).select('_id');
-      if (referringUser) {
-        referredById = referringUser._id;
+      }).select('_id name');
+      if (referringAgent) {
+        referredById = referringAgent._id;
       }
     }
 
@@ -719,7 +720,7 @@ const verifyPaymentHandler = async (req, res) => {
 
     // Send welcome email with set-password link
     if (setPasswordToken) {
-      await sendWelcomeSetPasswordEmail(user, setPasswordToken);
+      await sendWelcomeSetPasswordEmail(user, setPasswordToken, referringAgent);
     } else {
       await sendAccountActivatedEmail(user, password);
     }

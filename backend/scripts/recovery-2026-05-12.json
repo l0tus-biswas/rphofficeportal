@@ -1,0 +1,52 @@
+{
+  "users": [
+    {
+      "email": "kannojia.anuj@gmail.com",
+      "originalUserId": "69b8f8416c9ca6347aaea2b8",
+      "name": "Anuj Kannojia",
+      "role": "agent"
+    },
+    {
+      "email": "norgesemail@gmail.com",
+      "originalUserId": "69bb5d05916cb1592186d8c8",
+      "name": "March Eighteen",
+      "role": "agent"
+    },
+    {
+      "email": "norgehernandez6047@gmail.com",
+      "originalUserId": "69d031ce5b652c1d601e87ac",
+      "name": "April Third",
+      "role": "agent"
+    },
+    {
+      "email": "1000026381@dit.edu.in",
+      "name": "Anuj Kannojia",
+      "role": "agent"
+    },
+    {
+      "email": "norgeh6047@gmail.com",
+      "name": "April 3rd",
+      "role": "agent"
+    },
+    {
+      "email": "norgedidit@gmail.com",
+      "name": "Melissa Melissa",
+      "role": "agent"
+    },
+    {
+      "email": "melissa_4046@hotmail.com",
+      "name": "Melissa Melissa",
+      "role": "agent"
+    },
+    {
+      "email": "melissacortinas@outlook.com",
+      "name": "Melissa Melissa",
+      "role": "agent"
+    },
+    {
+      "email": "lotusbiswas2025@gmail.com",
+      "name": "John Testuser",
+      "role": "agent"
+    }
+  ]
+}

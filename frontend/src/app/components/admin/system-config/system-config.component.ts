@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 
 interface SystemConfig {
@@ -53,11 +54,32 @@ export class SystemConfigComponent implements OnInit {
   
   visibleSecrets: Set<string> = new Set();
 
-  constructor(private http: HttpClient) { }
+  // QuickBooks state
+  qboStatus: any = null;
+  qboLoading = false;
+  qboConnecting = false;
+  qboSyncLoading = false;
+  qboSyncing = false;
+  qboSyncData: any = null;
+  qboSyncResult: any = null;
+  syncingAgentId = '';
+  showSyncedList = false;
+
+  constructor(private http: HttpClient, private route: ActivatedRoute) { }
 
   ngOnInit(): void {
     this.loadConfigs();
     this.loadSiteAccess();
+    this.loadQBOStatus();
+
+    // Handle redirect from QuickBooks OAuth
+    this.route.queryParams.subscribe(params => {
+      if (params['qbo'] === 'connected') {
+        this.success = 'QuickBooks Online connected successfully!';
+        setTimeout(() => this.success = '', 5000);
+        this.loadQBOStatus();
+      }
+    });
   }
 
   loadSiteAccess(): void {
@@ -302,5 +324,116 @@ export class SystemConfigComponent implements OnInit {
       return '••••••••';
     }
     return config.actualValue;
+  }
+
+  // ── QuickBooks Methods ────────────────────────────────────────────────
+
+  loadQBOStatus(): void {
+    this.qboLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/quickbooks/status`).subscribe({
+      next: (status) => {
+        this.qboStatus = status;
+        this.qboLoading = false;
+      },
+      error: () => {
+        this.qboStatus = { connected: false };
+        this.qboLoading = false;
+      }
+    });
+  }
+
+  connectQBO(): void {
+    this.qboConnecting = true;
+    this.http.get<any>(`${environment.apiUrl}/quickbooks/connect`).subscribe({
+      next: (res) => {
+        this.qboConnecting = false;
+        if (res.authUri) {
+          window.location.href = res.authUri;
+        }
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to start QuickBooks authorization';
+        this.qboConnecting = false;
+      }
+    });
+  }
+
+  disconnectQBO(): void {
+    if (!confirm('Disconnect from QuickBooks Online? Employee sync will stop working.')) return;
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/disconnect`, {}).subscribe({
+      next: () => {
+        this.success = 'QuickBooks disconnected';
+        this.qboStatus = { connected: false };
+        this.qboSyncData = null;
+        this.qboSyncResult = null;
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to disconnect';
+      }
+    });
+  }
+
+  loadQBOSyncStatus(): void {
+    this.qboSyncLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/quickbooks/sync-status`).subscribe({
+      next: (data) => {
+        this.qboSyncData = data;
+        this.qboSyncLoading = false;
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to load sync status';
+        this.qboSyncLoading = false;
+      }
+    });
+  }
+
+  syncAllEmployees(): void {
+    if (!confirm('Sync all unsynced agents to QuickBooks as employees?')) return;
+    this.qboSyncing = true;
+    this.qboSyncResult = null;
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-all-employees`, {}).subscribe({
+      next: (result) => {
+        this.qboSyncResult = result;
+        this.qboSyncing = false;
+        this.loadQBOSyncStatus();
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Bulk sync failed';
+        this.qboSyncing = false;
+      }
+    });
+  }
+
+  syncSingleEmployee(agentId: string, agentName: string): void {
+    this.syncingAgentId = agentId;
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-employee/${agentId}`, {}).subscribe({
+      next: (result) => {
+        this.success = `${agentName} synced to QuickBooks (ID: ${result.employee?.id})`;
+        this.syncingAgentId = '';
+        this.loadQBOSyncStatus();
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || `Failed to sync ${agentName}`;
+        this.syncingAgentId = '';
+      }
+    });
+  }
+
+  resyncEmployee(agentId: string, agentName: string): void {
+    this.syncingAgentId = agentId;
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/resync-employee/${agentId}`, {}).subscribe({
+      next: (result) => {
+        this.success = `${agentName} updated in QuickBooks`;
+        this.syncingAgentId = '';
+        this.loadQBOSyncStatus();
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || `Failed to resync ${agentName}`;
+        this.syncingAgentId = '';
+      }
+    });
   }
 }

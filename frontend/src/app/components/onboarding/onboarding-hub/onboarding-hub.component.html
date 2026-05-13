@@ -23,7 +23,7 @@
     <div class="card-body py-3 px-4">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="fw-semibold text-dark">Onboarding Progress</span>
-        <span class="text-muted small">{{ completedRequiredCount }} of {{ requiredCount }} required documents</span>
+        <span class="text-muted small">{{ completedRequiredCount }} approved, {{ submittedRequiredCount }} submitted of {{ requiredCount }} required</span>
       </div>
       <div class="progress" style="height: 10px;">
         <div class="progress-bar bg-success" role="progressbar"
@@ -31,9 +31,12 @@
              [attr.aria-valuenow]="completedRequiredCount"
              aria-valuemin="0" [attr.aria-valuemax]="requiredCount">
         </div>
+        <div class="progress-bar bg-info bg-opacity-50" role="progressbar"
+             [style.width.%]="requiredCount > 0 ? ((submittedRequiredCount - completedRequiredCount) / requiredCount) * 100 : 0">
+        </div>
       </div>
       <div *ngIf="completedRequiredCount === requiredCount && requiredCount > 0" class="mt-2 text-success small fw-semibold">
-        <i class="bi bi-check-circle-fill me-1"></i>All required documents submitted!
+        <i class="bi bi-check-circle-fill me-1"></i>All required documents approved!
       </div>
     </div>
   </div>
@@ -61,8 +64,12 @@
           <div class="d-flex align-items-start justify-content-between mb-2">
             <div class="d-flex align-items-center gap-2">
               <i class="bi fs-4"
-                 [class.bi-file-check-fill]="card.document"
-                 [class.text-success]="card.document"
+                 [class.bi-file-check-fill]="card.document?.status === 'approved'"
+                 [class.text-success]="card.document?.status === 'approved'"
+                 [class.bi-file-earmark-arrow-up]="card.document && card.document.status !== 'approved'"
+                 [class.text-primary]="card.document?.status === 'pending'"
+                 [class.text-danger]="card.document?.status === 'rejected'"
+                 [class.text-warning]="card.document?.status === 'missing'"
                  [class.bi-file-earmark-text]="!card.document"
                  [class.text-muted]="!card.document"></i>
               <h6 class="mb-0 fw-semibold">{{ card.docType.name }}</h6>
@@ -76,12 +83,83 @@
 
           <!-- Current document status -->
           <div *ngIf="card.document" class="mb-3">
-            <div class="d-flex align-items-center gap-2 p-2 bg-success bg-opacity-10 rounded">
+            <!-- Approved -->
+            <div *ngIf="card.document.status === 'approved'" class="d-flex align-items-center gap-2 p-2 bg-success bg-opacity-10 rounded">
               <i class="bi bi-check-circle-fill text-success"></i>
               <div class="overflow-hidden">
-                <div class="small fw-semibold text-success">Submitted</div>
+                <div class="small fw-semibold text-success">Approved</div>
                 <div class="small text-muted text-truncate" *ngIf="card.document.originalFileName">
                   {{ card.document.originalFileName }}
+                </div>
+              </div>
+            </div>
+            <!-- Rejected -->
+            <div *ngIf="card.document.status === 'rejected'" class="d-flex align-items-center gap-2 p-2 bg-danger bg-opacity-10 rounded">
+              <i class="bi bi-x-circle-fill text-danger"></i>
+              <div class="overflow-hidden">
+                <div class="small fw-semibold text-danger">Rejected</div>
+                <div class="small text-muted text-truncate" *ngIf="card.document.originalFileName">
+                  {{ card.document.originalFileName }}
+                </div>
+              </div>
+            </div>
+            <!-- Missing / Resubmit -->
+            <div *ngIf="card.document.status === 'missing'" class="d-flex align-items-center gap-2 p-2 bg-warning bg-opacity-10 rounded">
+              <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+              <div class="overflow-hidden">
+                <div class="small fw-semibold text-warning">Resubmission Required</div>
+                <div class="small text-muted text-truncate" *ngIf="card.document.originalFileName">
+                  {{ card.document.originalFileName }}
+                </div>
+              </div>
+            </div>
+            <!-- Pending -->
+            <div *ngIf="card.document.status === 'pending' || !card.document.status" class="d-flex align-items-center gap-2 p-2 bg-info bg-opacity-10 rounded">
+              <i class="bi bi-clock-fill text-info"></i>
+              <div class="overflow-hidden">
+                <div class="small fw-semibold text-info">Pending Review</div>
+                <div class="small text-muted text-truncate" *ngIf="card.document.originalFileName">
+                  {{ card.document.originalFileName }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Admin Comment -->
+            <div *ngIf="card.document.adminComment" class="mt-2 p-2 border-start border-3 bg-light rounded-end"
+                 [class.border-danger]="card.document.status === 'rejected'"
+                 [class.border-warning]="card.document.status === 'missing'"
+                 [class.border-success]="card.document.status === 'approved'"
+                 [class.border-info]="card.document.status === 'pending'">
+              <div class="small text-muted mb-1"><i class="bi bi-chat-left-text me-1"></i>Admin Feedback</div>
+              <div class="small">{{ card.document.adminComment }}</div>
+            </div>
+
+            <!-- Review info -->
+            <div *ngIf="card.document.reviewedAt" class="mt-1 small text-muted">
+              <i class="bi bi-person-check me-1"></i>Reviewed {{ formatReviewDate(card.document.reviewedAt) }}
+              <span *ngIf="card.document.reviewedBy?.name"> by {{ card.document.reviewedBy.name }}</span>
+            </div>
+
+            <!-- Review history toggle -->
+            <div *ngIf="card.document.history && card.document.history.length > 1" class="mt-2">
+              <button class="btn btn-link btn-sm p-0 text-muted text-decoration-none"
+                      (click)="toggleHistory(card.docType._id!)">
+                <i class="bi me-1" [class.bi-chevron-down]="!showHistory[card.docType._id!]"
+                   [class.bi-chevron-up]="showHistory[card.docType._id!]"></i>
+                {{ showHistory[card.docType._id!] ? 'Hide' : 'View' }} Review History ({{ card.document.history.length }})
+              </button>
+              <div *ngIf="showHistory[card.docType._id!]" class="mt-2 border-start border-2 ps-2">
+                <div *ngFor="let entry of card.document.history" class="mb-2 small">
+                  <span class="badge me-1"
+                        [class.bg-success]="entry.status === 'approved'"
+                        [class.bg-danger]="entry.status === 'rejected'"
+                        [class.bg-warning]="entry.status === 'missing'"
+                        [class.text-dark]="entry.status === 'missing'"
+                        [class.bg-info]="entry.status === 'pending'">
+                    {{ entry.status | titlecase }}
+                  </span>
+                  <span class="text-muted">{{ formatReviewDate(entry.updatedAt) }}</span>
+                  <div *ngIf="entry.comment" class="text-muted fst-italic ms-1">"{{ entry.comment }}"</div>
                 </div>
               </div>
             </div>
@@ -118,6 +196,61 @@
 
             <!-- Uploadable document -->
             <div *ngIf="!card.docType.isReadOnlyLink && card.docType.agentCanUpload">
+
+              <!-- Direct Deposit banking fields -->
+              <div *ngIf="card.docType.hasDirectDepositFields" class="mb-3">
+                <div class="bg-light rounded p-3 mb-2">
+                  <h6 class="fw-semibold mb-2"><i class="bi bi-bank me-1"></i>Banking Information</h6>
+                  <div class="mb-2">
+                    <label class="form-label small mb-1">Account Type <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm"
+                            [(ngModel)]="directDepositData[card.docType._id!].accountType"
+                            [name]="'accountType-' + card.docType._id">
+                      <option value="">Select...</option>
+                      <option value="checking">Checking</option>
+                      <option value="savings">Savings</option>
+                    </select>
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label small mb-1">Routing Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm"
+                           [(ngModel)]="directDepositData[card.docType._id!].routingNumber"
+                           [name]="'routing-' + card.docType._id"
+                           placeholder="9-digit routing number"
+                           maxlength="9"
+                           pattern="[0-9]*"
+                           inputmode="numeric">
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label small mb-1">Account Number <span class="text-danger">*</span></label>
+                    <input type="password" class="form-control form-control-sm"
+                           [(ngModel)]="directDepositData[card.docType._id!].accountNumber"
+                           [name]="'account-' + card.docType._id"
+                           placeholder="Account number"
+                           maxlength="17"
+                           inputmode="numeric"
+                           autocomplete="off">
+                  </div>
+                  <div class="mb-0">
+                    <label class="form-label small mb-1">Confirm Account Number <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm"
+                           [(ngModel)]="directDepositData[card.docType._id!].confirmAccountNumber"
+                           [name]="'confirmAccount-' + card.docType._id"
+                           placeholder="Re-enter account number"
+                           maxlength="17"
+                           inputmode="numeric"
+                           autocomplete="off">
+                    <div *ngIf="directDepositData[card.docType._id!].accountNumber &&
+                                directDepositData[card.docType._id!].confirmAccountNumber &&
+                                directDepositData[card.docType._id!].accountNumber !== directDepositData[card.docType._id!].confirmAccountNumber"
+                         class="text-danger small mt-1">
+                      <i class="bi bi-exclamation-circle me-1"></i>Account numbers do not match
+                    </div>
+                  </div>
+                </div>
+                <small class="text-muted"><i class="bi bi-shield-lock me-1"></i>Banking info is encrypted at rest</small>
+              </div>
+
               <!-- Download existing -->
               <a *ngIf="card.document?._id"
                  [href]="getFileUrl(card.document!.filePath!)"
@@ -128,11 +261,14 @@
 
               <!-- Upload / Replace -->
               <div class="mb-2">
+                <label *ngIf="card.docType.hasDirectDepositFields" class="form-label small mb-1">
+                  Voided Check Image <span class="text-danger">*</span>
+                </label>
                 <input type="file" class="form-control form-control-sm"
-                       accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                       accept=".pdf,.png,.jpg,.jpeg"
                        (change)="onFileSelected($event, card.docType._id!)"
                        [id]="'file-' + card.docType._id">
-                <small class="text-muted">PDF, image, or doc file</small>
+                <small class="text-muted">{{ card.docType.hasDirectDepositFields ? 'Upload a photo or scan of a voided check' : 'PDF or image file (max 15MB)' }}</small>
               </div>
               <div class="mb-2">
                 <input type="text" class="form-control form-control-sm"

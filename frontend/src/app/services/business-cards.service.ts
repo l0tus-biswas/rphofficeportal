@@ -47,14 +47,57 @@ export interface ShippingAddress {
   phone?: string;
 }
 
-export interface BusinessCardOrder {
-  id: number;
-  status: string;
+export interface PrintfulOrderRecord {
+  id: string;
+  printfulOrderId: number | null;
+  productName: string;
+  variantName: string;
+  thumbnail: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  subtotal: number;
+  paymentStatus: string;
+  adminStatus: string;
+  printfulStatus: string;
+  receiptUrl: string;
+  shippingAddress: ShippingAddress;
+  textValues: { [key: string]: string };
+  mockupUrl: string;
+  adminNotes: string;
   created: string;
-  shipping: string;
-  costs: any;
-  recipient: { name: string; city: string; state: string } | null;
-  items: { name: string; quantity: number }[];
+  paidAt: string;
+}
+
+export interface AdminOrderRecord {
+  id: string;
+  user: { id?: string; name: string; email: string };
+  product: {
+    name: string;
+    variantId: number;
+    variantName: string;
+    sku: string;
+    thumbnail: string;
+    unitPrice: number;
+    quantity: number;
+  };
+  textValues: { [key: string]: string };
+  mockupUrl: string;
+  shippingAddress: ShippingAddress;
+  subtotal: number;
+  shipping: number;
+  total: number;
+  paymentStatus: string;
+  adminStatus: string;
+  adminNotes: string;
+  printfulOrderId: number | null;
+  printfulStatus: string;
+  stripePaymentIntentId: string;
+  receiptUrl: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  paidAt: string | null;
+  created: string;
 }
 
 export interface PrintfulAdminConfig {
@@ -73,44 +116,110 @@ export class BusinessCardsService {
 
   constructor(private http: HttpClient) {}
 
-  /** Get all products from the Printful store */
+  // ── Agent Product Browsing ──
+
   getProducts(): Observable<{ enabled: boolean; products: PrintfulProduct[] }> {
     return this.http.get<{ enabled: boolean; products: PrintfulProduct[] }>(`${this.apiUrl}/business-cards/products`);
   }
 
-  /** Get product details with variants and pricing */
   getProductDetail(id: number): Observable<{ product: ProductDetail }> {
     return this.http.get<{ product: ProductDetail }>(`${this.apiUrl}/business-cards/products/${id}`);
   }
 
-  /** Place an order for a product variant */
-  placeOrder(variantId: number, quantity: number, shippingAddress: ShippingAddress, textValues?: { [key: string]: string }): Observable<{ message: string; order: any }> {
-    const body: any = { variantId, quantity, shippingAddress };
-    if (textValues && Object.keys(textValues).length > 0) {
-      body.textValues = textValues;
-    }
-    return this.http.post<{ message: string; order: any }>(`${this.apiUrl}/business-cards/order`, body);
+  // ── Mockup Generator ──
+
+  generateMockup(productId: number, variantIds?: number[], textValues?: { [key: string]: string }, imageUrl?: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/business-cards/mockup`, {
+      productId, variantIds, textValues, imageUrl
+    });
   }
 
-  /** Get agent's order history */
-  getOrders(): Observable<{ orders: BusinessCardOrder[] }> {
-    return this.http.get<{ orders: BusinessCardOrder[] }>(`${this.apiUrl}/business-cards/orders`);
+  checkMockupStatus(taskKey: string): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/business-cards/mockup/status/${taskKey}`);
   }
 
-  // --- Admin Methods ---
+  // ── Shipping Estimate ──
 
-  /** Admin: get Printful configuration */
+  getShippingEstimate(variantId: number, quantity: number, shippingAddress: ShippingAddress): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/business-cards/estimate`, {
+      variantId, quantity, shippingAddress
+    });
+  }
+
+  // ── Checkout / Payment ──
+
+  createCheckout(data: {
+    variantId: number;
+    variantName: string;
+    productName: string;
+    productThumbnail: string;
+    sku: string;
+    unitPrice: string;
+    quantity: number;
+    shippingAddress: ShippingAddress;
+    textValues?: { [key: string]: string };
+    mockupUrl?: string;
+  }): Observable<{ orderId: string; clientSecret: string; total: number; subtotal: number; shipping: number }> {
+    return this.http.post<any>(`${this.apiUrl}/business-cards/checkout`, data);
+  }
+
+  confirmCheckout(orderId: string, paymentIntentId: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/business-cards/checkout/confirm`, { orderId, paymentIntentId });
+  }
+
+  // ── Agent Orders ──
+
+  getOrders(): Observable<{ orders: PrintfulOrderRecord[] }> {
+    return this.http.get<{ orders: PrintfulOrderRecord[] }>(`${this.apiUrl}/business-cards/orders`);
+  }
+
+  // ── Admin Config ──
+
   getAdminConfig(): Observable<{ config: PrintfulAdminConfig }> {
     return this.http.get<{ config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`);
   }
 
-  /** Admin: update Printful configuration */
-  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean }>): Observable<{ message: string; config: PrintfulAdminConfig }> {
+  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean; textFields: OptionField[] }>): Observable<{ message: string; config: PrintfulAdminConfig }> {
     return this.http.post<{ message: string; config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`, body);
   }
 
-  /** Admin: test Printful API connection */
   testConnection(): Observable<{ message: string; store: any }> {
     return this.http.post<{ message: string; store: any }>(`${this.apiUrl}/business-cards/admin/test-connection`, {});
+  }
+
+  // ── Admin Order Management ──
+
+  getAdminOrders(params?: { adminStatus?: string; paymentStatus?: string; page?: number; limit?: number; search?: string }): Observable<{
+    orders: AdminOrderRecord[];
+    total: number;
+    page: number;
+    pages: number;
+    counts: { pending: number; approved: number; rejected: number; total: number };
+  }> {
+    return this.http.get<any>(`${this.apiUrl}/business-cards/admin/orders`, { params: params as any });
+  }
+
+  getAdminOrderDetail(id: string): Observable<{ order: any }> {
+    return this.http.get<any>(`${this.apiUrl}/business-cards/admin/orders/${id}`);
+  }
+
+  approveOrder(id: string, notes?: string): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/business-cards/admin/orders/${id}/approve`, { notes });
+  }
+
+  rejectOrder(id: string, notes?: string): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/business-cards/admin/orders/${id}/reject`, { notes });
+  }
+
+  updateOrderNotes(id: string, notes: string): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/business-cards/admin/orders/${id}/notes`, { notes });
+  }
+
+  deleteOrder(id: string): Observable<any> {
+    return this.http.delete<any>(`${this.apiUrl}/business-cards/admin/orders/${id}`);
+  }
+
+  getOrderReceipt(id: string): Observable<{ receipt: any }> {
+    return this.http.get<any>(`${this.apiUrl}/business-cards/admin/orders/${id}/receipt`);
   }
 }

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { LicensingService, LicensingProgress } from '../../services/licensing.service';
 import { AuthService } from '../../services/auth.service';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-licensing',
@@ -27,12 +27,15 @@ export class LicensingComponent implements OnInit {
   constructor(
     private licensingService: LicensingService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
-    this.isAdmin = user?.role === 'admin';
+    // Only show admin view when on /admin/licensing route
+    const isAdminRoute = this.router.url.startsWith('/admin/');
+    this.isAdmin = user?.role === 'admin' && isAdminRoute;
     this.currentUserId = user?._id || '';
     
     this.loadLicensingProgress();
@@ -42,6 +45,23 @@ export class LicensingComponent implements OnInit {
     this.loading = true;
     this.error = '';
 
+    // Personal view: fetch only own licensing record
+    if (!this.isAdmin) {
+      this.licensingService.getLicensingProgress(this.currentUserId).subscribe({
+        next: (data) => {
+          this.selectedAgent = data;
+          this.loading = false;
+        },
+        error: (error) => {
+          console.error('Error loading licensing progress:', error);
+          this.error = 'No licensing progress found. Please contact your administrator.';
+          this.loading = false;
+        }
+      });
+      return;
+    }
+
+    // Admin view: fetch all agents
     const filters: any = {};
     if (this.filterIsLicensed === 'licensed') {
       filters.isLicensed = true;
@@ -52,10 +72,6 @@ export class LicensingComponent implements OnInit {
     this.licensingService.getAllLicensingProgress(filters).subscribe({
       next: (data) => {
         this.licensingProgress = data;
-        // If agent viewing own, auto-select
-        if (!this.isAdmin && data.length > 0) {
-          this.selectedAgent = data[0];
-        }
         this.loading = false;
       },
       error: (error) => {

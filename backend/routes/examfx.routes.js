@@ -1,11 +1,90 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const { parse } = require('csv-parse/sync');
 const ExamFXProgress = require('../models/ExamFXProgress');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
 const examfxService = require('../utils/examfx.service');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
+
+// ─── Multer for CSV upload ───
+const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (file.mimetype === 'text/csv' || ext === '.csv') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'), false);
+    }
+  },
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
+
+// ─── CSV parsing helpers ───
+function parsePercent(val) {
+  if (val == null || val === '') return null;
+  const s = String(val).replace('%', '').trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function parseTotalHours(val) {
+  if (!val || val === '') return 0;
+  const s = String(val).trim();
+  let minutes = 0;
+  const hrMatch = s.match(/([\d.]+)\s*hr/i);
+  const minMatch = s.match(/([\d.]+)\s*min/i);
+  if (hrMatch) minutes += parseFloat(hrMatch[1]) * 60;
+  if (minMatch) minutes += parseFloat(minMatch[1]);
+  return Math.round(minutes);
+}
+
+function parseCsvDate(val) {
+  if (!val || val === '') return null;
+  const s = String(val).trim();
+  // MM-DD-YYYY format
+  const parts = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (parts) {
+    const d = new Date(`${parts[3]}-${parts[1]}-${parts[2]}T00:00:00Z`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function parseNumber(val) {
+  if (val == null || val === '') return null;
+  const n = parseInt(String(val).trim(), 10);
+  return isNaN(n) ? null : n;
+}
+
+function csvStatusToEnrollment(csvStatus) {
+  if (!csvStatus) return 'not_enrolled';
+  const s = csvStatus.trim().toLowerCase();
+  if (s === 'active') return 'active';
+  if (s === 'completed' || s === 'complete') return 'completed';
+  if (s === 'expired') return 'expired';
+  if (s === 'enrolled' || s === 'registered') return 'enrolled';
+  return 'enrolled';
+}
+
+function csvStatusToCourseStatus(csvStatus, chapterProgress) {
+  if (!csvStatus) return 'not_started';
+  const s = csvStatus.trim().toLowerCase();
+  if (s === 'completed' || s === 'complete') return 'completed';
+  if (s === 'expired') return 'failed';
+  const pct = parsePercent(chapterProgress);
+  if (pct != null && pct > 0) return 'in_progress';
+  return 'not_started';
+}
+
+function generateCourseId(courseName) {
+  return (courseName || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+}
 
 // ─────────────────────────────────────────────
 // GET /api/examfx/config-status
@@ -100,6 +179,48 @@ router.get('/summary', authenticate, async (req, res) => {
     res.json(summary);
   } catch (error) {
     console.error('Error fetching ExamFX summary:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// GET /api/examfx/import-history
+// Get CSV import history (admin only)
+// ─────────────────────────────────────────────
+router.get('/import-history', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const records = await ExamFXProgress.find({ lastCsvImportDate: { $ne: null } })
+      .populate('agent', 'name email')
+      .populate('csvImportedBy', 'name email')
+      .select('agent lastCsvImportDate csvImportedBy enrollmentStatus overallPercentComplete courses updatedAt')
+      .sort({ lastCsvImportDate: -1 })
+      .lean();
+
+    // Group by import date (rounded to minute to group same upload batch)
+    const batches = {};
+    records.forEach(r => {
+      const key = new Date(r.lastCsvImportDate).toISOString().slice(0, 16); // group by minute
+      if (!batches[key]) {
+        batches[key] = {
+          importDate: r.lastCsvImportDate,
+          importedBy: r.csvImportedBy,
+          agents: []
+        };
+      }
+      batches[key].agents.push({
+        agentId: r.agent._id,
+        agentName: r.agent.name,
+        agentEmail: r.agent.email,
+        enrollmentStatus: r.enrollmentStatus,
+        overallPercentComplete: r.overallPercentComplete,
+        courseCount: r.courses.length
+      });
+    });
+
+    const history = Object.values(batches).sort((a, b) => new Date(b.importDate) - new Date(a.importDate));
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching import history:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -501,6 +622,241 @@ router.post('/webhook', async (req, res) => {
   } catch (error) {
     console.error('[ExamFX Webhook] Error:', error);
     res.status(500).json({ message: 'Internal error processing webhook' });
+  }
+});
+
+// ─────────────────────────────────────────────
+// POST /api/examfx/upload-csv
+// Admin: upload ExamFX CSV export to sync progress
+// ─────────────────────────────────────────────
+router.post('/upload-csv', authenticate, authorize('admin'), csvUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No CSV file provided. Send file in field "file".' });
+    }
+
+    // Parse CSV
+    let rows;
+    try {
+      rows = parse(req.file.buffer.toString('utf-8'), {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+        relax_quotes: true,
+        relax_column_count: true
+      });
+    } catch (parseErr) {
+      return res.status(400).json({ message: 'Failed to parse CSV file', error: parseErr.message });
+    }
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: 'CSV file is empty or has no data rows.' });
+    }
+
+    // Validate required columns
+    const firstRow = rows[0];
+    const headers = Object.keys(firstRow);
+    const requiredCols = ['Email', 'Course'];
+    const missingCols = requiredCols.filter(c => !headers.some(h => h.trim().toLowerCase() === c.toLowerCase()));
+    if (missingCols.length > 0) {
+      return res.status(400).json({
+        message: `CSV missing required columns: ${missingCols.join(', ')}`,
+        foundColumns: headers
+      });
+    }
+
+    // Normalize headers for lookup
+    function getCol(row, ...names) {
+      for (const name of names) {
+        for (const key of Object.keys(row)) {
+          if (key.trim().toLowerCase() === name.toLowerCase()) {
+            return row[key];
+          }
+        }
+      }
+      return null;
+    }
+
+    // Pre-fetch all agents for email matching
+    const allAgents = await User.find({ role: 'agent', deletedAt: null })
+      .select('_id name email phone')
+      .lean();
+    const emailMap = {};
+    for (const agent of allAgents) {
+      if (agent.email) emailMap[agent.email.toLowerCase().trim()] = agent;
+    }
+
+    const results = {
+      totalRows: rows.length,
+      matched: 0,
+      created: 0,
+      updated: 0,
+      unmatched: [],
+      matchedDetails: [],
+      errors: [],
+      completedAgents: []
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowIndex = i + 2; // +2 for header row + 1-based
+
+      try {
+        const email = (getCol(row, 'Email') || '').trim().toLowerCase();
+        const candidateName = getCol(row, 'Candidate') || '';
+        const courseName = getCol(row, 'Course') || '';
+
+        if (!email) {
+          results.errors.push({ rowIndex, candidate: candidateName, reason: 'Missing email' });
+          continue;
+        }
+
+        // Match agent by email
+        const agent = emailMap[email];
+        if (!agent) {
+          results.unmatched.push({
+            rowIndex,
+            candidate: candidateName,
+            email,
+            course: courseName,
+            reason: 'No matching agent found by email'
+          });
+          continue;
+        }
+
+        // Parse CSV fields
+        const csvStatus = getCol(row, 'Status') || '';
+        const chapterProgress = getCol(row, 'Chapter Progress');
+        const progressPct = parsePercent(chapterProgress) || 0;
+        const courseId = generateCourseId(courseName);
+
+        const courseData = {
+          courseId,
+          courseName,
+          status: csvStatusToCourseStatus(csvStatus, chapterProgress),
+          percentComplete: progressPct,
+          startedDate: parseCsvDate(getCol(row, 'First Activity Date')),
+          lastAccessedDate: parseCsvDate(getCol(row, 'Last Activity Date')),
+          score: parsePercent(getCol(row, 'Overall Chapter Quiz Average')),
+          passed: (getCol(row, 'Certificate Status') || '').trim().toLowerCase() === 'valid',
+          timeSpentMinutes: parseTotalHours(getCol(row, 'Total Hours')),
+          scoreTrend: parsePercent(getCol(row, 'Score Trend')),
+          activeAlerts: parseNumber(getCol(row, 'Active Alerts')),
+          courseExpirationDate: parseCsvDate(getCol(row, 'Course Expiration Date')),
+          licensingExamDate: parseCsvDate(getCol(row, 'Licensing Exam Date')),
+          quizStats: {
+            chapterQuizCount: parseNumber(getCol(row, 'Chapter Quiz Count')),
+            chapterQuizzesPassed: parseNumber(getCol(row, 'Chapter Quizzes Passed')),
+            quizPassRate: parsePercent(getCol(row, '% of Quizzes Passed')),
+            overallQuizAverage: parsePercent(getCol(row, 'Overall Chapter Quiz Average'))
+          },
+          practiceExamScores: {
+            examMode: {
+              best: parsePercent(getCol(row, 'Best Practice Exam: Exam Mode')),
+              average: parsePercent(getCol(row, 'Average Practice Exam: Exam Mode')),
+              latest: parsePercent(getCol(row, 'Latest Practice Exam: Exam Mode')),
+              attempts: parseNumber(getCol(row, 'Attempt Count Practice Exam: Exam Mode'))
+            },
+            learningMode: {
+              best: parsePercent(getCol(row, 'Best Practice Exam: Learning Mode')),
+              average: parsePercent(getCol(row, 'Average Practice Exam: Learning Mode')),
+              latest: parsePercent(getCol(row, 'Latest Practice Exam: Learning Mode')),
+              attempts: parseNumber(getCol(row, 'Attempt Count Practice Exam: Learning Mode'))
+            }
+          },
+          readinessExamScores: {
+            best: parsePercent(getCol(row, 'Best Readiness Exam')),
+            average: parsePercent(getCol(row, 'Average Readiness Exam')),
+            latest: parsePercent(getCol(row, 'Latest Readiness Exam')),
+            attempts: parseNumber(getCol(row, 'Attempt Count Readiness Exam'))
+          },
+          certificateExam: {
+            status: (getCol(row, 'Certificate Status') || '').trim() || null,
+            best: parsePercent(getCol(row, 'Best Certificate Exam')),
+            average: parsePercent(getCol(row, 'Average Certificate Exam')),
+            latest: parsePercent(getCol(row, 'Latest Certificate Exam')),
+            attempts: parseNumber(getCol(row, 'Attempt Count Certificate Exam'))
+          }
+        };
+
+        // Find or create ExamFXProgress record
+        let record = await ExamFXProgress.findOne({ agent: agent._id });
+        const isNew = !record;
+
+        if (!record) {
+          record = new ExamFXProgress({
+            agent: agent._id,
+            examfxEmail: email
+          });
+          results.created++;
+        } else {
+          results.updated++;
+        }
+
+        // Update enrollment fields
+        record.examfxEmail = email;
+        record.enrollmentStatus = csvStatusToEnrollment(csvStatus);
+        record.enrollmentDate = parseCsvDate(getCol(row, 'Registration')) || record.enrollmentDate;
+
+        // Upsert the course entry (by courseId)
+        const existingIdx = record.courses.findIndex(c => c.courseId === courseId);
+        if (existingIdx >= 0) {
+          // Preserve modules from existing entry, update everything else
+          const existingModules = record.courses[existingIdx].modules;
+          record.courses[existingIdx] = { ...courseData, modules: existingModules };
+        } else {
+          record.courses.push({ ...courseData, modules: [] });
+        }
+
+        // Recalculate overall progress (average across courses)
+        if (record.courses.length > 0) {
+          record.overallPercentComplete = Math.round(
+            record.courses.reduce((sum, c) => sum + (c.percentComplete || 0), 0) / record.courses.length
+          );
+        }
+
+        // Update sync metadata
+        record.lastSyncDate = new Date();
+        record.lastSyncStatus = 'success';
+        record.lastSyncError = null;
+        record.lastCsvImportDate = new Date();
+        record.csvImportedBy = req.user._id;
+        record.lastUpdatedBy = req.user._id;
+
+        await record.save();
+
+        results.matched++;
+        results.matchedDetails.push({
+          agentId: agent._id,
+          agentName: agent.name,
+          agentEmail: agent.email,
+          course: courseName,
+          progress: progressPct,
+          enrollmentStatus: record.enrollmentStatus,
+          certificateStatus: courseData.certificateExam.status
+        });
+
+        // If certificate is valid → auto-update licensing checklist
+        if (courseData.passed) {
+          results.completedAgents.push({ agentId: agent._id, agentName: agent.name, course: courseName });
+          await _syncToLicensingChecklist(agent._id, record, req.user._id);
+        }
+      } catch (rowErr) {
+        results.errors.push({
+          rowIndex,
+          candidate: getCol(row, 'Candidate') || '',
+          reason: rowErr.message
+        });
+      }
+    }
+
+    res.json({
+      message: `CSV import complete: ${results.matched} agents matched, ${results.unmatched.length} unmatched`,
+      ...results
+    });
+  } catch (error) {
+    console.error('Error processing ExamFX CSV upload:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

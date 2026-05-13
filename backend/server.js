@@ -97,6 +97,7 @@ app.use('/api/document-hub', require('./routes/document-hub.routes'));
 app.use('/api', require('./routes/aca.routes'));
 app.use('/api/business-cards', require('./routes/business-cards.routes'));
 app.use('/api/promotion', require('./routes/promotion.routes'));
+app.use('/api/quickbooks', require('./routes/quickbooks.routes'));
 
 // Health check
 app.get('/health', (req, res) => {

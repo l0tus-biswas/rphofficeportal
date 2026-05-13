@@ -285,10 +285,10 @@ router.get('/dashboard/checklist', async (req, res) => {
     const isLicensed = lp ? lp.isLicensed : false;
 
     // Fetch QuickBooks invite URL from SystemConfig
-    let quickbooksUrl = '#';
+    let quickbooksUrl = null;
     try {
       const cfg = await SystemConfig.findOne({ key: 'quickbooksInviteUrl' });
-      if (cfg) quickbooksUrl = cfg.value;
+      if (cfg && cfg.value && cfg.value !== '#') quickbooksUrl = cfg.value;
     } catch (e) { /* ignore */ }
 
     if (!isLicensed) {
@@ -347,7 +347,7 @@ router.get('/dashboard/checklist', async (req, res) => {
       },
       {
         label: 'Complete W-9 / Direct Deposit via QuickBooks',
-        completed: false, // static — admin confirms externally
+        completed: !!req.user.qboEmployeeId,
         link: quickbooksUrl
       }
     ];

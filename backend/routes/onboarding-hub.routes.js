@@ -7,7 +7,9 @@ const OnboardingDocType = require('../models/OnboardingDocType');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 // ---------------------------------------------------------------------------
 // Multer — onboarding document uploads
@@ -196,10 +198,13 @@ router.get('/admin/agents/:agentId', authenticate, authorize('admin'), async (re
       }
     }
 
-    const cards = docTypes.map(dt => ({
-      docType: dt,
-      document: docsByType.get(String(dt._id)) || null
-    }));
+    const cards = docTypes.map(dt => {
+      const doc = docsByType.get(String(dt._id)) || null;
+      if (doc && doc.bankRoutingNumber) {
+        doc.hasBankingData = true;
+      }
+      return { docType: dt, document: doc };
+    });
 
     res.json({
       agent,
@@ -224,7 +229,8 @@ router.put('/admin/documents/:id/status', authenticate, authorize('admin'), asyn
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const doc = await OnboardingDocument.findOne({ _id: req.params.id, deletedAt: null });
+    const doc = await OnboardingDocument.findOne({ _id: req.params.id, deletedAt: null })
+      .populate('docType', 'name');
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     doc.status = status;
@@ -240,9 +246,65 @@ router.put('/admin/documents/:id/status', authenticate, authorize('admin'), asyn
     });
 
     await doc.save();
+
+    // Create notification + email for the agent
+    const docTypeName = doc.docType?.name || 'Document';
+    const statusLabels = { approved: 'Approved', rejected: 'Rejected', missing: 'Resubmission Required', pending: 'Pending Review' };
+    const statusLabel = statusLabels[status] || status;
+    const commentNote = doc.adminComment ? ` Admin comment: "${doc.adminComment}"` : '';
+
+    Notification.createNotification({
+      userId: doc.agent,
+      type: 'document_reviewed',
+      title: `${docTypeName} — ${statusLabel}`,
+      message: `Your ${docTypeName} has been ${statusLabel.toLowerCase()}.${commentNote}`,
+      link: '/onboarding-hub'
+    }, true).catch(err => console.error('[Onboarding Review] Notification error:', err.message));
+
+    await auditLog(req.user._id, doc.agent, 'ONBOARDING_DOC_REVIEW', {
+      docType: docTypeName,
+      status,
+      comment: doc.adminComment
+    });
+
     res.json({ message: 'Document status updated', document: doc });
   } catch (error) {
     console.error('Error updating onboarding document status:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/onboarding-hub/admin/documents/:id/bank-info
+// @desc    Admin: view decrypted Direct Deposit banking info
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.get('/admin/documents/:id/bank-info', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const doc = await OnboardingDocument.findOne({ _id: req.params.id, deletedAt: null })
+      .populate('agent', 'name email')
+      .populate('docType', 'name hasDirectDepositFields');
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    if (!doc.bankRoutingNumber || !doc.bankAccountNumber) {
+      return res.status(404).json({ message: 'No banking information on this document' });
+    }
+
+    const bankInfo = {
+      routingNumber: decrypt(doc.bankRoutingNumber),
+      accountNumber: decrypt(doc.bankAccountNumber),
+      accountType: doc.bankAccountType,
+      agentName: doc.agent?.name,
+      agentEmail: doc.agent?.email
+    };
+
+    await auditLog(req.user._id, doc.agent?._id, 'VIEW_BANK_INFO', {
+      documentId: doc._id,
+      docType: doc.docType?.name
+    });
+
+    res.json(bankInfo);
+  } catch (error) {
+    console.error('Error fetching bank info:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -254,11 +316,11 @@ router.put('/admin/documents/:id/status', authenticate, authorize('admin'), asyn
 // ---------------------------------------------------------------------------
 router.post('/admin/doc-types', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { name, description, required, agentCanUpload, agentCanDelete, isReadOnlyLink, sortOrder } = req.body;
+    const { name, description, required, agentCanUpload, agentCanDelete, isReadOnlyLink, hasDirectDepositFields, sortOrder } = req.body;
     if (!name) return res.status(400).json({ message: 'Document type name is required' });
 
     const docType = await OnboardingDocType.create({
-      name, description, required, agentCanUpload, agentCanDelete, isReadOnlyLink, sortOrder
+      name, description, required, agentCanUpload, agentCanDelete, isReadOnlyLink, hasDirectDepositFields, sortOrder
     });
     res.status(201).json(docType);
   } catch (error) {
@@ -272,7 +334,7 @@ router.put('/admin/doc-types/:id', authenticate, authorize('admin'), async (req,
     const docType = await OnboardingDocType.findById(req.params.id);
     if (!docType) return res.status(404).json({ message: 'Document type not found' });
 
-    const fields = ['name', 'description', 'required', 'agentCanUpload', 'agentCanDelete', 'isReadOnlyLink', 'sortOrder', 'isActive'];
+    const fields = ['name', 'description', 'required', 'agentCanUpload', 'agentCanDelete', 'isReadOnlyLink', 'hasDirectDepositFields', 'sortOrder', 'isActive'];
     fields.forEach(f => { if (req.body[f] !== undefined) docType[f] = req.body[f]; });
 
     await docType.save();
@@ -311,8 +373,9 @@ router.get('/documents/:agentId', authenticate, async (req, res) => {
     }
 
     const documents = await OnboardingDocument.find({ agent: agentId, deletedAt: null })
-      .populate('docType', 'name isReadOnlyLink agentCanDelete')
+      .populate('docType', 'name isReadOnlyLink agentCanDelete hasDirectDepositFields')
       .populate('uploadedBy', 'name')
+      .populate('reviewedBy', 'name')
       .sort('-uploadedAt');
 
     res.json(documents);
@@ -327,13 +390,39 @@ router.get('/documents/:agentId', authenticate, async (req, res) => {
 // @desc    Upload a document (agent uploads own, admin uploads for anyone)
 // @access  Private
 // ---------------------------------------------------------------------------
-router.post('/documents', authenticate, docUpload.single('docFile'), async (req, res) => {
+router.post('/documents', authenticate, (req, res, next) => {
+  docUpload.single('docFile')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ message: 'File too large. Maximum size is 15MB.' });
+      }
+      return res.status(400).json({ message: err.message || 'File upload failed' });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
-    const { docTypeId, agentId, externalLink, notes } = req.body;
+    const { docTypeId, agentId, externalLink, notes, routingNumber, accountNumber, accountType } = req.body;
     if (!docTypeId) return res.status(400).json({ message: 'docTypeId is required' });
 
     const docType = await OnboardingDocType.findById(docTypeId);
     if (!docType || !docType.isActive) return res.status(404).json({ message: 'Document type not found' });
+
+    // Validate Direct Deposit fields if required
+    if (docType.hasDirectDepositFields) {
+      if (!routingNumber || !accountNumber || !accountType) {
+        return res.status(400).json({ message: 'Routing number, account number, and account type are required for Direct Deposit' });
+      }
+      if (!/^\d{9}$/.test(routingNumber)) {
+        return res.status(400).json({ message: 'Routing number must be exactly 9 digits' });
+      }
+      if (!/^\d{4,17}$/.test(accountNumber)) {
+        return res.status(400).json({ message: 'Account number must be 4-17 digits' });
+      }
+      if (!['checking', 'savings'].includes(accountType)) {
+        return res.status(400).json({ message: 'Account type must be checking or savings' });
+      }
+    }
 
     // Determine target agent
     const targetAgentId = (req.user.role === 'admin' && agentId) ? agentId : req.user._id.toString();
@@ -388,6 +477,13 @@ router.post('/documents', authenticate, docUpload.single('docFile'), async (req,
     }
     if (externalLink) {
       doc.externalLink = externalLink;
+    }
+
+    // Encrypt and store Direct Deposit banking info
+    if (docType.hasDirectDepositFields && routingNumber && accountNumber) {
+      doc.bankRoutingNumber = encrypt(routingNumber);
+      doc.bankAccountNumber = encrypt(accountNumber);
+      doc.bankAccountType = accountType;
     }
 
     await doc.save();

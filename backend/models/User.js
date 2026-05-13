@@ -180,6 +180,15 @@ const userSchema = new mongoose.Schema({
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  // QuickBooks Online integration
+  qboEmployeeId: {
+    type: String,
+    default: null
+  },
+  qboSyncedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

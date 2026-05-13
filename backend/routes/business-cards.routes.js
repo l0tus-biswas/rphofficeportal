@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const SystemConfig = require('../models/SystemConfig');
+const PrintfulOrder = require('../models/PrintfulOrder');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
+const { stripe, createPaymentIntent } = require('../utils/stripe');
 
 // ---------------------------------------------------------------------------
 // Printful API Configuration
@@ -178,88 +180,158 @@ router.get('/products/:id', authenticate, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// @route   POST /api/business-cards/order
-// @desc    Place an order for a specific product variant
-// @access  Private (agent)
+// @route   POST /api/business-cards/mockup
+// @desc    Generate a product mockup with customization text/image overlays
+// @access  Private (agent + admin)
 // ---------------------------------------------------------------------------
-router.post('/order', authenticate, async (req, res) => {
+router.post('/mockup', authenticate, async (req, res) => {
   try {
-    const { variantId, quantity, shippingAddress, textValues } = req.body;
+    const { productId, variantIds, textValues, imageUrl } = req.body;
 
-    // Validate
-    if (!variantId) {
-      return sendResponse(res, 400, { message: 'Product variant ID is required.' });
-    }
-    if (!quantity || quantity < 1 || quantity > 5000) {
-      return sendResponse(res, 400, { message: 'Quantity must be between 1 and 5000.' });
-    }
-    if (!shippingAddress || !shippingAddress.name || !shippingAddress.address1 ||
-        !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
-      return sendResponse(res, 400, { message: 'Complete shipping address is required (name, address1, city, state, zip).' });
+    if (!productId) {
+      return sendResponse(res, 400, { message: 'Product ID is required.' });
     }
 
     const config = await getPrintfulConfig();
-    if (!config.enabled) {
-      return sendResponse(res, 503, { message: 'Business cards ordering is not currently available.' });
-    }
     if (!config.apiKey) {
-      return sendResponse(res, 503, { message: 'Printful integration is not configured. Contact admin.' });
+      return sendResponse(res, 503, { message: 'Printful integration not configured.' });
     }
 
     const printful = getPrintfulClient(config.apiKey, config.storeId);
 
-    // Build order item
-    const orderItem = {
-      sync_variant_id: parseInt(variantId),
-      quantity: parseInt(quantity)
-    };
+    // First get the product's print files to find placement info
+    const productRes = await printful.get(`/store/products/${productId}`);
+    const product = productRes.data?.result;
+    if (!product) {
+      return sendResponse(res, 404, { message: 'Product not found.' });
+    }
 
-    const orderPayload = {
-      recipient: {
-        name: shippingAddress.name,
-        address1: shippingAddress.address1,
-        address2: shippingAddress.address2 || '',
-        city: shippingAddress.city,
-        state_code: shippingAddress.state,
-        country_code: shippingAddress.country || 'US',
-        zip: shippingAddress.zip,
-        phone: shippingAddress.phone || '',
-        email: req.user.email
-      },
-      items: [orderItem]
-    };
+    // Get variant IDs from sync variants
+    const syncVariants = product.sync_variants || [];
+    const catalogVariantIds = variantIds?.length
+      ? variantIds
+      : syncVariants.slice(0, 1).map(v => v.variant_id);
 
-    // If agent provided personalization text, add as packing slip note
-    if (textValues && typeof textValues === 'object' && Object.keys(textValues).length > 0) {
-      const noteLines = Object.entries(textValues)
-        .filter(([, val]) => val)
-        .map(([key, val]) => `${key}: ${val}`);
-      if (noteLines.length > 0) {
-        orderPayload.packing_slip = {
-          message: 'CARD PERSONALIZATION:\n' + noteLines.join('\n')
-        };
+    if (!catalogVariantIds.length) {
+      return sendResponse(res, 400, { message: 'No variants available for mockup generation.' });
+    }
+
+    // Get print files to determine what image to use for mockup
+    const printFiles = [];
+    for (const sv of syncVariants.slice(0, 1)) {
+      const files = sv.files || [];
+      for (const f of files) {
+        if (f.type === 'default' || f.type === 'front' || f.type === 'back') {
+          printFiles.push({
+            placement: f.type === 'default' ? 'front' : f.type,
+            image_url: imageUrl || f.preview_url || f.url || f.thumbnail_url
+          });
+        }
       }
     }
 
-    // Create order as draft (admin confirms in Printful dashboard)
-    const response = await printful.post('/orders', orderPayload);
-    const order = response.data?.result;
+    // If no print files found, try using the provided image or product thumbnail
+    if (printFiles.length === 0 && (imageUrl || product.sync_product?.thumbnail_url)) {
+      printFiles.push({
+        placement: 'front',
+        image_url: imageUrl || product.sync_product.thumbnail_url
+      });
+    }
 
-    return sendResponse(res, 201, {
-      message: 'Order placed successfully! It will be reviewed and shipped soon.',
-      order: {
-        id: order?.id,
-        status: order?.status || 'draft',
-        costs: order?.retail_costs || order?.costs || null,
-        items: order?.items?.length || 1
+    if (printFiles.length === 0) {
+      // Return the product thumbnail as a fallback "mockup"
+      return sendResponse(res, 200, {
+        mockupUrl: product.sync_product?.thumbnail_url || '',
+        status: 'fallback',
+        message: 'No print files available for mockup. Showing product thumbnail.'
+      });
+    }
+
+    // Create mockup generation task
+    const mockupPayload = {
+      variant_ids: catalogVariantIds.map(Number),
+      files: printFiles.map(pf => ({
+        placement: pf.placement,
+        image_url: pf.image_url,
+        position: {
+          area_width: 1800,
+          area_height: 1800,
+          width: 1800,
+          height: 1800,
+          top: 0,
+          left: 0
+        }
+      }))
+    };
+
+    // Get the catalog product ID (not sync product ID)
+    const catalogProductId = syncVariants[0]?.product?.product_id || syncVariants[0]?.product_id;
+    if (!catalogProductId) {
+      return sendResponse(res, 200, {
+        mockupUrl: product.sync_product?.thumbnail_url || '',
+        status: 'fallback',
+        message: 'Could not determine catalog product ID for mockup.'
+      });
+    }
+
+    try {
+      const mockupRes = await printful.post(`/mockup-generator/create-task/${catalogProductId}`, mockupPayload);
+      const taskKey = mockupRes.data?.result?.task_key;
+
+      if (!taskKey) {
+        return sendResponse(res, 200, {
+          mockupUrl: product.sync_product?.thumbnail_url || '',
+          status: 'fallback'
+        });
       }
-    });
+
+      // Poll for mockup result (max 15 seconds)
+      let mockupResult = null;
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          const resultRes = await printful.get(`/mockup-generator/task?task_key=${taskKey}`);
+          const task = resultRes.data?.result;
+          if (task?.status === 'completed' && task?.mockups?.length) {
+            mockupResult = task;
+            break;
+          }
+          if (task?.status === 'failed') break;
+        } catch (_) { /* retry */ }
+      }
+
+      if (mockupResult?.mockups?.length) {
+        return sendResponse(res, 200, {
+          mockupUrl: mockupResult.mockups[0].mockup_url || '',
+          mockups: mockupResult.mockups.map(m => ({
+            placement: m.placement,
+            url: m.mockup_url,
+            variantIds: m.variant_ids
+          })),
+          status: 'completed',
+          taskKey
+        });
+      }
+
+      // Task still pending — return task key for client polling
+      return sendResponse(res, 200, {
+        mockupUrl: product.sync_product?.thumbnail_url || '',
+        status: 'pending',
+        taskKey,
+        message: 'Mockup generation in progress. Use task key to check status.'
+      });
+    } catch (mockupErr) {
+      // Mockup API failed — return product thumbnail as fallback
+      return sendResponse(res, 200, {
+        mockupUrl: product.sync_product?.thumbnail_url || '',
+        status: 'fallback',
+        message: 'Mockup generation unavailable. Showing product image.'
+      });
+    }
   } catch (err) {
     if (err.response && err.response.data) {
-      const pfError = err.response.data;
       return sendResponse(res, err.response.status || 500, {
-        message: pfError.result || pfError.error?.message || 'Order failed.',
-        code: pfError.code
+        message: err.response.data.result || 'Mockup generation failed.'
       });
     }
     return errorResponse(res, err);
@@ -267,48 +339,347 @@ router.post('/order', authenticate, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// @route   GET /api/business-cards/mockup/status/:taskKey
+// @desc    Check mockup generation task status
+// @access  Private
+// ---------------------------------------------------------------------------
+router.get('/mockup/status/:taskKey', authenticate, async (req, res) => {
+  try {
+    const config = await getPrintfulConfig();
+    if (!config.apiKey) {
+      return sendResponse(res, 503, { message: 'Not configured.' });
+    }
+
+    const printful = getPrintfulClient(config.apiKey, config.storeId);
+    const response = await printful.get(`/mockup-generator/task?task_key=${encodeURIComponent(req.params.taskKey)}`);
+    const task = response.data?.result;
+
+    return sendResponse(res, 200, {
+      status: task?.status || 'unknown',
+      mockups: (task?.mockups || []).map(m => ({
+        placement: m.placement,
+        url: m.mockup_url,
+        variantIds: m.variant_ids
+      })),
+      mockupUrl: task?.mockups?.[0]?.mockup_url || ''
+    });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/estimate
+// @desc    Get shipping cost estimate for an order
+// @access  Private (agent)
+// ---------------------------------------------------------------------------
+router.post('/estimate', authenticate, async (req, res) => {
+  try {
+    const { variantId, quantity, shippingAddress } = req.body;
+
+    if (!variantId || !quantity || !shippingAddress) {
+      return sendResponse(res, 400, { message: 'Variant, quantity, and shipping address required.' });
+    }
+
+    const config = await getPrintfulConfig();
+    if (!config.apiKey) {
+      return sendResponse(res, 503, { message: 'Not configured.' });
+    }
+
+    const printful = getPrintfulClient(config.apiKey, config.storeId);
+
+    // Get variant retail price
+    // Use shipping rate estimation endpoint
+    const estimatePayload = {
+      recipient: {
+        address1: shippingAddress.address1,
+        city: shippingAddress.city,
+        state_code: shippingAddress.state,
+        country_code: shippingAddress.country || 'US',
+        zip: shippingAddress.zip
+      },
+      items: [{
+        sync_variant_id: parseInt(variantId),
+        quantity: parseInt(quantity)
+      }]
+    };
+
+    try {
+      const response = await printful.post('/shipping/rates', estimatePayload);
+      const rates = response.data?.result || [];
+      const cheapest = rates.length > 0
+        ? rates.reduce((a, b) => parseFloat(a.rate) < parseFloat(b.rate) ? a : b)
+        : null;
+
+      return sendResponse(res, 200, {
+        shippingRates: rates.map(r => ({
+          id: r.id,
+          name: r.name,
+          rate: r.rate,
+          currency: r.currency,
+          minDeliveryDays: r.minDeliveryDays,
+          maxDeliveryDays: r.maxDeliveryDays
+        })),
+        cheapestRate: cheapest ? parseFloat(cheapest.rate) : 0
+      });
+    } catch (shippingErr) {
+      // If shipping estimation fails, return zero (will be calculated at checkout)
+      return sendResponse(res, 200, { shippingRates: [], cheapestRate: 0 });
+    }
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/checkout
+// @desc    Create a Stripe PaymentIntent and local order record
+// @access  Private (agent)
+// ---------------------------------------------------------------------------
+router.post('/checkout', authenticate, async (req, res) => {
+  try {
+    const { variantId, variantName, productName, productThumbnail,
+            sku, unitPrice, quantity, shippingAddress, textValues, mockupUrl } = req.body;
+
+    // Validate required fields
+    if (!variantId) return sendResponse(res, 400, { message: 'Product variant ID is required.' });
+    if (!quantity || quantity < 1 || quantity > 5000) {
+      return sendResponse(res, 400, { message: 'Quantity must be between 1 and 5000.' });
+    }
+    if (!unitPrice || isNaN(parseFloat(unitPrice)) || parseFloat(unitPrice) <= 0) {
+      return sendResponse(res, 400, { message: 'Valid unit price is required.' });
+    }
+    if (!shippingAddress || !shippingAddress.name || !shippingAddress.address1 ||
+        !shippingAddress.city || !shippingAddress.state || !shippingAddress.zip) {
+      return sendResponse(res, 400, { message: 'Complete shipping address is required.' });
+    }
+
+    const config = await getPrintfulConfig();
+    if (!config.enabled) return sendResponse(res, 503, { message: 'Store is not currently available.' });
+    if (!config.apiKey) return sendResponse(res, 503, { message: 'Printful integration not configured.' });
+
+    // Calculate costs
+    const qty = parseInt(quantity);
+    const price = parseFloat(unitPrice);
+    const subtotal = Math.round(price * qty * 100) / 100; // round to 2 decimals
+    const shippingCost = 0; // Will be included in Printful fulfillment cost
+    const total = subtotal + shippingCost;
+
+    // Create local order record
+    const order = await PrintfulOrder.create({
+      user: req.user._id,
+      userEmail: req.user.email,
+      userName: req.user.firstName ? `${req.user.firstName} ${req.user.lastName || ''}`.trim() : req.user.email,
+      product: {
+        name: productName || 'Product',
+        variantId: parseInt(variantId),
+        variantName: variantName || '',
+        sku: sku || '',
+        thumbnail: productThumbnail || '',
+        unitPrice: price,
+        quantity: qty
+      },
+      textValues: textValues || {},
+      mockupUrl: mockupUrl || '',
+      shippingAddress: {
+        name: shippingAddress.name,
+        address1: shippingAddress.address1,
+        address2: shippingAddress.address2 || '',
+        city: shippingAddress.city,
+        state: shippingAddress.state,
+        zip: shippingAddress.zip,
+        country: shippingAddress.country || 'US',
+        phone: shippingAddress.phone || ''
+      },
+      subtotal,
+      shipping: shippingCost,
+      total,
+      paymentStatus: 'pending'
+    });
+
+    // Create Stripe PaymentIntent
+    const amountCents = Math.round(total * 100);
+    const paymentIntent = await createPaymentIntent(
+      amountCents,
+      'usd',
+      null, // no customer needed
+      {
+        orderId: order._id.toString(),
+        userEmail: req.user.email,
+        productName: productName || 'Printful Product'
+      }
+    );
+
+    order.stripePaymentIntentId = paymentIntent.id;
+    await order.save();
+
+    return sendResponse(res, 201, {
+      orderId: order._id,
+      clientSecret: paymentIntent.client_secret,
+      total,
+      subtotal,
+      shipping: shippingCost
+    });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/checkout/confirm
+// @desc    Confirm payment succeeded and submit order to Printful
+// @access  Private (agent)
+// ---------------------------------------------------------------------------
+router.post('/checkout/confirm', authenticate, async (req, res) => {
+  try {
+    const { orderId, paymentIntentId } = req.body;
+
+    if (!orderId) return sendResponse(res, 400, { message: 'Order ID is required.' });
+
+    const order = await PrintfulOrder.findOne({
+      _id: orderId,
+      user: req.user._id,
+      deletedAt: null
+    });
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    // Verify payment with Stripe
+    if (stripe && paymentIntentId) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (pi.status === 'succeeded') {
+          order.paymentStatus = 'paid';
+          order.paidAt = new Date();
+          // Try to get receipt URL from the charge
+          if (pi.latest_charge) {
+            try {
+              const charge = await stripe.charges.retrieve(pi.latest_charge);
+              order.stripeReceiptUrl = charge.receipt_url || '';
+            } catch (_) { /* ignore */ }
+          }
+        } else {
+          order.paymentStatus = 'failed';
+          await order.save();
+          return sendResponse(res, 400, { message: 'Payment has not succeeded yet.' });
+        }
+      } catch (stripeErr) {
+        order.paymentStatus = 'failed';
+        await order.save();
+        return sendResponse(res, 400, { message: 'Could not verify payment.' });
+      }
+    } else {
+      // If Stripe not configured, just mark as paid (for testing)
+      order.paymentStatus = 'paid';
+      order.paidAt = new Date();
+    }
+
+    // Submit to Printful as draft
+    const config = await getPrintfulConfig();
+    if (config.apiKey) {
+      try {
+        const printful = getPrintfulClient(config.apiKey, config.storeId);
+
+        const orderItem = {
+          sync_variant_id: order.product.variantId,
+          quantity: order.product.quantity
+        };
+
+        const orderPayload = {
+          recipient: {
+            name: order.shippingAddress.name,
+            address1: order.shippingAddress.address1,
+            address2: order.shippingAddress.address2 || '',
+            city: order.shippingAddress.city,
+            state_code: order.shippingAddress.state,
+            country_code: order.shippingAddress.country || 'US',
+            zip: order.shippingAddress.zip,
+            phone: order.shippingAddress.phone || '',
+            email: order.userEmail
+          },
+          items: [orderItem]
+        };
+
+        // Add personalization notes
+        if (order.textValues && Object.keys(order.textValues).length > 0) {
+          const noteLines = Object.entries(order.textValues)
+            .filter(([, val]) => val)
+            .map(([key, val]) => `${key}: ${val}`);
+          if (noteLines.length > 0) {
+            orderPayload.packing_slip = {
+              message: 'CARD PERSONALIZATION:\n' + noteLines.join('\n')
+            };
+          }
+        }
+
+        const pfResponse = await printful.post('/orders', orderPayload);
+        const pfOrder = pfResponse.data?.result;
+        if (pfOrder) {
+          order.printfulOrderId = pfOrder.id;
+          order.printfulStatus = pfOrder.status || 'draft';
+        }
+      } catch (pfErr) {
+        // Log but don't fail — order is paid, admin can submit manually
+        console.error('Printful order submission failed:', pfErr.response?.data || pfErr.message);
+      }
+    }
+
+    await order.save();
+
+    return sendResponse(res, 200, {
+      message: 'Payment confirmed! Your order has been submitted.',
+      order: {
+        id: order._id,
+        printfulOrderId: order.printfulOrderId,
+        paymentStatus: order.paymentStatus,
+        adminStatus: order.adminStatus,
+        total: order.total,
+        receiptUrl: order.stripeReceiptUrl || ''
+      }
+    });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // @route   GET /api/business-cards/orders
-// @desc    Get order history for the current agent
+// @desc    Get order history for the current agent (from local DB)
 // @access  Private (agent)
 // ---------------------------------------------------------------------------
 router.get('/orders', authenticate, async (req, res) => {
   try {
-    const config = await getPrintfulConfig();
-    if (!config.apiKey) {
-      return sendResponse(res, 200, { orders: [] });
-    }
-
-    const printful = getPrintfulClient(config.apiKey, config.storeId);
-    const response = await printful.get('/orders', { params: { limit: 50 } });
-
-    const allOrders = response.data?.result || [];
-    // Filter to this agent's orders by email
-    const agentOrders = allOrders.filter(
-      o => o.recipient && o.recipient.email === req.user.email
-    );
+    const orders = await PrintfulOrder.find({
+      user: req.user._id,
+      deletedAt: null
+    })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
 
     return sendResponse(res, 200, {
-      orders: agentOrders.map(o => ({
-        id: o.id,
-        status: o.status,
-        created: o.created ? new Date(o.created * 1000).toISOString() : null,
-        shipping: o.shipping_service_name || o.shipping || 'Standard',
-        costs: o.retail_costs || o.costs,
-        dashboardUrl: o.dashboard_url || null,
-        recipient: o.recipient ? {
-          name: o.recipient.name,
-          city: o.recipient.city,
-          state: o.recipient.state_code || o.recipient.state_name || ''
-        } : null,
-        items: (o.items || []).map(i => ({ name: i.name || i.product?.name || 'Item', quantity: i.quantity }))
+      orders: orders.map(o => ({
+        id: o._id,
+        printfulOrderId: o.printfulOrderId,
+        productName: o.product?.name || 'Product',
+        variantName: o.product?.variantName || '',
+        thumbnail: o.product?.thumbnail || '',
+        quantity: o.product?.quantity || 1,
+        unitPrice: o.product?.unitPrice || 0,
+        total: o.total,
+        subtotal: o.subtotal,
+        paymentStatus: o.paymentStatus,
+        adminStatus: o.adminStatus,
+        printfulStatus: o.printfulStatus,
+        receiptUrl: o.stripeReceiptUrl || '',
+        shippingAddress: o.shippingAddress,
+        textValues: o.textValues,
+        mockupUrl: o.mockupUrl || '',
+        adminNotes: o.adminNotes || '',
+        created: o.createdAt,
+        paidAt: o.paidAt
       }))
     });
   } catch (err) {
-    if (err.response && err.response.data) {
-      return sendResponse(res, err.response.status || 500, {
-        message: err.response.data.result || 'Failed to fetch orders.'
-      });
-    }
     return errorResponse(res, err);
   }
 });
@@ -403,6 +774,289 @@ router.post('/admin/test-connection', authenticate, authorize('admin'), async (r
         message: err.response.data.result || 'Connection test failed.'
       });
     }
+    return errorResponse(res, err);
+  }
+});
+
+// ===========================================================================
+// ADMIN ORDER MANAGEMENT ROUTES
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/business-cards/admin/orders
+// @desc    Get all orders with filtering (admin)
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.get('/admin/orders', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { adminStatus, paymentStatus, page = 1, limit = 25, search } = req.query;
+
+    const filter = { deletedAt: null };
+    if (adminStatus && adminStatus !== 'all') filter.adminStatus = adminStatus;
+    if (paymentStatus && paymentStatus !== 'all') filter.paymentStatus = paymentStatus;
+    if (search) {
+      filter.$or = [
+        { userEmail: { $regex: search, $options: 'i' } },
+        { userName: { $regex: search, $options: 'i' } },
+        { 'product.name': { $regex: search, $options: 'i' } },
+        { 'shippingAddress.name': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [orders, total] = await Promise.all([
+      PrintfulOrder.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('user', 'firstName lastName email')
+        .populate('reviewedBy', 'firstName lastName')
+        .lean(),
+      PrintfulOrder.countDocuments(filter)
+    ]);
+
+    // Counts by status
+    const [pendingCount, approvedCount, rejectedCount, totalAll] = await Promise.all([
+      PrintfulOrder.countDocuments({ adminStatus: 'pending_review', deletedAt: null }),
+      PrintfulOrder.countDocuments({ adminStatus: 'approved', deletedAt: null }),
+      PrintfulOrder.countDocuments({ adminStatus: 'rejected', deletedAt: null }),
+      PrintfulOrder.countDocuments({ deletedAt: null })
+    ]);
+
+    return sendResponse(res, 200, {
+      orders: orders.map(o => ({
+        id: o._id,
+        user: o.user ? {
+          id: o.user._id,
+          name: `${o.user.firstName || ''} ${o.user.lastName || ''}`.trim() || o.userEmail,
+          email: o.user.email || o.userEmail
+        } : { name: o.userName, email: o.userEmail },
+        product: o.product,
+        textValues: o.textValues,
+        mockupUrl: o.mockupUrl || '',
+        shippingAddress: o.shippingAddress,
+        subtotal: o.subtotal,
+        shipping: o.shipping,
+        total: o.total,
+        paymentStatus: o.paymentStatus,
+        adminStatus: o.adminStatus,
+        adminNotes: o.adminNotes || '',
+        printfulOrderId: o.printfulOrderId,
+        printfulStatus: o.printfulStatus,
+        stripePaymentIntentId: o.stripePaymentIntentId || '',
+        receiptUrl: o.stripeReceiptUrl || '',
+        reviewedBy: o.reviewedBy ? `${o.reviewedBy.firstName || ''} ${o.reviewedBy.lastName || ''}`.trim() : null,
+        reviewedAt: o.reviewedAt,
+        paidAt: o.paidAt,
+        created: o.createdAt
+      })),
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      counts: { pending: pendingCount, approved: approvedCount, rejected: rejectedCount, total: totalAll }
+    });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/business-cards/admin/orders/:id
+// @desc    Get single order detail (admin)
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.get('/admin/orders/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const order = await PrintfulOrder.findById(req.params.id)
+      .populate('user', 'firstName lastName email phone')
+      .populate('reviewedBy', 'firstName lastName')
+      .lean();
+
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    return sendResponse(res, 200, { order });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/business-cards/admin/orders/:id/approve
+// @desc    Approve an order (admin)
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.put('/admin/orders/:id/approve', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const order = await PrintfulOrder.findOne({ _id: req.params.id, deletedAt: null });
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    order.adminStatus = 'approved';
+    order.reviewedBy = req.user._id;
+    order.reviewedAt = new Date();
+    if (notes !== undefined) order.adminNotes = notes;
+
+    // If paid and has Printful order, try to confirm it
+    if (order.paymentStatus === 'paid' && order.printfulOrderId) {
+      try {
+        const config = await getPrintfulConfig();
+        if (config.apiKey) {
+          const printful = getPrintfulClient(config.apiKey, config.storeId);
+          await printful.post(`/orders/${order.printfulOrderId}/confirm`);
+          order.printfulStatus = 'pending';
+        }
+      } catch (pfErr) {
+        // Log but don't block approval
+        console.error('Printful confirm failed:', pfErr.response?.data || pfErr.message);
+      }
+    }
+
+    await order.save();
+    return sendResponse(res, 200, { message: 'Order approved.', order: { id: order._id, adminStatus: order.adminStatus } });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/business-cards/admin/orders/:id/reject
+// @desc    Reject an order (admin)
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.put('/admin/orders/:id/reject', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const order = await PrintfulOrder.findOne({ _id: req.params.id, deletedAt: null });
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    order.adminStatus = 'rejected';
+    order.reviewedBy = req.user._id;
+    order.reviewedAt = new Date();
+    if (notes !== undefined) order.adminNotes = notes;
+
+    // If paid, initiate refund
+    if (order.paymentStatus === 'paid' && order.stripePaymentIntentId && stripe) {
+      try {
+        await stripe.refunds.create({ payment_intent: order.stripePaymentIntentId });
+        order.paymentStatus = 'refunded';
+      } catch (refundErr) {
+        console.error('Refund failed:', refundErr.message);
+        // Append note about manual refund needed
+        order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
+          '[SYSTEM] Auto-refund failed. Manual refund needed for PI: ' + order.stripePaymentIntentId;
+      }
+    }
+
+    await order.save();
+    return sendResponse(res, 200, { message: 'Order rejected.', order: { id: order._id, adminStatus: order.adminStatus, paymentStatus: order.paymentStatus } });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   PUT /api/business-cards/admin/orders/:id/notes
+// @desc    Update admin notes on an order
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.put('/admin/orders/:id/notes', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { notes } = req.body;
+    if (notes === undefined) return sendResponse(res, 400, { message: 'Notes field required.' });
+
+    const order = await PrintfulOrder.findOneAndUpdate(
+      { _id: req.params.id, deletedAt: null },
+      { adminNotes: notes },
+      { new: true }
+    );
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    return sendResponse(res, 200, { message: 'Notes updated.', order: { id: order._id, adminNotes: order.adminNotes } });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   DELETE /api/business-cards/admin/orders/:id
+// @desc    Soft-delete an order (admin)
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.delete('/admin/orders/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const order = await PrintfulOrder.findOne({ _id: req.params.id, deletedAt: null });
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    order.deletedAt = new Date();
+    order.deletedBy = req.user._id;
+    order.adminStatus = 'deleted';
+    await order.save();
+
+    return sendResponse(res, 200, { message: 'Order deleted.' });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/business-cards/admin/orders/:id/receipt
+// @desc    Get payment receipt details for an order
+// @access  Admin
+// ---------------------------------------------------------------------------
+router.get('/admin/orders/:id/receipt', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const order = await PrintfulOrder.findById(req.params.id).populate('user', 'firstName lastName email').lean();
+    if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    let stripeData = null;
+    if (order.stripePaymentIntentId && stripe) {
+      try {
+        const pi = await stripe.paymentIntents.retrieve(order.stripePaymentIntentId);
+        let chargeData = null;
+        if (pi.latest_charge) {
+          const charge = await stripe.charges.retrieve(pi.latest_charge);
+          chargeData = {
+            id: charge.id,
+            amount: charge.amount,
+            currency: charge.currency,
+            status: charge.status,
+            receiptUrl: charge.receipt_url,
+            paymentMethod: charge.payment_method_details?.type || 'card',
+            cardBrand: charge.payment_method_details?.card?.brand || '',
+            cardLast4: charge.payment_method_details?.card?.last4 || '',
+            created: new Date(charge.created * 1000).toISOString()
+          };
+        }
+        stripeData = {
+          paymentIntentId: pi.id,
+          amount: pi.amount,
+          currency: pi.currency,
+          status: pi.status,
+          charge: chargeData
+        };
+      } catch (_) { /* Stripe lookup failed */ }
+    }
+
+    return sendResponse(res, 200, {
+      receipt: {
+        orderId: order._id,
+        user: order.user ? {
+          name: `${order.user.firstName || ''} ${order.user.lastName || ''}`.trim(),
+          email: order.user.email
+        } : { name: order.userName, email: order.userEmail },
+        product: order.product,
+        shippingAddress: order.shippingAddress,
+        subtotal: order.subtotal,
+        shipping: order.shipping,
+        total: order.total,
+        paymentStatus: order.paymentStatus,
+        paidAt: order.paidAt,
+        stripeReceiptUrl: order.stripeReceiptUrl || '',
+        stripe: stripeData,
+        created: order.createdAt
+      }
+    });
+  } catch (err) {
     return errorResponse(res, err);
   }
 });

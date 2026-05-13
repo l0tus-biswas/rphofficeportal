@@ -8,6 +8,13 @@ interface DocCard {
   document: OnboardingDocument | null;
 }
 
+interface DirectDepositEntry {
+  routingNumber: string;
+  accountNumber: string;
+  confirmAccountNumber: string;
+  accountType: string;
+}
+
 @Component({
   selector: 'app-onboarding-hub',
   templateUrl: './onboarding-hub.component.html',
@@ -23,6 +30,8 @@ export class OnboardingHubComponent implements OnInit {
   deletingDocId = '';
   selectedFiles: { [docTypeId: string]: File } = {};
   uploadNotes: { [docTypeId: string]: string } = {};
+  directDepositData: { [docTypeId: string]: DirectDepositEntry } = {};
+  showHistory: { [docTypeId: string]: boolean } = {};
 
   currentUser: any;
 
@@ -58,6 +67,17 @@ export class OnboardingHubComponent implements OnInit {
         docType: dt,
         document: dt._id ? (docMap[dt._id] || null) : null
       }));
+      // Initialize directDepositData for doc types that need it
+      for (const dt of docTypes) {
+        if (dt.hasDirectDepositFields && dt._id && !this.directDepositData[dt._id]) {
+          this.directDepositData[dt._id] = {
+            routingNumber: '',
+            accountNumber: '',
+            confirmAccountNumber: '',
+            accountType: ''
+          };
+        }
+      }
       this.loading = false;
     };
 
@@ -90,6 +110,23 @@ export class OnboardingHubComponent implements OnInit {
     const file = this.selectedFiles[docType._id];
     if (!file) { this.error = 'Please select a file first'; return; }
 
+    // Validate Direct Deposit fields
+    if (docType.hasDirectDepositFields) {
+      const dd = this.directDepositData[docType._id];
+      if (!dd || !dd.routingNumber || !dd.accountNumber || !dd.accountType) {
+        this.error = 'Please fill in all banking information fields';
+        return;
+      }
+      if (!/^\d{9}$/.test(dd.routingNumber)) {
+        this.error = 'Routing number must be exactly 9 digits';
+        return;
+      }
+      if (dd.accountNumber !== dd.confirmAccountNumber) {
+        this.error = 'Account numbers do not match';
+        return;
+      }
+    }
+
     this.uploadingDocTypeId = docType._id;
     this.error = '';
 
@@ -99,6 +136,13 @@ export class OnboardingHubComponent implements OnInit {
     if (this.uploadNotes[docType._id]) {
       formData.append('notes', this.uploadNotes[docType._id]);
     }
+    // Append Direct Deposit fields if applicable
+    if (docType.hasDirectDepositFields) {
+      const dd = this.directDepositData[docType._id];
+      formData.append('routingNumber', dd.routingNumber);
+      formData.append('accountNumber', dd.accountNumber);
+      formData.append('accountType', dd.accountType);
+    }
 
     this.onboardingHubService.uploadDocument(formData).subscribe({
       next: () => {
@@ -106,6 +150,14 @@ export class OnboardingHubComponent implements OnInit {
         this.uploadingDocTypeId = '';
         delete this.selectedFiles[docType._id!];
         delete this.uploadNotes[docType._id!];
+        if (docType.hasDirectDepositFields && docType._id) {
+          this.directDepositData[docType._id] = {
+            routingNumber: '',
+            accountNumber: '',
+            confirmAccountNumber: '',
+            accountType: ''
+          };
+        }
         this.loadData();
         setTimeout(() => this.success = '', 4000);
       },
@@ -143,6 +195,17 @@ export class OnboardingHubComponent implements OnInit {
     return `${environment.apiUrl.replace('/api', '')}/${filePath}`;
   }
 
+  formatReviewDate(date: any): string {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  toggleHistory(docTypeId: string): void {
+    this.showHistory[docTypeId] = !this.showHistory[docTypeId];
+  }
+
   get completedCount(): number {
     return this.docCards.filter(c => !!c.document).length;
   }
@@ -152,6 +215,10 @@ export class OnboardingHubComponent implements OnInit {
   }
 
   get completedRequiredCount(): number {
+    return this.docCards.filter(c => c.docType.required && c.document?.status === 'approved').length;
+  }
+
+  get submittedRequiredCount(): number {
     return this.docCards.filter(c => c.docType.required && !!c.document).length;
   }
 }

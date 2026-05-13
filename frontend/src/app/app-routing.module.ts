@@ -50,6 +50,7 @@ import { AcaManagementComponent } from './components/admin/aca-management/aca-ma
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
+import { PrintfulOrdersComponent } from './components/admin/printful-orders/printful-orders.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
@@ -299,6 +300,12 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
+  {
+    path: 'admin/printful-orders',
+    component: PrintfulOrdersComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
   // TASK 022 — Promotion Levels Admin Config
   {
     path: 'admin/promotion-levels',
@@ -312,7 +319,21 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
-  // ExamFX Licensing Progress Tracking
+  // Admin Licensing Overview
+  {
+    path: 'admin/licensing',
+    component: LicensingComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  // Admin ExamFX Management (CSV upload, manage agents)
+  {
+    path: 'admin/examfx',
+    component: ExamfxProgressComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  // Agent ExamFX Progress (own + downline view)
   {
     path: 'examfx-progress',
     component: ExamfxProgressComponent,

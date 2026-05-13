@@ -30,6 +30,11 @@ export class AdminOnboardingDetailComponent implements OnInit {
   pdfLoading = false;
   currentPdfName = '';
 
+  // Bank info state
+  bankInfoDocId = '';
+  bankInfo: { routingNumber: string; accountNumber: string; accountType: string } | null = null;
+  bankInfoLoading = false;
+
   constructor(
     private onboardingHubService: OnboardingHubService,
     private route: ActivatedRoute,
@@ -201,6 +206,29 @@ export class AdminOnboardingDetailComponent implements OnInit {
   formatFileSize(bytes: number): string {
     if (!bytes) return 'N/A';
     return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  viewBankInfo(documentId: string): void {
+    if (this.bankInfoDocId === documentId) {
+      this.bankInfoDocId = '';
+      this.bankInfo = null;
+      return;
+    }
+    this.bankInfoLoading = true;
+    this.bankInfoDocId = documentId;
+    this.bankInfo = null;
+
+    this.onboardingHubService.getBankInfo(documentId).subscribe({
+      next: (info) => {
+        this.bankInfo = info;
+        this.bankInfoLoading = false;
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to load banking information';
+        this.bankInfoLoading = false;
+        this.bankInfoDocId = '';
+      }
+    });
   }
 
   goBack(): void {

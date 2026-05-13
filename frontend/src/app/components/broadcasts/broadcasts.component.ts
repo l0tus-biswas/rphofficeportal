@@ -80,6 +80,16 @@ export class BroadcastsComponent implements OnInit {
 
   dismissAlert(): void {
     this.showNewAlert = false;
+    // Mark all unread broadcasts as read on server
+    const unread = this.broadcasts.filter(b => !b.isRead);
+    unread.forEach(b => {
+      this.broadcastService.getBroadcast(b._id).subscribe({
+        next: () => {
+          b.isRead = true;
+        }
+      });
+    });
+    this.broadcastService.refreshUnreadCount();
   }
 
   viewBroadcast(broadcast: Broadcast): void {
