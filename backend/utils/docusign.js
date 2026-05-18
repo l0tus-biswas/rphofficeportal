@@ -283,8 +283,14 @@ async function createAPAEnvelope(application) {
       status: 'sent'
     };
   } catch (error) {
-    console.error('DocuSign Envelope Creation Error:', error);
-    throw new Error('Failed to create DocuSign envelope: ' + error.message);
+    console.error('DocuSign Envelope Creation Error:', error.message);
+    if (error.response?.body) {
+      console.error('DocuSign API Response:', JSON.stringify(error.response.body, null, 2));
+    }
+    if (error.response?.text) {
+      console.error('DocuSign API Text:', error.response.text);
+    }
+    throw new Error('Failed to create DocuSign envelope: ' + (error.response?.body?.message || error.message));
   }
 }
 
@@ -392,15 +398,18 @@ function createSignerTabs(application) {
   const licensingStatus = application.licensingStatus || {};
   
   // Helper function to add text tab using the mapping
+  // Skips tabs with empty/null values to avoid DocuSign 400 errors on required fields
   const addTextTab = (semanticName, value, locked = true) => {
     const tabLabel = TEXT_TAB_LABELS[semanticName];
     if (!tabLabel) {
       console.warn(`Unknown text tab: ${semanticName}`);
       return;
     }
+    const strValue = (value !== undefined && value !== null) ? String(value).trim() : '';
+    if (!strValue) return; // Don't send empty values for required template fields
     const tab = new docusign.Text();
     tab.tabLabel = tabLabel;
-    tab.value = String(value !== undefined && value !== null ? value : '');
+    tab.value = strValue;
     tab.locked = locked ? 'true' : 'false';
     textTabs.push(tab);
   };
