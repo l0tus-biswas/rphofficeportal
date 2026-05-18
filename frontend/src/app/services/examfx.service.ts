@@ -104,6 +104,7 @@ export interface ExamFXSummary {
   completed: number;
   expired: number;
   averageProgress: number;
+  lastSynced?: string;
   agents: {
     agentId: string;
     agentName: string;

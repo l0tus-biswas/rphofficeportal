@@ -210,7 +210,7 @@ async function createAPAEnvelope(application) {
     const signer = new docusign.TemplateRole();
     signer.email = application.personalInfo.email;
     signer.name = `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`;
-    signer.roleName = 'agent'; // Must match role name in DocuSign template (NEW RHP APA AGREEMENT)
+    signer.roleName = 'Agent'; // Must match role name in DocuSign template (RHP Office APA AGREEMENT 2026(1))
     // NOTE: No clientUserId - this enables remote signing via email
 
     // Set custom sender name on the recipient notification
@@ -291,10 +291,95 @@ async function createAPAEnvelope(application) {
 /**
  * Create signer tabs to pre-fill template fields with application data
  * Maps all fields from APAApplication model to the new DocuSign template
+ * Template: RHP Office APA AGREEMENT 2026(1) (c1abdf9e-83be-49c5-9333-73788e5805e0)
+ * 
+ * NOTE: Tab labels are auto-generated UUIDs from DocuSign. If the template is
+ * recreated, these UUIDs will change and must be re-fetched using
+ * fetch-template-fields-detailed.js
  * 
  * @param {Object} application - APAApplication document
  * @returns {Object} DocuSign tabs object
  */
+
+// Text tab label mapping: semantic name → DocuSign UUID label
+const TEXT_TAB_LABELS = {
+  resident_state:                     'Text c3512b47-ef34-47bb-89fe-303db07c300a',
+  firstName:                          'Text 023cedba-a3cd-48ed-a4b8-895e19d0abb3',
+  middleName:                         'Text c82a8408-34f6-42ed-b307-4160d92299cb',
+  lastName:                           'Text 5987d2e1-1ac2-4464-83d1-601e6ae4ed42',
+  dateOfBirth:                        'Text c5159c89-4174-447e-a6b4-1eb7302256e4',
+  socialSecurityNumber:               'Text 2c9ad46a-9836-4c65-b1e3-a3b9bd7beb9f',
+  mobileNumber:                       'Text cd73b113-ea6b-4753-bf27-69e5d54b7254',
+  streetAddress:                      'Text 18e5cdec-3a1e-4e5a-a6ce-dcbfeb04b766',
+  city:                               'Text e6b85ed9-7f54-450d-8ec0-37c224859b9b',
+  state:                              'Text a3cbc6e6-b574-4b2c-8d9f-725757fe2b9a',
+  zipcode:                            'Text 13994a85-7130-4ac0-a0ae-10576951d45d',
+  recruiterFullName:                  'Text b5646b4e-79c0-4e2a-90a5-5cddd3c2d21c',
+  recruiterAgentId:                   'Text 2c275b1e-4b1a-4075-82d6-89abc18e61fb',
+  recruiterEmail:                     'Text a0e40538-3261-4a11-bd09-0deb67e551e4',
+  recruiterPhone:                     'Text 9b07bb3d-5312-4fd2-88bc-c605a6e0f299',
+  uplineLeaderName:                   'Text d8793083-25fc-4a1e-b419-b1508d05625d',
+  teamName:                           'Text 5c5f7092-b910-4cce-a8a8-9b876a7d3438',
+  previouslyContractedYesDescribe:    'Text b9ec7de1-4038-4fa3-93ba-d52352ee69f8',
+  convictedOfFelonyYesDescribe:       'Text 77bd5a39-d730-42a9-99bc-adbeb779d9b6',
+  convictedOfFraudYesDescribe:        'Text 5718ad9c-1de3-4502-805f-77170f01cf6c',
+  subjectToCivilActionYesDescribe:    'Text 71bd727f-e9e7-4b5d-832f-48b620c2384c',
+  insuranceLicenseYesDescribe:        'Text 9b09a3c9-12fe-424c-84c3-006fd58c39a7',
+  difficultyObtainingYesDescribe:     'Text 971cac85-5879-42e9-b2e4-d0123b88d694',
+  unsatisfiedJudgmentDescribe:        'Text 6c25d0bb-7c9e-49e6-b302-f442d4531b30',
+  unsatisfiedTaxLiensYesDescribe:     'Text 3c1cc6bf-eb2f-44d3-a2b3-cc7f5bfaa3a4',
+  oweInsuranceCompanyYesDescribe:     'Text cfdff338-5d64-48f9-8aa1-bd624704b31f',
+  bankruptcyAdditionalDetails:        'Text fbf8108a-a0bd-49dc-9812-17c74eb830a8',
+  licenseTypeOtherDescribe:           'Text 2e256c41-e388-41bc-9855-f755ae479730',
+  stateLicensedIn:                    'Text dcc8cafb-63e0-49a1-b33d-c3b7d3a34c97',
+  primaryLicenseNumber:               'Text 20944855-5cc4-4dad-bed2-355e2a63b1a7',
+  licenseStatus:                      'Text 3488675b-1e04-4116-b5c0-4dd81b6a9def',
+};
+
+// Checkbox tab label mapping: semantic name → DocuSign UUID label
+const CHECKBOX_TAB_LABELS = {
+  genderMale:                         'Checkbox 1527096c-00e8-4aff-a0ed-fdd52a389402',
+  genderFemale:                       'Checkbox 7519c608-5e1f-4c65-a839-8a2d352bd561',
+  genderOther:                        'Checkbox 1f3efc0b-fe00-4f1c-90e7-ec63c9124d84',
+  mailingAddressDifferent:            'Checkbox 7ae5ef53-7158-43d0-a5ea-07d779c3f3ee',
+  previouslyContractedRHP:            'Checkbox d6ff0743-457e-4444-8ace-92438d66426e',
+  previouslyContractedYes:            'Checkbox 6a460b72-7fd1-4fd6-9ab4-bb7352df0b04',
+  previouslyContractedNo:             'Checkbox eee11eef-aae0-443b-84af-f7dfcd6a1270',
+  convictedOfFelonyYes:               'Checkbox 48898510-66f7-4918-aba7-dee3ec9f1c3f',
+  convictedOfFelonyNo:                'Checkbox d6503d01-1c8c-4966-80ef-8516dc71b2ef',
+  convictedOfFraudYes:                'Checkbox 709b68e2-2054-43dd-b9f8-c21fa0b4fe93',
+  convictedOfFraudNo:                 'Checkbox c9ce8f3c-b9be-4a4b-ba48-0dcea79ed911',
+  subjectToCivilActionYes:            'Checkbox 576db9ce-76d8-4ab9-a040-2c94b20f52a6',
+  subjectToCivilActionNo:             'Checkbox 6b200fbc-b0a7-4ef3-b1a3-19181f6e4704',
+  insuranceLicenseYes:                'Checkbox eacf377f-a663-43e4-bcd1-35ca3ecf1cd6',
+  insuranceLicenseNo:                 'Checkbox e76791fe-8b35-486e-9e85-387cf54fb4c3',
+  difficultyObtainingYes:             'Checkbox 2595f673-2a9f-42d4-ac40-ee33656a57b8',
+  difficultyObtainingNo:              'Checkbox b9c26f6f-a149-44d3-ac2e-bc9b47ad74a7',
+  unsatisfiedJudgmentYes:             'Checkbox bca0a490-9270-4878-86fe-4eabacfccbf8',
+  unsatisfiedJudgmentNo:              'Checkbox b554ebe9-e486-4409-83c8-09011106d0c1',
+  unsatisfiedTaxLiensYes:             'Checkbox 7a8a39b2-96e9-4a8e-8f78-2ed6816a8312',
+  unsatisfiedTaxLiensNo:              'Checkbox de41079f-b637-426b-9b22-643a21607cbd',
+  oweInsuranceCompanyYes:             'Checkbox 50fc8cee-1ed5-45d5-94d5-89ee606e5af2',
+  oweInsuranceCompanyNo:              'Checkbox 4c256b51-53eb-4203-a212-097babcc5c63',
+  filedForBankruptcyYes:              'Checkbox e51789a2-4ce7-4c38-8033-14d43420b46d',
+  filedForBankruptcyNo:               'Checkbox 5577bc25-4328-48c6-86bc-da51f7bc9214',
+  bankruptcyChapter7:                 'Checkbox 12d1026f-67bb-42ad-959f-819221f1ffc4',
+  bankruptcyChapter11:                'Checkbox 490775e1-546b-45df-8d58-01076710e89e',
+  bankruptcyChapter13:                'Checkbox 3d1e0e49-bc48-44fd-9362-2d85eabe554e',
+  bankruptcyOpenPending:              'Checkbox 1dd6a4c2-e524-4d97-ac1f-f83bee6e962a',
+  bankruptcyDischarged:               'Checkbox acd8acf6-701a-4890-a38e-de888ead3969',
+  bankruptcyDismissed:                'Checkbox 4f1c2ddf-ffbb-4345-b38f-63f2f535aadf',
+  currentlyLicensedYes:               'Checkbox 303ce368-806b-4427-a6ba-e81406b84545',
+  currentlyLicensedNo:                'Checkbox b002c68c-ac2b-4298-81a7-8cf9f93006aa',
+  licenseTypeLife:                    'Checkbox 749acf19-c1bf-4244-90d4-0d35f7b05986',
+  licenseTypeHealth:                  'Checkbox a81104ca-5778-4991-ace7-79d2b013d7f5',
+  licenseTypeLifeHealth:              'Checkbox 93b77c63-8b0f-4ffb-9a4d-a7148cb24a05',
+  licenseTypeOther:                   'Checkbox e987cb13-5a37-40fd-b2d3-bbcc93c55c7b',
+  licenseStatusActive:                'Checkbox c6d857e0-e7e4-425a-b537-e43be6ec58d9',
+  licenseStatusInactive:              'Checkbox 332d00cb-356c-476e-b441-90627b4d8967',
+  licenseStatusPending:               'Checkbox d0842a00-1ce0-4708-91f5-46f3c125847a',
+};
+
 function createSignerTabs(application) {
   const tabs = new docusign.Tabs();
   const textTabs = [];
@@ -306,19 +391,27 @@ function createSignerTabs(application) {
   const financialBackground = application.financialBackground || {};
   const licensingStatus = application.licensingStatus || {};
   
-  // Helper function to add text tab
-  const addTextTab = (tabLabel, value, locked = true) => {
-    if (value !== undefined && value !== null) {
-      const tab = new docusign.Text();
-      tab.tabLabel = tabLabel;
-      tab.value = String(value);
-      tab.locked = locked ? 'true' : 'false';
-      textTabs.push(tab);
+  // Helper function to add text tab using the mapping
+  const addTextTab = (semanticName, value, locked = true) => {
+    const tabLabel = TEXT_TAB_LABELS[semanticName];
+    if (!tabLabel) {
+      console.warn(`Unknown text tab: ${semanticName}`);
+      return;
     }
+    const tab = new docusign.Text();
+    tab.tabLabel = tabLabel;
+    tab.value = String(value !== undefined && value !== null ? value : '');
+    tab.locked = locked ? 'true' : 'false';
+    textTabs.push(tab);
   };
 
-  // Helper function to add checkbox tab
-  const addCheckboxTab = (tabLabel, selected) => {
+  // Helper function to add checkbox tab using the mapping
+  const addCheckboxTab = (semanticName, selected) => {
+    const tabLabel = CHECKBOX_TAB_LABELS[semanticName];
+    if (!tabLabel) {
+      console.warn(`Unknown checkbox tab: ${semanticName}`);
+      return;
+    }
     const tab = new docusign.Checkbox();
     tab.tabLabel = tabLabel;
     tab.selected = selected ? 'true' : 'false';
@@ -335,7 +428,6 @@ function createSignerTabs(application) {
   addTextTab('dateOfBirth', formatDate(personalInfo.dateOfBirth));
   addTextTab('socialSecurityNumber', personalInfo.ssn || '');
   addTextTab('mobileNumber', personalInfo.mobilePhone || '');
-  addTextTab('emailAddress', personalInfo.email || '');
   addTextTab('streetAddress', personalInfo.homeAddress?.street || '');
   addTextTab('city', personalInfo.homeAddress?.city || '');
   addTextTab('state', personalInfo.homeAddress?.state || '');
@@ -370,14 +462,16 @@ function createSignerTabs(application) {
     financialBackground.unsatisfiedLiensExplanation || '');
   addTextTab('oweInsuranceCompanyYesDescribe', '');
 
+  // Bankruptcy additional details
+  addTextTab('bankruptcyAdditionalDetails',
+    financialBackground.bankruptcy?.filed ? (financialBackground.bankruptcy?.explanation || '') : '');
+
   // Licensing Information
   addTextTab('licenseTypeOtherDescribe', licensingStatus.licenseOtherDescription || '');
   addTextTab('stateLicensedIn', 
     licensingStatus.statesLicensed ? licensingStatus.statesLicensed.join(', ') : '');
   addTextTab('primaryLicenseNumber', licensingStatus.licenseNumber || '');
-  
-  // Agreement Date
-  addTextTab('dateOfAgreement', formatDate(new Date()));
+  addTextTab('licenseStatus', licensingStatus.licenseStatus || '');
 
   // ===== CHECKBOX FIELDS =====
   
@@ -391,10 +485,10 @@ function createSignerTabs(application) {
                            personalInfo.mailingAddress?.city || 
                            personalInfo.mailingAddress?.state || 
                            personalInfo.mailingAddress?.zipCode;
-  addCheckboxTab('mailingAddressDifferentFromHomeAddress', !!hasMailingAddress);
+  addCheckboxTab('mailingAddressDifferent', !!hasMailingAddress);
 
   // Previously Contracted with RHP Office (Section 1 checkbox)
-  addCheckboxTab('previouslyContracted', personalInfo.previouslyContracted === true);
+  addCheckboxTab('previouslyContractedRHP', personalInfo.previouslyContracted === true);
 
   // Previously Contracted with OTHER companies (Section 3 compliance question)
   addCheckboxTab('previouslyContractedYes', complianceQuestions.previouslyContractedOther?.answer === true);
@@ -428,7 +522,7 @@ function createSignerTabs(application) {
   addCheckboxTab('unsatisfiedTaxLiensYes', financialBackground.unsatisfiedLiens === true);
   addCheckboxTab('unsatisfiedTaxLiensNo', financialBackground.unsatisfiedLiens === false);
 
-  // Owe Insurance Company (placeholder - not in current model)
+  // Owe Insurance Company
   addCheckboxTab('oweInsuranceCompanyYes', false);
   addCheckboxTab('oweInsuranceCompanyNo', true);
 
@@ -438,28 +532,28 @@ function createSignerTabs(application) {
   
   // Bankruptcy Chapter (only if filed)
   if (financialBackground.bankruptcy?.filed) {
-    addCheckboxTab('filedForBankruptcyYesLeftChapter7', financialBackground.bankruptcy?.chapter === '7');
-    addCheckboxTab('filedForBankruptcyYesLeftChapter11', financialBackground.bankruptcy?.chapter === '11');
-    addCheckboxTab('filedForBankruptcyYesLeftChapter13', financialBackground.bankruptcy?.chapter === '13');
+    addCheckboxTab('bankruptcyChapter7', financialBackground.bankruptcy?.chapter === '7');
+    addCheckboxTab('bankruptcyChapter11', financialBackground.bankruptcy?.chapter === '11');
+    addCheckboxTab('bankruptcyChapter13', financialBackground.bankruptcy?.chapter === '13');
     
     // Bankruptcy Status
-    addCheckboxTab('filedForBankruptcyYesRightDischarged', financialBackground.bankruptcy?.status === 'Discharged');
-    addCheckboxTab('filedForBankruptcyYesRightOpenPending', financialBackground.bankruptcy?.status === 'Open');
-    addCheckboxTab('filedForBankruptcyYesDismissed', financialBackground.bankruptcy?.status === 'Dismissed');
+    addCheckboxTab('bankruptcyDischarged', financialBackground.bankruptcy?.status === 'Discharged');
+    addCheckboxTab('bankruptcyOpenPending', financialBackground.bankruptcy?.status === 'Open');
+    addCheckboxTab('bankruptcyDismissed', financialBackground.bankruptcy?.status === 'Dismissed');
   }
 
   // Currently Licensed
-  addCheckboxTab('currentlyLicensedToSellInsuranceYes', licensingStatus.currentlyLicensed === true);
-  addCheckboxTab('currentlyLicensedToSellInsuranceNo', licensingStatus.currentlyLicensed === false);
+  addCheckboxTab('currentlyLicensedYes', licensingStatus.currentlyLicensed === true);
+  addCheckboxTab('currentlyLicensedNo', licensingStatus.currentlyLicensed === false);
 
   // License Types
   const licenseTypes = licensingStatus.licenseTypes || [];
-  addCheckboxTab('licenseTypeLifeInsurance', licenseTypes.includes('Life'));
-  addCheckboxTab('licenseTypeHealthInsurance', licenseTypes.includes('Health'));
-  addCheckboxTab('licenseTypeLifeHealthInsurance', licenseTypes.includes('Life & Health'));
+  addCheckboxTab('licenseTypeLife', licenseTypes.includes('Life'));
+  addCheckboxTab('licenseTypeHealth', licenseTypes.includes('Health'));
+  addCheckboxTab('licenseTypeLifeHealth', licenseTypes.includes('Life & Health'));
   addCheckboxTab('licenseTypeOther', licenseTypes.includes('Other'));
 
-  // License Status
+  // License Status (checkboxes)
   addCheckboxTab('licenseStatusActive', licensingStatus.licenseStatus === 'Active');
   addCheckboxTab('licenseStatusInactive', licensingStatus.licenseStatus === 'Inactive');
   addCheckboxTab('licenseStatusPending', licensingStatus.licenseStatus === 'Pending Renewal' || licensingStatus.licenseStatus === 'Pending');
@@ -792,7 +886,7 @@ async function createTemplateFromPDF(pdfBuffer, fileName) {
   document.documentId = '1';
 
   const signer = new docusign.Signer();
-  signer.roleName = 'agent';
+  signer.roleName = 'Agent';
   signer.recipientId = '1';
   signer.routingOrder = '1';
 

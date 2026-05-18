@@ -54,9 +54,16 @@ const promotionLevelSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  skipRequirements: {
-    type: String,
-    default: ''
+  skipMultiplier: {
+    type: Number,
+    default: 1.4,
+    min: 1
+  },
+  skipLegCapPercent: {
+    type: Number,
+    default: 50,
+    min: 1,
+    max: 100
   },
 
   isActive: {

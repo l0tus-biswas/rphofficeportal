@@ -38,16 +38,6 @@ const userSchema = new mongoose.Schema({
   // Agent Level/Rank
   level: {
     type: String,
-    enum: [
-      'associate',
-      'senior associate',
-      'manager',
-      'senior manager',
-      'regional executive',
-      'senior regional executive',
-      'national executive',
-      'senior national executive'
-    ],
     default: 'associate'
   },
   promotedAt: Date,

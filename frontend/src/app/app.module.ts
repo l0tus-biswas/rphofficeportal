@@ -69,7 +69,6 @@ import { PromotionLevelsComponent } from './components/admin/promotion-levels/pr
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
-import { PrintfulOrdersComponent } from './components/admin/printful-orders/printful-orders.component';
 
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
@@ -134,8 +133,7 @@ import { SafePipe } from './pipes/safe.pipe';
     PromotionLevelsComponent,
     MyTeamComponent,
     ExamfxProgressComponent,
-    NotFoundComponent,
-    PrintfulOrdersComponent
+    NotFoundComponent
   ],
   imports: [
     BrowserModule,

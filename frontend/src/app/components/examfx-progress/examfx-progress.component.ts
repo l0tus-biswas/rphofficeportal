@@ -38,6 +38,9 @@ export class ExamfxProgressComponent implements OnInit {
   importHistory: ExamFXImportBatch[] = [];
   activeTab: 'progress' | 'history' = 'progress';
 
+  // Last synced
+  lastSyncedDate: string | null = null;
+
   constructor(
     private examfxService: ExamfxService,
     private authService: AuthService,
@@ -63,6 +66,16 @@ export class ExamfxProgressComponent implements OnInit {
     this.examfxService.getAllProgress().subscribe({
       next: (data) => {
         this.allProgress = data;
+        // Compute last synced from progress records
+        let latest: Date | null = null;
+        for (const r of data) {
+          const candidates = [r.lastSyncDate, r.lastCsvImportDate, r.updatedAt].filter(Boolean);
+          for (const d of candidates) {
+            const dt = new Date(d as any);
+            if (!latest || dt > latest) latest = dt;
+          }
+        }
+        this.lastSyncedDate = latest ? latest.toISOString() : null;
         // Auto-select for agent view (non-admin route) or when only one record
         if (!this.isAdminRoute && data.length > 0) {
           this.selectedAgent = data.find(r => r.agent._id === this.currentUserId) || data[0];
@@ -169,6 +182,22 @@ export class ExamfxProgressComponent implements OnInit {
   }
 
   // ── Helpers ──
+  getTimeAgo(dateStr: string): string {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHr / 24);
+
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
+    if (diffHr < 24) return `${diffHr} hour${diffHr > 1 ? 's' : ''} ago`;
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
   formatDate(date: any): string {
     if (!date) return '—';
     return new Date(date).toLocaleDateString('en-US', {

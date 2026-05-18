@@ -64,7 +64,8 @@ export interface PromotionLevel {
   builderAgentCountThreshold: number;
   builderWindowDays: number;
   canSkipTo: boolean;
-  skipRequirements: string;
+  skipMultiplier: number;
+  skipLegCapPercent: number;
   isActive: boolean;
 }
 
@@ -87,17 +88,36 @@ export class PromotionService {
 
   /** All authenticated users — get all public promotion levels (for tracker arrow strip) */
   getLevels(): Observable<{ levels: PromotionLevel[] }> {
-    return this.http.get<{ levels: PromotionLevel[] }>(`${this.apiUrl}/promotion/levels`);
+    return this.http.get<{ levels: PromotionLevel[] }>(`${this.apiUrl}/promotion/levels`, {
+      params: { _t: Date.now().toString() }
+    });
   }
 
   /** Admin — get all promotion levels */
   getAdminLevels(): Observable<{ levels: PromotionLevel[] }> {
-    return this.http.get<{ levels: PromotionLevel[] }>(`${this.apiUrl}/promotion/admin/levels`);
+    return this.http.get<{ levels: PromotionLevel[] }>(`${this.apiUrl}/promotion/admin/levels`, {
+      params: { _t: Date.now().toString() }
+    });
   }
 
   /** Admin — update a promotion level */
   updateLevel(id: string, data: Partial<PromotionLevel>): Observable<{ level: PromotionLevel; message: string }> {
     return this.http.put<{ level: PromotionLevel; message: string }>(`${this.apiUrl}/promotion/admin/levels/${id}`, data);
+  }
+
+  /** Admin — create a new promotion level */
+  createLevel(data: Partial<PromotionLevel>): Observable<{ level: PromotionLevel; message: string }> {
+    return this.http.post<{ level: PromotionLevel; message: string }>(`${this.apiUrl}/promotion/admin/levels`, data);
+  }
+
+  /** Admin — delete a promotion level */
+  deleteLevel(id: string): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.apiUrl}/promotion/admin/levels/${id}`);
+  }
+
+  /** Admin — reorder promotion levels */
+  reorderLevels(order: Array<{ id: string; rank: number }>): Observable<{ levels: PromotionLevel[]; message: string }> {
+    return this.http.put<{ levels: PromotionLevel[]; message: string }>(`${this.apiUrl}/promotion/admin/levels/reorder`, { order });
   }
 
   /** Check if current user is eligible for advancement */

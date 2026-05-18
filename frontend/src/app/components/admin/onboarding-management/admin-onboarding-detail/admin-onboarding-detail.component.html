@@ -81,10 +81,16 @@
 
               <div *ngIf="card.document; else notUploadedBlock">
                 <div class="d-flex align-items-center justify-content-between mb-2">
-                  <span [ngClass]="getStatusBadgeClass(card.document.status || 'pending')">
-                    <i [ngClass]="getStatusIcon(card.document.status || 'pending')" class="me-1"></i>
-                    {{ (card.document.status || 'pending') | titlecase }}
-                  </span>
+                  <div class="d-flex align-items-center gap-2">
+                    <span [ngClass]="getStatusBadgeClass(card.document.status || 'pending')">
+                      <i [ngClass]="getStatusIcon(card.document.status || 'pending')" class="me-1"></i>
+                      {{ (card.document.status || 'pending') | titlecase }}
+                    </span>
+                    <span class="badge bg-purple text-white"
+                          *ngIf="card.document.uploadedBy && card.document.uploadedBy._id !== detail.agent._id">
+                      <i class="bi bi-person-badge me-1"></i>Uploaded by Admin
+                    </span>
+                  </div>
                   <small class="text-muted">{{ formatDate(card.document.uploadedAt) }}</small>
                 </div>
 
@@ -117,6 +123,13 @@
                           (click)="openActionModal(card.document._id!, card.docType.name, card.document.status || 'pending', card.document.adminComment || '')">
                     <i class="bi bi-check-circle me-1"></i>Review
                   </button>
+                  <button class="btn btn-sm btn-outline-secondary"
+                          (click)="triggerUpload(card.docType._id!)"
+                          [disabled]="uploadLoading">
+                    <span *ngIf="uploadLoading && uploadingDocTypeId === card.docType._id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i class="bi bi-arrow-repeat me-1" *ngIf="!(uploadLoading && uploadingDocTypeId === card.docType._id)"></i>
+                    Replace
+                  </button>
                 </div>
 
                 <!-- Bank info display -->
@@ -146,6 +159,13 @@
                 <div class="text-center text-muted py-3">
                   <i class="bi bi-file-earmark-x" style="font-size: 2rem;"></i>
                   <p class="mb-0 mt-2">Document not uploaded yet</p>
+                  <button class="btn btn-sm btn-outline-primary mt-2"
+                          (click)="triggerUpload(card.docType._id!)"
+                          [disabled]="uploadLoading">
+                    <span *ngIf="uploadLoading && uploadingDocTypeId === card.docType._id" class="spinner-border spinner-border-sm me-1"></span>
+                    <i class="bi bi-upload me-1" *ngIf="!(uploadLoading && uploadingDocTypeId === card.docType._id)"></i>
+                    Upload on Behalf
+                  </button>
                 </div>
               </ng-template>
             </div>
@@ -210,3 +230,9 @@
   </div>
 </div>
 <div class="modal-backdrop fade" [class.show]="showPdfModal" *ngIf="showPdfModal"></div>
+
+<!-- Hidden file input for admin upload -->
+<input type="file" #adminFileInput
+       (change)="onAdminFileSelected($event)"
+       accept=".pdf,.jpg,.jpeg,.png"
+       style="display: none;">

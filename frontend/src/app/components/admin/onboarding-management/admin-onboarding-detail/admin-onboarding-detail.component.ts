@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../../../environments/environment';
 import { OnboardingHubService, AdminOnboardingAgentDetail, OnboardingDocument } from '../../../../services/onboarding-hub.service';
@@ -34,6 +34,11 @@ export class AdminOnboardingDetailComponent implements OnInit {
   bankInfoDocId = '';
   bankInfo: { routingNumber: string; accountNumber: string; accountType: string } | null = null;
   bankInfoLoading = false;
+
+  // Admin upload state
+  @ViewChild('adminFileInput') adminFileInput!: ElementRef<HTMLInputElement>;
+  uploadingDocTypeId = '';
+  uploadLoading = false;
 
   constructor(
     private onboardingHubService: OnboardingHubService,
@@ -227,6 +232,42 @@ export class AdminOnboardingDetailComponent implements OnInit {
         this.error = err.error?.message || 'Failed to load banking information';
         this.bankInfoLoading = false;
         this.bankInfoDocId = '';
+      }
+    });
+  }
+
+  // Admin upload on behalf of agent
+  triggerUpload(docTypeId: string): void {
+    this.uploadingDocTypeId = docTypeId;
+    this.adminFileInput.nativeElement.value = '';
+    this.adminFileInput.nativeElement.click();
+  }
+
+  onAdminFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length || !this.uploadingDocTypeId) return;
+
+    const file = input.files[0];
+    this.uploadLoading = true;
+    this.error = '';
+    this.success = '';
+
+    const formData = new FormData();
+    formData.append('docFile', file);
+    formData.append('docTypeId', this.uploadingDocTypeId);
+    formData.append('agentId', this.userId);
+
+    this.onboardingHubService.uploadDocument(formData).subscribe({
+      next: () => {
+        this.success = 'Document uploaded successfully on behalf of agent';
+        this.uploadLoading = false;
+        this.uploadingDocTypeId = '';
+        this.loadDetail();
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to upload document';
+        this.uploadLoading = false;
+        this.uploadingDocTypeId = '';
       }
     });
   }

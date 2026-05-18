@@ -1,0 +1,409 @@
+﻿node.exe : - Generating browser application bundles (phase: setup)...
+At C:\Program Files\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (- Generating br...hase: setup)... 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Γ£ö Browser application bundle generation complete.
+Γ£ö Browser application bundle generation complete.
+- Copying assets...
+Γ£ö Copying assets complete.
+- Generating index html...
+- Generating index html...
+1 rules skipped due to selector errors:
+  .form-floating>~label -> Did not expect successive traversals.
+Γ£ö Index html generation complete.
+
+Initial chunk files           | Names         |  Raw size | Estimated transfer size
+main.325ac042335549c9.js      | main          |   1.51 MB |               281.84 kB
+styles.08e37cc38ab61ad8.css   | styles        | 313.79 kB |                34.05 kB
+scripts.425520de70bbab43.js   | scripts       |  77.73 kB |                20.88 kB
+polyfills.c3b2196b20874c13.js | polyfills     |  34.01 kB |                11.07 kB
+runtime.4a2556dae8bcf5f5.js   | runtime       |   1.15 kB |               622 bytes
+
+                              | Initial total |   1.93 MB |               348.45 kB
+
+Build at: 2026-05-16T06:17:45.424Z - Hash: a98db899f75dfac3 - Time: 59990ms
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:139:65 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+139                        [src]="order.mockupUrl || order.product?.thumbnail" 
+class="rounded" style="width: 36px; height: 36px; object-fit: cover;">
+                                                                    ~~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:145:65 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+145                   <div class="fw-semibold small">{{ order.user?.name || 
+'Unknown' }}</div>
+                                                                    ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:146:85 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+146                   <div class="text-muted" style="font-size: 0.7rem;">{{ 
+order.user?.email }}</div>
+                                                                               
+         ~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:149:56 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+149                   <div class="small">{{ order.product?.name || 'Product' 
+}}</div>
+                                                           ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:150:88 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+150                   <div class="text-muted" style="font-size: 0.7rem;">{{ 
+order.product?.variantName }}</div>
+                                                                               
+            ~~~~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:152:86 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+152                 <td class="text-center" (click)="viewOrder(order)">{{ 
+order.product?.quantity || 1 }}</td>
+                                                                               
+          ~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:153:94 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+153                 <td class="text-end fw-semibold" 
+(click)="viewOrder(order)">${{ order.total?.toFixed(2) }}</td>
+                                                                               
+                  ~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:227:81 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+227                      [src]="selectedOrder!.mockupUrl || 
+selectedOrder!.product?.thumbnail"
+                                                                               
+     ~~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:230:71 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+230                   <h6 class="fw-bold mb-1">{{ selectedOrder!.product?.name 
+}}</h6>
+                                                                          ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:231:76 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+231                   <div class="text-muted small">{{ 
+selectedOrder!.product?.variantName }}</div>
+                                                                               
+~~~~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:232:81 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+232                   <div class="text-muted small">SKU: {{ 
+selectedOrder!.product?.sku }}</div>
+                                                                               
+     ~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:234:79 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+234                     <span class="fw-semibold">Qty: {{ 
+selectedOrder!.product?.quantity }}</span>
+                                                                               
+   ~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:236:55 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+236                     <span>${{ 
+selectedOrder!.product?.unitPrice?.toFixed(2) }}</span>
+                                                          ~~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:238:82 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+238                     <span class="fw-bold text-success">${{ 
+selectedOrder!.total?.toFixed(2) }}</span>
+                                                                               
+      ~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:258:62 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+258                   <div class="small">{{ selectedOrder!.user?.name }}</div>
+                                                                 ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:259:73 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+259                   <div class="small text-muted">{{ 
+selectedOrder!.user?.email }}</div>
+                                                                            
+~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:264:56 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+264                     {{ selectedOrder!.shippingAddress?.name }}<br>
+                                                           ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:265:56 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+265                     {{ selectedOrder!.shippingAddress?.address1 }}
+                                                           ~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: src/app/components/admin/printful-orders/printful-orders.component.htm
+l:266:115 - warning NG8107: The left side of this optional chain operation 
+does not include 'null' or 'undefined' in its type, therefore the '?.' 
+operator can be replaced with the '.' operator.
+
+266                     <span 
+*ngIf="selectedOrder!.shippingAddress?.address2"><br>{{ 
+selectedOrder!.shippingAddress?.address2 }}</span><br>
+                                                                               
+                                       ~~~~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/admin/printful-orders/printful-orders.component.html:267:56 
+- warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+267                     {{ selectedOrder!.shippingAddress?.city }}, {{ 
+selectedOrder!.shippingAddress?.state }} {{ 
+selectedOrder!.shippingAddress?.zip }}
+                                                           ~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: src/app/components/admin/printful-orders/printful-orders.component.htm
+l:267:100 - warning NG8107: The left side of this optional chain operation 
+does not include 'null' or 'undefined' in its type, therefore the '?.' 
+operator can be replaced with the '.' operator.
+
+267                     {{ selectedOrder!.shippingAddress?.city }}, {{ 
+selectedOrder!.shippingAddress?.state }} {{ 
+selectedOrder!.shippingAddress?.zip }}
+                                                                               
+                        ~~~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: src/app/components/admin/printful-orders/printful-orders.component.htm
+l:267:144 - warning NG8107: The left side of this optional chain operation 
+does not include 'null' or 'undefined' in its type, therefore the '?.' 
+operator can be replaced with the '.' operator.
+
+267                     {{ selectedOrder!.shippingAddress?.city }}, {{ 
+selectedOrder!.shippingAddress?.state }} {{ 
+selectedOrder!.shippingAddress?.zip }}
+                                                                               
+                                                                    ~~~
+
+  src/app/components/admin/printful-orders/printful-orders.component.ts:6:16
+    6   templateUrl: './printful-orders.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component PrintfulOrdersComponent.
+
+
+Warning: 
+src/app/components/business-cards/business-cards.component.html:421:65 - 
+warning NG8107: The left side of this optional chain operation does not 
+include 'null' or 'undefined' in its type, therefore the '?.' operator can be 
+replaced with the '.' operator.
+
+421                     <div class="fw-bold small">${{ order.total?.toFixed(2) 
+}}</div>
+                                                                    ~~~~~~~
+
+  src/app/components/business-cards/business-cards.component.ts:8:16
+    8   templateUrl: './business-cards.component.html',
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Error occurs in the template of component BusinessCardsComponent.
+
+
+

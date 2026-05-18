@@ -155,6 +155,15 @@ router.get('/summary', authenticate, async (req, res) => {
       .populate('agent', 'name email')
       .lean();
 
+    // Compute the most recent sync/import/update across all records
+    let lastSynced = null;
+    for (const r of records) {
+      const candidates = [r.lastCsvImportDate, r.lastSyncDate, r.updatedAt].filter(Boolean);
+      for (const d of candidates) {
+        if (!lastSynced || new Date(d) > new Date(lastSynced)) lastSynced = d;
+      }
+    }
+
     const summary = {
       totalAgents: records.length,
       notEnrolled: records.filter(r => r.enrollmentStatus === 'not_enrolled').length,
@@ -164,6 +173,7 @@ router.get('/summary', authenticate, async (req, res) => {
       averageProgress: records.length > 0
         ? Math.round(records.reduce((sum, r) => sum + (r.overallPercentComplete || 0), 0) / records.length)
         : 0,
+      lastSynced,
       agents: records.map(r => ({
         agentId: r.agent._id,
         agentName: r.agent.name,

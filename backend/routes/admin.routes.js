@@ -318,18 +318,12 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
   try {
     const { level } = req.body;
     
-    const validLevels = [
-      'associate',
-      'senior associate',
-      'manager',
-      'senior manager',
-      'regional executive',
-      'senior regional executive',
-      'national executive',
-      'senior national executive'
-    ];
+    // Dynamically load valid levels from the PromotionLevel collection
+    const PromotionLevel = require('../models/PromotionLevel');
+    const allLevels = await PromotionLevel.find({ isActive: true }).select('name').lean();
+    const validLevels = allLevels.map(l => l.name.toLowerCase());
     
-    if (!level || !validLevels.includes(level)) {
+    if (!level || !validLevels.includes(level.toLowerCase())) {
       return sendResponse(res, 400, { 
         message: 'Invalid level. Must be one of: ' + validLevels.join(', ') 
       });

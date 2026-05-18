@@ -1,10 +1,25 @@
 <div class="container-fluid py-4">
   <!-- Page header -->
-  <div class="d-flex align-items-center mb-4">
+  <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-      <h2 class="mb-0 fw-bold"><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Promotion Levels</h2>
-      <p class="text-muted mb-0 small">Configure promotion thresholds for Producer and Builder tracks.</p>
+      <h2 class="mb-0 fw-bold"><i class="bi bi-bar-chart-steps me-2 text-primary"></i>Promotion Management</h2>
+      <p class="text-muted mb-0 small">Add, edit, reorder, and manage promotion levels for all agents.</p>
     </div>
+    <button class="btn btn-primary" (click)="openAddModal()">
+      <i class="bi bi-plus-lg me-1"></i>Add New Level
+    </button>
+  </div>
+
+  <!-- Success alert -->
+  <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+    <button type="button" class="btn-close" (click)="success = ''"></button>
+  </div>
+
+  <!-- Error alert -->
+  <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+    <button type="button" class="btn-close" (click)="error = ''"></button>
   </div>
 
   <!-- Loading -->
@@ -13,110 +28,207 @@
     <p class="text-muted mt-2">Loading promotion levels...</p>
   </div>
 
-  <!-- Error -->
-  <div *ngIf="!loading && error" class="alert alert-danger">
-    <i class="bi bi-exclamation-circle me-1"></i>{{ error }}
+  <!-- Empty state -->
+  <div *ngIf="!loading && !error && levels.length === 0" class="text-center py-5">
+    <i class="bi bi-diagram-3 text-muted" style="font-size: 4rem;"></i>
+    <h5 class="mt-3 text-muted">No Promotion Levels</h5>
+    <p class="text-muted">Get started by adding your first promotion level.</p>
+    <button class="btn btn-primary" (click)="openAddModal()">
+      <i class="bi bi-plus-lg me-1"></i>Add First Level
+    </button>
   </div>
 
-  <!-- Levels Table -->
-  <div *ngIf="!loading && !error" class="table-responsive">
-    <table class="table table-bordered table-hover align-middle">
-      <thead class="table-light">
-        <tr>
-          <th style="width: 40px" class="text-center">#</th>
-          <th>Level Name</th>
-          <th class="text-center" style="width: 80px">Comm %</th>
-          <th colspan="2" class="text-center bg-primary bg-opacity-10">Producer Track</th>
-          <th colspan="3" class="text-center bg-success bg-opacity-10">Builder Track</th>
-          <th class="text-center" style="width: 70px">Skip</th>
-          <th class="text-center" style="width: 70px">Active</th>
-          <th style="width: 100px"></th>
-        </tr>
-        <tr class="small text-muted">
-          <th></th>
-          <th></th>
-          <th></th>
-          <th class="text-center bg-primary bg-opacity-10">Premium ($)</th>
-          <th class="text-center bg-primary bg-opacity-10">Window (days)</th>
-          <th class="text-center bg-success bg-opacity-10">Premium ($)</th>
-          <th class="text-center bg-success bg-opacity-10">Agents</th>
-          <th class="text-center bg-success bg-opacity-10">Window (days)</th>
-          <th></th>
-          <th></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let level of levels; let i = index">
-          <td class="text-center text-muted small">{{ level.rank }}</td>
-          <td class="fw-semibold">{{ formatLevel(level.name) }}</td>
-          <td class="text-center">
-            <input type="number" class="form-control form-control-sm text-center"
-                   [(ngModel)]="level.commissionPercent" min="0" max="200" style="width: 70px; margin: 0 auto">
-          </td>
-          <!-- Producer -->
-          <td>
-            <input type="number" class="form-control form-control-sm"
-                   [(ngModel)]="level.producerPremiumThreshold" min="0" style="width: 110px">
-          </td>
-          <td>
-            <input type="number" class="form-control form-control-sm text-center"
-                   [(ngModel)]="level.producerWindowDays" min="1" style="width: 70px; margin: 0 auto">
-          </td>
-          <!-- Builder -->
-          <td>
-            <input type="number" class="form-control form-control-sm"
-                   [(ngModel)]="level.builderPremiumThreshold" min="0" style="width: 110px">
-          </td>
-          <td>
-            <input type="number" class="form-control form-control-sm text-center"
-                   [(ngModel)]="level.builderAgentCountThreshold" min="0" style="width: 70px; margin: 0 auto">
-          </td>
-          <td>
-            <input type="number" class="form-control form-control-sm text-center"
-                   [(ngModel)]="level.builderWindowDays" min="1" style="width: 70px; margin: 0 auto">
-          </td>
-          <!-- Skip -->
-          <td class="text-center">
-            <div class="form-check d-flex justify-content-center mb-0">
-              <input class="form-check-input" type="checkbox" [(ngModel)]="level.canSkipTo">
+  <!-- Level cards list -->
+  <div *ngIf="!loading && !error && levels.length > 0">
+    <div class="card shadow-sm mb-3" *ngFor="let level of levels; let i = index"
+         [class.border-start]="true" [class.border-4]="true"
+         [class.border-primary]="level.isActive" [class.border-secondary]="!level.isActive"
+         [class.opacity-50]="!level.isActive">
+      <div class="card-body">
+        <div class="row align-items-center">
+          <!-- Reorder + Rank -->
+          <div class="col-auto">
+            <div class="d-flex flex-column align-items-center gap-1">
+              <button class="btn btn-sm btn-outline-secondary px-1 py-0" (click)="moveUp(i)" [disabled]="i === 0" title="Move Up">
+                <i class="bi bi-chevron-up"></i>
+              </button>
+              <span class="badge bg-light text-dark fw-bold">{{ i + 1 }}</span>
+              <button class="btn btn-sm btn-outline-secondary px-1 py-0" (click)="moveDown(i)" [disabled]="i === levels.length - 1" title="Move Down">
+                <i class="bi bi-chevron-down"></i>
+              </button>
             </div>
-          </td>
-          <!-- Active -->
-          <td class="text-center">
-            <div class="form-check d-flex justify-content-center mb-0">
-              <input class="form-check-input" type="checkbox" [(ngModel)]="level.isActive">
-            </div>
-          </td>
-          <!-- Save -->
-          <td class="text-center">
-            <button class="btn btn-sm btn-primary" (click)="saveLevel(level)" [disabled]="saving[level._id]">
-              <span *ngIf="saving[level._id]" class="spinner-border spinner-border-sm me-1" role="status"></span>
-              <i *ngIf="!saving[level._id]" class="bi bi-check-lg me-1"></i>Save
-            </button>
-            <div *ngIf="saveSuccess[level._id]" class="text-success small mt-1"><i class="bi bi-check-circle"></i> Saved</div>
-            <div *ngIf="saveError[level._id]" class="text-danger small mt-1">{{ saveError[level._id] }}</div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+          </div>
 
-  <!-- Skip requirements (editable per level) -->
-  <div *ngIf="!loading && !error && levels.length">
-    <h5 class="mt-4 mb-3 fw-semibold"><i class="bi bi-lightning-fill me-2 text-warning"></i>Skip-Level Requirements</h5>
-    <div *ngFor="let level of levels">
-      <div *ngIf="level.canSkipTo" class="card mb-2">
-        <div class="card-body py-2 d-flex align-items-center">
-          <span class="fw-semibold me-3" style="min-width:180px">{{ formatLevel(level.name) }}</span>
-          <input type="text" class="form-control form-control-sm" [(ngModel)]="level.skipRequirements"
-                 placeholder="Describe skip-level conditions...">
-          <button class="btn btn-sm btn-outline-primary ms-2" (click)="saveLevel(level)" [disabled]="saving[level._id]">
-            <i class="bi bi-check-lg"></i>
-          </button>
+          <!-- Level info -->
+          <div class="col">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <h5 class="mb-0 fw-bold">{{ formatLevel(level.name) }}</h5>
+              <span class="badge bg-primary">{{ level.commissionPercent }}% Commission</span>
+              <span *ngIf="!level.isActive" class="badge bg-secondary">Inactive</span>
+              <span *ngIf="level.canSkipTo" class="badge bg-warning text-dark">
+                <i class="bi bi-lightning-fill me-1"></i>Skip Eligible
+              </span>
+            </div>
+            <div class="row g-3 mt-1">
+              <!-- Producer Track -->
+              <div class="col-md-4">
+                <div class="small text-muted mb-1"><i class="bi bi-graph-up-arrow text-primary me-1"></i>Producer Track</div>
+                <div class="small">
+                  <strong>${{ level.producerPremiumThreshold | number }}</strong> premium in <strong>{{ level.producerWindowDays }}</strong> days
+                </div>
+              </div>
+              <!-- Builder Track -->
+              <div class="col-md-5">
+                <div class="small text-muted mb-1"><i class="bi bi-people-fill text-success me-1"></i>Builder Track</div>
+                <div class="small">
+                  <strong>${{ level.builderPremiumThreshold | number }}</strong> premium + <strong>{{ level.builderAgentCountThreshold }}</strong> agents in <strong>{{ level.builderWindowDays }}</strong> days
+                </div>
+              </div>
+              <!-- Skip config -->
+              <div class="col-md-3" *ngIf="level.canSkipTo">
+                <div class="small text-muted mb-1"><i class="bi bi-lightning text-warning me-1"></i>Skip Config</div>
+                <div class="small">{{ level.skipMultiplier || 1.4 }}× multiplier, {{ level.skipLegCapPercent || 50 }}% leg cap</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="col-auto">
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" (click)="openEditModal(level)" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger" (click)="deleteLevel(level)" [disabled]="deleting[level._id]" title="Delete">
+                <span *ngIf="deleting[level._id]" class="spinner-border spinner-border-sm"></span>
+                <i *ngIf="!deleting[level._id]" class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-    <p *ngIf="!hasSkipLevels()" class="text-muted small">No levels have skip-level enabled.</p>
   </div>
 </div>
+
+<!-- Add / Edit Level Modal -->
+<div class="modal fade" [class.show]="showAddModal || showEditModal" [style.display]="(showAddModal || showEditModal) ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi me-2" [class.bi-plus-circle]="showAddModal" [class.bi-pencil-square]="showEditModal"></i>
+          {{ showEditModal ? 'Edit Promotion Level' : 'Add New Promotion Level' }}
+        </h5>
+        <button type="button" class="btn-close" (click)="closeModal()"></button>
+      </div>
+      <div class="modal-body">
+        <div *ngIf="modalError" class="alert alert-danger py-2">
+          <i class="bi bi-exclamation-triangle me-1"></i>{{ modalError }}
+        </div>
+
+        <!-- Essential fields — always visible -->
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">Level Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" [(ngModel)]="editingLevel.name" placeholder="e.g. Senior Director">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Rank Position</label>
+            <input type="number" class="form-control" [(ngModel)]="editingLevel.rank" min="1">
+            <small class="text-muted">Order in hierarchy</small>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Commission %</label>
+            <input type="number" class="form-control" [(ngModel)]="editingLevel.commissionPercent" min="0" max="200">
+          </div>
+        </div>
+
+        <div class="row g-3 mt-2">
+          <div class="col-md-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" [(ngModel)]="editingLevel.isActive" id="modalActive">
+              <label class="form-check-label" for="modalActive">Active</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Configuration — collapsible -->
+        <div class="mt-4">
+          <button type="button" class="btn btn-sm btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
+                  (click)="showAdvanced = !showAdvanced">
+            <i class="bi" [class.bi-chevron-down]="!showAdvanced" [class.bi-chevron-up]="showAdvanced"></i>
+            {{ showAdvanced ? 'Hide' : 'Show' }} Advanced Configuration
+            <span class="badge bg-secondary ms-1">Promotion Thresholds &amp; Options</span>
+          </button>
+        </div>
+
+        <div *ngIf="showAdvanced" class="mt-3 pt-3 border-top">
+          <!-- Producer Track -->
+          <h6 class="fw-semibold text-primary"><i class="bi bi-graph-up me-1"></i>Producer Track Requirements</h6>
+          <p class="text-muted small mb-2">Individual sales targets needed to reach this level.</p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Premium Threshold ($)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.producerPremiumThreshold" min="0">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Rolling Window (days)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.producerWindowDays" min="1">
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- Builder Track -->
+          <h6 class="fw-semibold text-success"><i class="bi bi-people me-1"></i>Builder Track Requirements</h6>
+          <p class="text-muted small mb-2">Team leadership targets needed to reach this level.</p>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Premium Threshold ($)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderPremiumThreshold" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Agent Count</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderAgentCountThreshold" min="0">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Rolling Window (days)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderWindowDays" min="1">
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <!-- Skip-Level Options -->
+          <h6 class="fw-semibold text-warning"><i class="bi bi-lightning me-1"></i>Skip-Level Fast Track</h6>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="editingLevel.canSkipTo" id="modalSkip" (ngModelChange)="onSkipToggle()">
+                <label class="form-check-label" for="modalSkip">Allow Skip-To</label>
+              </div>
+            </div>
+            <div class="col-md-4" *ngIf="editingLevel.canSkipTo">
+              <label class="form-label">Skip Multiplier</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.skipMultiplier" min="1" step="0.1">
+              <small class="text-muted">× threshold to qualify</small>
+            </div>
+            <div class="col-md-4" *ngIf="editingLevel.canSkipTo">
+              <label class="form-label">Leg Cap %</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.skipLegCapPercent" min="1" max="100">
+              <small class="text-muted">Max % from one leg</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeModal()" [disabled]="modalLoading">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="submitModal()" [disabled]="modalLoading">
+          <span *ngIf="modalLoading" class="spinner-border spinner-border-sm me-1"></span>
+          {{ modalLoading ? 'Saving...' : (showEditModal ? 'Save Changes' : 'Create Level') }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="showAddModal || showEditModal" *ngIf="showAddModal || showEditModal"></div>

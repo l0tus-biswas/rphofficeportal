@@ -192,9 +192,10 @@ async function countProducingAgents(agentIds, windowDays, sinceDate, transferDat
 }
 
 // ============================================================================
-// Fast-Track multiplier: agents can skip one level if they hit this × target
+// Fast-Track: default multiplier (used if level doesn't specify one)
 // ============================================================================
-const FAST_TRACK_MULTIPLIER = 1.4;
+const DEFAULT_SKIP_MULTIPLIER = 1.4;
+const DEFAULT_LEG_CAP_PERCENT = 50;
 
 // ============================================================================
 // Helper: compute premium per direct leg (first-level children) for 50% cap
@@ -233,13 +234,14 @@ async function getPremiumByLeg(userId, windowDays, sinceDate) {
 }
 
 // ============================================================================
-// Helper: check if builder fast-track 50% leg cap is satisfied
-// No more than 50% of team premium may come from one leg or personal production
+// Helper: check if builder fast-track leg cap is satisfied
+// No more than legCapPercent% of team premium may come from one leg
 // ============================================================================
-function checkBuilderLegCap(legPremiums, totalPremium) {
+function checkBuilderLegCap(legPremiums, totalPremium, legCapPercent) {
   if (totalPremium <= 0) return true;
+  const cap = (legCapPercent || DEFAULT_LEG_CAP_PERCENT) / 100;
   for (const leg of legPremiums) {
-    if (leg.premium / totalPremium > 0.5) return false;
+    if (leg.premium / totalPremium > cap) return false;
   }
   return true;
 }
@@ -411,24 +413,29 @@ router.get('/tracker', authenticate, async (req, res) => {
     const promotionReady = producerMet || builderMet;
 
     // ---- Fast-Track Skip Logic ----
-    // Producer: skip one level if premium >= 1.4× the skip-target level's threshold
-    // Builder: skip one level if team premium >= 1.4× skip-target's threshold (with 50% leg cap)
+    // Producer: skip one level if premium >= multiplier × the skip-target level's threshold
+    // Builder: skip one level if team premium >= multiplier × skip-target's threshold (with leg cap)
     let fastTrack = { eligible: false };
     const skipTargetIdx = resolvedIdx + 2; // skip one level ahead
     if (!isMaxLevel && skipTargetIdx < levels.length) {
       const skipTarget = levels[skipTargetIdx];
       if (skipTarget.canSkipTo || next.canSkipTo) {
-        const producerSkipThreshold = skipTarget.producerPremiumThreshold * FAST_TRACK_MULTIPLIER;
-        const builderSkipThreshold = skipTarget.builderPremiumThreshold * FAST_TRACK_MULTIPLIER;
+        // Use per-level config or defaults
+        const skipLevel = skipTarget.canSkipTo ? skipTarget : next;
+        const multiplier = skipLevel.skipMultiplier || DEFAULT_SKIP_MULTIPLIER;
+        const legCapPercent = skipLevel.skipLegCapPercent || DEFAULT_LEG_CAP_PERCENT;
+
+        const producerSkipThreshold = skipTarget.producerPremiumThreshold * multiplier;
+        const builderSkipThreshold = skipTarget.builderPremiumThreshold * multiplier;
 
         const producerFastTrack = producerPremium >= producerSkipThreshold;
 
-        // Builder fast-track: 1.4× team premium AND 50% leg cap
+        // Builder fast-track: multiplier × team premium AND leg cap
         let builderFastTrack = false;
         if (builderPremium >= builderSkipThreshold) {
           const legPremiums = await getPremiumByLeg(userId, builderWindow, promotedAt);
           const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow, promotedAt));
-          builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium);
+          builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium, legCapPercent);
         }
 
         if (producerFastTrack || builderFastTrack) {
@@ -561,6 +568,45 @@ router.get('/admin/levels', authenticate, authorize('admin'), async (req, res) =
 });
 
 // ============================================================================
+// @route   PUT /api/promotion/admin/levels/reorder
+// @desc    Admin — reorder promotion levels (bulk rank update)
+// @access  Admin only
+// ============================================================================
+router.put('/admin/levels/reorder', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { order } = req.body; // Array of { id, rank }
+    if (!Array.isArray(order) || order.length === 0) {
+      return sendResponse(res, 400, { message: 'Order array is required' });
+    }
+
+    // Two-pass reorder to avoid unique constraint conflicts on rank:
+    // Pass 1: set all ranks to negative temporary values
+    const tempOps = order.map((item, i) => ({
+      updateOne: {
+        filter: { _id: item.id },
+        update: { $set: { rank: -(i + 1) } }
+      }
+    }));
+    await PromotionLevel.bulkWrite(tempOps);
+
+    // Pass 2: set final positive rank values
+    const finalOps = order.map(item => ({
+      updateOne: {
+        filter: { _id: item.id },
+        update: { $set: { rank: item.rank } }
+      }
+    }));
+    await PromotionLevel.bulkWrite(finalOps);
+
+    const levels = await PromotionLevel.find().sort({ rank: 1 }).lean();
+
+    return sendResponse(res, 200, { levels, message: 'Levels reordered.' });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ============================================================================
 // @route   PUT /api/promotion/admin/levels/:id
 // @desc    Admin — update a promotion level's thresholds
 // @access  Admin only
@@ -568,15 +614,17 @@ router.get('/admin/levels', authenticate, authorize('admin'), async (req, res) =
 router.put('/admin/levels/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const allowed = [
-      'commissionPercent',
+      'name', 'commissionPercent',
       'producerPremiumThreshold', 'producerWindowDays',
       'builderPremiumThreshold', 'builderAgentCountThreshold', 'builderWindowDays',
-      'canSkipTo', 'skipRequirements', 'isActive'
+      'canSkipTo', 'skipMultiplier', 'skipLegCapPercent', 'isActive'
     ];
     const updates = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
-        updates[key] = req.body[key];
+        updates[key] = key === 'name' && typeof req.body[key] === 'string'
+          ? req.body[key].trim().toLowerCase()
+          : req.body[key];
       }
     }
 
@@ -587,6 +635,92 @@ router.put('/admin/levels/:id', authenticate, authorize('admin'), async (req, re
     if (!level) return errorResponse(res, new Error('Promotion level not found'), 404);
 
     return sendResponse(res, 200, { level, message: 'Promotion level updated.' });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ============================================================================
+// @route   POST /api/promotion/admin/levels
+// @desc    Admin — create a new promotion level
+// @access  Admin only
+// ============================================================================
+router.post('/admin/levels', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { name, rank, commissionPercent, producerPremiumThreshold, producerWindowDays,
+            builderPremiumThreshold, builderAgentCountThreshold, builderWindowDays,
+            canSkipTo, skipMultiplier, skipLegCapPercent, isActive } = req.body;
+
+    if (!name || !name.trim()) {
+      return sendResponse(res, 400, { message: 'Level name is required' });
+    }
+    if (rank == null || rank < 1) {
+      return sendResponse(res, 400, { message: 'Rank must be a positive number' });
+    }
+
+    // Shift existing ranks up if inserting at/after this rank
+    await PromotionLevel.updateMany(
+      { rank: { $gte: rank } },
+      { $inc: { rank: 1 } }
+    );
+
+    const level = await PromotionLevel.create({
+      name: name.trim().toLowerCase(),
+      rank,
+      commissionPercent: commissionPercent || 0,
+      producerPremiumThreshold: producerPremiumThreshold || 0,
+      producerWindowDays: producerWindowDays || 30,
+      builderPremiumThreshold: builderPremiumThreshold || 0,
+      builderAgentCountThreshold: builderAgentCountThreshold || 0,
+      builderWindowDays: builderWindowDays || 60,
+      canSkipTo: canSkipTo || false,
+      skipMultiplier: skipMultiplier || 1.4,
+      skipLegCapPercent: skipLegCapPercent || 50,
+      isActive: isActive !== false
+    });
+
+    return sendResponse(res, 201, { level, message: 'Promotion level created.' });
+  } catch (err) {
+    if (err.code === 11000) {
+      return sendResponse(res, 400, { message: 'A level with that name or rank already exists.' });
+    }
+    return errorResponse(res, err);
+  }
+});
+
+// ============================================================================
+// @route   DELETE /api/promotion/admin/levels/:id
+// @desc    Admin — delete a promotion level (only if no agents are using it)
+// @access  Admin only
+// ============================================================================
+router.delete('/admin/levels/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const level = await PromotionLevel.findById(req.params.id);
+    if (!level) return sendResponse(res, 404, { message: 'Promotion level not found' });
+
+    // Check if any agents are currently at this level
+    const agentCount = await User.countDocuments({
+      role: 'agent',
+      level: { $regex: new RegExp(`^${level.name}$`, 'i') },
+      deletedAt: null
+    });
+
+    if (agentCount > 0) {
+      return sendResponse(res, 400, {
+        message: `Cannot delete: ${agentCount} agent(s) currently at this level. Reassign them first.`
+      });
+    }
+
+    const deletedRank = level.rank;
+    await level.deleteOne();
+
+    // Shift ranks down to fill the gap
+    await PromotionLevel.updateMany(
+      { rank: { $gt: deletedRank } },
+      { $inc: { rank: -1 } }
+    );
+
+    return sendResponse(res, 200, { message: 'Promotion level deleted.' });
   } catch (err) {
     return errorResponse(res, err);
   }

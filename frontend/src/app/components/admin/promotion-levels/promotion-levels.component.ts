@@ -10,6 +10,21 @@ export class PromotionLevelsComponent implements OnInit {
   levels: PromotionLevel[] = [];
   loading = true;
   error = '';
+  success = '';
+
+  // Modal state (shared for add/edit)
+  showAddModal = false;
+  showEditModal = false;
+  showAdvanced = false;
+  editingLevel: Partial<PromotionLevel> = {};
+  editingLevelId = '';
+  modalLoading = false;
+  modalError = '';
+
+  // Delete state
+  deleting: { [id: string]: boolean } = {};
+
+  // Legacy compatibility
   saving: { [id: string]: boolean } = {};
   saveSuccess: { [id: string]: boolean } = {};
   saveError: { [id: string]: string } = {};
@@ -35,37 +50,146 @@ export class PromotionLevelsComponent implements OnInit {
     });
   }
 
-  saveLevel(level: PromotionLevel): void {
-    this.saving[level._id] = true;
-    this.saveSuccess[level._id] = false;
-    this.saveError[level._id] = '';
-
-    const payload = {
-      commissionPercent: level.commissionPercent,
-      producerPremiumThreshold: level.producerPremiumThreshold,
-      producerWindowDays: level.producerWindowDays,
-      builderPremiumThreshold: level.builderPremiumThreshold,
-      builderAgentCountThreshold: level.builderAgentCountThreshold,
-      builderWindowDays: level.builderWindowDays,
-      canSkipTo: level.canSkipTo,
-      skipRequirements: level.skipRequirements,
-      isActive: level.isActive
+  // --- Add Level ---
+  openAddModal(): void {
+    const nextRank = this.levels.length > 0
+      ? Math.max(...this.levels.map(l => l.rank)) + 1
+      : 1;
+    this.showAdvanced = false;
+    this.editingLevel = {
+      name: '',
+      rank: nextRank,
+      commissionPercent: 0,
+      producerPremiumThreshold: 0,
+      producerWindowDays: 30,
+      builderPremiumThreshold: 0,
+      builderAgentCountThreshold: 0,
+      builderWindowDays: 60,
+      canSkipTo: false,
+      skipMultiplier: 1.4,
+      skipLegCapPercent: 50,
+      isActive: true
     };
+    this.editingLevelId = '';
+    this.modalError = '';
+    this.showAddModal = true;
+    this.showEditModal = false;
+  }
 
-    this.promotionService.updateLevel(level._id, payload).subscribe({
-      next: (res: any) => {
-        const updated = (res.data || res).level;
-        if (updated) {
-          const idx = this.levels.findIndex(l => l._id === level._id);
-          if (idx >= 0) this.levels[idx] = updated;
+  // --- Edit Level ---
+  openEditModal(level: PromotionLevel): void {
+    this.editingLevel = {
+      ...level,
+      skipMultiplier: level.skipMultiplier || 1.4,
+      skipLegCapPercent: level.skipLegCapPercent || 50
+    };
+    this.editingLevelId = level._id;
+    this.modalError = '';
+    this.showAdvanced = true;
+    this.showEditModal = true;
+    this.showAddModal = false;
+  }
+
+  onSkipToggle(): void {
+    if (this.editingLevel.canSkipTo) {
+      if (!this.editingLevel.skipMultiplier) this.editingLevel.skipMultiplier = 1.4;
+      if (!this.editingLevel.skipLegCapPercent) this.editingLevel.skipLegCapPercent = 50;
+    }
+  }
+
+  closeModal(): void {
+    this.showAddModal = false;
+    this.showEditModal = false;
+    this.modalError = '';
+    this.modalLoading = false;
+  }
+
+  submitModal(): void {
+    if (!this.editingLevel.name?.trim()) {
+      this.modalError = 'Level name is required.';
+      return;
+    }
+    this.modalLoading = true;
+    this.modalError = '';
+
+    if (this.showEditModal && this.editingLevelId) {
+      // Update existing
+      this.promotionService.updateLevel(this.editingLevelId, this.editingLevel).subscribe({
+        next: () => {
+          this.modalLoading = false;
+          this.closeModal();
+          this.success = 'Promotion level updated successfully.';
+          setTimeout(() => this.success = '', 3000);
+          this.loadLevels();
+        },
+        error: (err) => {
+          this.modalLoading = false;
+          this.modalError = err?.error?.message || err?.error?.data?.message || 'Failed to update level.';
         }
-        this.saving[level._id] = false;
-        this.saveSuccess[level._id] = true;
-        setTimeout(() => this.saveSuccess[level._id] = false, 2500);
+      });
+    } else {
+      // Create new
+      this.promotionService.createLevel(this.editingLevel).subscribe({
+        next: () => {
+          this.modalLoading = false;
+          this.closeModal();
+          this.success = 'Promotion level created successfully.';
+          setTimeout(() => this.success = '', 3000);
+          this.loadLevels();
+        },
+        error: (err) => {
+          this.modalLoading = false;
+          this.modalError = err?.error?.message || err?.error?.data?.message || 'Failed to create level.';
+        }
+      });
+    }
+  }
+
+  // --- Delete Level ---
+  deleteLevel(level: PromotionLevel): void {
+    if (!confirm(`Are you sure you want to delete "${this.formatLevel(level.name)}"?\n\nThis cannot be undone.`)) {
+      return;
+    }
+    this.deleting[level._id] = true;
+
+    this.promotionService.deleteLevel(level._id).subscribe({
+      next: (res: any) => {
+        this.deleting[level._id] = false;
+        this.success = (res.data || res).message || 'Level deleted.';
+        setTimeout(() => this.success = '', 3000);
+        this.loadLevels();
       },
       error: (err) => {
-        this.saving[level._id] = false;
-        this.saveError[level._id] = err?.error?.message || 'Save failed.';
+        this.deleting[level._id] = false;
+        this.error = err?.error?.message || err?.error?.data?.message || 'Failed to delete level.';
+        setTimeout(() => this.error = '', 5000);
+      }
+    });
+  }
+
+  // --- Reorder ---
+  moveUp(index: number): void {
+    if (index <= 0) return;
+    this.swapAndReorder(index, index - 1);
+  }
+
+  moveDown(index: number): void {
+    if (index >= this.levels.length - 1) return;
+    this.swapAndReorder(index, index + 1);
+  }
+
+  private swapAndReorder(fromIdx: number, toIdx: number): void {
+    const temp = this.levels[fromIdx];
+    this.levels[fromIdx] = this.levels[toIdx];
+    this.levels[toIdx] = temp;
+
+    const order = this.levels.map((l, i) => ({ id: l._id, rank: i + 1 }));
+    this.promotionService.reorderLevels(order).subscribe({
+      next: (res: any) => {
+        this.levels = (res.data || res).levels || this.levels;
+      },
+      error: () => {
+        this.loadLevels();
       }
     });
   }
