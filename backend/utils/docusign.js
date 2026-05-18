@@ -398,7 +398,7 @@ function createSignerTabs(application) {
   const licensingStatus = application.licensingStatus || {};
   
   // Helper function to add text tab using the mapping
-  // Skips tabs with empty/null values to avoid DocuSign 400 errors on required fields
+  // Sends a space for empty values to clear template placeholder text
   const addTextTab = (semanticName, value, locked = true) => {
     const tabLabel = TEXT_TAB_LABELS[semanticName];
     if (!tabLabel) {
@@ -406,10 +406,9 @@ function createSignerTabs(application) {
       return;
     }
     const strValue = (value !== undefined && value !== null) ? String(value).trim() : '';
-    if (!strValue) return; // Don't send empty values for required template fields
     const tab = new docusign.Text();
     tab.tabLabel = tabLabel;
-    tab.value = strValue;
+    tab.value = strValue || ' '; // Space clears placeholder without leaving template default visible
     tab.locked = locked ? 'true' : 'false';
     textTabs.push(tab);
   };
