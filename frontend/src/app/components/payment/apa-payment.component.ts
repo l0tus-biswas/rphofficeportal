@@ -51,7 +51,7 @@ export class ApaPaymentComponent implements OnInit {
   }
 
   getLogoUrl(): string {
-    return this.branding.appLogo ? `${environment.baseUrl}${this.branding.appLogo}` : '';
+    return this.branding.appLogo || '';
   }
 
   initializeForm(): void {

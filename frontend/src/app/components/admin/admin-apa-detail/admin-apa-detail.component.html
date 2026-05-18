@@ -344,20 +344,24 @@
           <h6 class="mt-3">Payment</h6>
           <table class="table table-sm">
             <tr>
-              <th>Onboarding Fee:</th>
-              <td>${{ application.payment.onboardingFee }}</td>
+              <th>Setup Fee:</th>
+              <td>${{ application.payment.onboardingFeeAmount }}</td>
             </tr>
             <tr>
               <th>Monthly Fee:</th>
-              <td>${{ application.payment.monthlyFee }}</td>
+              <td>${{ application.payment.monthlyFeeAmount }}</td>
             </tr>
             <tr>
-              <th>Onboarding Fee Waived:</th>
+              <th>Setup Fee Waived:</th>
               <td>{{ application.payment.onboardingFeeWaived ? 'Yes' : 'No' }}</td>
             </tr>
             <tr>
+              <th>Setup Fee Paid:</th>
+              <td>{{ application.payment.onboardingFeePaid || application.payment.paymentStatus === 'completed' ? 'Yes' : 'No' }}</td>
+            </tr>
+            <tr>
               <th>Payment Date:</th>
-              <td>{{ application.payment.paymentDate ? (application.payment.paymentDate | date:'short') : 'Not yet paid' }}</td>
+              <td>{{ (application.payment.paidAt || application.payment.paymentDate) ? ((application.payment.paidAt || application.payment.paymentDate) | date:'short') : 'Not yet paid' }}</td>
             </tr>
           </table>
         </div>

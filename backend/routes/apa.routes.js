@@ -1098,9 +1098,9 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
     const monthlyFee = 20;
     const onboardingFeeWaived = true;
 
-    // Update payment info (mock)
-    application.payment.onboardingFee = onboardingFee;
-    application.payment.monthlyFee = monthlyFee;
+    // Update payment info
+    application.payment.onboardingFeeAmount = onboardingFee;
+    application.payment.monthlyFeeAmount = monthlyFee;
     application.payment.onboardingFeeWaived = onboardingFeeWaived;
     application.payment.onboardingFeePaid = true;
     application.payment.monthlyFeeAuthorized = true;
