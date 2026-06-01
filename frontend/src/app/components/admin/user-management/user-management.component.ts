@@ -106,18 +106,40 @@ export class UserManagementComponent implements OnInit {
     if (!this.selectedUser) return;
     
     this.loading = true;
-    this.adminService.updateUser(this.selectedUser._id, this.editForm).subscribe({
-      next: (response) => {
-        this.success = 'User updated successfully!';
-        this.loadUsers();
-        this.closeEditModal();
-        setTimeout(() => this.success = '', 3000);
-      },
-      error: (error) => {
-        this.error = error.error?.message || 'Failed to update user';
-        this.loading = false;
-      }
-    });
+
+    // Handle billing exempt change separately via dedicated endpoint
+    const billingChanged = this.editForm.billingExempt !== this.selectedUser.billingExempt;
+    
+    const saveMain = () => {
+      this.adminService.updateUser(this.selectedUser._id, this.editForm).subscribe({
+        next: (response) => {
+          this.success = 'User updated successfully!';
+          this.loadUsers();
+          this.closeEditModal();
+          setTimeout(() => this.success = '', 3000);
+        },
+        error: (error) => {
+          this.error = error.error?.message || 'Failed to update user';
+          this.loading = false;
+        }
+      });
+    };
+
+    if (billingChanged) {
+      this.adminService.setBillingExempt(
+        this.selectedUser._id,
+        this.editForm.billingExempt,
+        this.editForm.billingExemptReason || ''
+      ).subscribe({
+        next: () => saveMain(),
+        error: (error) => {
+          this.error = error.error?.message || 'Failed to update billing status';
+          this.loading = false;
+        }
+      });
+    } else {
+      saveMain();
+    }
   }
 
   toggleUserStatus(user: any): void {
@@ -134,6 +156,25 @@ export class UserManagementComponent implements OnInit {
       error: (error) => {
         this.error = error.error?.message || `Failed to ${action} user`;
         this.loading = false;
+      }
+    });
+  }
+
+  toggleBillingExempt(user: any): void {
+    const newStatus = !user.billingExempt;
+    const action = newStatus ? 'grant Free Access to' : 'remove Free Access from';
+    if (!confirm(`Are you sure you want to ${action} ${user.name}?\n\nFree Access users retain full platform access without setup fees or monthly charges.`)) return;
+
+    this.adminService.setBillingExempt(user._id, newStatus, '').subscribe({
+      next: () => {
+        this.success = newStatus
+          ? `${user.name} now has Free Access (no billing)`
+          : `${user.name} billing restored to normal`;
+        this.loadUsers();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (error) => {
+        this.error = error.error?.message || 'Failed to update billing status';
       }
     });
   }

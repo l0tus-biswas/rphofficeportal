@@ -18,7 +18,43 @@ const { cancelSubscription } = require('../utils/stripe');
 const ACAClientRecord = require('../models/ACAClientRecord');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
 const { ONBOARDING_ROOT } = require('../utils/storage');
+
+// Multer config for welcome message media uploads (image/PDF)
+const welcomeMediaStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/welcome');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `welcome-${file.fieldname}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const welcomeMediaUpload = multer({
+  storage: welcomeMediaStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: function (req, file, cb) {
+    if (file.fieldname === 'image') {
+      const allowedTypes = /jpeg|jpg|png|gif|webp/;
+      const extOk = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimeOk = allowedTypes.test(file.mimetype);
+      if (mimeOk && extOk) return cb(null, true);
+      return cb(new Error('Only image files (jpg, png, gif, webp) are allowed'));
+    }
+    if (file.fieldname === 'pdf') {
+      if (file.mimetype === 'application/pdf') return cb(null, true);
+      return cb(new Error('Only PDF files are allowed'));
+    }
+    cb(new Error('Unexpected field'));
+  }
+});
 
 const SystemConfig = require('../models/SystemConfig');
 
@@ -223,6 +259,39 @@ router.put('/users/:userId', validateRequest(schemas.updateUser), logAction('UPD
     
     sendResponse(res, 200, {
       message: 'User updated successfully',
+      user: await User.findById(user._id).select('-password')
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/users/:userId/billing-exempt
+// @desc    Set or clear billing exempt status for a user
+// @access  Private (Admin only)
+router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), async (req, res) => {
+  try {
+    const { exempt, reason } = req.body;
+    const user = await User.findById(req.params.userId);
+
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    user.billingExempt = !!exempt;
+    user.billingExemptReason = exempt ? (reason || null) : null;
+    user.billingExemptSetBy = req.user._id;
+    user.billingExemptSetAt = new Date();
+
+    // If exempting, also grant payment access so they can use the platform
+    if (exempt) {
+      user.paymentAccessEnabled = true;
+    }
+
+    await user.save();
+
+    sendResponse(res, 200, {
+      message: exempt ? 'User marked as billing exempt' : 'Billing exempt status removed',
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {
@@ -798,10 +867,13 @@ router.get('/payments', async (req, res) => {
     const userId = req.query.userId;
     const search = req.query.search;
 
+    const includeDeleted = req.query.includeDeleted === 'true';
+
     const filter = {};
     if (type) filter.type = type;
     if (status) filter.status = status;
     if (userId) filter.user = userId;
+    if (!includeDeleted) filter.deletedAt = null;
 
     // Search by user name or email
     if (search && !userId) {
@@ -815,14 +887,21 @@ router.get('/payments', async (req, res) => {
     }
 
     const query = Payment.find(filter)
-      .populate('user', 'name email role')
+      .populate('user', 'name email role deletedAt')
       .sort('-createdAt');
 
-    const payments = await paginate(query, page, limit);
-    const total = await Payment.countDocuments(filter);
+    let payments = await paginate(query, page, limit);
+    // Exclude orphaned payments (user deleted or removed) unless includeDeleted
+    if (!includeDeleted) {
+      payments = payments.filter(p => p.user && !p.user.deletedAt);
+    }
+    const total = payments.length;
 
-    // Calculate stats
+    // Calculate stats (exclude soft-deleted payments and orphaned user refs)
     const stats = await Payment.aggregate([
+      { $match: { deletedAt: null } },
+      { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userDoc' } },
+      { $match: { 'userDoc.0': { $exists: true }, 'userDoc.0.deletedAt': null } },
       { $group: {
         _id: '$status',
         count: { $sum: 1 },
@@ -853,19 +932,28 @@ router.get('/subscriptions', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const status = req.query.status;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
     const filter = {};
     if (status) filter.status = status;
+    if (!includeDeleted) filter.deletedAt = null;
 
     const query = Subscription.find(filter)
-      .populate('user', 'name email role paymentAccessEnabled')
+      .populate('user', 'name email role paymentAccessEnabled deletedAt')
       .sort('-createdAt');
 
-    const subscriptions = await paginate(query, page, limit);
-    const total = await Subscription.countDocuments(filter);
+    let subscriptions = await paginate(query, page, limit);
+    // Exclude orphaned subscriptions (user deleted or removed) unless includeDeleted
+    if (!includeDeleted) {
+      subscriptions = subscriptions.filter(s => s.user && !s.user.deletedAt);
+    }
+    const total = subscriptions.length;
 
-    // Calculate stats
+    // Calculate stats (exclude soft-deleted subscriptions and orphaned user refs)
     const stats = await Subscription.aggregate([
+      { $match: { deletedAt: null } },
+      { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userDoc' } },
+      { $match: { 'userDoc.0': { $exists: true }, 'userDoc.0.deletedAt': null } },
       { $group: {
         _id: '$status',
         count: { $sum: 1 }
@@ -1114,6 +1202,118 @@ router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, r
       message: `${agent.name} transferred to ${newUpline.name} successfully`,
       agent: await User.findById(agent._id).select('-password').populate('referredBy', 'name email')
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/welcome-message
+// @desc    Get current welcome message configuration
+// @access  Private (Admin only)
+router.get('/welcome-message', async (req, res) => {
+  try {
+    const config = await SystemConfig.findOne({ key: 'welcome_message' });
+    sendResponse(res, 200, {
+      config: config ? config.value : {
+        enabled: false,
+        title: '',
+        message: '',
+        videoUrl: '',
+        imageUrl: '',
+        pdfUrl: '',
+        displayMode: 'until_dismissed',
+        startDate: null,
+        endDate: null
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/welcome-message
+// @desc    Update the welcome message configuration
+// @access  Private (Admin only)
+router.put('/welcome-message', logAction('UPDATE_WELCOME_MESSAGE'), async (req, res) => {
+  try {
+    const { enabled, title, message, videoUrl, imageUrl, pdfUrl, displayMode, startDate, endDate } = req.body;
+
+    const allowedModes = ['first_login', 'until_dismissed', 'date_range'];
+    const mode = allowedModes.includes(displayMode) ? displayMode : 'until_dismissed';
+
+    const config = await SystemConfig.findOneAndUpdate(
+      { key: 'welcome_message' },
+      {
+        key: 'welcome_message',
+        value: {
+          enabled: !!enabled,
+          title: title || '',
+          message: message || '',
+          videoUrl: videoUrl || '',
+          imageUrl: imageUrl || '',
+          pdfUrl: pdfUrl || '',
+          displayMode: mode,
+          startDate: startDate || null,
+          endDate: endDate || null,
+          lastConfiguredAt: new Date()
+        },
+        category: 'general',
+        updatedBy: req.user._id
+      },
+      { upsert: true, new: true }
+    );
+
+    sendResponse(res, 200, { message: 'Welcome message updated', config: config.value });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/welcome-message/upload
+// @desc    Upload image or PDF for welcome message
+// @access  Private (Admin only)
+router.post('/welcome-message/upload', welcomeMediaUpload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'pdf', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    const result = {};
+    if (req.files && req.files.image && req.files.image[0]) {
+      result.imageUrl = `/uploads/welcome/${req.files.image[0].filename}`;
+    }
+    if (req.files && req.files.pdf && req.files.pdf[0]) {
+      result.pdfUrl = `/uploads/welcome/${req.files.pdf[0].filename}`;
+    }
+
+    // Update the config with the new file URLs
+    if (result.imageUrl || result.pdfUrl) {
+      const config = await SystemConfig.findOne({ key: 'welcome_message' });
+      if (config && config.value) {
+        const update = { ...config.value };
+        if (result.imageUrl) update.imageUrl = result.imageUrl;
+        if (result.pdfUrl) update.pdfUrl = result.pdfUrl;
+        config.value = update;
+        config.updatedBy = req.user._id;
+        await config.save();
+      }
+    }
+
+    sendResponse(res, 200, { message: 'File(s) uploaded', ...result });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/welcome-message/reset-users
+// @desc    Reset all users' welcomeMessageSeenAt so they see it again
+// @access  Private (Admin only)
+router.post('/welcome-message/reset-users', logAction('RESET_WELCOME_MESSAGE'), async (req, res) => {
+  try {
+    const result = await User.updateMany(
+      { welcomeMessageSeenAt: { $ne: null } },
+      { $set: { welcomeMessageSeenAt: null } }
+    );
+    sendResponse(res, 200, { message: `Reset welcome message for ${result.modifiedCount} users` });
   } catch (error) {
     errorResponse(res, error);
   }

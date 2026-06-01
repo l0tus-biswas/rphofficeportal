@@ -169,6 +169,21 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
+
+    # Socket.IO WebSocket proxy (required for real-time broadcasts/notifications)
+    location /socket.io/ {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
 }
 ```
 
@@ -193,6 +208,12 @@ server {
 - Verify webhook URLs are publicly accessible
 - Check webhook secrets match
 - Review webhook logs in respective dashboards
+
+**Real-time broadcasts/notifications not working:**
+- Verify `/socket.io/` nginx proxy location is configured (required for WebSocket)
+- Check that `proxy_read_timeout` is set high (86400) to keep connections alive
+- Confirm backend logs show "Socket authenticated" when agents log in
+- In Plesk: add the `/socket.io/` location block under Additional nginx directives
 
 ### Scaling
 

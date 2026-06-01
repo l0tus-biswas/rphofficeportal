@@ -68,6 +68,7 @@ import { PromotionTrackerComponent } from './components/dashboard/promotion-trac
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
+import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 
 // Pipes
@@ -133,6 +134,7 @@ import { SafePipe } from './pipes/safe.pipe';
     PromotionLevelsComponent,
     MyTeamComponent,
     ExamfxProgressComponent,
+    WelcomeMessageComponent,
     NotFoundComponent
   ],
   imports: [

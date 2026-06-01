@@ -26,8 +26,15 @@
           <i class="bi bi-person me-1"></i>{{ currentBroadcast.postedBy || 'Admin' }}
         </span>
         <span class="metadata-item">
-          <i class="bi bi-calendar me-1"></i>{{ currentBroadcast.createdAt | date:'short' }}
+          <i class="bi bi-calendar me-1"></i>{{ currentBroadcast.createdAt | date:'MMM d, y h:mm a' }}
         </span>
+      </div>
+
+      <!-- Link (if available) - shown directly on popup -->
+      <div *ngIf="currentBroadcast.link" class="popup-link">
+        <a [href]="currentBroadcast.link" target="_blank" rel="noopener noreferrer" class="btn btn-link-action">
+          <i class="bi bi-link-45deg me-1"></i>Open Link
+        </a>
       </div>
 
       <!-- Action Buttons -->

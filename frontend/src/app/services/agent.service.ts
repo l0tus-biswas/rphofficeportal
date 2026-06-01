@@ -86,4 +86,13 @@ export class AgentService {
   getReferralLink(): Observable<any> {
     return this.http.get(`${this.apiUrl}/agent/referral-link`, this.getHeaders());
   }
+
+  // Welcome Message
+  getWelcomeMessage(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/agent/welcome-message`, this.getHeaders());
+  }
+
+  dismissWelcomeMessage(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/agent/welcome-message/dismiss`, {}, this.getHeaders());
+  }
 }

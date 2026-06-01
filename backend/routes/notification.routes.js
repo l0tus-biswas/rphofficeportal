@@ -99,6 +99,10 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
     if (targetRoles && Array.isArray(targetRoles) && targetRoles.length > 0) {
       filter.role = { $in: targetRoles };
     }
+    // Only notify users who existed when the broadcast was created
+    if (broadcastRecord) {
+      filter.createdAt = { $lte: broadcastRecord.createdAt };
+    }
 
     const users = await User.find(filter).select('_id').lean();
     let sentCount = 0;
@@ -130,6 +134,19 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
       broadcastRecord.sentCount = sentCount;
       broadcastRecord.emailsSent = emailsSent;
       await broadcastRecord.save();
+    }
+
+    // Emit Socket.IO event for real-time popup delivery
+    const io = req.app.locals.io;
+    if (io && broadcastRecord) {
+      const enrichedBroadcast = {
+        ...broadcastRecord.toObject(),
+        postedBy: req.user.name || 'Admin'
+      };
+      users.forEach(user => {
+        io.to(`user:${user._id.toString()}`).emit('new_broadcast', enrichedBroadcast);
+      });
+      console.log(`[Broadcast] Socket notified ${users.length} users for: ${title}`);
     }
 
     sendResponse(res, 200, { message: `Broadcast sent to ${sentCount} users (${emailsSent} emails)`, sentCount, emailsSent });

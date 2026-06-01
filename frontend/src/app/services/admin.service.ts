@@ -59,12 +59,29 @@ export class AdminService {
     return this.http.put(`${this.apiUrl}/admin/users/${userId}/deactivate`, {}, this.getHeaders());
   }
 
+  setBillingExempt(userId: string, exempt: boolean, reason?: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/users/${userId}/billing-exempt`, { exempt, reason }, this.getHeaders());
+  }
+
   deleteUser(userId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/admin/users/${userId}`, this.getHeaders());
   }
 
   deleteOnboarding(userId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/admin/onboarding/${userId}`, this.getHeaders());
+  }
+
+  // Welcome Message
+  getWelcomeMessage(): Observable<any> {
+    return this.http.get(`${this.apiUrl}/admin/welcome-message`, this.getHeaders());
+  }
+
+  updateWelcomeMessage(data: { enabled: boolean; title: string; message: string; videoUrl?: string }): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/welcome-message`, data, this.getHeaders());
+  }
+
+  resetWelcomeMessageUsers(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/admin/welcome-message/reset-users`, {}, this.getHeaders());
   }
 
   getStats(): Observable<any> {

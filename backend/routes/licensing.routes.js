@@ -232,6 +232,10 @@ router.get('/:agentId', authenticate, async (req, res) => {
     const responseData = licensingProgress.toObject();
     // Only include license types if user said they're currently licensed
     responseData.licenseTypes = isCurrentlyLicensed ? licenseTypes : [];
+    // If agent is currently licensed per APA, reflect that in the response
+    if (isCurrentlyLicensed && !responseData.isLicensed) {
+      responseData.isLicensed = true;
+    }
     
     res.json(responseData);
   } catch (error) {

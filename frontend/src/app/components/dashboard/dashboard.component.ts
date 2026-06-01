@@ -1,11 +1,13 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
 import { AdminService } from '../../services/admin.service';
 import { LicensingService, LicensingProgress } from '../../services/licensing.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
 import { Stats, User } from '../../models/user.model';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-dashboard',
@@ -24,13 +26,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   daysRemaining: number = 0;
   private timerInterval: any;
 
+  // Welcome Message
+  showWelcomeModal = false;
+  welcomeTitle = '';
+  welcomeMessage = '';
+  welcomeVideoUrl = '';
+  welcomeImageUrl = '';
+  welcomePdfUrl = '';
+
   constructor(
     public authService: AuthService,
     private agentService: AgentService,
     private adminService: AdminService,
     private licensingService: LicensingService,
     private brandingService: BrandingService,
-    private router: Router
+    private router: Router,
+    private http: HttpClient
   ) { }
 
   ngOnInit(): void {
@@ -48,6 +59,29 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadStats();
     this.generateReferralLink();
     this.loadLicensingProgress();
+    this.loadWelcomeMessage();
+  }
+
+  loadWelcomeMessage(): void {
+    if (!this.authService.isAgent() || this.authService.isAdmin()) return;
+    this.http.get<any>(`${environment.apiUrl}/agent/welcome-message`).subscribe({
+      next: (res) => {
+        if (res.show) {
+          this.welcomeTitle = res.title || '';
+          this.welcomeMessage = res.message || '';
+          this.welcomeVideoUrl = res.videoUrl || '';
+          this.welcomeImageUrl = res.imageUrl || '';
+          this.welcomePdfUrl = res.pdfUrl || '';
+          this.showWelcomeModal = true;
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  dismissWelcomeMessage(): void {
+    this.showWelcomeModal = false;
+    this.http.post<any>(`${environment.apiUrl}/agent/welcome-message/dismiss`, {}).subscribe();
   }
 
   loadLicensingProgress(): void {

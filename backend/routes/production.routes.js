@@ -151,6 +151,15 @@ router.get('/', authenticate, async (req, res) => {
     if (req.query.status) {
       query.status = req.query.status;
     }
+    if (req.query.priority) {
+      query.$or = [
+        { priority: req.query.priority },
+        { 'customFields.priority': req.query.priority }
+      ];
+    }
+    if (req.query.productCategory) {
+      query.productCategory = req.query.productCategory;
+    }
 
     // Date range filter
     if (req.query.startDate || req.query.endDate) {
@@ -300,6 +309,70 @@ router.get('/team-report', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching team report:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/production/stats/filtered
+// @desc    Get production statistics that match the SAME filters as the list view
+//          so that dashboard totals update when filters are applied
+// @access  Private
+// ---------------------------------------------------------------------------
+router.get('/stats/filtered', authenticate, async (req, res) => {
+  try {
+    let query = { deletedAt: null };
+
+    if (req.user.role !== 'admin') {
+      if (req.query.scope === 'team') {
+        const downlineIds = await getDownlineIds(req.user._id);
+        const allIds = [req.user._id, ...downlineIds];
+        query.agent = { $in: allIds };
+      } else {
+        query.agent = req.user._id;
+      }
+    }
+
+    if (req.query.agentId) query.agent = req.query.agentId;
+    if (req.query.productSold) query.productSold = req.query.productSold;
+    if (req.query.carrier && mongoose.Types.ObjectId.isValid(req.query.carrier)) {
+      query.carrier = new mongoose.Types.ObjectId(req.query.carrier);
+    }
+    if (req.query.status) query.status = req.query.status;
+    if (req.query.priority) {
+      query.$or = [
+        { priority: req.query.priority },
+        { 'customFields.priority': req.query.priority }
+      ];
+    }
+    if (req.query.productCategory) query.productCategory = req.query.productCategory;
+
+    if (req.query.startDate || req.query.endDate) {
+      query.submissionDate = {};
+      if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate);
+      if (req.query.endDate) query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+    }
+
+    const stats = await ProductionSubmission.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalSubmissions: { $sum: 1 },
+          totalPremium: { $sum: '$premiumAmount' },
+          totalMembers: { $sum: { $ifNull: ['$numberOfMembers', 0] } },
+          inForceCount: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, 1, 0] } },
+          inForcePremium: { $sum: { $cond: [{ $eq: ['$status', 'In Force'] }, '$premiumAmount', 0] } },
+          submittedCount: { $sum: { $cond: [{ $eq: ['$status', 'Submitted'] }, 1, 0] } },
+          pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'Pending'] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    res.json({
+      summary: stats[0] || { totalSubmissions: 0, totalPremium: 0, totalMembers: 0, inForceCount: 0, inForcePremium: 0, submittedCount: 0, pendingCount: 0 }
+    });
+  } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -608,7 +681,9 @@ router.post('/', authenticate, async (req, res) => {
       notes,
       status,
       isTrainingPeriod,
-      customFields
+      customFields,
+      inForceDate,
+      priority
     } = req.body;
     
     // Validate required fields
@@ -652,7 +727,9 @@ router.post('/', authenticate, async (req, res) => {
       notes,
       status: status || 'Submitted',
       isTrainingPeriod: isTrainingPeriod || false,
-      customFields: customFields || {}
+      customFields: customFields || {},
+      inForceDate: inForceDate || null,
+      priority: priority || null
     });
     
     await submission.save();
@@ -702,7 +779,9 @@ router.put('/:id', authenticate, async (req, res) => {
       notes,
       status,
       isTrainingPeriod,
-      customFields
+      customFields,
+      inForceDate,
+      priority
     } = req.body;
     
     // Update fields
@@ -721,11 +800,18 @@ router.put('/:id', authenticate, async (req, res) => {
     if (notes !== undefined) submission.notes = notes;
     if (isTrainingPeriod !== undefined) submission.isTrainingPeriod = isTrainingPeriod;
     if (customFields !== undefined) submission.customFields = customFields;
+    if (inForceDate !== undefined) submission.inForceDate = inForceDate;
+    if (priority !== undefined) submission.priority = priority;
     
     // Status changes: admins can set any status; agents can only set Submitted/Pending
+    const previousStatus = submission.status;
     if (status) {
       if (req.user.role === 'admin') {
         submission.status = status;
+        // Auto-set inForceDate when status changes to "In Force" and no explicit inForceDate provided
+        if (status === 'In Force' && !submission.inForceDate && !inForceDate) {
+          submission.inForceDate = new Date();
+        }
       } else {
         // Agents can only set Submitted or Pending (cannot self-approve)
         const agentAllowedStatuses = ['Submitted', 'Pending'];
@@ -739,6 +825,23 @@ router.put('/:id', authenticate, async (req, res) => {
     await submission.save();
     await submission.populate('agent', 'name email');
     await submission.populate('carrier', 'name');
+    
+    // Trigger promotion sync when status changes to "In Force"
+    if (submission.status === 'In Force' && previousStatus !== 'In Force') {
+      const agentId = submission.agent._id || submission.agent;
+      const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+      (async () => {
+        try {
+          await checkAndNotifyPromotion(agentId);
+          const uplineIds = await getUplineChainIds(agentId);
+          for (const uplineId of uplineIds) {
+            await checkAndNotifyPromotion(uplineId);
+          }
+        } catch (promoErr) {
+          console.error('[Production Update] Promotion chain check error:', promoErr.message);
+        }
+      })();
+    }
     
     res.json(submission);
   } catch (error) {
@@ -833,6 +936,11 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
     submission.reviewNotes = reviewNotes;
     submission.reviewedBy = req.user._id;
     submission.reviewedAt = Date.now();
+
+    // Auto-set inForceDate when marked as "In Force" and not already set
+    if (status === 'In Force' && !submission.inForceDate) {
+      submission.inForceDate = new Date();
+    }
     
     await submission.save();
     await submission.populate('agent', 'name email');

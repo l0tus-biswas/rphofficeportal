@@ -8,12 +8,12 @@ const configSchema = new mongoose.Schema({
     trim: true
   },
   value: {
-    type: String,
+    type: mongoose.Schema.Types.Mixed,
     required: true
   },
   category: {
     type: String,
-    enum: ['database', 'server', 'email', 'jwt', 'application', 'other'],
+    enum: ['database', 'server', 'email', 'jwt', 'application', 'general', 'other'],
     default: 'other'
   },
   description: {

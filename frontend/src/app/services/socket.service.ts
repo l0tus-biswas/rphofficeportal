@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -12,7 +12,7 @@ export class SocketService {
   private connectionStateSubject = new BehaviorSubject<'disconnected' | 'connected' | 'connecting'>('disconnected');
   public connectionState$ = this.connectionStateSubject.asObservable();
 
-  constructor(private authService: AuthService) {
+  constructor(private authService: AuthService, private ngZone: NgZone) {
     // Connect when user logs in
     this.authService.currentUser$.subscribe(user => {
       if (user) {
@@ -108,7 +108,7 @@ export class SocketService {
 
       const attach = () => {
         if (this.socket && !listener) {
-          listener = (data: T) => observer.next(data);
+          listener = (data: T) => this.ngZone.run(() => observer.next(data));
           this.socket.on(event, listener);
         }
       };

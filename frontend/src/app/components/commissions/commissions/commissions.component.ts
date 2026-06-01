@@ -16,6 +16,11 @@ export class CommissionsComponent implements OnInit {
   filterFrom = '';
   filterTo = '';
 
+  // Notes modal
+  showNotesModal = false;
+  selectedStatementNotes: any[] = [];
+  selectedStatementPayPeriod = '';
+
   constructor(private commissionService: CommissionService) {}
 
   ngOnInit(): void {
@@ -79,5 +84,24 @@ export class CommissionsComponent implements OnInit {
     this.filterFrom = '';
     this.filterTo = '';
     this.loadStatements();
+  }
+
+  viewNotes(statement: CommissionStatement): void {
+    if (!statement._id) return;
+    this.selectedStatementPayPeriod = String(statement.payPeriod);
+    this.selectedStatementNotes = statement.notes || [];
+    this.showNotesModal = true;
+    // Fetch fresh notes from the API
+    this.commissionService.getNotes(statement._id).subscribe({
+      next: (res) => {
+        this.selectedStatementNotes = res.notes || [];
+      },
+      error: () => { /* fall back to cached notes already shown */ }
+    });
+  }
+
+  closeNotesModal(): void {
+    this.showNotesModal = false;
+    this.selectedStatementNotes = [];
   }
 }

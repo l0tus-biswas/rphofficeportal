@@ -153,6 +153,32 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   
+  // Billing Exempt: admin can mark users who should have free access without charges
+  billingExempt: {
+    type: Boolean,
+    default: false
+  },
+  billingExemptReason: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  billingExemptSetBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  billingExemptSetAt: {
+    type: Date,
+    default: null
+  },
+
+  // Welcome message: tracks if user has dismissed the welcome popup
+  welcomeMessageSeenAt: {
+    type: Date,
+    default: null
+  },
+  
   // Audit Fields
   createdAt: {
     type: Date,

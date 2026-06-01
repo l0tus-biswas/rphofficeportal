@@ -51,6 +51,10 @@ router.post('/one-time-intent', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
 
+    if (user.billingExempt) {
+      return sendResponse(res, 400, { message: 'User is billing exempt - no payment required' });
+    }
+
     if (user.oneTimePaymentCompleted) {
       return sendResponse(res, 400, { message: 'Setup fee already completed' });
     }
@@ -173,6 +177,17 @@ router.post('/subscription-intent', protect, async (req, res) => {
 router.get('/status', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+
+    // Billing-exempt users always have full access
+    if (user.billingExempt) {
+      return sendResponse(res, 200, {
+        billingExempt: true,
+        billingExemptReason: user.billingExemptReason,
+        oneTimePaymentCompleted: true,
+        subscriptionStatus: 'exempt',
+        paymentAccessEnabled: true
+      });
+    }
 
     // Fetch subscription from Subscription model (source of truth)
     let subscriptionDetails = null;

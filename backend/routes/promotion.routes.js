@@ -10,8 +10,10 @@ const { sendResponse, errorResponse, getDownlineIds } = require('../utils/helper
 
 // ============================================================================
 // Qualifying product categories for promotion calculations
+// Only Life Insurance and Supplemental Insurance count toward promotions.
+// ACA/Medicare/Retirement do NOT count toward promotion tracking.
 // ============================================================================
-const QUALIFYING_CATEGORIES = ['Life Insurance', 'Supplemental Insurance', 'Retirement / Annuities'];
+const QUALIFYING_CATEGORIES = ['Life Insurance', 'Supplemental Insurance'];
 
 // ============================================================================
 // Helper: get all promotion levels sorted by rank
@@ -33,6 +35,9 @@ async function sumQualifyingPremium(agentIds, windowDays, sinceDate, transferDat
     baseCutoff.setDate(baseCutoff.getDate() - windowDays);
   }
 
+  // Use inForceDate for promotion tracking (falls back to submissionDate via $ifNull)
+  const dateExpr = { $ifNull: ['$inForceDate', '$submissionDate'] };
+
   // If no transfer dates, use single aggregation with global cutoff
   if (!transferDates || transferDates.size === 0) {
     const result = await ProductionSubmission.aggregate([
@@ -41,9 +46,14 @@ async function sumQualifyingPremium(agentIds, windowDays, sinceDate, transferDat
           agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
           status: 'In Force',
           productCategory: { $in: QUALIFYING_CATEGORIES },
-          submissionDate: { $gte: baseCutoff },
           deletedAt: null
         }
+      },
+      {
+        $addFields: { _promotionDate: dateExpr }
+      },
+      {
+        $match: { _promotionDate: { $gte: baseCutoff } }
       },
       { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
     ]);
@@ -75,33 +85,36 @@ async function sumQualifyingPremium(agentIds, windowDays, sinceDate, transferDat
           agent: { $in: nonTransferredIds },
           status: 'In Force',
           productCategory: { $in: QUALIFYING_CATEGORIES },
-          submissionDate: { $gte: baseCutoff },
           deletedAt: null
         }
       },
+      { $addFields: { _promotionDate: dateExpr } },
+      { $match: { _promotionDate: { $gte: baseCutoff } } },
       { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
     ]);
     if (result.length > 0) total += result[0].total;
   }
 
-  // Sum transferred agents with their individual cutoffs
+  // Sum transferred agents with their individual cutoffs (using inForceDate)
   if (transferredGroups.length > 0) {
-    const orConditions = transferredGroups.map(g => ({
-      agent: g.id,
-      submissionDate: { $gte: g.cutoff }
-    }));
-    const result = await ProductionSubmission.aggregate([
-      {
-        $match: {
-          $or: orConditions,
-          status: 'In Force',
-          productCategory: { $in: QUALIFYING_CATEGORIES },
-          deletedAt: null
-        }
-      },
-      { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
-    ]);
-    if (result.length > 0) total += result[0].total;
+    // For transferred agents, we need to filter per-agent by their transfer cutoff
+    // using the promotion date (inForceDate or submissionDate)
+    for (const g of transferredGroups) {
+      const agentResult = await ProductionSubmission.aggregate([
+        {
+          $match: {
+            agent: g.id,
+            status: 'In Force',
+            productCategory: { $in: QUALIFYING_CATEGORIES },
+            deletedAt: null
+          }
+        },
+        { $addFields: { _promotionDate: dateExpr } },
+        { $match: { _promotionDate: { $gte: g.cutoff } } },
+        { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
+      ]);
+      if (agentResult.length > 0) total += agentResult[0].total;
+    }
   }
 
   return total;

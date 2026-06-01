@@ -121,6 +121,10 @@
                     <span class="badge" [ngClass]="user.isActive ? 'bg-success' : 'bg-danger'">
                       {{ user.isActive ? 'Active' : 'Inactive' }}
                     </span>
+                    <br *ngIf="user.billingExempt">
+                    <span *ngIf="user.billingExempt" class="badge bg-info mt-1" title="Free Access - No billing">
+                      <i class="bi bi-gift"></i> Free Access
+                    </span>
                   </td>
                   <td>
                     <small>{{ user.createdAt | date: 'shortDate' }}</small>
@@ -141,6 +145,12 @@
                         (click)="toggleUserStatus(user)" 
                         [title]="user.isActive ? 'Deactivate' : 'Activate'">
                         <i class="bi" [ngClass]="user.isActive ? 'bi-pause-circle' : 'bi-play-circle'"></i>
+                      </button>
+                      <button class="btn" 
+                        [ngClass]="user.billingExempt ? 'btn-info' : 'btn-outline-info'"
+                        (click)="toggleBillingExempt(user)" 
+                        [title]="user.billingExempt ? 'Remove Free Access' : 'Grant Free Access'">
+                        <i class="bi bi-gift"></i>
                       </button>
                       <button *ngIf="user.role === 'agent'"
                         class="btn btn-outline-secondary"
@@ -224,6 +234,22 @@
             <option [value]="true">Active</option>
             <option [value]="false">Inactive</option>
           </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Billing Status</label>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="billingExemptSwitch"
+              [(ngModel)]="editForm.billingExempt">
+            <label class="form-check-label" for="billingExemptSwitch">
+              Free Access (No billing)
+            </label>
+          </div>
+          <div *ngIf="editForm.billingExempt" class="mt-2">
+            <input type="text" class="form-control form-control-sm" 
+              [(ngModel)]="editForm.billingExemptReason" 
+              placeholder="Reason (e.g., Staff, Test user, Special case)">
+          </div>
+          <small class="text-muted">Free Access users retain full platform access without setup fees or monthly charges.</small>
         </div>
         <div class="mb-3">
           <label class="form-label">Address</label>

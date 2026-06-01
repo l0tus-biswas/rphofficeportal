@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
+const APAApplication = require('../models/APAApplication');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -11,6 +12,7 @@ const AgentCarrierStatus = require('../models/AgentCarrierStatus');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 const SystemConfig = require('../models/SystemConfig');
+const ACAClientRecord = require('../models/ACAClientRecord');
 
 // All routes require authentication as agent or admin
 router.use(protect);
@@ -238,13 +240,56 @@ router.get('/stats', async (req, res) => {
       referredBy: req.user._id, 
       isActive: true 
     });
+
+    // ACA Top 5 Leaderboards (global)
+    let topPersonalACA = [];
+    let topTeamACA = [];
+    try {
+      const globalLatestBatchDoc = await ACAClientRecord.findOne({}, { uploadBatch: 1 }).sort({ uploadedAt: -1 }).lean();
+      if (globalLatestBatchDoc) {
+        const globalBatch = globalLatestBatchDoc.uploadBatch;
+        topPersonalACA = await ACAClientRecord.aggregate([
+          { $match: { uploadBatch: globalBatch } },
+          { $sort: { clientCount: -1 } },
+          { $limit: 5 },
+          { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
+          { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
+        ]);
+
+        const allGlobalRecords = await ACAClientRecord.find({ uploadBatch: globalBatch }).lean();
+        const allAgentsForTeam = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+        const childrenMap = {};
+        allAgentsForTeam.forEach(u => {
+          const pid = u.referredBy?.toString();
+          if (pid) {
+            if (!childrenMap[pid]) childrenMap[pid] = [];
+            childrenMap[pid].push(u._id.toString());
+          }
+        });
+        const recordMap = {};
+        allGlobalRecords.forEach(r => { recordMap[r.agent.toString()] = r.clientCount; });
+        function sumTree(id) {
+          let total = recordMap[id] || 0;
+          (childrenMap[id] || []).forEach(cid => { total += sumTree(cid); });
+          return total;
+        }
+        const teamTotals = allAgentsForTeam.map(u => ({
+          agentName: u.name, teamClientCount: sumTree(u._id.toString())
+        }));
+        teamTotals.sort((a, b) => b.teamClientCount - a.teamClientCount);
+        topTeamACA = teamTotals.slice(0, 5);
+      }
+    } catch (e) { /* ACA data optional */ }
     
     sendResponse(res, 200, {
       stats: {
         directRecruits,
         totalDownline,
         activeRecruits,
-        inactiveRecruits: directRecruits - activeRecruits
+        inactiveRecruits: directRecruits - activeRecruits,
+        topPersonalACA,
+        topTeamACA
       }
     });
   } catch (error) {
@@ -281,8 +326,29 @@ router.get('/referral-link', async (req, res) => {
 router.get('/dashboard/checklist', async (req, res) => {
   try {
     // Check LicensingProgress record (authoritative source for licensing status)
-    const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed checklist.preLicenseCourse.completed').lean();
-    const isLicensed = lp ? lp.isLicensed : false;
+    const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed licenseTypes checklist.preLicenseCourse.completed').lean();
+    let isLicensed = lp ? lp.isLicensed : false;
+
+    // If agent selected license types (answered "Yes" to currently licensed), treat as licensed
+    if (!isLicensed && lp?.licenseTypes?.length > 0) {
+      isLicensed = true;
+    }
+
+    // Also check APA Application's currentlyLicensed field (agent self-reported as already licensed)
+    if (!isLicensed) {
+      const apa = await APAApplication.findOne({ user: req.user._id }).select('licensingStatus.currentlyLicensed').lean();
+      if (apa?.licensingStatus?.currentlyLicensed) {
+        isLicensed = true;
+      }
+    }
+
+    // Also check user metadata for currentlyLicensed (fallback for imported/migrated agents)
+    if (!isLicensed && req.user.metadata) {
+      const metaLicensed = req.user.metadata.get ? req.user.metadata.get('currentlyLicensed') : req.user.metadata?.currentlyLicensed;
+      if (metaLicensed === 'true' || metaLicensed === true) {
+        isLicensed = true;
+      }
+    }
 
     // Fetch QuickBooks invite URL from SystemConfig
     let quickbooksUrl = null;
@@ -561,5 +627,72 @@ function buildTreeFromFlat(rootUserId, flatList) {
 
   return buildNode(rootUserId);
 }
+
+// @route   GET /api/agent/welcome-message
+// @desc    Get the welcome message for new users (if not yet dismissed)
+// @access  Private
+router.get('/welcome-message', async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    // Get the welcome message config
+    const config = await SystemConfig.findOne({ key: 'welcome_message' });
+    if (!config || !config.value || !config.value.enabled) {
+      return sendResponse(res, 200, { show: false });
+    }
+
+    const { displayMode, startDate, endDate, lastConfiguredAt } = config.value;
+
+    // First login only mode: only show to users created AFTER the message was configured
+    // and who haven't dismissed it yet
+    if (displayMode === 'first_login') {
+      if (user.welcomeMessageSeenAt) {
+        return sendResponse(res, 200, { show: false });
+      }
+      // Only show to users who registered after the welcome message was set up
+      if (lastConfiguredAt && user.createdAt && new Date(user.createdAt) < new Date(lastConfiguredAt)) {
+        return sendResponse(res, 200, { show: false });
+      }
+    }
+
+    // Date range mode: only show within the specified dates, and respect dismiss
+    if (displayMode === 'date_range') {
+      const now = new Date();
+      if (startDate && new Date(startDate) > now) return sendResponse(res, 200, { show: false });
+      if (endDate && new Date(endDate) < now) return sendResponse(res, 200, { show: false });
+      if (user.welcomeMessageSeenAt) return sendResponse(res, 200, { show: false });
+    }
+
+    // Until dismissed mode (default): show until user explicitly dismisses
+    if (displayMode === 'until_dismissed' || !displayMode) {
+      if (user.welcomeMessageSeenAt) {
+        return sendResponse(res, 200, { show: false });
+      }
+    }
+
+    sendResponse(res, 200, {
+      show: true,
+      title: config.value.title || 'Welcome to RHP Office!',
+      message: config.value.message || '',
+      videoUrl: config.value.videoUrl || null,
+      imageUrl: config.value.imageUrl || null,
+      pdfUrl: config.value.pdfUrl || null
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/agent/welcome-message/dismiss
+// @desc    Mark the welcome message as seen
+// @access  Private
+router.post('/welcome-message/dismiss', async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user._id, { welcomeMessageSeenAt: new Date() });
+    sendResponse(res, 200, { message: 'Welcome message dismissed' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
 
 module.exports = router;

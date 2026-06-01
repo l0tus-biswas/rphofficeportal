@@ -1,0 +1,199 @@
+<div class="container-fluid mt-4">
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2><i class="bi bi-chat-heart"></i> Welcome Message</h2>
+        <span class="badge fs-6" [ngClass]="welcomeMsg.enabled ? 'bg-success' : 'bg-secondary'">
+          {{ welcomeMsg.enabled ? 'Active' : 'Inactive' }}
+        </span>
+      </div>
+      <p class="text-muted">Configure the welcome popup that new recruits see when they log in.</p>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-border text-success" role="status"></div>
+    <p class="mt-2 text-muted">Loading configuration...</p>
+  </div>
+
+  <div *ngIf="!loading">
+    <!-- Alerts -->
+    <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+      <i class="bi bi-check-circle-fill me-1"></i> {{ success }}
+      <button type="button" class="btn-close" (click)="success = ''"></button>
+    </div>
+    <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ error }}
+      <button type="button" class="btn-close" (click)="error = ''"></button>
+    </div>
+
+    <div class="row">
+      <!-- Left Column: Settings -->
+      <div class="col-lg-8">
+        <div class="card border-success mb-4">
+          <div class="card-header bg-success-subtle">
+            <h5 class="mb-0"><i class="bi bi-gear me-2"></i>Settings</h5>
+          </div>
+          <div class="card-body">
+            <!-- Enabled Toggle -->
+            <div class="d-flex align-items-center gap-3 mb-4">
+              <span class="fw-semibold fs-5">Enabled</span>
+              <div class="form-check form-switch m-0">
+                <input class="form-check-input" type="checkbox" id="welcomeEnabled"
+                       [(ngModel)]="welcomeMsg.enabled" style="width: 3em; height: 1.5em;">
+              </div>
+            </div>
+
+            <!-- Display Mode -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">When should the popup appear?</label>
+              <select class="form-select" [(ngModel)]="welcomeMsg.displayMode">
+                <option value="first_login">First login only (new recruits)</option>
+                <option value="until_dismissed">Every login until dismissed</option>
+                <option value="date_range">During a specific date range</option>
+              </select>
+              <div class="form-text">
+                <span *ngIf="welcomeMsg.displayMode === 'first_login'">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Shows only to users who registered <strong>after</strong> this message was last saved. Once dismissed, it never reappears.
+                </span>
+                <span *ngIf="welcomeMsg.displayMode === 'until_dismissed'">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Shows on every login until the user clicks "Got it." Use "Reset All Users" to re-show after updates.
+                </span>
+                <span *ngIf="welcomeMsg.displayMode === 'date_range'">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Shows to all users within the date window who haven't dismissed it yet.
+                </span>
+              </div>
+            </div>
+
+            <!-- Date Range (conditional) -->
+            <div class="row mb-4" *ngIf="welcomeMsg.displayMode === 'date_range'">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">Start Date</label>
+                <input type="date" class="form-control" [(ngModel)]="welcomeMsg.startDate">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">End Date</label>
+                <input type="date" class="form-control" [(ngModel)]="welcomeMsg.endDate">
+              </div>
+            </div>
+
+            <hr>
+
+            <!-- Title -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Title</label>
+              <input type="text" class="form-control" [(ngModel)]="welcomeMsg.title"
+                     placeholder="Welcome to RHP Office!">
+            </div>
+
+            <!-- Message -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Message</label>
+              <textarea class="form-control" rows="4" [(ngModel)]="welcomeMsg.message"
+                        placeholder="Write a welcome message for new agents..."></textarea>
+              <small class="form-text">Supports multiple lines. This is the main text the user sees.</small>
+            </div>
+
+            <!-- Video URL -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Welcome Video URL <small class="text-muted">(optional)</small></label>
+              <input type="url" class="form-control" [(ngModel)]="welcomeMsg.videoUrl"
+                     placeholder="https://youtube.com/embed/...">
+              <small class="form-text">Paste a YouTube or Vimeo embed URL. The video will display in the popup.</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Media Uploads Card -->
+        <div class="card border-primary mb-4">
+          <div class="card-header bg-primary-subtle">
+            <h5 class="mb-0"><i class="bi bi-image me-2"></i>Media Attachments</h5>
+          </div>
+          <div class="card-body">
+            <!-- Image Upload -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">Image / Flyer <small class="text-muted">(jpg, png, gif, webp — max 10MB)</small></label>
+              <div *ngIf="welcomeMsg.imageUrl" class="mb-2 p-3 bg-light rounded text-center">
+                <img [src]="welcomeMsg.imageUrl" alt="Welcome image" class="img-thumbnail" style="max-height: 200px;">
+                <div class="mt-2">
+                  <button class="btn btn-sm btn-outline-danger" (click)="removeMedia('imageUrl')">
+                    <i class="bi bi-trash me-1"></i>Remove Image
+                  </button>
+                </div>
+              </div>
+              <input type="file" class="form-control" accept="image/jpeg,image/png,image/gif,image/webp"
+                     (change)="uploadMedia($event, 'image')" [disabled]="uploading">
+            </div>
+
+            <!-- PDF Upload -->
+            <div class="mb-3">
+              <label class="form-label fw-semibold">PDF Document <small class="text-muted">(max 10MB)</small></label>
+              <div *ngIf="welcomeMsg.pdfUrl" class="mb-2 p-3 bg-light rounded">
+                <a [href]="welcomeMsg.pdfUrl" target="_blank" class="btn btn-outline-primary">
+                  <i class="bi bi-file-earmark-pdf me-1"></i>View Current PDF
+                </a>
+                <button class="btn btn-sm btn-outline-danger ms-2" (click)="removeMedia('pdfUrl')">
+                  <i class="bi bi-trash me-1"></i>Remove PDF
+                </button>
+              </div>
+              <input type="file" class="form-control" accept="application/pdf"
+                     (change)="uploadMedia($event, 'pdf')" [disabled]="uploading">
+            </div>
+
+            <div *ngIf="uploading" class="text-primary">
+              <span class="spinner-border spinner-border-sm me-1"></span> Uploading file...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Actions & Info -->
+      <div class="col-lg-4">
+        <!-- Save Card -->
+        <div class="card border-success mb-4">
+          <div class="card-body text-center">
+            <button class="btn btn-success btn-lg w-100 mb-3" (click)="saveConfig()" [disabled]="saving">
+              <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+              <i *ngIf="!saving" class="bi bi-save me-1"></i>
+              Save Configuration
+            </button>
+            <small class="text-muted d-block">Saves all settings including title, message, mode, and media URLs.</small>
+          </div>
+        </div>
+
+        <!-- Reset Users Card -->
+        <div class="card border-warning mb-4">
+          <div class="card-header bg-warning-subtle">
+            <h6 class="mb-0"><i class="bi bi-arrow-counterclockwise me-2"></i>Reset Dismissals</h6>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-3">Clear all users' dismissal status so they see the welcome message again on their next login.</p>
+            <button class="btn btn-outline-warning w-100" (click)="resetUsers()" [disabled]="resetting">
+              <span *ngIf="resetting" class="spinner-border spinner-border-sm me-1"></span>
+              <i *ngIf="!resetting" class="bi bi-arrow-counterclockwise me-1"></i>
+              Reset All Users
+            </button>
+          </div>
+        </div>
+
+        <!-- How It Works Card -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h6 class="mb-0"><i class="bi bi-question-circle me-2"></i>How "New Users" Work</h6>
+          </div>
+          <div class="card-body small">
+            <ul class="mb-0">
+              <li class="mb-2"><strong>First login only:</strong> Only users who registered <em>after</em> this message was last saved will see the popup. Existing users are not affected.</li>
+              <li class="mb-2"><strong>Until dismissed:</strong> ALL users who haven't clicked "Got it" will see the popup every login. Use "Reset All Users" after changing content.</li>
+              <li><strong>Date range:</strong> Everyone sees it during the specified window (unless they dismiss it).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

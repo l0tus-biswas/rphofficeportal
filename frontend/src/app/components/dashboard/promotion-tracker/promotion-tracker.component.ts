@@ -14,12 +14,18 @@ export class PromotionTrackerComponent implements OnInit {
   error = '';
 
   windowOptions = [
-    { label: '1 Month',  value: 30  },
-    { label: '2 Months', value: 60  },
-    { label: '3 Months', value: 90  },
-    { label: '4 Months', value: 120 },
-    { label: '5 Months', value: 150 },
-    { label: '6 Months', value: 180 }
+    { label: '1 Month',   value: 30  },
+    { label: '2 Months',  value: 60  },
+    { label: '3 Months',  value: 90  },
+    { label: '4 Months',  value: 120 },
+    { label: '5 Months',  value: 150 },
+    { label: '6 Months',  value: 180 },
+    { label: '7 Months',  value: 210 },
+    { label: '8 Months',  value: 240 },
+    { label: '9 Months',  value: 270 },
+    { label: '10 Months', value: 300 },
+    { label: '11 Months', value: 330 },
+    { label: '12 Months', value: 365 }
   ];
   selectedWindow = 30;
 

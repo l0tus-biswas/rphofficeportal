@@ -4,7 +4,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h2 class="mb-0"><i class="bi bi-archive me-2"></i>Document Hub</h2>
-      <small class="text-muted">Browse, download, and manage shared resources</small>
+      <small class="text-muted">Upload, organize, and share documents, forms, and resources</small>
     </div>
     <div class="d-flex gap-2 flex-wrap" *ngIf="isAdmin">
       <button class="btn btn-primary btn-sm" (click)="openNewFolder()">
@@ -46,7 +46,7 @@
         </div>
       </div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div *ngIf="isAdmin" class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm h-100 stat-card">
         <div class="card-body">
           <div class="text-muted small">Requests With Pending Work</div>
@@ -54,7 +54,7 @@
         </div>
       </div>
     </div>
-    <div class="col-6 col-lg-3">
+    <div *ngIf="isAdmin" class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm h-100 stat-card">
         <div class="card-body">
           <div class="text-muted small">Overdue Requests</div>
@@ -68,7 +68,7 @@
     <button class="btn btn-sm" [class.btn-primary]="activeSection === 'library'" [class.btn-outline-primary]="activeSection !== 'library'" (click)="switchSection('library')">
       <i class="bi bi-archive me-1"></i>Library
     </button>
-    <button class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
+    <button *ngIf="isAdmin" class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
       <i class="bi bi-send me-1"></i>Requests
     </button>
   </div>

@@ -73,8 +73,18 @@ export class CommissionService {
     return this.http.post(`${this.apiUrl}/${statementId}/notes`, { text });
   }
 
+  // Edit existing note on a statement
+  editNote(statementId: string, noteId: string, text: string): Observable<any> {
+    return this.http.put(`${this.apiUrl}/${statementId}/notes/${noteId}`, { text });
+  }
+
   // 6.3: Delete note from statement
   deleteNote(statementId: string, noteId: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${statementId}/notes/${noteId}`);
+  }
+
+  // Get notes for a statement (agent view)
+  getNotes(statementId: string): Observable<{ notes: CommissionNote[] }> {
+    return this.http.get<{ notes: CommissionNote[] }>(`${this.apiUrl}/${statementId}/notes`);
   }
 }

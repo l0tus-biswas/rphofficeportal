@@ -58,6 +58,8 @@ export class CommissionStatementsComponent implements OnInit {
   selectedStatement: CommissionStatement | null = null;
   newNoteText = '';
   addingNote = false;
+  editingNoteId: string | null = null;
+  editNoteText = '';
 
   constructor(
     public commissionService: CommissionService,
@@ -250,6 +252,8 @@ export class CommissionStatementsComponent implements OnInit {
     this.showNotesModal = false;
     this.selectedStatement = null;
     this.newNoteText = '';
+    this.editingNoteId = null;
+    this.editNoteText = '';
   }
 
   addNote(): void {
@@ -282,6 +286,32 @@ export class CommissionStatementsComponent implements OnInit {
         this.loadStatements();
       },
       error: () => { this.error = 'Failed to delete note'; }
+    });
+  }
+
+  editNote(note: any): void {
+    if (!this.selectedStatement?._id || !note._id) return;
+    this.editingNoteId = note._id;
+    this.editNoteText = note.text;
+  }
+
+  cancelEditNote(): void {
+    this.editingNoteId = null;
+    this.editNoteText = '';
+  }
+
+  saveEditNote(): void {
+    if (!this.selectedStatement?._id || !this.editingNoteId || !this.editNoteText.trim()) return;
+    this.commissionService.editNote(this.selectedStatement._id, this.editingNoteId, this.editNoteText.trim()).subscribe({
+      next: (res) => {
+        if (this.selectedStatement) {
+          this.selectedStatement.notes = res.notes || [];
+        }
+        this.editingNoteId = null;
+        this.editNoteText = '';
+        this.loadStatements();
+      },
+      error: () => { this.error = 'Failed to edit note'; }
     });
   }
 

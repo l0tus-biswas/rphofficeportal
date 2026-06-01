@@ -205,11 +205,30 @@
               <strong>{{ note.addedBy?.name || 'Unknown' }}</strong>
               <small class="text-muted ms-2">{{ note.addedAt | date:'medium' }}</small>
             </div>
-            <button class="btn btn-sm btn-outline-danger" (click)="deleteNote(note._id!)" title="Delete note">
-              <i class="bi bi-trash"></i>
-            </button>
+            <div class="btn-group" *ngIf="editingNoteId !== note._id">
+              <button class="btn btn-sm btn-outline-primary" (click)="editNote(note)" title="Edit note">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-danger" (click)="deleteNote(note._id!)" title="Delete note">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
           </div>
-          <p class="mb-0 mt-1">{{ note.text }}</p>
+          <!-- Display mode -->
+          <p class="mb-0 mt-1" *ngIf="editingNoteId !== note._id">{{ note.text }}</p>
+          <!-- Edit mode -->
+          <div *ngIf="editingNoteId === note._id" class="mt-2">
+            <div class="input-group">
+              <input type="text" class="form-control" [(ngModel)]="editNoteText" name="editNote"
+                     (keydown.enter)="saveEditNote()" (keydown.escape)="cancelEditNote()">
+              <button class="btn btn-success btn-sm" (click)="saveEditNote()" [disabled]="!editNoteText.trim()" title="Save">
+                <i class="bi bi-check-lg"></i>
+              </button>
+              <button class="btn btn-secondary btn-sm" (click)="cancelEditNote()" title="Cancel">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Add note -->

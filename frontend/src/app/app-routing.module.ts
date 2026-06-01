@@ -52,6 +52,7 @@ import { VistaprintConfigComponent } from './components/admin/vistaprint-config/
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
+import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 
 const routes: Routes = [
@@ -159,6 +160,12 @@ const routes: Routes = [
   { 
     path: 'admin/config', 
     component: SystemConfigComponent, 
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  { 
+    path: 'admin/welcome-message', 
+    component: WelcomeMessageComponent, 
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },

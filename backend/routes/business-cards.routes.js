@@ -59,9 +59,51 @@ function getPrintfulClient(apiKey, storeId) {
   });
 }
 
+// Photo upload for business card personalization
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const uploadDir = path.join(__dirname, '..', 'uploads', 'business-card-photos');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const photoStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${req.user._id}-${Date.now()}${ext}`);
+  }
+});
+const photoUpload = multer({
+  storage: photoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error('Only JPG/PNG images allowed'));
+  }
+});
+
 // ===========================================================================
 // AGENT ROUTES
 // ===========================================================================
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/upload-photo
+// @desc    Upload a headshot/photo for business card personalization
+// @access  Private (agent + admin)
+// ---------------------------------------------------------------------------
+router.post('/upload-photo', authenticate, photoUpload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return sendResponse(res, 400, { message: 'No photo uploaded' });
+    }
+    const photoUrl = `${process.env.API_URL || ''}/uploads/business-card-photos/${req.file.filename}`;
+    sendResponse(res, 200, { photoUrl, message: 'Photo uploaded successfully' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // @route   GET /api/business-cards/products

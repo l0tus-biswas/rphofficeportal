@@ -111,7 +111,7 @@ export class DocumentHubComponent implements OnInit {
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
     this.isAdmin = user?.role === 'admin';
-    this.activeSection = this.isAdmin ? 'library' : 'requests';
+    this.activeSection = 'library';
     this.loadFolders();
     this.loadFiles();
     this.loadRequests();

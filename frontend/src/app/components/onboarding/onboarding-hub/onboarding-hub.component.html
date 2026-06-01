@@ -3,7 +3,7 @@
   <div class="d-flex align-items-center mb-4">
     <i class="bi bi-folder2-open fs-3 text-primary me-2"></i>
     <div>
-      <h4 class="mb-0 fw-bold">Document Hub</h4>
+      <h4 class="mb-0 fw-bold">Onboarding Documents</h4>
       <small class="text-muted">Upload and manage your required onboarding documents</small>
     </div>
   </div>
@@ -37,6 +37,45 @@
       </div>
       <div *ngIf="completedRequiredCount === requiredCount && requiredCount > 0" class="mt-2 text-success small fw-semibold">
         <i class="bi bi-check-circle-fill me-1"></i>All required documents approved!
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending Document Requests from Admin -->
+  <div *ngIf="pendingRequests.length > 0" class="card border-warning shadow-sm mb-4">
+    <div class="card-header bg-warning bg-opacity-10 border-warning">
+      <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Requested Documents</h6>
+    </div>
+    <div class="card-body p-0">
+      <div *ngFor="let req of pendingRequests" class="px-3 py-2 border-bottom">
+        <div class="d-flex align-items-center">
+          <div class="flex-grow-1">
+            <div class="fw-semibold">{{ req.title }}</div>
+            <small class="text-muted" *ngIf="req.description">{{ req.description }}</small>
+            <div *ngIf="req.dueDate" class="small" [class.text-danger]="isOverdue(req.dueDate)" [class.text-muted]="!isOverdue(req.dueDate)">
+              <i class="bi bi-calendar me-1"></i>Due: {{ req.dueDate | date:'mediumDate' }}
+            </div>
+          </div>
+          <button *ngIf="!requestUploadOpen[req._id!]" class="btn btn-sm btn-outline-primary" (click)="toggleRequestUpload(req._id!)">
+            <i class="bi bi-upload me-1"></i>Upload
+          </button>
+          <button *ngIf="requestUploadOpen[req._id!]" class="btn btn-sm btn-outline-secondary" (click)="toggleRequestUpload(req._id!)">
+            <i class="bi bi-x me-1"></i>Cancel
+          </button>
+        </div>
+        <!-- Inline upload form -->
+        <div *ngIf="requestUploadOpen[req._id!]" class="mt-2 p-2 bg-light rounded">
+          <div class="mb-2">
+            <input type="file" class="form-control form-control-sm" (change)="onRequestFileSelected($event, req._id!)">
+          </div>
+          <div class="mb-2">
+            <input type="text" class="form-control form-control-sm" placeholder="Notes (optional)" [(ngModel)]="requestUploadNotes[req._id!]">
+          </div>
+          <button class="btn btn-sm btn-primary" [disabled]="!requestFiles[req._id!] || submittingRequest[req._id!]" (click)="submitRequestResponse(req)">
+            <span *ngIf="submittingRequest[req._id!]" class="spinner-border spinner-border-sm me-1"></span>
+            <i *ngIf="!submittingRequest[req._id!]" class="bi bi-check-lg me-1"></i>Submit
+          </button>
+        </div>
       </div>
     </div>
   </div>

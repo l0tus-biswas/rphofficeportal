@@ -14,6 +14,19 @@ const productionSubmissionSchema = new mongoose.Schema({
     default: Date.now
   },
   
+  // In-Force Date (when the policy goes in force — used for promotion tracking)
+  inForceDate: {
+    type: Date,
+    default: null
+  },
+
+  // Priority level for production tracking
+  priority: {
+    type: String,
+    enum: ['Low', 'Medium', 'High', 'Urgent', null],
+    default: null
+  },
+  
   // Client information
   clientName: {
     type: String,

@@ -145,7 +145,7 @@
 
     <!-- Stats Summary -->
     <div *ngIf="stats" class="row mb-4">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="card bg-primary text-white">
           <div class="card-body">
             <h3>{{ stats.summary.totalSubmissions }}</h3>
@@ -153,7 +153,7 @@
           </div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <div class="card bg-success text-white">
           <div class="card-body">
             <h3>{{ formatCurrency(stats.summary.totalPremium) }}</h3>
@@ -161,11 +161,19 @@
           </div>
         </div>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+          <div class="card-body">
+            <h3>{{ stats.summary.inForceCount || 0 }}</h3>
+            <p class="mb-0">In Force</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
         <div class="card bg-info text-white">
           <div class="card-body">
-            <h3>{{ formatCurrency(stats.summary.avgPremium) }}</h3>
-            <p class="mb-0">Average Premium</p>
+            <h3>{{ formatCurrency(stats.summary.inForcePremium || 0) }}</h3>
+            <p class="mb-0">In-Force Premium</p>
           </div>
         </div>
       </div>
@@ -219,6 +227,16 @@
             </select>
           </div>
           <div class="col-md-3">
+            <label class="form-label">Priority</label>
+            <select class="form-select" [(ngModel)]="filters.priority">
+              <option value="">All Priorities</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </div>
+          <div class="col-md-3">
             <label class="form-label">Start Date</label>
             <input type="date" class="form-control" [(ngModel)]="filters.startDate">
           </div>
@@ -269,6 +287,7 @@
                 <th class="text-end" style="white-space: nowrap;">Premium</th>
                 <th class="text-end" style="white-space: nowrap;">Members</th>
                 <th style="white-space: nowrap;">Status</th>
+                <th style="white-space: nowrap;">In-Force Date</th>
                 <th *ngFor="let cf of customFieldDefs" style="white-space: nowrap;">{{ cf.label }}</th>
                 <th style="white-space: nowrap;">Notes</th>
                 <th style="white-space: nowrap; position: sticky; right: 0; background: #f8f9fa; z-index: 1;">Actions</th>
@@ -301,6 +320,7 @@
                     <i class="bi bi-mortarboard-fill"></i> Training
                   </span>
                 </td>
+                <td>{{ submission.inForceDate ? formatDate(submission.inForceDate) : '—' }}</td>
                 <!-- Custom field cells -->
                 <td *ngFor="let cf of customFieldDefs" style="white-space: nowrap;">
                   {{ getCustomFieldValue(submission, cf.key) }}
@@ -395,6 +415,11 @@
               <option *ngFor="let s of statusValues" [value]="s">{{ s }}</option>
             </select>
           </div>
+          <div class="col-md-6" *ngIf="currentSubmission.status === 'In Force'">
+            <label class="form-label">In-Force Date</label>
+            <input type="date" class="form-control" [(ngModel)]="currentSubmission.inForceDate"
+                   placeholder="Auto-set if left blank">
+          </div>
           <div class="col-md-6">
             <label class="form-label">Carrier *</label>
             <select class="form-select" [(ngModel)]="currentSubmission.carrier" required>
@@ -449,8 +474,11 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="cancelForm()">Cancel</button>
-        <button type="button" class="btn btn-primary" (click)="saveSubmission()">Save</button>
+        <button type="button" class="btn btn-secondary" (click)="cancelForm()" [disabled]="saving">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="saveSubmission()" [disabled]="saving">
+          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
+          {{ saving ? 'Saving...' : (editMode ? 'Update' : 'Submit') }}
+        </button>
       </div>
     </div>
   </div>

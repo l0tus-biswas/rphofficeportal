@@ -7,6 +7,7 @@ export interface ProductionSubmission {
   _id?: string;
   agent: any;
   submissionDate: Date;
+  inForceDate?: Date | string;
   clientName: string;
   numberOfMembers?: number | null;
   productSold: string;
@@ -31,6 +32,7 @@ export interface ProductionFilters {
   productSold?: string;
   carrier?: string;
   status?: string;
+  priority?: string;
   startDate?: string;
   endDate?: string;
   scope?: string;
@@ -72,9 +74,14 @@ export interface ProductionStats {
   summary: {
     totalSubmissions: number;
     totalPremium: number;
-    avgPremium: number;
+    avgPremium?: number;
+    totalMembers?: number;
+    inForceCount?: number;
+    inForcePremium?: number;
+    submittedCount?: number;
+    pendingCount?: number;
   };
-  byProduct: {
+  byProduct?: {
     _id: string;
     count: number;
     totalPremium: number;
@@ -264,14 +271,18 @@ export class ProductionService {
     });
   }
 
-  // Get statistics summary
-  getProductionStats(filters?: { agentId?: string; startDate?: string; endDate?: string }): Observable<ProductionStats> {
+  // Get statistics summary (filtered to match visible records)
+  getProductionStats(filters?: { agentId?: string; startDate?: string; endDate?: string; status?: string; productSold?: string; carrier?: string; priority?: string }): Observable<ProductionStats> {
     let params = new HttpParams();
     if (filters?.agentId) params = params.set('agentId', filters.agentId);
     if (filters?.startDate) params = params.set('startDate', filters.startDate);
     if (filters?.endDate) params = params.set('endDate', filters.endDate);
+    if (filters?.status) params = params.set('status', filters.status);
+    if (filters?.productSold) params = params.set('productSold', filters.productSold);
+    if (filters?.carrier) params = params.set('carrier', filters.carrier);
+    if (filters?.priority) params = params.set('priority', filters.priority);
     
-    return this.http.get<ProductionStats>(`${this.apiUrl}/stats/summary`, { params });
+    return this.http.get<ProductionStats>(`${this.apiUrl}/stats/filtered`, { params });
   }
 
   // Export production data as CSV blob

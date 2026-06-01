@@ -70,6 +70,12 @@ router.get('/', async (req, res) => {
       { targetRoles: req.user.role }
     ];
 
+    // Only show broadcasts created AFTER the user's account was created
+    // This prevents new agents from seeing old historical announcements
+    // Always apply the filter — fallback to current date if createdAt is missing
+    // so that users without a createdAt never see old broadcasts
+    query.createdAt = { $gte: req.user.createdAt || new Date() };
+
     const broadcasts = await Broadcast.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
@@ -115,6 +121,9 @@ router.get('/unread-count', async (req, res) => {
       { targetRoles: { $size: 0 } },
       { targetRoles: req.user.role }
     ];
+
+    // Only count broadcasts created AFTER the user's account was created
+    query.createdAt = { $gte: req.user.createdAt || new Date() };
 
     const broadcasts = await Broadcast.find(query).select('_id').lean();
     const broadcastIds = broadcasts.map(b => b._id.toString());
@@ -179,6 +188,12 @@ router.get('/:id', async (req, res) => {
       return sendResponse(res, 404, { message: 'Broadcast not found' });
     }
 
+    // Prevent users from viewing broadcasts that predate their account
+    const userCreatedAt = req.user.createdAt ? new Date(req.user.createdAt) : new Date();
+    if (new Date(broadcast.createdAt) < userCreatedAt) {
+      return sendResponse(res, 404, { message: 'Broadcast not found' });
+    }
+
     // Mark the user's notification for this broadcast as read (or create one if missing)
     const result = await Notification.updateMany(
       { userId: req.user._id, type: 'admin_broadcast', 'data.broadcastId': broadcast._id.toString() },
@@ -225,11 +240,13 @@ router.post('/', authorize('admin'), async (req, res) => {
       createdBy: req.user._id
     });
 
-    // Send notifications to matching users
+    // Send notifications to matching users (only those who existed before/at broadcast creation)
     const filter = { isActive: true };
     if (broadcast.targetRoles.length > 0) {
       filter.role = { $in: broadcast.targetRoles };
     }
+    // Only notify users who existed when the broadcast was created
+    filter.createdAt = { $lte: broadcast.createdAt };
 
     const users = await User.find(filter).select('_id email name').lean();
     let sentCount = 0;
@@ -379,6 +396,8 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
     if (broadcast.targetRoles && broadcast.targetRoles.length > 0) {
       filter.role = { $in: broadcast.targetRoles };
     }
+    // Only notify users who existed when the broadcast was created
+    filter.createdAt = { $lte: broadcast.createdAt };
     const users = await User.find(filter).select('_id email').lean();
 
     const enrichedBroadcast = {
@@ -479,6 +498,8 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
     if (broadcast.targetRoles.length > 0) {
       filter.role = { $in: broadcast.targetRoles };
     }
+    // Only resend to users who existed when the broadcast was created
+    filter.createdAt = { $lte: broadcast.createdAt };
 
     const users = await User.find(filter).select('_id email name').lean();
 

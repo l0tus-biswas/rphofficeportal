@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { AuthService } from '../../../services/auth.service';
 import { OnboardingHubService, OnboardingDocType, OnboardingDocument } from '../../../services/onboarding-hub.service';
+import { DocumentHubService, DocRequest } from '../../../services/document-hub.service';
 import { environment } from '../../../../environments/environment';
 
 interface DocCard {
@@ -34,15 +35,24 @@ export class OnboardingHubComponent implements OnInit {
   showHistory: { [docTypeId: string]: boolean } = {};
 
   currentUser: any;
+  pendingRequests: DocRequest[] = [];
+
+  // Request response inline upload state
+  requestUploadOpen: { [requestId: string]: boolean } = {};
+  requestFiles: { [requestId: string]: File } = {};
+  requestUploadNotes: { [requestId: string]: string } = {};
+  submittingRequest: { [requestId: string]: boolean } = {};
 
   constructor(
     private onboardingHubService: OnboardingHubService,
+    private documentHubService: DocumentHubService,
     private authService: AuthService
   ) {}
 
   ngOnInit(): void {
     this.currentUser = this.authService.getCurrentUser();
     this.loadData();
+    this.loadPendingRequests();
   }
 
   loadData(): void {
@@ -220,5 +230,66 @@ export class OnboardingHubComponent implements OnInit {
 
   get submittedRequiredCount(): number {
     return this.docCards.filter(c => c.docType.required && !!c.document).length;
+  }
+
+  loadPendingRequests(): void {
+    this.documentHubService.getRequests().subscribe({
+      next: (res: any) => {
+        const userId = this.currentUser?._id;
+        this.pendingRequests = (res.requests || []).filter((r: DocRequest) => {
+          if (r.isActive === false) return false;
+          // Only show requests where this agent's response is still 'pending'
+          if (userId && r.responses) {
+            const myResponse = r.responses.find((resp: any) => {
+              const agentId = typeof resp.agent === 'object' ? resp.agent._id : resp.agent;
+              return agentId === userId;
+            });
+            if (myResponse && myResponse.status !== 'pending') return false;
+          }
+          return true;
+        });
+      },
+      error: () => {}
+    });
+  }
+
+  toggleRequestUpload(requestId: string): void {
+    this.requestUploadOpen[requestId] = !this.requestUploadOpen[requestId];
+  }
+
+  onRequestFileSelected(event: Event, requestId: string): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      this.requestFiles[requestId] = input.files[0];
+    }
+  }
+
+  submitRequestResponse(request: DocRequest): void {
+    const reqId = request._id;
+    if (!reqId) return;
+    const file = this.requestFiles[reqId];
+    if (!file) return;
+
+    this.submittingRequest[reqId] = true;
+    const notes = this.requestUploadNotes[reqId] || '';
+
+    this.documentHubService.respondToRequest(reqId, file, notes).subscribe({
+      next: () => {
+        this.success = `Response submitted for "${request.title}"`;
+        this.submittingRequest[reqId] = false;
+        this.requestUploadOpen[reqId] = false;
+        delete this.requestFiles[reqId];
+        delete this.requestUploadNotes[reqId];
+        this.loadPendingRequests();
+      },
+      error: (err: any) => {
+        this.error = err.error?.message || 'Failed to submit response';
+        this.submittingRequest[reqId] = false;
+      }
+    });
+  }
+
+  isOverdue(dueDate: string): boolean {
+    return new Date(dueDate) < new Date();
   }
 }

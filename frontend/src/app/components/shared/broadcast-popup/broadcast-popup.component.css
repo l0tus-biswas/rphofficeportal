@@ -112,6 +112,29 @@
   flex-wrap: wrap;
 }
 
+.popup-link {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.popup-link .btn-link-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: #e7f1ff;
+  color: #0d6efd;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.popup-link .btn-link-action:hover {
+  background: #cfe2ff;
+  color: #0a58ca;
+}
+
 .metadata-item {
   display: flex;
   align-items: center;

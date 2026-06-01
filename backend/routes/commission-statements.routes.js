@@ -210,6 +210,58 @@ router.post('/:id/notes', authenticate, authorize('admin'), async (req, res) => 
 });
 
 // ---------------------------------------------------------------------------
+// @route   PUT /api/commission-statements/:id/notes/:noteId
+// @desc    Edit an existing note on a commission statement
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.put('/:id/notes/:noteId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ message: 'Note text is required' });
+
+    const stmt = await CommissionStatement.findById(req.params.id);
+    if (!stmt) return res.status(404).json({ message: 'Statement not found' });
+
+    const note = stmt.notes.id(req.params.noteId);
+    if (!note) return res.status(404).json({ message: 'Note not found' });
+
+    note.text = text.trim();
+    await stmt.save();
+
+    // Re-populate for response
+    await stmt.populate('notes.addedBy', 'name');
+
+    res.json({ message: 'Note updated', notes: stmt.notes });
+  } catch (error) {
+    console.error('Error editing note:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/commission-statements/:id/notes
+// @desc    Get notes for a commission statement (agent can view their own)
+// @access  Private (agent can only access own; admin can access any)
+// ---------------------------------------------------------------------------
+router.get('/:id/notes', authenticate, async (req, res) => {
+  try {
+    const stmt = await CommissionStatement.findById(req.params.id)
+      .populate('notes.addedBy', 'name');
+    if (!stmt) return res.status(404).json({ message: 'Statement not found' });
+
+    // Access control: agents can only view notes on their own statements
+    if (req.user.role !== 'admin' && stmt.agent.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json({ notes: stmt.notes });
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // @route   DELETE /api/commission-statements/:id/notes/:noteId
 // @desc    Delete a note from a commission statement (6.3)
 // @access  Admin only

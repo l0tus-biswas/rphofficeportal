@@ -35,7 +35,8 @@ export class ProductionComponent implements OnInit {
     agentId: '',
     productSold: '',
     carrier: '',
-    status: ''
+    status: '',
+    priority: ''
   };
   
   // 8.5: Date preset active label
@@ -50,6 +51,7 @@ export class ProductionComponent implements OnInit {
   showForm = false;
   editMode = false;
   currentSubmission: Partial<ProductionSubmission> = { customFields: {} };
+  saving = false; // Prevents duplicate submissions
   
   // Stats
   stats: any = null;
@@ -186,6 +188,10 @@ export class ProductionComponent implements OnInit {
     if (this.filters.agentId) statsFilters.agentId = this.filters.agentId;
     if (this.filters.startDate) statsFilters.startDate = this.filters.startDate;
     if (this.filters.endDate) statsFilters.endDate = this.filters.endDate;
+    if (this.filters.status) statsFilters.status = this.filters.status;
+    if (this.filters.productSold) statsFilters.productSold = this.filters.productSold;
+    if (this.filters.carrier) statsFilters.carrier = this.filters.carrier;
+    if ((this.filters as any).priority) statsFilters.priority = (this.filters as any).priority;
     
     this.productionService.getProductionStats(statsFilters).subscribe({
       next: (stats) => {
@@ -208,7 +214,7 @@ export class ProductionComponent implements OnInit {
   }
 
   clearFilters(): void {
-    this.filters = { page: 1, limit: 20, agentId: '', productSold: '', carrier: '', status: '' };
+    this.filters = { page: 1, limit: 20, agentId: '', productSold: '', carrier: '', status: '', priority: '' };
     this.activeDatePreset = '';
     this.loadSubmissions();
     this.loadStats();
@@ -283,6 +289,8 @@ export class ProductionComponent implements OnInit {
   }
 
   saveSubmission(): void {
+    if (this.saving) return; // Prevent duplicate submissions
+    
     const premiumMissing = this.currentSubmission.premiumAmount == null || String(this.currentSubmission.premiumAmount) === '';
     if (!this.currentSubmission.clientName || !this.currentSubmission.productSold || 
         !this.currentSubmission.carrier || premiumMissing) {
@@ -294,6 +302,8 @@ export class ProductionComponent implements OnInit {
       this.error = 'Please provide a description for "Other" product type';
       return;
     }
+
+    this.saving = true;
     
     if (this.editMode && this.currentSubmission._id) {
       this.productionService.updateProductionSubmission(
@@ -302,6 +312,7 @@ export class ProductionComponent implements OnInit {
       ).subscribe({
         next: () => {
           this.success = 'Submission updated successfully';
+          this.saving = false;
           this.cancelForm();
           this.loadSubmissions();
           this.loadStats();
@@ -310,12 +321,14 @@ export class ProductionComponent implements OnInit {
         error: (error) => {
           console.error('Error updating submission:', error);
           this.error = 'Failed to update submission';
+          this.saving = false;
         }
       });
     } else {
       this.productionService.createProductionSubmission(this.currentSubmission).subscribe({
         next: () => {
           this.success = 'Submission created successfully';
+          this.saving = false;
           this.cancelForm();
           this.loadSubmissions();
           this.loadStats();
@@ -324,6 +337,7 @@ export class ProductionComponent implements OnInit {
         error: (error) => {
           console.error('Error creating submission:', error);
           this.error = 'Failed to create submission';
+          this.saving = false;
         }
       });
     }
@@ -362,6 +376,7 @@ export class ProductionComponent implements OnInit {
     if (this.filters.carrier) url += `&carrier=${this.filters.carrier}`;
     if (this.filters.startDate) url += `&startDate=${this.filters.startDate}`;
     if (this.filters.endDate) url += `&endDate=${this.filters.endDate}`;
+    if (this.filters.priority) url += `&priority=${this.filters.priority}`;
     this.http.get<any>(url).subscribe({
       next: (data) => { this.teamReport = data; this.teamReportLoading = false; },
       error: () => { this.teamReportLoading = false; }

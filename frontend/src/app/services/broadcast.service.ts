@@ -80,8 +80,12 @@ export class BroadcastService {
     this.getBroadcasts(1, 20).subscribe({
       next: (res: any) => {
         const broadcasts: Broadcast[] = res?.broadcasts || res?.data?.broadcasts || [];
+        // Client-side safety: skip broadcasts that predate the user's account
+        const user = this.authService.getCurrentUser();
+        const userCreatedAt = user?.createdAt ? new Date(user.createdAt).getTime() : Date.now();
+        const eligible = broadcasts.filter(b => new Date(b.createdAt).getTime() >= userCreatedAt);
         // Find the newest unread broadcast we haven't popped up yet
-        const toShow = broadcasts.find(b => !b.isRead && !this.isBroadcastDismissed(b._id));
+        const toShow = eligible.find(b => !b.isRead && !this.isBroadcastDismissed(b._id));
         if (toShow) {
           this.emitForPopup(toShow);
         }
@@ -129,6 +133,16 @@ export class BroadcastService {
   private setupSocketListeners(): void {
     this.socketService.on<Broadcast>('new_broadcast').subscribe({
       next: (broadcast: Broadcast) => {
+        // Skip broadcasts created before the user's account
+        const user = this.authService.getCurrentUser();
+        if (user?.createdAt && broadcast.createdAt) {
+          const userDate = new Date(user.createdAt).getTime();
+          const broadcastDate = new Date(broadcast.createdAt).getTime();
+          if (broadcastDate < userDate) {
+            console.log('[Broadcast] Skipping old broadcast (pre-dates user):', broadcast.title);
+            return;
+          }
+        }
         console.log('[Broadcast] New broadcast received via WebSocket:', broadcast.title);
         this.emitForPopup(broadcast);
         this.refreshUnreadCount();

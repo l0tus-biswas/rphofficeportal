@@ -73,18 +73,51 @@
                 <td><small class="text-muted">{{ stmt.originalFileName || 'statement.pdf' }}</small></td>
                 <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
                 <td>
-                  <span *ngIf="stmt.notes?.length" class="badge bg-secondary">{{ stmt.notes.length }}</span>
+                  <span *ngIf="stmt.notes?.length" class="badge bg-secondary cursor-pointer" (click)="viewNotes(stmt)" title="Click to view notes">{{ stmt.notes.length }}</span>
                   <small *ngIf="!stmt.notes?.length" class="text-muted">—</small>
                 </td>
                 <td>
-                  <button class="btn btn-outline-primary btn-sm" (click)="downloadStatement(stmt)">
+                  <button class="btn btn-outline-primary btn-sm me-1" (click)="downloadStatement(stmt)">
                     <i class="bi bi-download me-1"></i>Download
+                  </button>
+                  <button *ngIf="stmt.notes?.length" class="btn btn-outline-secondary btn-sm" (click)="viewNotes(stmt)">
+                    <i class="bi bi-chat-text me-1"></i>Notes
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Notes Modal -->
+<div *ngIf="showNotesModal" class="modal-backdrop" (click)="closeNotesModal()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-chat-text me-2"></i>Statement Notes</h5>
+        <button type="button" class="btn-close" (click)="closeNotesModal()"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3" *ngIf="selectedStatementPayPeriod">
+          Pay Period: <strong>{{ selectedStatementPayPeriod | date:'mediumDate' }}</strong>
+        </p>
+        <div *ngIf="selectedStatementNotes.length === 0" class="text-center py-3">
+          <p class="text-muted">No notes available.</p>
+        </div>
+        <div *ngFor="let note of selectedStatementNotes" class="note-item mb-3 p-3 bg-light rounded">
+          <p class="mb-1">{{ note.text }}</p>
+          <small class="text-muted">
+            <i class="bi bi-person me-1"></i>{{ note.addedBy?.name || 'Admin' }}
+            <span class="ms-2"><i class="bi bi-clock me-1"></i>{{ note.addedAt | date:'medium' }}</span>
+          </small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="closeNotesModal()">Close</button>
       </div>
     </div>
   </div>
