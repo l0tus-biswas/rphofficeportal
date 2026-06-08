@@ -48,12 +48,15 @@
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-lock"></i></span>
               <input 
-                type="password" 
+                [type]="showPassword ? 'text' : 'password'" 
                 class="form-control" 
                 id="password" 
                 formControlName="password"
                 [class.is-invalid]="f['password'].invalid && f['password'].touched"
                 [placeholder]="'Enter your password'">
+              <button type="button" class="btn btn-outline-secondary password-toggle" (click)="showPassword = !showPassword" tabindex="-1" aria-label="Toggle password visibility">
+                <i class="bi" [ngClass]="showPassword ? 'bi-eye-slash' : 'bi-eye'"></i>
+              </button>
             </div>
             <div *ngIf="f['password'].invalid && f['password'].touched" class="text-danger small mt-1">
               {{ "is required" }}

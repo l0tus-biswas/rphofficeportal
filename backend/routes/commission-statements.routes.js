@@ -212,15 +212,20 @@ router.post('/:id/notes', authenticate, authorize('admin'), async (req, res) => 
 // ---------------------------------------------------------------------------
 // @route   PUT /api/commission-statements/:id/notes/:noteId
 // @desc    Edit an existing note on a commission statement
-// @access  Admin only
+// @access  Admin or statement owner (agent)
 // ---------------------------------------------------------------------------
-router.put('/:id/notes/:noteId', authenticate, authorize('admin'), async (req, res) => {
+router.put('/:id/notes/:noteId', authenticate, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ message: 'Note text is required' });
 
     const stmt = await CommissionStatement.findById(req.params.id);
     if (!stmt) return res.status(404).json({ message: 'Statement not found' });
+
+    // Access control: admin can edit any; agent can only edit notes on their own statements
+    if (req.user.role !== 'admin' && stmt.agent.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
 
     const note = stmt.notes.id(req.params.noteId);
     if (!note) return res.status(404).json({ message: 'Note not found' });

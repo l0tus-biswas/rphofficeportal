@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const Broadcast = require('../models/Broadcast');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { authLimiter, resetLimiter } = require('../middleware/rateLimiter.middleware');
 const { sendPasswordResetEmail } = require('../utils/neuzmail');
@@ -56,6 +57,9 @@ router.post('/login', authLimiter, validateRequest(schemas.login), async (req, r
       }
     }
     
+    // Capture first-login state before updating lastLogin
+    const isFirstLogin = !user.lastLogin;
+
     // Update last login
     user.lastLogin = Date.now();
     await user.save();
@@ -78,6 +82,50 @@ router.post('/login', authLimiter, validateRequest(schemas.login), async (req, r
       }, false);
     } catch (notifErr) {
       console.error('Login notification error:', notifErr.message);
+    }
+
+    // First login: mark all pre-existing broadcasts as read so new agents
+    // don't see historical announcements they missed before joining.
+    if (isFirstLogin) {
+      try {
+        const query = { isActive: true };
+        if (user.role !== 'admin') {
+          query.$or = [
+            { targetRoles: { $size: 0 } },
+            { targetRoles: user.role }
+          ];
+        }
+        query.createdAt = { $gte: user.createdAt || new Date() };
+
+        const existingBroadcasts = await Broadcast.find(query).select('_id title message link').lean();
+
+        if (existingBroadcasts.length > 0) {
+          // Check which broadcasts already have notifications for this user
+          const existingNotifs = await Notification.find({
+            userId: user._id,
+            type: 'admin_broadcast',
+            'data.broadcastId': { $in: existingBroadcasts.map(b => b._id.toString()) }
+          }).select('data.broadcastId').lean();
+
+          const existingSet = new Set(existingNotifs.map(n => n.data?.broadcastId?.toString()));
+
+          // Create read notifications for any broadcasts without one
+          const toMark = existingBroadcasts.filter(b => !existingSet.has(b._id.toString()));
+          for (const b of toMark) {
+            await Notification.create({
+              userId: user._id,
+              type: 'admin_broadcast',
+              title: b.title,
+              message: b.message,
+              data: { broadcastId: b._id.toString() },
+              isRead: true,
+              link: b.link || null
+            });
+          }
+        }
+      } catch (firstLoginErr) {
+        console.error('First login broadcast marking error:', firstLoginErr.message);
+      }
     }
 
     sendResponse(res, 200, {

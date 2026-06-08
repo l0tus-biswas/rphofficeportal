@@ -17,6 +17,7 @@ export class AppComponent implements OnInit, OnDestroy {
   title = 'RHP Office - Recruiting Platform';
   private currentBrandingName = 'RHP Office';
   private broadcastSubscription?: Subscription;
+  private broadcastQueueSubscription?: Subscription;
 
   constructor(
     private titleService: Title,
@@ -65,10 +66,18 @@ export class AppComponent implements OnInit, OnDestroy {
         this.broadcastPopupService.showBroadcastPopup(broadcast);
       }
     });
+
+    // Listen for queued broadcasts (multiple unread) and display them sequentially
+    this.broadcastQueueSubscription = this.broadcastService.newBroadcastQueue$.subscribe(broadcasts => {
+      if (broadcasts && broadcasts.length > 0) {
+        this.broadcastPopupService.showBroadcastQueue(broadcasts);
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.broadcastSubscription?.unsubscribe();
+    this.broadcastQueueSubscription?.unsubscribe();
   }
 
   private updateMetaForRoute(url: string): void {

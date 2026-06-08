@@ -29,3 +29,18 @@
 .input-group:focus-within .input-group-text {
   border-color: #4CAF50;
 }
+
+.password-toggle {
+  border-left: none;
+  background: transparent;
+  z-index: 3;
+}
+
+.password-toggle:hover,
+.password-toggle:focus {
+  background: #f8f9fa;
+}
+
+.input-group:focus-within .password-toggle {
+  border-color: #4CAF50;
+}

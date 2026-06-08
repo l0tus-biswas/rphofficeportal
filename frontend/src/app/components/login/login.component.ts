@@ -15,6 +15,7 @@ export class LoginComponent implements OnInit {
   loginForm!: FormGroup;
   loading = false;
   error = '';
+  showPassword = false;
   maintenanceMode = false;
   maintenanceMessage = 'RHP Office is temporarily under maintenance. Please check back shortly.';
   returnUrl = '/dashboard';

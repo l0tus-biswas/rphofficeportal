@@ -34,6 +34,9 @@ export class BroadcastService {
   private newBroadcastSubject = new BehaviorSubject<Broadcast | null>(null);
   public newBroadcast$ = this.newBroadcastSubject.asObservable();
 
+  private newBroadcastQueueSubject = new BehaviorSubject<Broadcast[]>([]);
+  public newBroadcastQueue$ = this.newBroadcastQueueSubject.asObservable();
+
   // localStorage key for broadcasts the user has explicitly dismissed/confirmed
   private readonly DISMISSED_KEY = 'rph_broadcast_dismissed_ids';
   // in-memory guard: prevents showing the same popup twice in one session
@@ -73,7 +76,7 @@ export class BroadcastService {
 
   /**
    * Fetch unread broadcasts the user may have missed while offline and show
-   * a popup for the most recent one not already shown.
+   * popups for all of them sequentially.
    */
   private checkOfflineBroadcasts(): void {
     if (!this.authService.isLoggedIn()) return;
@@ -84,10 +87,12 @@ export class BroadcastService {
         const user = this.authService.getCurrentUser();
         const userCreatedAt = user?.createdAt ? new Date(user.createdAt).getTime() : Date.now();
         const eligible = broadcasts.filter(b => new Date(b.createdAt).getTime() >= userCreatedAt);
-        // Find the newest unread broadcast we haven't popped up yet
-        const toShow = eligible.find(b => !b.isRead && !this.isBroadcastDismissed(b._id));
-        if (toShow) {
-          this.emitForPopup(toShow);
+        // Find ALL unread broadcasts we haven't popped up yet, ordered oldest-first
+        const toShow = eligible
+          .filter(b => !b.isRead && !this.isBroadcastDismissed(b._id))
+          .reverse(); // oldest first so user sees them chronologically
+        if (toShow.length > 0) {
+          this.emitQueueForPopup(toShow);
         }
       },
       error: () => {}
@@ -103,6 +108,22 @@ export class BroadcastService {
     if (this.shownInSession.has(broadcast._id)) return;
     this.shownInSession.add(broadcast._id);
     this.newBroadcastSubject.next(broadcast);
+  }
+
+  /** Emit a queue of broadcasts to be displayed one-by-one via popup loop.
+   *  Filters out dismissed and already-shown broadcasts before emitting. */
+  private emitQueueForPopup(broadcasts: Broadcast[]): void {
+    const filtered = broadcasts.filter(b => {
+      if (this.isBroadcastDismissed(b._id)) return false;
+      if (this.shownInSession.has(b._id)) return false;
+      return true;
+    });
+    for (const b of filtered) {
+      this.shownInSession.add(b._id);
+    }
+    if (filtered.length > 0) {
+      this.newBroadcastQueueSubject.next(filtered);
+    }
   }
 
   /** Called by the popup component when user explicitly dismisses, confirms, or opens the link. */

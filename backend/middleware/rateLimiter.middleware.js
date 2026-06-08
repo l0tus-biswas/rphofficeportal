@@ -13,15 +13,19 @@ exports.apiLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Strict rate limiter for auth endpoints
+// Strict rate limiter for auth endpoints – keyed by email (not IP)
 exports.authLimiter = rateLimit({
   windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 5,
   skip: (req) => process.env.NODE_ENV === 'development',
-  skipSuccessfulRequests: false,
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const email = (req.body && req.body.email || '').trim().toLowerCase();
+    return email || req.ip;
+  },
   message: {
     success: false,
-    message: 'Too many login attempts, please try again after 15 minutes.'
+    message: 'Too many login attempts for this account, please try again after 15 minutes.'
   }
 });
 

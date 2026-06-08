@@ -1,5 +1,10 @@
 <div *ngIf="isVisible && currentBroadcast" class="broadcast-popup-overlay">
   <div class="broadcast-popup-container">
+    <!-- Queue indicator -->
+    <div *ngIf="remainingCount > 1" class="popup-queue-indicator">
+      <span class="queue-badge">{{ remainingCount }} announcements</span>
+    </div>
+
     <!-- Popup Content -->
     <div class="popup-content">
       <!-- Icon -->

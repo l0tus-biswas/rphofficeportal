@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const multer = require('multer');
 const Broadcast = require('../models/Broadcast');
 const Notification = require('../models/Notification');
+const NotificationPreference = require('../models/NotificationPreference');
 const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
@@ -418,6 +419,7 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
     // Background email sending with current broadcast data (includes image if uploaded)
     (async () => {
       const userIds = users.map(u => u._id);
+      // Find notifications that already had email sent to avoid duplicates
       const existingNotifications = await Notification.find({
         type: 'admin_broadcast',
         'data.broadcastId': broadcast._id.toString(),
@@ -427,13 +429,27 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
       const notificationMap = new Map();
       existingNotifications.forEach(n => notificationMap.set(n.userId.toString(), n));
 
+      // Find users who have globally muted emails
+      const mutedPrefs = await NotificationPreference.find({
+        userId: { $in: userIds },
+        $or: [
+          { muteAllEmails: true },
+          { 'preferences.admin_broadcast.email': false }
+        ]
+      }).select('userId').lean();
+      const mutedSet = new Set(mutedPrefs.map(p => p.userId.toString()));
+
       let emailCount = 0;
 
       for (let i = 0; i < users.length; i++) {
         const user = users[i];
+        if (!user.email) continue;
+        if (mutedSet.has(user._id.toString())) continue;
+
         const notif = notificationMap.get(user._id.toString());
 
-        if (!user.email || !notif || notif.emailSent) continue;
+        // Skip if email was already sent for this broadcast
+        if (notif && notif.emailSent) continue;
 
         if (emailCount > 0 && emailCount % EMAIL_BATCH_SIZE === 0) {
           await delay(EMAIL_BATCH_DELAY_MS);
@@ -449,8 +465,23 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
             actionLabel: 'View Announcement'
           });
           emailCount++;
-          notif.emailSent = true;
-          await notif.save();
+          // Mark emailSent on existing notification, or create a tracking record
+          if (notif) {
+            notif.emailSent = true;
+            await notif.save();
+          } else {
+            // User may have in-app disabled but email should still be tracked
+            await Notification.create({
+              userId: user._id,
+              type: 'admin_broadcast',
+              title: broadcast.title,
+              message: broadcast.message,
+              data: { broadcastId: broadcast._id.toString() },
+              isRead: false,
+              emailSent: true,
+              link: broadcast.link || null
+            });
+          }
         } catch (emailErr) {
           console.error(`[Broadcast Notify] Email failed for ${user.email}:`, emailErr.message);
           if (emailErr.message && emailErr.message.includes('rate limit')) {
@@ -465,8 +496,21 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
                 actionLabel: 'View Announcement'
               });
               emailCount++;
-              notif.emailSent = true;
-              await notif.save();
+              if (notif) {
+                notif.emailSent = true;
+                await notif.save();
+              } else {
+                await Notification.create({
+                  userId: user._id,
+                  type: 'admin_broadcast',
+                  title: broadcast.title,
+                  message: broadcast.message,
+                  data: { broadcastId: broadcast._id.toString() },
+                  isRead: false,
+                  emailSent: true,
+                  link: broadcast.link || null
+                });
+              }
             } catch (retryErr) {
               console.error(`[Broadcast Notify] Email retry failed for ${user.email}:`, retryErr.message);
             }

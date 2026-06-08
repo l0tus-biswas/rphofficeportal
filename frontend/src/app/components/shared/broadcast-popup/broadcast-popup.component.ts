@@ -14,6 +14,7 @@ import { Subscription } from 'rxjs';
 export class BroadcastPopupComponent implements OnInit, OnDestroy {
   currentBroadcast: Broadcast | null = null;
   isVisible = false;
+  remainingCount = 0;
   private popupSubscription?: Subscription;
 
   constructor(
@@ -28,6 +29,7 @@ export class BroadcastPopupComponent implements OnInit, OnDestroy {
       if (broadcast) {
         this.currentBroadcast = broadcast;
         this.isVisible = true;
+        this.remainingCount = this.broadcastPopupService.queueLength;
       }
     });
   }

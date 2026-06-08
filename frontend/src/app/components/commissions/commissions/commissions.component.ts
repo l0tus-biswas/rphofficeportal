@@ -20,6 +20,11 @@ export class CommissionsComponent implements OnInit {
   showNotesModal = false;
   selectedStatementNotes: any[] = [];
   selectedStatementPayPeriod = '';
+  selectedStatementId = '';
+
+  // Note editing
+  editingNoteId: string | null = null;
+  editNoteText = '';
 
   constructor(private commissionService: CommissionService) {}
 
@@ -88,9 +93,12 @@ export class CommissionsComponent implements OnInit {
 
   viewNotes(statement: CommissionStatement): void {
     if (!statement._id) return;
+    this.selectedStatementId = statement._id;
     this.selectedStatementPayPeriod = String(statement.payPeriod);
     this.selectedStatementNotes = statement.notes || [];
     this.showNotesModal = true;
+    this.editingNoteId = null;
+    this.editNoteText = '';
     // Fetch fresh notes from the API
     this.commissionService.getNotes(statement._id).subscribe({
       next: (res) => {
@@ -103,5 +111,31 @@ export class CommissionsComponent implements OnInit {
   closeNotesModal(): void {
     this.showNotesModal = false;
     this.selectedStatementNotes = [];
+    this.selectedStatementId = '';
+    this.editingNoteId = null;
+    this.editNoteText = '';
+  }
+
+  editNote(note: any): void {
+    this.editingNoteId = note._id;
+    this.editNoteText = note.text;
+  }
+
+  cancelEditNote(): void {
+    this.editingNoteId = null;
+    this.editNoteText = '';
+  }
+
+  saveEditNote(): void {
+    if (!this.selectedStatementId || !this.editingNoteId || !this.editNoteText.trim()) return;
+    this.commissionService.editNote(this.selectedStatementId, this.editingNoteId, this.editNoteText.trim()).subscribe({
+      next: (res) => {
+        this.selectedStatementNotes = res.notes || [];
+        this.editingNoteId = null;
+        this.editNoteText = '';
+        this.loadStatements();
+      },
+      error: () => { this.error = 'Failed to edit note'; }
+    });
   }
 }

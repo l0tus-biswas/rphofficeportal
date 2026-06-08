@@ -358,7 +358,7 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
     const teamIds = [userId, ...downlineIds];
 
     // ── REPORTED (from ProductionSubmission) ─────────────────────────
-    // Personal reported
+    // Personal reported — sum numberOfMembers (fallback to 1 per submission if not set)
     const personalReportedAgg = await ProductionSubmission.aggregate([
       {
         $match: {
@@ -370,7 +370,7 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       {
         $group: {
           _id: null,
-          clientCount: { $sum: 1 },
+          clientCount: { $sum: { $ifNull: ['$numberOfMembers', 1] } },
           premium: { $sum: '$premiumAmount' }
         }
       }
@@ -388,7 +388,7 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       {
         $group: {
           _id: null,
-          clientCount: { $sum: 1 },
+          clientCount: { $sum: { $ifNull: ['$numberOfMembers', 1] } },
           premium: { $sum: '$premiumAmount' },
           producingAgents: { $addToSet: '$agent' }
         }

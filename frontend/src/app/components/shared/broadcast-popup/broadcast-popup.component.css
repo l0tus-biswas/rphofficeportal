@@ -44,6 +44,21 @@
   animation: slideUp 0.4s ease-out;
 }
 
+.popup-queue-indicator {
+  text-align: center;
+  padding: 8px 16px 0;
+}
+
+.queue-badge {
+  display: inline-block;
+  background: #e8f4fd;
+  color: #1976d2;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
 .close-btn {
   position: absolute;
   top: 15px;

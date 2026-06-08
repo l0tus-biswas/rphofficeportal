@@ -369,7 +369,7 @@ router.get('/dashboard/checklist', async (req, res) => {
     }
 
     // For licensed agents: check onboarding documents
-    const docTypeNames = ['W-9', 'Direct Deposit', "E&O Insurance", 'CMS Certificate'];
+    const docTypeNames = ['W-9', "E&O Insurance", 'CMS Certificate'];
     const docTypes = await OnboardingDocType.find({ name: { $in: docTypeNames }, isActive: true }).select('_id name');
     const docTypeMap = {};
     docTypes.forEach(dt => { docTypeMap[dt.name] = dt._id; });
@@ -387,16 +387,6 @@ router.get('/dashboard/checklist', async (req, res) => {
 
     const checklist = [
       {
-        label: 'Upload W-9',
-        completed: docTypeMap['W-9'] ? uploadedDocTypeIds.has(docTypeMap['W-9'].toString()) : false,
-        link: '/onboarding-hub'
-      },
-      {
-        label: 'Upload Direct Deposit',
-        completed: docTypeMap['Direct Deposit'] ? uploadedDocTypeIds.has(docTypeMap['Direct Deposit'].toString()) : false,
-        link: '/onboarding-hub'
-      },
-      {
         label: 'Upload E&O Insurance',
         completed: docTypeMap['E&O Insurance'] ? uploadedDocTypeIds.has(docTypeMap['E&O Insurance'].toString()) : false,
         link: '/onboarding-hub'
@@ -407,14 +397,19 @@ router.get('/dashboard/checklist', async (req, res) => {
         link: '/onboarding-hub'
       },
       {
+        label: 'Complete W-9 / Direct Deposit via QuickBooks',
+        completed: !!req.user.qboEmployeeId,
+        link: quickbooksUrl
+      },
+      {
         label: 'Request Carrier Appointments',
         completed: !!hasCarrierRequest,
         link: '/carriers'
       },
       {
-        label: 'Complete W-9 / Direct Deposit via QuickBooks',
-        completed: !!req.user.qboEmployeeId,
-        link: quickbooksUrl
+        label: 'Check onboarding docs tab',
+        completed: false,
+        link: '/onboarding-hub'
       }
     ];
 
