@@ -387,6 +387,11 @@ router.get('/dashboard/checklist', async (req, res) => {
 
     const checklist = [
       {
+        label: 'Complete W-9 / Direct Deposit via QuickBooks',
+        completed: !!req.user.qboEmployeeId,
+        link: quickbooksUrl
+      },
+      {
         label: 'Upload E&O Insurance',
         completed: docTypeMap['E&O Insurance'] ? uploadedDocTypeIds.has(docTypeMap['E&O Insurance'].toString()) : false,
         link: '/onboarding-hub'
@@ -395,11 +400,6 @@ router.get('/dashboard/checklist', async (req, res) => {
         label: 'Upload CMS Certificate',
         completed: docTypeMap['CMS Certificate'] ? uploadedDocTypeIds.has(docTypeMap['CMS Certificate'].toString()) : false,
         link: '/onboarding-hub'
-      },
-      {
-        label: 'Complete W-9 / Direct Deposit via QuickBooks',
-        completed: !!req.user.qboEmployeeId,
-        link: quickbooksUrl
       },
       {
         label: 'Request Carrier Appointments',
