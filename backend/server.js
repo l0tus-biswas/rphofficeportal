@@ -32,12 +32,13 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Angular requires these
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:"],
-      frameSrc: ["'none'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com", "https://translate.google.com"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://translate.google.com", "https://translate.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://translate.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https://translate.google.com"],
+      connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:", "https://api.stripe.com", "https://js.stripe.com"],
+      frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"]
     }
