@@ -77,6 +77,14 @@
                   </div>
                 </div>
 
+                <div class="mb-3">
+                  <label class="form-label"><strong>Timezone</strong></label>
+                  <select class="form-select" formControlName="timezone">
+                    <option *ngFor="let tz of timezoneOptions" [value]="tz.value">{{ tz.label }}</option>
+                  </select>
+                  <small class="text-muted">Select your preferred timezone for displaying dates and times</small>
+                </div>
+
                 <div class="text-end" *ngIf="editMode">
                   <button type="button" class="btn btn-secondary me-2" (click)="toggleEditMode()">
                     Cancel
@@ -175,7 +183,7 @@
 
               <div class="mb-3">
                 <label class="text-muted small">Member Since</label>
-                <div>{{ currentUser?.createdAt | date: 'mediumDate' }}</div>
+                <div>{{ currentUser?.createdAt | appDate: 'mediumDate' }}</div>
               </div>
 
               <div class="mb-3">
@@ -189,7 +197,7 @@
 
               <div class="mb-0" *ngIf="currentUser?.lastLogin">
                 <label class="text-muted small">Last Login</label>
-                <div>{{ currentUser?.lastLogin | date: 'short' }}</div>
+                <div>{{ currentUser?.lastLogin | appDate: 'short' }}</div>
               </div>
             </div>
           </div>

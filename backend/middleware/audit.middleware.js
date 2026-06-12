@@ -1,5 +1,20 @@
 const AuditLog = require('../models/AuditLog');
 
+// Sensitive fields that should never be stored in audit logs
+const REDACTED_FIELDS = ['password', 'currentPassword', 'newPassword', 'confirmPassword', 'ssn', 'socialSecurityNumber', 'token', 'resetToken', 'autoLoginToken'];
+
+// Redact sensitive fields from an object (shallow copy)
+function redactSensitiveFields(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const redacted = { ...obj };
+  for (const field of REDACTED_FIELDS) {
+    if (field in redacted) {
+      redacted[field] = '[REDACTED]';
+    }
+  }
+  return redacted;
+}
+
 // Helper function to get real client IP
 function getClientIP(req) {
   // Check for X-Forwarded-For header (proxy/load balancer)
@@ -47,7 +62,7 @@ exports.logAction = (action) => {
             details: {
               method: req.method,
               path: req.path,
-              body: req.body,
+              body: redactSensitiveFields(req.body),
               params: req.params
             },
             ipAddress: getClientIP(req),

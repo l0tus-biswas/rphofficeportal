@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { LicensingService, LicensingProgress } from '../../services/licensing.service';
 import { AuthService } from '../../services/auth.service';
@@ -183,7 +184,7 @@ export class LicensingComponent implements OnInit {
 
   formatDate(date: any): string {
     if (!date) return 'Not set';
-    return new Date(date).toLocaleDateString();
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
   }
 
   getChecklistItemStatus(item: any): string {

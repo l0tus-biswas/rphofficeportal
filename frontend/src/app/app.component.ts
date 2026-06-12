@@ -5,6 +5,7 @@ import { BrandingService } from './services/branding.service';
 import { BroadcastService } from './services/broadcast.service';
 import { BroadcastPopupService } from './services/broadcast-popup.service';
 import { SocketService } from './services/socket.service';
+import { TimezoneService } from './services/timezone.service';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 
@@ -26,7 +27,8 @@ export class AppComponent implements OnInit, OnDestroy {
     private brandingService: BrandingService,
     private broadcastService: BroadcastService,
     private broadcastPopupService: BroadcastPopupService,
-    private socketService: SocketService
+    private socketService: SocketService,
+    private timezoneService: TimezoneService
   ) {}
 
   ngOnInit(): void {

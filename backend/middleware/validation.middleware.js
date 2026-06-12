@@ -46,7 +46,8 @@ exports.schemas = {
     city: Joi.string().trim().max(50).optional(),
     state: Joi.string().trim().max(50).optional(),
     zipCode: Joi.string().trim().max(10).optional(),
-    dateOfBirth: Joi.date().optional()
+    dateOfBirth: Joi.date().optional(),
+    timezone: Joi.string().trim().max(50).optional().allow('', null)
   }),
   
   changePassword: Joi.object({
@@ -133,5 +134,22 @@ exports.schemas = {
     userUsageLimit: Joi.number().min(1).optional(),
     applicableRoles: Joi.array().items(Joi.string().valid('admin', 'agent')).optional(),
     isActive: Joi.boolean().optional()
+  }),
+
+  productionSubmission: Joi.object({
+    submissionDate: Joi.date().optional(),
+    clientName: Joi.string().trim().min(1).max(500).required(),
+    numberOfMembers: Joi.number().integer().min(0).optional().allow(null),
+    productSold: Joi.string().trim().min(1).max(200).required(),
+    productOtherDescription: Joi.string().trim().max(500).optional().allow('', null),
+    productCategory: Joi.string().trim().max(100).optional(),
+    carrier: Joi.string().hex().length(24).required(),
+    premiumAmount: Joi.number().min(0).required(),
+    notes: Joi.string().trim().max(2000).optional().allow('', null),
+    status: Joi.string().valid('Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled').optional(),
+    isTrainingPeriod: Joi.boolean().optional(),
+    customFields: Joi.object().optional(),
+    inForceDate: Joi.date().optional().allow(null),
+    priority: Joi.string().valid('Low', 'Medium', 'High', 'Urgent').optional().allow(null)
   })
 };

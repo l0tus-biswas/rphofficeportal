@@ -6,6 +6,7 @@ const Carrier = require('../models/Carrier');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
+const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { getDownlineIds } = require('../utils/helpers');
 const SystemConfig = require('../models/SystemConfig');
 const multer = require('multer');
@@ -78,11 +79,11 @@ const PRODUCT_CATEGORY_MAP = {
 
 /**
  * Derive category from product name.
- * Falls back to 'Life Insurance' if unmapped (most legacy records are life/supplemental).
+ * Falls back to 'Other' for unmapped products.
  */
 const getProductCategory = (productSold) => {
-  if (!productSold || productSold === 'Other') return 'Life Insurance';
-  return PRODUCT_CATEGORY_MAP[productSold] || 'Life Insurance';
+  if (!productSold || productSold === 'Other') return 'Other';
+  return PRODUCT_CATEGORY_MAP[productSold] || 'Other';
 };
 
 // Configure multer for file uploads
@@ -139,7 +140,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     // Apply filters
-    if (req.query.agentId) {
+    if (req.query.agentId && req.user.role === 'admin') {
       query.agent = req.query.agentId;
     }
     if (req.query.productSold) {
@@ -165,11 +166,11 @@ router.get('/', authenticate, async (req, res) => {
     if (req.query.startDate || req.query.endDate) {
       query.submissionDate = {};
       if (req.query.startDate) {
-        query.submissionDate.$gte = new Date(req.query.startDate);
+        query.submissionDate.$gte = new Date(req.query.startDate + 'T00:00:00');
       }
       if (req.query.endDate) {
-        // Set to end of day (23:59:59.999 UTC) to include all records from that date
-        const endDate = new Date(req.query.endDate + 'T23:59:59.999Z');
+        // Set to end of day in server timezone to include all records from that date
+        const endDate = new Date(req.query.endDate + 'T23:59:59.999');
         query.submissionDate.$lte = endDate;
       }
     }
@@ -267,10 +268,10 @@ router.get('/team-report', authenticate, async (req, res) => {
     if (req.query.startDate || req.query.endDate) {
       productionQuery.submissionDate = {};
       if (req.query.startDate) {
-        productionQuery.submissionDate.$gte = new Date(req.query.startDate);
+        productionQuery.submissionDate.$gte = new Date(req.query.startDate + 'T00:00:00');
       }
       if (req.query.endDate) {
-        productionQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+        productionQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999');
       }
     } else {
       productionQuery.submissionDate = { $gte: since };
@@ -333,7 +334,7 @@ router.get('/stats/filtered', authenticate, async (req, res) => {
       }
     }
 
-    if (req.query.agentId) query.agent = req.query.agentId;
+    if (req.query.agentId && req.user.role === 'admin') query.agent = req.query.agentId;
     if (req.query.productSold) query.productSold = req.query.productSold;
     if (req.query.carrier && mongoose.Types.ObjectId.isValid(req.query.carrier)) {
       query.carrier = new mongoose.Types.ObjectId(req.query.carrier);
@@ -349,8 +350,8 @@ router.get('/stats/filtered', authenticate, async (req, res) => {
 
     if (req.query.startDate || req.query.endDate) {
       query.submissionDate = {};
-      if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate);
-      if (req.query.endDate) query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+      if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate + 'T00:00:00');
+      if (req.query.endDate) query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999');
     }
 
     const stats = await ProductionSubmission.aggregate([
@@ -396,13 +397,19 @@ router.get('/export', authenticate, async (req, res) => {
     if (req.query.productSold) query.productSold = req.query.productSold;
     if (req.query.carrier) query.carrier = req.query.carrier;
     if (req.query.status) query.status = req.query.status;
+    if (req.query.priority) {
+      query.$or = [
+        { priority: req.query.priority },
+        { 'customFields.priority': req.query.priority }
+      ];
+    }
     if (req.query.productCategory) query.productCategory = req.query.productCategory;
 
     if (req.query.startDate || req.query.endDate) {
       query.submissionDate = {};
-      if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate);
+      if (req.query.startDate) query.submissionDate.$gte = new Date(req.query.startDate + 'T00:00:00');
       if (req.query.endDate) {
-        query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+        query.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999');
       }
     }
 
@@ -415,17 +422,18 @@ router.get('/export', authenticate, async (req, res) => {
     const escape = (val) => {
       if (val === null || val === undefined) return '';
       const str = String(val).replace(/"/g, '""');
-      return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+      return str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r') ? `"${str}"` : str;
     };
 
     const headers = [
-      'Submission Date', 'Agent Name', 'Agent Email',
+      'Submission Date', 'In-Force Date', 'Agent Name', 'Agent Email',
       'Client Name', 'Product', 'Product Category',
-      'Carrier', 'Premium Amount', 'Status', 'Notes'
+      'Carrier', 'Premium Amount', 'Members', 'Status', 'Priority', 'Notes'
     ];
 
     const rows = submissions.map(s => [
       s.submissionDate ? new Date(s.submissionDate).toLocaleDateString('en-US') : '',
+      s.inForceDate ? new Date(s.inForceDate).toLocaleDateString('en-US') : '',
       s.agent?.name || '',
       s.agent?.email || '',
       s.clientName || '',
@@ -435,7 +443,9 @@ router.get('/export', authenticate, async (req, res) => {
       s.productCategory || '',
       s.carrier?.name || '',
       s.premiumAmount != null ? s.premiumAmount.toFixed(2) : '',
+      s.numberOfMembers != null ? s.numberOfMembers : '',
       s.status || '',
+      s.priority || '',
       s.notes || ''
     ].map(escape).join(','));
 
@@ -469,10 +479,10 @@ router.get('/stats/summary', authenticate, async (req, res) => {
     if (req.query.startDate || req.query.endDate) {
       matchQuery.submissionDate = {};
       if (req.query.startDate) {
-        matchQuery.submissionDate.$gte = new Date(req.query.startDate);
+        matchQuery.submissionDate.$gte = new Date(req.query.startDate + 'T00:00:00');
       }
       if (req.query.endDate) {
-        matchQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999Z');
+        matchQuery.submissionDate.$lte = new Date(req.query.endDate + 'T23:59:59.999');
       }
     }
     
@@ -667,7 +677,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // @route   POST /api/production
 // @desc    Create new production submission
 // @access  Private (agent or admin)
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, validateRequest(schemas.productionSubmission), async (req, res) => {
   try {
     const {
       submissionDate,
@@ -686,18 +696,6 @@ router.post('/', authenticate, async (req, res) => {
       priority
     } = req.body;
     
-    // Validate required fields
-    if (!clientName || !productSold || !carrier || (premiumAmount == null && premiumAmount !== 0)) {
-      return res.status(400).json({ 
-        message: 'Missing required fields: clientName, productSold, carrier, premiumAmount' 
-      });
-    }
-    
-    // Validate premium is non-negative
-    if (premiumAmount < 0) {
-      return res.status(400).json({ message: 'Premium amount cannot be negative' });
-    }
-    
     // If product is "Other", require description
     if (productSold === 'Other' && !productOtherDescription) {
       return res.status(400).json({ 
@@ -713,10 +711,45 @@ router.post('/', authenticate, async (req, res) => {
     if (!carrierExists) {
       return res.status(400).json({ message: 'Invalid carrier' });
     }
+
+    // Duplicate submission guard: prevent identical submissions within 60 seconds
+    const dupeWindow = new Date(Date.now() - 60 * 1000);
+    const duplicate = await ProductionSubmission.findOne({
+      agent: req.user._id,
+      clientName,
+      productSold,
+      carrier,
+      premiumAmount,
+      deletedAt: null,
+      createdAt: { $gte: dupeWindow }
+    }).lean();
+    if (duplicate) {
+      return res.status(409).json({ message: 'Duplicate submission detected. Please wait before resubmitting.' });
+    }
+
+    // Non-admin users can only submit with 'Submitted' or 'Pending' status
+    let resolvedStatus = status || 'Submitted';
+    if (req.user.role !== 'admin') {
+      const allowedAgentStatuses = ['Submitted', 'Pending'];
+      if (!allowedAgentStatuses.includes(resolvedStatus)) {
+        resolvedStatus = 'Submitted';
+      }
+    }
+
+    // Non-admin: restrict submission date (no more than 1 year in the past)
+    let resolvedSubmissionDate = submissionDate || Date.now();
+    if (req.user.role !== 'admin' && submissionDate) {
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const submDate = new Date(submissionDate);
+      if (submDate < oneYearAgo) {
+        return res.status(400).json({ message: 'Submission date cannot be more than 1 year in the past' });
+      }
+    }
     
     const submission = new ProductionSubmission({
       agent: req.user._id,
-      submissionDate: submissionDate || Date.now(),
+      submissionDate: resolvedSubmissionDate,
       clientName,
       numberOfMembers: numberOfMembers != null ? numberOfMembers : null,
       productSold,
@@ -725,7 +758,7 @@ router.post('/', authenticate, async (req, res) => {
       carrier,
       premiumAmount,
       notes,
-      status: status || 'Submitted',
+      status: resolvedStatus,
       isTrainingPeriod: isTrainingPeriod || false,
       customFields: customFields || {},
       inForceDate: inForceDate || null,
@@ -796,7 +829,12 @@ router.put('/:id', authenticate, async (req, res) => {
     if (productCategory) submission.productCategory = productCategory;
     if (productOtherDescription !== undefined) submission.productOtherDescription = productOtherDescription;
     if (carrier) submission.carrier = carrier;
-    if (premiumAmount !== undefined) submission.premiumAmount = premiumAmount;
+    if (premiumAmount !== undefined) {
+      if (premiumAmount < 0) {
+        return res.status(400).json({ message: 'Premium amount cannot be negative' });
+      }
+      submission.premiumAmount = premiumAmount;
+    }
     if (notes !== undefined) submission.notes = notes;
     if (isTrainingPeriod !== undefined) submission.isTrainingPeriod = isTrainingPeriod;
     if (customFields !== undefined) submission.customFields = customFields;
@@ -838,7 +876,35 @@ router.put('/:id', authenticate, async (req, res) => {
             await checkAndNotifyPromotion(uplineId);
           }
         } catch (promoErr) {
-          console.error('[Production Update] Promotion chain check error:', promoErr.message);
+          console.error('[Production Update] Promotion chain check error:', {
+            submissionId: submission._id,
+            agentId: agentId.toString(),
+            error: promoErr.message,
+            stack: promoErr.stack
+          });
+        }
+      })();
+    }
+
+    // When status changes FROM "In Force" to something else, re-check promotions
+    // (the agent/upline may no longer meet thresholds)
+    if (previousStatus === 'In Force' && submission.status !== 'In Force') {
+      const agentId = submission.agent._id || submission.agent;
+      const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+      (async () => {
+        try {
+          await checkAndNotifyPromotion(agentId);
+          const uplineIds = await getUplineChainIds(agentId);
+          for (const uplineId of uplineIds) {
+            await checkAndNotifyPromotion(uplineId);
+          }
+        } catch (promoErr) {
+          console.error('[Production Update] Promotion recheck error:', {
+            submissionId: submission._id,
+            agentId: agentId.toString(),
+            error: promoErr.message,
+            stack: promoErr.stack
+          });
         }
       })();
     }
@@ -866,7 +932,10 @@ router.delete('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
-    await submission.deleteOne();
+    // Soft-delete: set deletedAt timestamp instead of removing the record
+    submission.deletedAt = new Date();
+    submission.deletedBy = req.user._id;
+    await submission.save();
     
     res.json({ message: 'Production submission deleted successfully' });
   } catch (error) {

@@ -27,14 +27,7 @@ const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 
 // TEST ROUTE - Get DocuSign template fields
-router.get('/test-template-fields', async (req, res) => {
-  try {
-    const template = await getTemplateFields();
-    res.json({ success: true, template });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+// TEST ROUTE REMOVED — was exposing DocuSign template internals publicly (Audit Fix #7)
 
 // @route   GET /api/public/check-pending-application
 // @desc    Check if user has a pending signature application

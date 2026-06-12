@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { BusinessCardsService, AdminOrderRecord } from '../../../services/business-cards.service';
 
@@ -237,12 +238,12 @@ export class PrintfulOrdersComponent implements OnInit {
 
   formatDate(date: any): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(),  year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   formatDateTime(date: any): string {
     if (!date) return '—';
-    return new Date(date).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(date).toLocaleString('en-US', { timeZone: getAppTimezone(),  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
 
   toUpper(val: string): string {

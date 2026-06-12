@@ -6,6 +6,9 @@ const User = require('../models/User');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { protect, authorize } = require('../middleware/auth.middleware');
 
+// All notification routes require authentication
+router.use(protect);
+
 // ─── Notification type categories (for preference UI grouping) ───
 const NOTIFICATION_CATEGORIES = {
   'Activity': ['login', 'profile_updated', 'password_changed', 'password_reset'],

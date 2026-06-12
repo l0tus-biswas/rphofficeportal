@@ -73,8 +73,8 @@
                   {{ req.status }}
                 </span>
               </td>
-              <td><small class="text-muted">{{ req.requestedAt | date:'medium' }}</small></td>
-              <td><small class="text-muted">{{ req.appointedAt ? (req.appointedAt | date:'medium') : '—' }}</small></td>
+              <td><small class="text-muted">{{ req.requestedAt | appDate:'medium' }}</small></td>
+              <td><small class="text-muted">{{ req.appointedAt ? (req.appointedAt | appDate:'medium') : '—' }}</small></td>
               <td>
                 <button class="btn btn-sm btn-outline-secondary position-relative" (click)="openNotes(req)">
                   <i class="bi bi-chat-left-text"></i>
@@ -133,7 +133,7 @@
             <p class="mb-1" style="white-space: pre-line">{{ note.text }}</p>
             <small class="text-muted">
               <i class="bi bi-person me-1"></i>{{ note.addedBy?.name || 'Admin' }}
-              <i class="bi bi-clock ms-2 me-1"></i>{{ note.addedAt | date:'medium' }}
+              <i class="bi bi-clock ms-2 me-1"></i>{{ note.addedAt | appDate:'medium' }}
             </small>
           </div>
         </div>

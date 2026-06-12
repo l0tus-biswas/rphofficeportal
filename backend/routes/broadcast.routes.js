@@ -73,9 +73,8 @@ router.get('/', async (req, res) => {
 
     // Only show broadcasts created AFTER the user's account was created
     // This prevents new agents from seeing old historical announcements
-    // Always apply the filter — fallback to current date if createdAt is missing
-    // so that users without a createdAt never see old broadcasts
-    query.createdAt = { $gte: req.user.createdAt || new Date() };
+    // If user's createdAt is missing, default to epoch (show all broadcasts)
+    query.createdAt = { $gte: req.user.createdAt || new Date(0) };
 
     const broadcasts = await Broadcast.find(query)
       .sort({ createdAt: -1 })

@@ -17,6 +17,7 @@ export interface ProductionSubmission {
   premiumAmount: number;
   notes?: string;
   status: 'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled';
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent' | null;
   isTrainingPeriod?: boolean;
   customFields?: Record<string, any>;
   reviewedBy?: any;
@@ -227,6 +228,7 @@ export class ProductionService {
     if (filters?.productSold) params = params.set('productSold', filters.productSold);
     if (filters?.carrier) params = params.set('carrier', filters.carrier);
     if (filters?.status) params = params.set('status', filters.status);
+    if (filters?.priority) params = params.set('priority', filters.priority);
     if (filters?.startDate) params = params.set('startDate', filters.startDate);
     if (filters?.endDate) params = params.set('endDate', filters.endDate);
     if (filters?.page) params = params.set('page', filters.page.toString());

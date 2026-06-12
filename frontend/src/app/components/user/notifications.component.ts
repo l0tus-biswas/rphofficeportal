@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { NotificationService, Notification } from '../../services/notification.service';
@@ -271,7 +272,7 @@ export class NotificationsComponent implements OnInit {
     const weeks = Math.floor(days / 7);
     if (weeks < 4) return `${weeks}w ago`;
     
-    return notifDate.toLocaleDateString();
+    return notifDate.toLocaleDateString('en-US', { timeZone: getAppTimezone() });
   }
 
   // ─── Tab switching ───

@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { DocumentHubService, DocFolder, DocHubFile, DocRequest, DocRequestResponse } from '../../services/document-hub.service';
@@ -591,7 +592,7 @@ export class DocumentHubComponent implements OnInit {
 
   formatDate(d: any): string {
     if (!d) return '';
-    return new Date(d).toLocaleDateString();
+    return new Date(d).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
   }
 
   formatFileSize(bytes: number): string {

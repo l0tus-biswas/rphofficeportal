@@ -84,7 +84,8 @@ const productionSubmissionSchema = new mongoose.Schema({
       'Supplemental Insurance',
       'Retirement / Annuities',
       'Property & Casualty - Personal',
-      'Property & Casualty - Commercial'
+      'Property & Casualty - Commercial',
+      'Other'
     ],
     required: true
   },

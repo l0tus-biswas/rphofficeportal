@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { BroadcastService, Broadcast } from '../../services/broadcast.service';
 import { AuthService } from '../../services/auth.service';
@@ -131,7 +132,7 @@ export class BroadcastsComponent implements OnInit {
     if (hrs < 24) return `${hrs}h ago`;
     const days = Math.floor(hrs / 24);
     if (days < 7) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString();
+    return new Date(dateStr).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
   }
 
   getImageUrl(imagePath: string): string {

@@ -28,6 +28,18 @@ router.get('/branding', async (req, res) => {
   }
 });
 
+// @route   GET /api/public/timezone
+// @desc    Get configured timezone for the application
+// @access  Public
+router.get('/timezone', async (req, res) => {
+  try {
+    const config = await SystemConfig.findOne({ key: 'app_timezone' }).lean();
+    sendResponse(res, 200, { timezone: config?.value || 'America/New_York' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   GET /api/public/site-access
 // @desc    Get emergency site access state and message
 // @access  Public
@@ -89,8 +101,8 @@ router.post('/apply', applyLimiter, validateRequest(schemas.applyForm), async (r
     const { name, email, phone, address, city, state, zipCode, metadata } = req.body;
     const { ref } = req.query;
     
-    // Check if email already exists
-    const existingUser = await User.findOne({ email });
+    // Check if email already exists (case-insensitive)
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return sendResponse(res, 400, {
         message: 'An account with this email already exists'
@@ -130,10 +142,9 @@ router.post('/apply', applyLimiter, validateRequest(schemas.applyForm), async (r
       isActive: true
     });
     
-    // Update agent's children array (cache)
+    // Update agent's children array atomically
     if (agent) {
-      agent.children.push(newUser._id);
-      await agent.save();
+      await User.findByIdAndUpdate(agent._id, { $push: { children: newUser._id } });
     }
     
     // Send welcome email with credentials
@@ -143,6 +154,10 @@ router.post('/apply', applyLimiter, validateRequest(schemas.applyForm), async (r
       console.error('Email sending failed:', emailError);
       // Continue even if email fails
     }
+
+    // Generate a one-time auto-login token (expires in 5 minutes)
+    const autoLoginToken = newUser.getAutoLoginToken();
+    await newUser.save({ validateBeforeSave: false });
     
     sendResponse(res, 201, {
       message: 'Application submitted successfully! Check your email for login credentials.',
@@ -152,10 +167,7 @@ router.post('/apply', applyLimiter, validateRequest(schemas.applyForm), async (r
         email: newUser.email,
         role: newUser.role
       },
-      credentials: {
-        email: newUser.email,
-        password: tempPassword
-      }
+      autoLoginToken
     });
   } catch (error) {
     errorResponse(res, error);
@@ -204,8 +216,8 @@ router.post('/registration-payment-intent', async (req, res) => {
       return sendResponse(res, 400, { message: 'Email is required' });
     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // Check if user already exists (case-insensitive)
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return sendResponse(res, 400, { message: 'Account already exists. Please login.' });
     }

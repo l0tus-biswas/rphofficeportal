@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { PaymentService } from '../../../services/payment.service';
 
@@ -90,7 +91,7 @@ export class UserTransactionsComponent implements OnInit {
 
   formatDate(date: any): string {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(), 
       year: 'numeric',
       month: 'short',
       day: 'numeric',

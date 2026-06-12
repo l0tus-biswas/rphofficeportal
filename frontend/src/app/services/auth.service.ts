@@ -103,6 +103,19 @@ export class AuthService {
     return this.http.post(`${this.apiUrl}/auth/reset-password/${token}`, { password });
   }
 
+  exchangeToken(autoLoginToken: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>(`${this.apiUrl}/auth/token-exchange`, { token: autoLoginToken })
+      .pipe(
+        tap(response => {
+          if (response.success && response.token) {
+            localStorage.setItem('token', response.token);
+            localStorage.setItem('user', JSON.stringify(response.user));
+            this.currentUserSubject.next(response.user);
+          }
+        })
+      );
+  }
+
   getAuthHeaders(): HttpHeaders {
     const token = this.getToken();
     return new HttpHeaders({

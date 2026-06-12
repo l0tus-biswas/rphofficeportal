@@ -70,7 +70,9 @@ const serveStepFile = async (res, onboarding, userId, stepKey) => {
     });
   }
 
-  return res.download(filePath, stepData.originalName || stepData.fileName);
+  // Sanitize download filename to prevent issues with special chars/path separators
+  const downloadName = (stepData.originalName || stepData.fileName).replace(/[/\\:*?"<>|]/g, '_');
+  return res.download(filePath, downloadName);
 };
 
 const handleUploadForUser = async (req, res, targetUserId) => {

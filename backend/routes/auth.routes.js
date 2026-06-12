@@ -146,8 +146,11 @@ router.post('/forgot-password', resetLimiter, validateRequest(schemas.forgotPass
     
     const user = await User.findOne({ email });
     
+    // Always return the same response to prevent email enumeration
+    const genericMessage = 'If an account exists with that email, a password reset link has been sent.';
+    
     if (!user) {
-      return sendResponse(res, 404, { message: 'No account found with that email' });
+      return sendResponse(res, 200, { message: genericMessage });
     }
     
     const resetToken = user.getResetPasswordToken();
@@ -155,17 +158,15 @@ router.post('/forgot-password', resetLimiter, validateRequest(schemas.forgotPass
     
     try {
       await sendPasswordResetEmail(user, resetToken);
-      
-      sendResponse(res, 200, {
-        message: 'Password reset email sent successfully'
-      });
     } catch (error) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
-      
-      throw new Error('Email could not be sent');
+      // Log but don't reveal failure to client
+      console.error('Password reset email failed:', error.message);
     }
+    
+    sendResponse(res, 200, { message: genericMessage });
   } catch (error) {
     errorResponse(res, error);
   }
@@ -245,7 +246,7 @@ router.get('/profile', require('../middleware/auth.middleware').protect, async (
 // @access  Private
 router.put('/profile', require('../middleware/auth.middleware').protect, validateRequest(schemas.updateProfile), async (req, res) => {
   try {
-    const { name, phone, address, city, state, zipCode, dateOfBirth } = req.body;
+    const { name, phone, address, city, state, zipCode, dateOfBirth, timezone } = req.body;
     
     const user = await User.findById(req.user._id);
     
@@ -256,6 +257,7 @@ router.put('/profile', require('../middleware/auth.middleware').protect, validat
     if (state) user.state = state;
     if (zipCode) user.zipCode = zipCode;
     if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+    if (timezone !== undefined) user.timezone = timezone || null;
     
     user.updatedBy = req.user._id;
     await user.save();
@@ -266,6 +268,46 @@ router.put('/profile', require('../middleware/auth.middleware').protect, validat
       message: 'Profile updated successfully',
       user: updatedUser
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/auth/token-exchange
+// @desc    Exchange a one-time auto-login token for a JWT (used after registration)
+// @access  Public
+router.post('/token-exchange', authLimiter, async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return sendResponse(res, 400, { message: 'Token is required' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      autoLoginToken: hashedToken,
+      autoLoginTokenExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return sendResponse(res, 401, { message: 'Invalid or expired token' });
+    }
+
+    // Invalidate the one-time token immediately
+    user.autoLoginToken = undefined;
+    user.autoLoginTokenExpire = undefined;
+    user.lastLogin = Date.now();
+    await user.save();
+
+    const jwtToken = generateToken(user, process.env.JWT_SECRET, process.env.JWT_EXPIRE);
+
+    const userResponse = await User.findById(user._id)
+      .select('-password')
+      .populate('referredBy', 'name email phone referralCode');
+
+    sendResponse(res, 200, { token: jwtToken, user: userResponse });
   } catch (error) {
     errorResponse(res, error);
   }

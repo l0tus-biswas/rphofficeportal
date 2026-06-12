@@ -195,7 +195,7 @@
               <i class="bi bi-briefcase me-1"></i>{{ node.role | titlecase }}
             </small>
             <small class="text-muted ms-3">
-              <i class="bi bi-calendar3 me-1"></i>{{ node.createdAt | date: 'MMM d, y' }}
+              <i class="bi bi-calendar3 me-1"></i>{{ node.createdAt | appDate: 'MMM d, y' }}
             </small>
             <small *ngIf="node.children && node.children.length > 0" class="text-muted ms-3">
               <i class="bi bi-people me-1"></i>{{ node.children.length }} recruit{{ node.children.length !== 1 ? 's' : '' }}

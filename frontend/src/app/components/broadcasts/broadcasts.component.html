@@ -92,7 +92,7 @@
         <div class="modal-body">
           <div class="d-flex gap-3 text-muted small mb-3">
             <span><i class="bi bi-person me-1"></i>{{ selectedBroadcast.postedBy || 'Admin' }}</span>
-            <span><i class="bi bi-calendar me-1"></i>{{ selectedBroadcast.createdAt | date:'medium' }}</span>
+            <span><i class="bi bi-calendar me-1"></i>{{ selectedBroadcast.createdAt | appDate:'medium' }}</span>
           </div>
           <!-- Announcement Image -->
           <div *ngIf="selectedBroadcast.image" class="mb-3 text-center">

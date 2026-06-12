@@ -286,6 +286,7 @@
                 <th style="white-space: nowrap;">Carrier</th>
                 <th class="text-end" style="white-space: nowrap;">Premium</th>
                 <th class="text-end" style="white-space: nowrap;">Members</th>
+                <th style="white-space: nowrap;">Priority</th>
                 <th style="white-space: nowrap;">Status</th>
                 <th style="white-space: nowrap;">In-Force Date</th>
                 <th *ngFor="let cf of customFieldDefs" style="white-space: nowrap;">{{ cf.label }}</th>
@@ -312,6 +313,12 @@
                 <td>{{ submission.carrier?.name || '—' }}</td>
                 <td class="text-end">{{ formatCurrency(submission.premiumAmount) }}</td>
                 <td class="text-end">{{ submission.numberOfMembers != null ? submission.numberOfMembers : '—' }}</td>
+                <td>
+                  <span *ngIf="submission.priority" class="badge" [class]="getPriorityBadgeClass(submission.priority)">
+                    {{ submission.priority }}
+                  </span>
+                  <span *ngIf="!submission.priority" class="text-muted">—</span>
+                </td>
                 <td>
                   <span class="badge" [class]="getStatusBadgeClass(submission.status)">
                     {{ submission.status }}
@@ -412,7 +419,7 @@
           <div class="col-md-6">
             <label class="form-label">Status *</label>
             <select class="form-select" [(ngModel)]="currentSubmission.status">
-              <option *ngFor="let s of statusValues" [value]="s">{{ s }}</option>
+              <option *ngFor="let s of allowedStatuses" [value]="s">{{ s }}</option>
             </select>
           </div>
           <div class="col-md-6" *ngIf="currentSubmission.status === 'In Force'">

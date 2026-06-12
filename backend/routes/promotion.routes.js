@@ -133,6 +133,9 @@ async function countProducingAgents(agentIds, windowDays, sinceDate, transferDat
     baseCutoff.setDate(baseCutoff.getDate() - windowDays);
   }
 
+  // Use inForceDate for promotion tracking (falls back to submissionDate via $ifNull)
+  const dateExpr = { $ifNull: ['$inForceDate', '$submissionDate'] };
+
   // Get licensed agent IDs first
   const LicensingProgress = require('../models/LicensingProgress');
   const licensedRecords = await LicensingProgress.find({
@@ -151,57 +154,69 @@ async function countProducingAgents(agentIds, windowDays, sinceDate, transferDat
           agent: { $in: licensedIds },
           status: 'In Force',
           productCategory: { $in: QUALIFYING_CATEGORIES },
-          submissionDate: { $gte: baseCutoff },
           deletedAt: null
         }
       },
+      { $addFields: { _promotionDate: dateExpr } },
+      { $match: { _promotionDate: { $gte: baseCutoff } } },
       { $group: { _id: '$agent' } }
     ]);
     return result.length;
   }
 
-  // With transfer dates: build per-agent cutoff conditions
+  // With transfer dates: build per-agent cutoff conditions using inForceDate
   const nonTransferredIds = [];
-  const transferredConditions = [];
+  const transferredGroups = [];
 
   for (const id of licensedIds) {
     const idStr = id.toString();
     const transferDate = transferDates.get(idStr);
     if (transferDate && new Date(transferDate) > baseCutoff) {
-      transferredConditions.push({
-        agent: id,
-        submissionDate: { $gte: new Date(transferDate) }
-      });
+      transferredGroups.push({ id, cutoff: new Date(transferDate) });
     } else {
       nonTransferredIds.push(id);
     }
   }
 
-  const matchConditions = [];
+  let distinctAgents = new Set();
+
+  // Non-transferred agents with global cutoff
   if (nonTransferredIds.length > 0) {
-    matchConditions.push({
-      agent: { $in: nonTransferredIds },
-      submissionDate: { $gte: baseCutoff }
-    });
-  }
-  if (transferredConditions.length > 0) {
-    matchConditions.push(...transferredConditions);
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: { $in: nonTransferredIds },
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          deletedAt: null
+        }
+      },
+      { $addFields: { _promotionDate: dateExpr } },
+      { $match: { _promotionDate: { $gte: baseCutoff } } },
+      { $group: { _id: '$agent' } }
+    ]);
+    result.forEach(r => distinctAgents.add(r._id.toString()));
   }
 
-  if (matchConditions.length === 0) return 0;
+  // Transferred agents with their individual cutoffs
+  for (const g of transferredGroups) {
+    const result = await ProductionSubmission.aggregate([
+      {
+        $match: {
+          agent: g.id,
+          status: 'In Force',
+          productCategory: { $in: QUALIFYING_CATEGORIES },
+          deletedAt: null
+        }
+      },
+      { $addFields: { _promotionDate: dateExpr } },
+      { $match: { _promotionDate: { $gte: g.cutoff } } },
+      { $group: { _id: '$agent' } }
+    ]);
+    result.forEach(r => distinctAgents.add(r._id.toString()));
+  }
 
-  const result = await ProductionSubmission.aggregate([
-    {
-      $match: {
-        $or: matchConditions,
-        status: 'In Force',
-        productCategory: { $in: QUALIFYING_CATEGORIES },
-        deletedAt: null
-      }
-    },
-    { $group: { _id: '$agent' } }
-  ]);
-  return result.length;
+  return distinctAgents.size;
 }
 
 // ============================================================================

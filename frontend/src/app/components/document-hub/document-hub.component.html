@@ -4,7 +4,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h2 class="mb-0"><i class="bi bi-archive me-2"></i>Document Hub</h2>
-      <small class="text-muted">Upload, organize, and share documents, forms, and resources</small>
+      <small class="text-muted">Access documents, forms, training materials, and resources</small>
     </div>
     <div class="d-flex gap-2 flex-wrap" *ngIf="isAdmin">
       <button class="btn btn-primary btn-sm" (click)="openNewFolder()">
@@ -71,6 +71,15 @@
     <button *ngIf="isAdmin" class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
       <i class="bi bi-send me-1"></i>Requests
     </button>
+  </div>
+
+  <!-- Agent notice: document requests are in Onboarding Docs -->
+  <div *ngIf="!loading && !isAdmin && pendingRequestCount > 0" class="alert alert-info d-flex align-items-center mb-3">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    <div>
+      You have <strong>{{ pendingRequestCount }}</strong> pending document request{{ pendingRequestCount > 1 ? 's' : '' }}.
+      <a routerLink="/onboarding-hub" class="alert-link">Go to Onboarding Docs</a> to upload required documents.
+    </div>
   </div>
 
   <!-- Breadcrumb + Search -->
@@ -207,8 +216,8 @@
     </div>
   </div>
 
-  <!-- Document Requests Section -->
-  <div *ngIf="!loading && activeSection === 'requests'" class="mt-4">
+  <!-- Document Requests Section (Admin Only) -->
+  <div *ngIf="!loading && activeSection === 'requests' && isAdmin" class="mt-4">
     <h5 class="mb-3"><i class="bi bi-send me-2"></i>Document Requests</h5>
     <div *ngIf="requests.length === 0" class="card border-0 shadow-sm">
       <div class="card-body text-center py-4 text-muted">

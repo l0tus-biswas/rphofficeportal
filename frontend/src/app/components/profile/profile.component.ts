@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
+import { TimezoneService } from '../../services/timezone.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -20,10 +21,23 @@ export class ProfileComponent implements OnInit {
   passwordError = '';
   editMode = false;
 
+  timezoneOptions = [
+    { value: '', label: 'Use system default' },
+    { value: 'America/New_York', label: 'Eastern Time (ET)' },
+    { value: 'America/Chicago', label: 'Central Time (CT)' },
+    { value: 'America/Denver', label: 'Mountain Time (MT)' },
+    { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+    { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+    { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' },
+    { value: 'America/Phoenix', label: 'Arizona (No DST)' },
+    { value: 'UTC', label: 'UTC' }
+  ];
+
   constructor(
     private formBuilder: FormBuilder,
     private authService: AuthService,
-    private agentService: AgentService
+    private agentService: AgentService,
+    private timezoneService: TimezoneService
   ) { }
 
   ngOnInit(): void {
@@ -65,7 +79,8 @@ export class ProfileComponent implements OnInit {
       address: [''],
       city: [''],
       state: [''],
-      zipCode: ['']
+      zipCode: [''],
+      timezone: ['']
     });
 
     this.passwordForm = this.formBuilder.group({
@@ -94,7 +109,8 @@ export class ProfileComponent implements OnInit {
         address: this.currentUser.address || '',
         city: this.currentUser.city || '',
         state: this.currentUser.state || '',
-        zipCode: this.currentUser.zipCode || ''
+        zipCode: this.currentUser.zipCode || '',
+        timezone: this.currentUser.timezone || ''
       });
     }
   }
@@ -133,6 +149,10 @@ export class ProfileComponent implements OnInit {
         // Update current user in auth service
         const updatedUser = { ...this.currentUser, ...this.profileForm.value };
         this.authService.updateCurrentUser(updatedUser);
+        this.currentUser = updatedUser;
+
+        // Reload timezone if it changed
+        this.timezoneService.loadTimezone();
       },
       error: (error: any) => {
         this.profileError = error.error?.message || 'Failed to update profile';

@@ -54,10 +54,11 @@ import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
+import { LoginRedirectGuard } from './guards/login-redirect.guard';
 
 const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
-  { path: 'login', component: LoginComponent },
+  { path: 'login', component: LoginComponent, canActivate: [LoginRedirectGuard] },
   { path: 'apply', component: ApplyComponent },
   { path: 'application-success', component: ApplicationSuccessComponent },
   { path: 'payment-success', component: ApaPaymentSuccessComponent },
@@ -195,8 +196,8 @@ const routes: Routes = [
   },
   { 
     path: 'one-time-payment', 
-    component: OneTimePaymentComponent
-    // No auth guard - accessible during registration
+    component: OneTimePaymentComponent,
+    canActivate: [AuthGuard]
   },
   { 
     path: 'subscription-payment', 

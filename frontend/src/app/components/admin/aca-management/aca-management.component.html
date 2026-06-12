@@ -280,7 +280,7 @@
                     <td class="text-end">{{ batch.agentCount | number }}</td>
                     <td class="text-end text-primary fw-semibold">{{ batch.totalClients | number }}</td>
                     <td class="text-end text-success">{{ batch.producingAgents | number }}</td>
-                    <td class="text-muted small">{{ batch.uploadedAt | date:'mediumDate' }}</td>
+                    <td class="text-muted small">{{ batch.uploadedAt | appDate:'mediumDate' }}</td>
                     <td class="text-muted small">{{ batch.uploadedByName || '—' }}</td>
                     <td class="text-end">
                       <button class="btn btn-sm btn-outline-primary me-1" (click)="viewBatchRecords(batch._id)" title="View records">

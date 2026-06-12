@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommissionService, CommissionStatement } from '../../../services/commission.service';
+import { AuthService } from '../../../services/auth.service';
 
 @Component({
   selector: 'app-commissions',
@@ -26,7 +27,7 @@ export class CommissionsComponent implements OnInit {
   editingNoteId: string | null = null;
   editNoteText = '';
 
-  constructor(private commissionService: CommissionService) {}
+  constructor(private commissionService: CommissionService, public authService: AuthService) {}
 
   ngOnInit(): void {
     this.loadStatements();

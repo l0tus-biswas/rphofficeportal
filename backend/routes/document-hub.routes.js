@@ -299,6 +299,13 @@ router.get('/files', authenticate, async (req, res) => {
   try {
     const query = { isActive: true };
     if (req.query.folder) {
+      // Enforce folder visibility for non-admin users
+      if (req.user.role !== 'admin') {
+        const folder = await DocumentFolder.findById(req.query.folder);
+        if (!folder || !folder.isActive || folder.visibility === 'admin') {
+          return res.status(403).json({ message: 'Access denied: folder not accessible' });
+        }
+      }
       query.folder = req.query.folder;
     } else if (req.query.folder === '' || req.query.root === 'true') {
       query.folder = null; // root-level files
@@ -491,9 +498,21 @@ router.get('/files/:id/download', authenticate, async (req, res) => {
           return res.status(403).json({ message: 'Access denied' });
         }
       }
+      // Check parent folder visibility
+      if (file.folder) {
+        const folder = await DocumentFolder.findById(file.folder);
+        if (folder && folder.visibility === 'admin') {
+          return res.status(403).json({ message: 'Access denied' });
+        }
+      }
     }
 
     const fullPath = path.join(__dirname, '..', file.filePath);
+    // Path traversal protection
+    const backendRoot = path.resolve(__dirname, '..');
+    if (!fullPath.startsWith(backendRoot + path.sep)) {
+      return res.status(403).json({ message: 'Access denied: invalid file path' });
+    }
     if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
 
     res.setHeader('Content-Disposition', `attachment; filename="${file.originalFileName}"`);

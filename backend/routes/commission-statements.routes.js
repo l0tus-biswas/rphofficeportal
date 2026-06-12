@@ -166,13 +166,32 @@ router.get('/', authenticate, async (req, res) => {
       if (req.query.to) filter.payPeriod.$lte = new Date(req.query.to);
     }
 
-    const statements = await CommissionStatement.find(filter)
-      .populate('agent', 'name email')
-      .populate('uploadedBy', 'name')
-      .populate('notes.addedBy', 'name')
-      .sort({ payPeriod: -1 });
+    // Pagination (defaults: page 1, limit 50; max 200)
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
 
-    res.json(statements);
+    const [statements, total] = await Promise.all([
+      CommissionStatement.find(filter)
+        .populate('agent', 'name email')
+        .populate('uploadedBy', 'name')
+        .populate('notes.addedBy', 'name')
+        .sort({ payPeriod: -1 })
+        .skip(skip)
+        .limit(limit),
+      CommissionStatement.countDocuments(filter)
+    ]);
+
+    // If pagination params are explicitly passed, return structured response
+    // Otherwise return array for backward compatibility with frontend
+    if (req.query.page || req.query.limit) {
+      res.json({
+        statements,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      });
+    } else {
+      res.json(statements);
+    }
   } catch (error) {
     console.error('Error fetching commission statements:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -212,20 +231,15 @@ router.post('/:id/notes', authenticate, authorize('admin'), async (req, res) => 
 // ---------------------------------------------------------------------------
 // @route   PUT /api/commission-statements/:id/notes/:noteId
 // @desc    Edit an existing note on a commission statement
-// @access  Admin or statement owner (agent)
+// @access  Admin only
 // ---------------------------------------------------------------------------
-router.put('/:id/notes/:noteId', authenticate, async (req, res) => {
+router.put('/:id/notes/:noteId', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ message: 'Note text is required' });
 
     const stmt = await CommissionStatement.findById(req.params.id);
     if (!stmt) return res.status(404).json({ message: 'Statement not found' });
-
-    // Access control: admin can edit any; agent can only edit notes on their own statements
-    if (req.user.role !== 'admin' && stmt.agent.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
 
     const note = stmt.notes.id(req.params.noteId);
     if (!note) return res.status(404).json({ message: 'Note not found' });
@@ -302,6 +316,11 @@ router.get('/:id/download', authenticate, async (req, res) => {
     }
 
     const filePath = path.join(__dirname, '..', stmt.filePath);
+    // Path traversal protection
+    const backendRoot = path.resolve(__dirname, '..');
+    if (!filePath.startsWith(backendRoot + path.sep)) {
+      return res.status(403).json({ message: 'Access denied: invalid file path' });
+    }
     if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on server' });
 
     // Determine content type from extension

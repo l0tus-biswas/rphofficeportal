@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { AcaService, AcaTrackerData, AgentBreakdownEntry } from '../../../services/aca.service';
 
@@ -49,13 +50,13 @@ export class AcaTrackerComponent implements OnInit {
     const matchYM = this.data.uploadBatch.match(/^(\d{4})-(\d{2})$/);
     if (matchYM) {
       const date = new Date(parseInt(matchYM[1]), parseInt(matchYM[2]) - 1, 1);
-      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return date.toLocaleDateString('en-US', { timeZone: getAppTimezone(),  month: 'long', year: 'numeric' });
     }
     // Handle MM-YYYY
     const matchMY = this.data.uploadBatch.match(/^(\d{2})-(\d{4})$/);
     if (matchMY) {
       const date = new Date(parseInt(matchMY[2]), parseInt(matchMY[1]) - 1, 1);
-      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return date.toLocaleDateString('en-US', { timeZone: getAppTimezone(),  month: 'long', year: 'numeric' });
     }
     return this.data.uploadBatch;
   }

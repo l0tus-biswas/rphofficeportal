@@ -156,10 +156,10 @@
               <td>
                 <span *ngFor="let c of (stmt.carrierList || stmt.carriers || [stmt.carrier])" class="badge bg-info text-dark me-1">{{ c }}</span>
               </td>
-              <td><strong>{{ stmt.payPeriod | date:'mediumDate' }}</strong></td>
+              <td><strong>{{ stmt.payPeriod | appDate:'mediumDate' }}</strong></td>
               <td><small class="text-muted">{{ stmt.originalFileName || 'statement.pdf' }}</small></td>
               <td><small>{{ stmt.uploadedBy?.name || '\u2014' }}</small></td>
-              <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
+              <td><small class="text-muted">{{ stmt.uploadedAt | appDate:'mediumDate' }}</small></td>
               <td>
                 <button class="btn btn-outline-secondary btn-sm" (click)="openNotes(stmt)">
                   <i class="bi bi-chat-left-text me-1"></i>{{ stmt.notes.length || 0 }}
@@ -203,7 +203,7 @@
           <div class="d-flex justify-content-between align-items-start">
             <div>
               <strong>{{ note.addedBy?.name || 'Unknown' }}</strong>
-              <small class="text-muted ms-2">{{ note.addedAt | date:'medium' }}</small>
+              <small class="text-muted ms-2">{{ note.addedAt | appDate:'medium' }}</small>
             </div>
             <div class="btn-group" *ngIf="editingNoteId !== note._id">
               <button class="btn btn-sm btn-outline-primary" (click)="editNote(note)" title="Edit note">

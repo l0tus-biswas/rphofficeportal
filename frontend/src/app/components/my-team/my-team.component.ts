@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { AgentService } from '../../services/agent.service';
 import { AuthService } from '../../services/auth.service';
@@ -230,7 +231,7 @@ export class MyTeamComponent implements OnInit {
   }
 
   formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(), 
       year: 'numeric', month: 'short', day: 'numeric'
     });
   }

@@ -66,12 +66,12 @@
             </thead>
             <tbody>
               <tr *ngFor="let stmt of statements">
-                <td><strong>{{ stmt.payPeriod | date:'mediumDate' }}</strong></td>
+                <td><strong>{{ stmt.payPeriod | appDate:'mediumDate' }}</strong></td>
                 <td>
                   <span *ngFor="let c of (stmt.carrierList || stmt.carriers || [stmt.carrier])" class="badge bg-info text-dark me-1">{{ c }}</span>
                 </td>
                 <td><small class="text-muted">{{ stmt.originalFileName || 'statement.pdf' }}</small></td>
-                <td><small class="text-muted">{{ stmt.uploadedAt | date:'mediumDate' }}</small></td>
+                <td><small class="text-muted">{{ stmt.uploadedAt | appDate:'mediumDate' }}</small></td>
                 <td>
                   <span *ngIf="stmt.notes?.length" class="badge bg-secondary cursor-pointer" (click)="viewNotes(stmt)" title="Click to view notes">{{ stmt.notes.length }}</span>
                   <small *ngIf="!stmt.notes?.length" class="text-muted">—</small>
@@ -103,7 +103,7 @@
       </div>
       <div class="modal-body">
         <p class="text-muted mb-3" *ngIf="selectedStatementPayPeriod">
-          Pay Period: <strong>{{ selectedStatementPayPeriod | date:'mediumDate' }}</strong>
+          Pay Period: <strong>{{ selectedStatementPayPeriod | appDate:'mediumDate' }}</strong>
         </p>
         <div *ngIf="selectedStatementNotes.length === 0" class="text-center py-3">
           <p class="text-muted">No notes available.</p>
@@ -115,15 +115,15 @@
             <div class="d-flex justify-content-between align-items-center">
               <small class="text-muted">
                 <i class="bi bi-person me-1"></i>{{ note.addedBy?.name || 'Admin' }}
-                <span class="ms-2"><i class="bi bi-clock me-1"></i>{{ note.addedAt | date:'medium' }}</span>
+                <span class="ms-2"><i class="bi bi-clock me-1"></i>{{ note.addedAt | appDate:'medium' }}</span>
               </small>
-              <button class="btn btn-sm btn-outline-primary" (click)="editNote(note)" title="Edit note">
+              <button *ngIf="authService.isAdmin()" class="btn btn-sm btn-outline-primary" (click)="editNote(note)" title="Edit note">
                 <i class="bi bi-pencil me-1"></i>Edit
               </button>
             </div>
           </div>
-          <!-- Edit mode -->
-          <div *ngIf="editingNoteId === note._id">
+          <!-- Edit mode (admin only) -->
+          <div *ngIf="authService.isAdmin() && editingNoteId === note._id">
             <div class="input-group">
               <input type="text" class="form-control" [(ngModel)]="editNoteText"
                      (keydown.enter)="saveEditNote()" (keydown.escape)="cancelEditNote()"

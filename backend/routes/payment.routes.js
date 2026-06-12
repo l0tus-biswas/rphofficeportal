@@ -232,9 +232,18 @@ router.get('/status', protect, async (req, res) => {
 
 // @route   POST /api/payments/webhook
 // @desc    Handle Stripe webhooks
-// @access  Public (Stripe only)
+// @access  Public (Stripe only — verified via signature)
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
+
+  if (!sig) {
+    return res.status(400).send('Missing stripe-signature header');
+  }
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error('STRIPE_WEBHOOK_SECRET is not configured');
+    return res.status(500).send('Webhook secret not configured');
+  }
 
   try {
     const event = constructWebhookEvent(req.body, sig);
@@ -435,4 +444,29 @@ async function handleInvoicePaymentFailed(invoice) {
   }
 }
 
+// ============================================================================
+// Cleanup: Expire stale pending payments (older than 7 days)
+// Called on server startup and can be triggered via admin endpoint
+// ============================================================================
+async function expireStalePendingPayments() {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const result = await Payment.updateMany(
+      { status: 'pending', createdAt: { $lt: sevenDaysAgo }, deletedAt: null },
+      { $set: { status: 'expired' } }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`[Billing Cleanup] Expired ${result.modifiedCount} stale pending payment(s)`);
+    }
+    return result.modifiedCount;
+  } catch (err) {
+    console.error('[Billing Cleanup] Error expiring stale payments:', err.message);
+    return 0;
+  }
+}
+
+// Run cleanup on module load (server start)
+setTimeout(() => expireStalePendingPayments(), 5000);
+
 module.exports = router;
+module.exports.expireStalePendingPayments = expireStalePendingPayments;

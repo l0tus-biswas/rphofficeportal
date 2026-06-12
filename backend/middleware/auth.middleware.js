@@ -4,6 +4,32 @@ const SystemConfig = require('../models/SystemConfig');
 
 const DEFAULT_SITE_ACCESS_MESSAGE = 'RHP Office is temporarily under maintenance. Please check back shortly.';
 
+// In-memory cache for maintenance mode state (avoids 2 DB queries per request)
+let maintenanceCache = { enabled: true, message: DEFAULT_SITE_ACCESS_MESSAGE, lastFetched: 0 };
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+async function getMaintenanceState() {
+  const now = Date.now();
+  if (now - maintenanceCache.lastFetched < CACHE_TTL_MS) {
+    return maintenanceCache;
+  }
+  try {
+    const [enabledConfig, messageConfig] = await Promise.all([
+      SystemConfig.findOne({ key: 'site_access_enabled' }).lean(),
+      SystemConfig.findOne({ key: 'site_access_message' }).lean()
+    ]);
+    maintenanceCache = {
+      enabled: (enabledConfig?.value || 'true').toLowerCase() !== 'false',
+      message: messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE,
+      lastFetched: now
+    };
+  } catch (err) {
+    // On DB error, use last known state (don't block all users)
+    console.error('[Auth] Maintenance state fetch error:', err.message);
+  }
+  return maintenanceCache;
+}
+
 exports.protect = async (req, res, next) => {
   try {
     let token;
@@ -52,17 +78,12 @@ exports.protect = async (req, res, next) => {
       }
 
       // Emergency maintenance mode: block non-admin access when site access is disabled
-      const [enabledConfig, messageConfig] = await Promise.all([
-        SystemConfig.findOne({ key: 'site_access_enabled' }).lean(),
-        SystemConfig.findOne({ key: 'site_access_message' }).lean()
-      ]);
-
-      const siteAccessEnabled = (enabledConfig?.value || 'true').toLowerCase() !== 'false';
-      if (!siteAccessEnabled) {
+      const maintenance = await getMaintenanceState();
+      if (!maintenance.enabled) {
         return res.status(503).json({
           success: false,
           maintenanceMode: true,
-          message: messageConfig?.value || DEFAULT_SITE_ACCESS_MESSAGE
+          message: maintenance.message
         });
       }
       

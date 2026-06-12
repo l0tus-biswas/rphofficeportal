@@ -325,11 +325,11 @@
             </tr>
             <tr *ngIf="application.docusign.sentDate">
               <th>Sent Date:</th>
-              <td>{{ application.docusign.sentDate | date:'short' }}</td>
+              <td>{{ application.docusign.sentDate | appDate:'short' }}</td>
             </tr>
             <tr *ngIf="application.docusign.signedDate">
               <th>Signed Date:</th>
-              <td>{{ application.docusign.signedDate | date:'short' }}</td>
+              <td>{{ application.docusign.signedDate | appDate:'short' }}</td>
             </tr>
             <tr *ngIf="application.docusign.documentUrl">
               <th>Signed Agreement:</th>
@@ -361,7 +361,7 @@
             </tr>
             <tr>
               <th>Payment Date:</th>
-              <td>{{ (application.payment.paidAt || application.payment.paymentDate) ? ((application.payment.paidAt || application.payment.paymentDate) | date:'short') : 'Not yet paid' }}</td>
+              <td>{{ (application.payment.paidAt || application.payment.paymentDate) ? ((application.payment.paidAt || application.payment.paymentDate) | appDate:'short') : 'Not yet paid' }}</td>
             </tr>
           </table>
         </div>
@@ -378,15 +378,15 @@
           <table class="table table-sm">
             <tr>
               <th>Submitted:</th>
-              <td>{{ application.submittedAt | date:'short' }}</td>
+              <td>{{ application.submittedAt | appDate:'short' }}</td>
             </tr>
             <tr *ngIf="application.reviewedAt">
               <th>Reviewed:</th>
-              <td>{{ application.reviewedAt | date:'short' }}</td>
+              <td>{{ application.reviewedAt | appDate:'short' }}</td>
             </tr>
             <tr *ngIf="application.completedAt">
               <th>Completed:</th>
-              <td>{{ application.completedAt | date:'short' }}</td>
+              <td>{{ application.completedAt | appDate:'short' }}</td>
             </tr>
           </table>
         </div>

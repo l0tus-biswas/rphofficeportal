@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { ExamfxService, ExamFXProgress, ExamFXSummary, ExamFXCsvUploadResult, ExamFXImportBatch } from '../../services/examfx.service';
@@ -195,19 +196,19 @@ export class ExamfxProgressComponent implements OnInit {
     if (diffMin < 60) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
     if (diffHr < 24) return `${diffHr} hour${diffHr > 1 ? 's' : ''} ago`;
     if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', { timeZone: getAppTimezone(),  year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   formatDate(date: any): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(), 
       year: 'numeric', month: 'short', day: 'numeric'
     });
   }
 
   formatDateTime(date: any): string {
     if (!date) return '—';
-    return new Date(date).toLocaleString('en-US', {
+    return new Date(date).toLocaleString('en-US', { timeZone: getAppTimezone(), 
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
     });

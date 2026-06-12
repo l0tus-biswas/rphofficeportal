@@ -67,5 +67,6 @@ const documentHubFileSchema = new mongoose.Schema({
 
 documentHubFileSchema.index({ folder: 1, isActive: 1 });
 documentHubFileSchema.index({ name: 'text', description: 'text' });
+documentHubFileSchema.index({ filePath: 1 }, { unique: true });
 
 module.exports = mongoose.model('DocumentHubFile', documentHubFileSchema);

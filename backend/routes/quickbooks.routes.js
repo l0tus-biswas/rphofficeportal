@@ -15,6 +15,7 @@ const OnboardingDocType = require('../models/OnboardingDocType');
 const AuditLog = require('../models/AuditLog');
 const APAApplication = require('../models/APAApplication');
 const OAuthClient = require('intuit-oauth');
+const crypto = require('crypto');
 const qbo = require('../utils/quickbooks');
 const { decrypt } = require('../utils/encryption');
 
@@ -58,9 +59,19 @@ router.get('/status', authenticate, authorize('admin'), async (req, res) => {
 router.get('/connect', authenticate, authorize('admin'), async (req, res) => {
   try {
     const oauthClient = qbo.getOAuthClient();
+    
+    // Generate a cryptographic state nonce to prevent CSRF
+    const stateNonce = crypto.randomBytes(24).toString('hex');
+    const SystemConfig = require('../models/SystemConfig');
+    await SystemConfig.findOneAndUpdate(
+      { key: 'qbo_oauth_state' },
+      { key: 'qbo_oauth_state', value: { nonce: stateNonce, userId: req.user._id.toString(), createdAt: new Date() } },
+      { upsert: true }
+    );
+    
     const authUri = oauthClient.authorizeUri({
       scope: [OAuthClient.scopes.Accounting],
-      state: req.user._id.toString()
+      state: stateNonce
     });
     res.json({ authUri });
   } catch (error) {
@@ -77,6 +88,28 @@ router.get('/connect', authenticate, authorize('admin'), async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/callback', async (req, res) => {
   try {
+    // Validate OAuth state parameter to prevent CSRF
+    const state = req.query.state;
+    const SystemConfig = require('../models/SystemConfig');
+    const storedState = await SystemConfig.findOne({ key: 'qbo_oauth_state' });
+    
+    if (!state || !storedState || storedState.value.nonce !== state) {
+      console.error('[QBO] Callback: invalid or missing state parameter');
+      const appUrl = process.env.APP_URL || 'http://localhost:4200';
+      return res.redirect(`${appUrl}/admin/config?qbo=error&message=${encodeURIComponent('Invalid OAuth state - possible CSRF attack')}`);
+    }
+    
+    // Check if state is expired (10 minute window)
+    const stateAge = Date.now() - new Date(storedState.value.createdAt).getTime();
+    if (stateAge > 10 * 60 * 1000) {
+      await SystemConfig.deleteOne({ key: 'qbo_oauth_state' });
+      const appUrl = process.env.APP_URL || 'http://localhost:4200';
+      return res.redirect(`${appUrl}/admin/config?qbo=error&message=${encodeURIComponent('OAuth state expired - please try again')}`);
+    }
+    
+    // Clear the used state nonce (single-use)
+    await SystemConfig.deleteOne({ key: 'qbo_oauth_state' });
+
     const oauthClient = qbo.getOAuthClient();
     const authResponse = await oauthClient.createToken(req.url);
     const tokenData = authResponse.getJson();

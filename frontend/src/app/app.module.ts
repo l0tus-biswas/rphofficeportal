@@ -73,6 +73,7 @@ import { NotFoundComponent } from './components/not-found/not-found.component';
 
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
+import { AppDatePipe } from './pipes/app-date.pipe';
 
 @NgModule({
   declarations: [
@@ -116,6 +117,7 @@ import { SafePipe } from './pipes/safe.pipe';
     BroadcastManagementComponent,
     BroadcastPopupComponent,
     SafePipe,
+    AppDatePipe,
     AgentCarriersComponent,
     CarrierAppointmentsComponent,
     CommissionsComponent,

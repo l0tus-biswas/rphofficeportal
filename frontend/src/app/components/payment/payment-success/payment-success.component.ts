@@ -65,11 +65,8 @@ export class PaymentSuccessComponent implements OnInit {
       // Create account
       this.publicService.submitApplication(pendingApp.formData, pendingApp.referralCode).subscribe({
         next: (response) => {
-          // Login with new credentials
-          this.authService.login({
-            email: response.credentials.email,
-            password: response.credentials.password
-          }).subscribe({
+          // Exchange auto-login token for JWT (secure, no credentials in transit)
+          this.authService.exchangeToken(response.autoLoginToken).subscribe({
             next: (loginResponse) => {
               // Upload documents
               const formData = new FormData();

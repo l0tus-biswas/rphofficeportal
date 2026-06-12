@@ -33,8 +33,8 @@ const guideUpload = multer({
 
 // @route   GET /api/carriers/my-statuses
 // @desc    Agent: get all their carrier status records
-// @access  Private
-router.get('/my-statuses', authenticate, async (req, res) => {
+// @access  Private (agent, admin)
+router.get('/my-statuses', authenticate, authorize('agent', 'admin'), async (req, res) => {
   try {
     const statuses = await AgentCarrierStatus.find({ agent: req.user._id })
       .populate('carrier', 'name category factor')
@@ -145,6 +145,18 @@ router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuid
     });
     if (existing) return res.status(400).json({ message: 'Carrier with this name already exists' });
 
+    // Validate contractingLink is a valid URL if provided
+    if (contractingLink && contractingLink.trim()) {
+      try {
+        const url = new URL(contractingLink);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          return res.status(400).json({ message: 'Contracting link must be an HTTP or HTTPS URL' });
+        }
+      } catch (e) {
+        return res.status(400).json({ message: 'Contracting link must be a valid URL' });
+      }
+    }
+
     const carrierData = {
       name, category: categoryArr,
       isActive: isActive !== undefined ? isActive : true,
@@ -212,7 +224,19 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
       try { carrier.productFactors = typeof productFactors === 'string' ? JSON.parse(productFactors) : productFactors; }
       catch (e) { /* ignore */ }
     }
-    if (contractingLink !== undefined) carrier.contractingLink = contractingLink;
+    if (contractingLink !== undefined) {
+      if (contractingLink && contractingLink.trim()) {
+        try {
+          const url = new URL(contractingLink);
+          if (!['http:', 'https:'].includes(url.protocol)) {
+            return res.status(400).json({ message: 'Contracting link must be an HTTP or HTTPS URL' });
+          }
+        } catch (e) {
+          return res.status(400).json({ message: 'Contracting link must be a valid URL' });
+        }
+      }
+      carrier.contractingLink = contractingLink;
+    }
     if (contractingInstructions !== undefined) carrier.contractingInstructions = contractingInstructions;
     if (whatToExpect !== undefined) carrier.whatToExpect = whatToExpect;
     if (notes !== undefined) carrier.notes = notes;

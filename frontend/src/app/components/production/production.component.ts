@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { ProductionService, ProductionSubmission, ProductionFilters, STATUS_VALUES, RankingEntry, CustomFieldDef } from '../../services/production.service';
@@ -46,6 +47,11 @@ export class ProductionComponent implements OnInit {
   productTypes: string[] = [];
   productCategoryMap: Record<string, string> = {};
   statusValues = STATUS_VALUES;
+  
+  // Agents can only use Submitted/Pending; Admins can use all statuses
+  get allowedStatuses(): string[] {
+    return this.isAdmin ? this.statusValues : ['Submitted', 'Pending'];
+  }
   
   // Form for new/edit submission
   showForm = false;
@@ -385,7 +391,7 @@ export class ProductionComponent implements OnInit {
 
   formatDate(date: any): string {
     if (!date) return '';
-    return new Date(date).toLocaleDateString();
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
   }
 
   formatCurrency(amount: number): string {
@@ -417,6 +423,16 @@ export class ProductionComponent implements OnInit {
       'Property & Casualty - Commercial': 'bg-dark'
     };
     return (category && classes[category]) || 'bg-secondary';
+  }
+
+  getPriorityBadgeClass(priority: string): string {
+    const classes: any = {
+      'Low': 'bg-secondary',
+      'Medium': 'bg-info text-dark',
+      'High': 'bg-warning text-dark',
+      'Urgent': 'bg-danger'
+    };
+    return classes[priority] || 'bg-secondary';
   }
 
   // --- 8.5: Date preset filters ---

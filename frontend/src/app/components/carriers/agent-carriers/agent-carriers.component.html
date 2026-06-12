@@ -162,7 +162,7 @@
                   'bi-clock': status.status === 'Requested',
                   'bi-x-circle': status.status === 'Unappointed'
                 }"></i>
-                <span *ngIf="status.status === 'Appointed'">Appointed on {{ status.appointedAt | date:'mediumDate' }}</span>
+                <span *ngIf="status.status === 'Appointed'">Appointed on {{ status.appointedAt | appDate:'mediumDate' }}</span>
                 <span *ngIf="status.status === 'Requested'">Requested — awaiting admin approval</span>
                 <span *ngIf="status.status === 'Unappointed'">Unappointed</span>
               </div>
@@ -173,7 +173,7 @@
                 <div *ngFor="let note of status.notes" class="border rounded p-2 mb-1 bg-light">
                   <p class="small mb-0" style="white-space: pre-line">{{ note.text }}</p>
                   <small class="text-muted">
-                    {{ note.addedBy?.name || 'Admin' }} — {{ note.addedAt | date:'medium' }}
+                    {{ note.addedBy?.name || 'Admin' }} — {{ note.addedAt | appDate:'medium' }}
                   </small>
                 </div>
               </div>

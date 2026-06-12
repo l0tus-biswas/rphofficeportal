@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { AuthService } from '../../../services/auth.service';
 import { OnboardingHubService, OnboardingDocType, OnboardingDocument } from '../../../services/onboarding-hub.service';
@@ -36,6 +37,7 @@ export class OnboardingHubComponent implements OnInit {
 
   currentUser: any;
   pendingRequests: DocRequest[] = [];
+  completedRequests: DocRequest[] = [];
 
   // Request response inline upload state
   requestUploadOpen: { [requestId: string]: boolean } = {};
@@ -207,7 +209,7 @@ export class OnboardingHubComponent implements OnInit {
 
   formatReviewDate(date: any): string {
     if (!date) return '';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(), 
       month: 'short', day: 'numeric', year: 'numeric'
     });
   }
@@ -236,9 +238,8 @@ export class OnboardingHubComponent implements OnInit {
     this.documentHubService.getRequests().subscribe({
       next: (res: any) => {
         const userId = this.currentUser?._id;
-        this.pendingRequests = (res.requests || []).filter((r: DocRequest) => {
-          if (r.isActive === false) return false;
-          // Only show requests where this agent's response is still 'pending'
+        const allRequests = (res.requests || []).filter((r: DocRequest) => r.isActive !== false);
+        this.pendingRequests = allRequests.filter((r: DocRequest) => {
           if (userId && r.responses) {
             const myResponse = r.responses.find((resp: any) => {
               const agentId = typeof resp.agent === 'object' ? resp.agent._id : resp.agent;
@@ -247,6 +248,16 @@ export class OnboardingHubComponent implements OnInit {
             if (myResponse && myResponse.status !== 'pending') return false;
           }
           return true;
+        });
+        this.completedRequests = allRequests.filter((r: DocRequest) => {
+          if (userId && r.responses) {
+            const myResponse = r.responses.find((resp: any) => {
+              const agentId = typeof resp.agent === 'object' ? resp.agent._id : resp.agent;
+              return agentId === userId;
+            });
+            if (myResponse && (myResponse.status === 'submitted' || myResponse.status === 'approved' || myResponse.status === 'rejected')) return true;
+          }
+          return false;
         });
       },
       error: () => {}
@@ -291,5 +302,19 @@ export class OnboardingHubComponent implements OnInit {
 
   isOverdue(dueDate: string): boolean {
     return new Date(dueDate) < new Date();
+  }
+
+  getMyResponse(request: DocRequest): any {
+    const userId = this.currentUser?._id;
+    if (!userId || !request.responses) return null;
+    return request.responses.find((resp: any) => {
+      const agentId = typeof resp.agent === 'object' ? resp.agent._id : resp.agent;
+      return agentId === userId;
+    });
+  }
+
+  getStatusBadgeClass(status: string): string {
+    const m: any = { pending: 'bg-warning text-dark', submitted: 'bg-info', approved: 'bg-success', rejected: 'bg-danger' };
+    return m[status] || 'bg-secondary';
   }
 }

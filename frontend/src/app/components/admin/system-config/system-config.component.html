@@ -195,7 +195,7 @@
                           <td>{{ agent.name }}</td>
                           <td class="small">{{ agent.email }}</td>
                           <td class="font-monospace small">{{ agent.qboEmployeeId }}</td>
-                          <td class="small">{{ agent.qboSyncedAt | date:'short' }}</td>
+                          <td class="small">{{ agent.qboSyncedAt | appDate:'short' }}</td>
                           <td>
                             <button class="btn btn-outline-secondary btn-sm py-0 px-2"
                                     (click)="resyncEmployee(agent._id, agent.name)"
@@ -308,7 +308,7 @@
                     <small class="text-muted">{{ config.description || 'No description' }}</small>
                   </td>
                   <td>
-                    <small>{{ config.updatedAt | date:'short' }}</small>
+                    <small>{{ config.updatedAt | appDate:'short' }}</small>
                   </td>
                   <td class="text-end">
                     <button 

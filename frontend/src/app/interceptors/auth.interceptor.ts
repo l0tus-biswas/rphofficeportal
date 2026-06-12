@@ -30,7 +30,13 @@ export class AuthInterceptor implements HttpInterceptor {
         } else if (error.status === 503 && error.error?.maintenanceMode) {
           // Emergency maintenance mode: force non-admin users back to login
           const userRaw = localStorage.getItem('user');
-          const user = userRaw ? JSON.parse(userRaw) : null;
+          let user: any = null;
+          try {
+            user = userRaw ? JSON.parse(userRaw) : null;
+          } catch {
+            // Invalid JSON in localStorage — clear and redirect
+            localStorage.removeItem('user');
+          }
           if (!user || user.role !== 'admin') {
             localStorage.removeItem('token');
             localStorage.removeItem('user');

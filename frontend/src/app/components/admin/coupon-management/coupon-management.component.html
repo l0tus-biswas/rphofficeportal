@@ -103,8 +103,8 @@
                 </td>
                 <td>
                   <div class="small">
-                    <div><i class="bi bi-calendar-check me-1"></i>{{ coupon.validFrom | date: 'MMM d, y' }}</div>
-                    <div><i class="bi bi-calendar-x me-1"></i>{{ coupon.validUntil | date: 'MMM d, y' }}</div>
+                    <div><i class="bi bi-calendar-check me-1"></i>{{ coupon.validFrom | appDate: 'MMM d, y' }}</div>
+                    <div><i class="bi bi-calendar-x me-1"></i>{{ coupon.validUntil | appDate: 'MMM d, y' }}</div>
                   </div>
                 </td>
                 <td>

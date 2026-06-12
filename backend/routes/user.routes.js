@@ -21,14 +21,7 @@ router.get('/payments', protect, async (req, res) => {
     const query = Payment.find({ user: req.user._id })
       .sort('-createdAt');
 
-    const rawPayments = await paginate(query, page, limit);
-    const payments = rawPayments.map(payment => {
-      const record = payment.toObject ? payment.toObject() : payment;
-      if (record.amount && typeof record.amount === 'number' && record.amount % 100 !== 0) {
-        record.amount = Math.round(record.amount * 100);
-      }
-      return record;
-    });
+    const payments = await paginate(query, page, limit);
     const total = await Payment.countDocuments({ user: req.user._id });
 
     sendResponse(res, 200, {

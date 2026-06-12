@@ -49,7 +49,7 @@ function parseCsvDate(val) {
   // MM-DD-YYYY format
   const parts = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (parts) {
-    const d = new Date(`${parts[3]}-${parts[1]}-${parts[2]}T00:00:00Z`);
+    const d = new Date(`${parts[3]}-${parts[1]}-${parts[2]}T00:00:00`);
     return isNaN(d.getTime()) ? null : d;
   }
   const d = new Date(s);

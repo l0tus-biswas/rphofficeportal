@@ -38,7 +38,7 @@ router.get('/profile', async (req, res) => {
 // @access  Private (Agent/Admin)
 router.put('/profile', validateRequest(schemas.updateProfile), logAction('UPDATE_PROFILE'), async (req, res) => {
   try {
-    const { name, phone, address, city, state, zipCode, dateOfBirth } = req.body;
+    const { name, phone, address, city, state, zipCode, dateOfBirth, timezone } = req.body;
     
     const user = await User.findById(req.user._id);
     
@@ -49,6 +49,7 @@ router.put('/profile', validateRequest(schemas.updateProfile), logAction('UPDATE
     if (state) user.state = state;
     if (zipCode) user.zipCode = zipCode;
     if (dateOfBirth) user.dateOfBirth = dateOfBirth;
+    if (timezone !== undefined) user.timezone = timezone || null;
     
     user.updatedBy = req.user._id;
     await user.save();
@@ -326,18 +327,18 @@ router.get('/referral-link', async (req, res) => {
 router.get('/dashboard/checklist', async (req, res) => {
   try {
     // Check LicensingProgress record (authoritative source for licensing status)
-    const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed licenseTypes checklist.preLicenseCourse.completed').lean();
+    const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed checklist.preLicenseCourse.completed checklist.stateAppointment.approved').lean();
     let isLicensed = lp ? lp.isLicensed : false;
 
-    // If agent selected license types (answered "Yes" to currently licensed), treat as licensed
-    if (!isLicensed && lp?.licenseTypes?.length > 0) {
+    // If all checklist steps complete (stateAppointment approved), treat as licensed
+    if (!isLicensed && lp?.checklist?.stateAppointment?.approved) {
       isLicensed = true;
     }
 
-    // Also check APA Application's currentlyLicensed field (agent self-reported as already licensed)
+    // Also check APA Application's licensingStatus (agent self-reported)
     if (!isLicensed) {
-      const apa = await APAApplication.findOne({ user: req.user._id }).select('licensingStatus.currentlyLicensed').lean();
-      if (apa?.licensingStatus?.currentlyLicensed) {
+      const apa = await APAApplication.findOne({ user: req.user._id }).select('licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
+      if (apa?.licensingStatus?.currentlyLicensed || (apa?.licensingStatus?.licenseTypes?.length > 0)) {
         isLicensed = true;
       }
     }

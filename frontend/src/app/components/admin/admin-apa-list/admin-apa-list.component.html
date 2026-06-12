@@ -97,7 +97,7 @@
                     <div><strong>Name:</strong> {{ templateInfo.templateInfo?.name || 'N/A' }}</div>
                     <div><strong>Template ID:</strong> <code>{{ templateInfo.templateId }}</code></div>
                     <div *ngIf="templateInfo.templateInfo?.lastModified">
-                      <strong>Last Modified:</strong> {{ templateInfo.templateInfo.lastModified | date:'medium' }}
+                      <strong>Last Modified:</strong> {{ templateInfo.templateInfo.lastModified | appDate:'medium' }}
                     </div>
                   </div>
                 </div>
@@ -112,7 +112,7 @@
                     <i class="bi bi-dot"></i>
                     <strong>{{ h.fileName }}</strong> ({{ formatFileSize(h.fileSize) }})
                     — {{ h.mode === 'new' ? 'New Template' : 'Replaced' }}
-                    <span class="text-muted">{{ h.uploadedAt | date:'short' }}</span>
+                    <span class="text-muted">{{ h.uploadedAt | appDate:'short' }}</span>
                   </div>
                 </div>
               </div>
@@ -246,7 +246,7 @@
                       {{ getStatusLabel(app.status) }}
                     </span>
                   </td>
-                  <td (click)="viewApplication(app._id)">{{ app.submittedAt | date:'short' }}</td>
+                  <td (click)="viewApplication(app._id)">{{ app.submittedAt | appDate:'short' }}</td>
                   <td>
                     <button class="btn btn-sm btn-primary" (click)="viewApplication(app._id)">
                       <i class="bi bi-eye"></i> View

@@ -76,6 +76,10 @@ const userSchema = new mongoose.Schema({
   state: String,
   zipCode: String,
   dateOfBirth: Date,
+  timezone: {
+    type: String,
+    default: null
+  },
   
   // Status
   isActive: {
@@ -101,6 +105,10 @@ const userSchema = new mongoose.Schema({
   // Password Reset
   resetPasswordToken: String,
   resetPasswordExpire: Date,
+
+  // One-time auto-login token (for post-registration flows)
+  autoLoginToken: String,
+  autoLoginTokenExpire: Date,
   
   // Metadata (from apply form)
   metadata: {
@@ -179,15 +187,7 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   
-  // Audit Fields
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  },
+  // Audit Fields (createdAt/updatedAt auto-managed by timestamps: true)
   lastLogin: Date,
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -228,9 +228,20 @@ userSchema.pre('save', async function(next) {
 });
 
 // Generate referral code for all users
-userSchema.pre('save', function(next) {
+userSchema.pre('save', async function(next) {
   if (!this.referralCode) {
-    this.referralCode = this.generateReferralCode();
+    // Retry up to 5 times in case of collision with existing codes
+    const User = mongoose.model('User');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = this.generateReferralCode();
+      const existing = await User.findOne({ referralCode: code });
+      if (!existing) {
+        this.referralCode = code;
+        return next();
+      }
+    }
+    // Fallback: use timestamp-based code to guarantee uniqueness
+    this.referralCode = `${this.role === 'admin' ? 'ADM' : 'AGT'}${Date.now().toString(36).toUpperCase().slice(-6)}`;
   }
   next();
 });
@@ -262,10 +273,10 @@ userSchema.methods.generateReferralCode = function() {
   let prefix = 'AGT'; // Default for agents
   if (this.role === 'admin') prefix = 'ADM';
   
-  // Generate 2 random alphanumeric characters (mix of letters and numbers) for total of 5
+  // Generate 6 random alphanumeric characters for sufficient uniqueness
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing chars like 0, O, 1, I
   let random = '';
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 6; i++) {
     random += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   
@@ -284,6 +295,20 @@ userSchema.methods.getResetPasswordToken = function() {
   this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
   
   return resetToken;
+};
+
+// Generate a one-time auto-login token (used after registration to auto-login the user)
+userSchema.methods.getAutoLoginToken = function() {
+  const token = crypto.randomBytes(32).toString('hex');
+
+  this.autoLoginToken = crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
+
+  this.autoLoginTokenExpire = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+  return token;
 };
 
 // Soft-delete user and cascade to related collections

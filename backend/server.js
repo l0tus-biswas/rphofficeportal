@@ -11,6 +11,12 @@ const SystemConfig = require('./models/SystemConfig');
 const { protect: authMiddleware } = require('./middleware/auth.middleware');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// Critical startup validation: refuse to start without required secrets
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
+  console.error('FATAL: JWT_SECRET must be set and at least 16 characters long.');
+  process.exit(1);
+}
+
 // Set timezone to Eastern Time (America/New_York)
 process.env.TZ = 'America/New_York';
 
@@ -21,12 +27,36 @@ app.set('trust proxy', true);
 
 // Middleware
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Angular requires these
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"]
+    }
+  },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false
 }));
 app.use(cors({
-  origin: process.env.APP_URL || 'http://localhost:4200',
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    // Support comma-separated origins in APP_URL env var
+    const allowedOrigins = (process.env.APP_URL || 'http://localhost:4200')
+      .split(',')
+      .map(o => o.trim());
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -42,11 +72,35 @@ app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend
   etag: false
 }));
 
-// Serve uploads folder for images and files
+// Serve uploads folder — branding/welcome assets are public, everything else requires auth
+// Public: /uploads/branding/*, /uploads/welcome/*, /uploads/broadcast-images/*
+// Protected: all other /uploads/* paths (commission-statements, onboarding-docs, etc.)
 app.use('/uploads', (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Access-Control-Allow-Origin', process.env.APP_URL || 'http://localhost:4200');
-  next();
+
+  // Allow public access to branding, welcome, and broadcast images
+  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/'];
+  const isPublicPath = publicPrefixes.some(prefix => req.path.startsWith(prefix));
+
+  if (isPublicPath) {
+    return next();
+  }
+
+  // All other uploads require a valid auth token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer')) {
+    return res.status(401).json({ message: 'Authentication required to access this file' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  try {
+    const jwt = require('jsonwebtoken');
+    jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
 }, express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
@@ -68,6 +122,19 @@ async function connectDatabase() {
 
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('MongoDB connected successfully');
+
+  // Load configured timezone from database
+  try {
+    const SystemConfig = require('./models/SystemConfig');
+    const tzConfig = await SystemConfig.findOne({ key: 'app_timezone' }).lean();
+    if (tzConfig?.value) {
+      process.env.TZ = tzConfig.value;
+      console.log(`Timezone set to: ${tzConfig.value}`);
+    }
+  } catch (e) {
+    console.log('Using default timezone: America/New_York');
+  }
+
   return mongoose.connection;
 }
 
@@ -107,10 +174,11 @@ app.get('/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  const isDev = process.env.NODE_ENV === 'development';
   res.status(err.status || 500).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    message: isDev ? (err.message || 'Internal Server Error') : 'Internal Server Error',
+    ...(isDev && { stack: err.stack })
   });
 });
 

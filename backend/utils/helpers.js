@@ -27,13 +27,47 @@ exports.sendResponse = (res, statusCode, data) => {
   });
 };
 
-// Error handler
-exports.errorResponse = (res, error, statusCode = 500) => {
+// Error handler with smart status code detection
+exports.errorResponse = (res, error, statusCode) => {
   console.error('Error:', error);
+  
+  // Auto-detect appropriate status code from error type if not explicitly provided
+  if (!statusCode) {
+    if (error.name === 'ValidationError') {
+      statusCode = 400; // Mongoose validation error
+    } else if (error.name === 'CastError') {
+      statusCode = 400; // Invalid ObjectId or type cast
+    } else if (error.code === 11000) {
+      statusCode = 409; // MongoDB duplicate key
+    } else if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      statusCode = 401; // JWT errors
+    } else {
+      statusCode = 500;
+    }
+  }
+  
+  const isDev = process.env.NODE_ENV === 'development';
+  
+  // Build a user-friendly message for known error types
+  let message;
+  if (isDev) {
+    message = error.message || 'An error occurred';
+  } else if (error.code === 11000) {
+    // Extract the duplicate field name from the error
+    const field = Object.keys(error.keyPattern || {})[0] || 'field';
+    message = `A record with that ${field} already exists`;
+  } else if (error.name === 'ValidationError') {
+    message = 'Validation failed';
+  } else if (error.name === 'CastError') {
+    message = 'Invalid ID format';
+  } else {
+    message = 'An error occurred';
+  }
+  
   res.status(statusCode).json({
     success: false,
-    message: error.message || 'An error occurred',
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+    message,
+    ...(isDev && { stack: error.stack })
   });
 };
 
@@ -67,5 +101,24 @@ exports.getDownlineIds = async (userId) => {
   }
 
   return result;
+};
+
+/**
+ * Safely resolve a relative file path from the backend root directory.
+ * Prevents path traversal attacks by verifying the resolved path stays
+ * within the expected base directory.
+ *
+ * @param {string} relativePath - The DB-stored relative path (e.g. 'uploads/document-hub/file.pdf')
+ * @returns {string|null} - The absolute path if safe, or null if traversal is detected
+ */
+exports.safePath = (relativePath) => {
+  const path = require('path');
+  const baseDir = path.resolve(__dirname, '..');
+  const resolved = path.resolve(baseDir, relativePath);
+
+  if (!resolved.startsWith(baseDir + path.sep) && resolved !== baseDir) {
+    return null;
+  }
+  return resolved;
 };
 

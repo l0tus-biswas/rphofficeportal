@@ -1,3 +1,4 @@
+import { getAppTimezone } from '../../../../services/timezone.service';
 import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { environment } from '../../../../../environments/environment';
@@ -199,7 +200,7 @@ export class AdminOnboardingDetailComponent implements OnInit {
 
   formatDate(date: any): string {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone(), 
       year: 'numeric',
       month: 'short',
       day: 'numeric',

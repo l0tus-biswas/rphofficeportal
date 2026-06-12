@@ -15,6 +15,7 @@ const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, sendResponse, errorResponse, paginate } = require('../utils/helpers');
 const { cancelSubscription } = require('../utils/stripe');
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
 const path = require('path');
 const fs = require('fs');
@@ -132,10 +133,11 @@ router.get('/users', async (req, res) => {
     if (role) filter.role = role;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
     if (search) {
+      const escaped = escapeRegex(search);
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
+        { name: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+        { phone: { $regex: escaped, $options: 'i' } }
       ];
     }
     
@@ -194,7 +196,7 @@ router.post('/users', validateRequest(schemas.createUser), logAction('CREATE_USE
   try {
     const { name, email, phone, role, password } = req.body;
     
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return sendResponse(res, 400, { message: 'Email already exists' });
     }
@@ -272,6 +274,16 @@ router.put('/users/:userId', validateRequest(schemas.updateUser), logAction('UPD
 router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), async (req, res) => {
   try {
     const { exempt, reason } = req.body;
+
+    // Validate: exempt must be an explicit boolean
+    if (typeof exempt !== 'boolean') {
+      return sendResponse(res, 400, { message: 'Field "exempt" must be a boolean (true or false)' });
+    }
+    // If granting exemption, require a reason
+    if (exempt && (!reason || typeof reason !== 'string' || reason.trim().length === 0)) {
+      return sendResponse(res, 400, { message: 'A "reason" is required when setting billing exempt' });
+    }
+
     const user = await User.findById(req.params.userId);
 
     if (!user) {
@@ -347,6 +359,7 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
     user.updatedBy = req.user._id;
 
     // Cancel Stripe subscription if exists
+    let subscriptionCancelWarning = null;
     const subscription = await Subscription.findOne({ user: req.params.userId });
     if (subscription?.stripeSubscriptionId) {
       try {
@@ -357,7 +370,14 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
         await subscription.save();
         console.log(`Cancelled Stripe subscription for deactivated user ${req.params.userId}`);
       } catch (stripeError) {
-        console.warn(`Failed to cancel Stripe subscription on deactivation: ${stripeError.message}`);
+        // Mark subscription as cancel_pending so it can be retried
+        subscription.status = 'cancel_pending';
+        subscription.cancelError = stripeError.message;
+        subscription.cancelAttemptedAt = new Date();
+        await subscription.save();
+        user.subscriptionStatus = 'cancel_pending';
+        subscriptionCancelWarning = `Stripe cancellation failed: ${stripeError.message}. Marked as cancel_pending.`;
+        console.warn(`[Deactivate] Failed to cancel Stripe subscription for user ${req.params.userId}: ${stripeError.message}`);
       }
     }
 
@@ -372,7 +392,10 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
     }, false).catch(() => {});
     
     sendResponse(res, 200, {
-      message: 'User deactivated successfully. Subscription canceled.',
+      message: subscriptionCancelWarning 
+        ? 'User deactivated. WARNING: Subscription cancellation failed — marked as cancel_pending.'
+        : 'User deactivated successfully. Subscription canceled.',
+      warning: subscriptionCancelWarning || undefined,
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {
@@ -782,6 +805,23 @@ router.get('/stats', async (req, res) => {
       .slice(0, 8);
     const recentAlerts = mergedAlerts;
 
+    // --- Billing summary (§25.6) ---
+    const subscriptionStatsAgg = await Subscription.aggregate([
+      { $match: { deletedAt: null } },
+      { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userDoc' } },
+      { $match: { 'userDoc.0': { $exists: true }, 'userDoc.0.deletedAt': null } },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+    const activeSubscriptions = subscriptionStatsAgg.find(s => s._id === 'active')?.count || 0;
+    const canceledSubscriptions = subscriptionStatsAgg.find(s => s._id === 'canceled')?.count || 0;
+    const pastDueSubscriptions = subscriptionStatsAgg.find(s => s._id === 'past_due')?.count || 0;
+
+    const paymentSummary = await Payment.aggregate([
+      { $match: { deletedAt: null, status: { $in: ['succeeded', 'completed'] } } },
+      { $group: { _id: '$type', count: { $sum: 1 }, totalAmount: { $sum: '$amount' } } }
+    ]);
+    const totalRevenue = paymentSummary.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+
     sendResponse(res, 200, {
       stats: {
         totalUsers,
@@ -811,7 +851,12 @@ router.get('/stats', async (req, res) => {
         topPersonalACA,
         topTeamACA,
         // §25.5 — Recent alerts
-        recentAlerts
+        recentAlerts,
+        // §25.6 — Billing summary
+        activeSubscriptions,
+        canceledSubscriptions,
+        pastDueSubscriptions,
+        totalRevenue
       }
     });
   } catch (error) {
@@ -886,6 +931,22 @@ router.get('/payments', async (req, res) => {
       filter.user = { $in: matchingUsers.map(u => u._id) };
     }
 
+    // Get total count first (excluding deleted users if needed)
+    let total;
+    if (!includeDeleted) {
+      // Use aggregation to get accurate count excluding deleted/orphaned users
+      const countPipeline = [
+        { $match: filter },
+        { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userDoc' } },
+        { $match: { 'userDoc.0': { $exists: true }, 'userDoc.0.deletedAt': null } },
+        { $count: 'total' }
+      ];
+      const countResult = await Payment.aggregate(countPipeline);
+      total = countResult.length > 0 ? countResult[0].total : 0;
+    } else {
+      total = await Payment.countDocuments(filter);
+    }
+
     const query = Payment.find(filter)
       .populate('user', 'name email role deletedAt')
       .sort('-createdAt');
@@ -895,7 +956,6 @@ router.get('/payments', async (req, res) => {
     if (!includeDeleted) {
       payments = payments.filter(p => p.user && !p.user.deletedAt);
     }
-    const total = payments.length;
 
     // Calculate stats (exclude soft-deleted payments and orphaned user refs)
     const stats = await Payment.aggregate([
@@ -938,6 +998,21 @@ router.get('/subscriptions', async (req, res) => {
     if (status) filter.status = status;
     if (!includeDeleted) filter.deletedAt = null;
 
+    // Get accurate total count (excluding deleted/orphaned users)
+    let total;
+    if (!includeDeleted) {
+      const countPipeline = [
+        { $match: filter },
+        { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'userDoc' } },
+        { $match: { 'userDoc.0': { $exists: true }, 'userDoc.0.deletedAt': null } },
+        { $count: 'total' }
+      ];
+      const countResult = await Subscription.aggregate(countPipeline);
+      total = countResult.length > 0 ? countResult[0].total : 0;
+    } else {
+      total = await Subscription.countDocuments(filter);
+    }
+
     const query = Subscription.find(filter)
       .populate('user', 'name email role paymentAccessEnabled deletedAt')
       .sort('-createdAt');
@@ -947,7 +1022,6 @@ router.get('/subscriptions', async (req, res) => {
     if (!includeDeleted) {
       subscriptions = subscriptions.filter(s => s.user && !s.user.deletedAt);
     }
-    const total = subscriptions.length;
 
     // Calculate stats (exclude soft-deleted subscriptions and orphaned user refs)
     const stats = await Subscription.aggregate([
@@ -1126,6 +1200,22 @@ router.put('/payment-settings', logAction('UPDATE_PAYMENT_SETTINGS'), async (req
     );
 
     sendResponse(res, 200, { message: 'Payment settings updated successfully', ...settings });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/payments/cleanup-stale
+// @desc    Expire stale pending payments (>7 days old)
+// @access  Private (Admin only)
+router.post('/payments/cleanup-stale', logAction('CLEANUP_STALE_PAYMENTS'), async (req, res) => {
+  try {
+    const { expireStalePendingPayments } = require('./payment.routes');
+    const expiredCount = await expireStalePendingPayments();
+    sendResponse(res, 200, {
+      message: `Expired ${expiredCount} stale pending payment(s)`,
+      expiredCount
+    });
   } catch (error) {
     errorResponse(res, error);
   }
