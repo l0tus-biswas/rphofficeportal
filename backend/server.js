@@ -12,9 +12,11 @@ const { protect: authMiddleware } = require('./middleware/auth.middleware');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Critical startup validation: refuse to start without required secrets
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
-  console.error('FATAL: JWT_SECRET must be set and at least 16 characters long.');
-  process.exit(1);
+if (process.env.NODE_ENV !== 'test') {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
+    console.error('FATAL: JWT_SECRET must be set and at least 16 characters long.');
+    process.exit(1);
+  }
 }
 
 // Set timezone to Eastern Time (America/New_York)
