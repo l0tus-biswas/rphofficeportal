@@ -249,6 +249,10 @@ describe('Fix #2: safePath utility', () => {
   it('should handle Windows-style traversal', () => {
     expect(safePath('..\\..\\windows\\system32')).toBeNull();
   });
+
+  it('should block mixed separator traversal', () => {
+    expect(safePath('uploads/../../etc/passwd')).toBeNull();
+  });
 });
 
 // ─────────────────────────────────────────────────────────

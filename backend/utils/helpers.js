@@ -113,8 +113,11 @@ exports.getDownlineIds = async (userId) => {
  */
 exports.safePath = (relativePath) => {
   const path = require('path');
+  // Normalize backslashes to forward slashes to prevent traversal on Linux
+  // where \ is a valid filename character, not a path separator
+  const normalized = relativePath.replace(/\\/g, '/');
   const baseDir = path.resolve(__dirname, '..');
-  const resolved = path.resolve(baseDir, relativePath);
+  const resolved = path.resolve(baseDir, normalized);
 
   if (!resolved.startsWith(baseDir + path.sep) && resolved !== baseDir) {
     return null;
