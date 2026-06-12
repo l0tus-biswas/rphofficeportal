@@ -59,24 +59,13 @@ jobs:
         run: cd frontend && npm run build -- --configuration=production
 
   deploy:
-    name: Deploy to Production
+    name: Trigger Deployment
     runs-on: ubuntu-latest
     needs: [test, build]
     if: github.event_name == 'push'
     steps:
-      - name: Deploy to Plesk server via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            cd /var/www/vhosts/rhpoffice.com/httpdocs
-            git pull origin ${{ github.ref_name }}
-            npm install --production
-            cd backend && npm install --production && cd ..
-            cd frontend && npm install && npm run build -- --configuration=production && cd ..
-            pm2 restart rhp-office-portal || pm2 start ecosystem.config.json
-            pm2 save
-            echo "✅ Deployed commit: ${{ github.sha }}"
+      - name: Notify Plesk webhook
+        run: |
+          echo "✅ Tests passed, build verified."
+          echo "Plesk Git auto-deploy handles the actual deployment via webhook."
+          echo "Commit: ${{ github.sha }}"
