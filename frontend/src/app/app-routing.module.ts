@@ -54,6 +54,7 @@ import { PromotionLevelsComponent } from './components/admin/promotion-levels/pr
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
+import { SystemMonitoringComponent } from './components/admin/system-monitoring/system-monitoring.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 import { LoginRedirectGuard } from './guards/login-redirect.guard';
 
@@ -346,6 +347,12 @@ const routes: Routes = [
     path: 'examfx-progress',
     component: ExamfxProgressComponent,
     canActivate: [AuthGuard]
+  },
+  {
+    path: 'admin/monitoring',
+    component: SystemMonitoringComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
   },
   { path: '**', component: NotFoundComponent }
 ];

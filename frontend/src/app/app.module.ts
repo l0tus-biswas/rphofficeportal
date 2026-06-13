@@ -70,6 +70,7 @@ import { PromotionLevelsComponent } from './components/admin/promotion-levels/pr
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
 import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
+import { SystemMonitoringComponent } from './components/admin/system-monitoring/system-monitoring.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 
 // Pipes
@@ -139,6 +140,7 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     MyTeamComponent,
     ExamfxProgressComponent,
     WelcomeMessageComponent,
+    SystemMonitoringComponent,
     NotFoundComponent
   ],
   imports: [
