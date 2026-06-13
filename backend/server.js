@@ -9,12 +9,13 @@ const { Server } = require('socket.io');
 const User = require('./models/User');
 const SystemConfig = require('./models/SystemConfig');
 const { protect: authMiddleware } = require('./middleware/auth.middleware');
+const logger = require('./utils/logger');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Critical startup validation: refuse to start without required secrets
 if (process.env.NODE_ENV !== 'test') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
-    console.error('FATAL: JWT_SECRET must be set and at least 16 characters long.');
+    logger.error('FATAL: JWT_SECRET must be set and at least 16 characters long.');
     process.exit(1);
   }
 }
@@ -26,6 +27,28 @@ const app = express();
 
 // Trust proxy - necessary for getting real IP behind reverse proxy
 app.set('trust proxy', true);
+
+// Real-time monitoring dashboard at /status
+const statusMonitor = require('express-status-monitor')({
+  title: 'RHP Office Status',
+  path: '/status',
+  spans: [
+    { interval: 1, retention: 60 },    // 1s for last 60s
+    { interval: 5, retention: 60 },    // 5s for last 5 min
+    { interval: 15, retention: 60 },   // 15s for last 15 min
+    { interval: 60, retention: 60 }    // 1m for last hour
+  ],
+  chartVisibility: {
+    cpu: true,
+    mem: true,
+    load: true,
+    heap: true,
+    responseTime: true,
+    rps: true,
+    statusCodes: true
+  }
+});
+app.use(statusMonitor);
 
 // Middleware
 app.use(helmet({
@@ -69,7 +92,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
+// HTTP request logging via Winston (structured JSON in production, dev format locally)
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined', { stream: logger.stream }));
+} else {
+  app.use(morgan('dev', { stream: logger.stream }));
+}
 
 // Serve static files from Angular app FIRST
 app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend'), {
@@ -126,7 +154,7 @@ async function connectDatabase() {
   }
 
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log('MongoDB connected successfully');
+  logger.info('MongoDB connected successfully');
 
   // Load configured timezone from database
   try {
@@ -134,10 +162,10 @@ async function connectDatabase() {
     const tzConfig = await SystemConfig.findOne({ key: 'app_timezone' }).lean();
     if (tzConfig?.value) {
       process.env.TZ = tzConfig.value;
-      console.log(`Timezone set to: ${tzConfig.value}`);
+      logger.info(`Timezone set to: ${tzConfig.value}`);
     }
   } catch (e) {
-    console.log('Using default timezone: America/New_York');
+    logger.info('Using default timezone: America/New_York');
   }
 
   return mongoose.connection;
@@ -171,14 +199,64 @@ app.use('/api/business-cards', require('./routes/business-cards.routes'));
 app.use('/api/promotion', require('./routes/promotion.routes'));
 app.use('/api/quickbooks', require('./routes/quickbooks.routes'));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date() });
+// Health check — detailed system status for monitoring
+app.get('/health', async (req, res) => {
+  const uptime = process.uptime();
+  const memUsage = process.memoryUsage();
+
+  // Check MongoDB connectivity
+  let dbStatus = 'disconnected';
+  let dbLatencyMs = null;
+  try {
+    const start = Date.now();
+    await mongoose.connection.db.admin().ping();
+    dbLatencyMs = Date.now() - start;
+    dbStatus = 'connected';
+  } catch (e) {
+    dbStatus = 'error';
+  }
+
+  const health = {
+    status: dbStatus === 'connected' ? 'healthy' : 'degraded',
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`,
+    uptimeSeconds: Math.floor(uptime),
+    version: require('./package.json').version,
+    node: process.version,
+    memory: {
+      rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+      external: `${Math.round(memUsage.external / 1024 / 1024)}MB`
+    },
+    database: {
+      status: dbStatus,
+      latencyMs: dbLatencyMs
+    },
+    socketIO: {
+      connected: io.engine ? io.engine.clientsCount : 0
+    }
+  };
+
+  const statusCode = health.status === 'healthy' ? 200 : 503;
+  res.status(statusCode).json(health);
+});
+
+// Minimal health probe for uptime monitors (fast, no DB check)
+app.get('/health/ping', (req, res) => {
+  res.status(200).send('pong');
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error('Unhandled error', {
+    message: err.message,
+    stack: err.stack,
+    method: req.method,
+    url: req.originalUrl,
+    ip: req.ip,
+    statusCode: err.status || 500
+  });
   const isDev = process.env.NODE_ENV === 'development';
   res.status(err.status || 500).json({
     success: false,
@@ -225,7 +303,7 @@ io.use((socket, next) => {
   (async () => {
     const token = socket.handshake.auth.token;
     if (!token) {
-      console.warn('[Socket] Connection rejected: No token provided');
+      logger.warn('[Socket] Connection rejected: No token provided');
       return next(new Error('Authentication required'));
     }
 
@@ -248,10 +326,10 @@ io.use((socket, next) => {
 
       socket.user = decoded;
       socket.userId = decoded.id;
-      console.log(`[Socket] User ${socket.userId} authenticated`);
+      logger.info(`[Socket] User ${socket.userId} authenticated`);
       next();
     } catch (error) {
-      console.warn(`[Socket] Authentication failed: ${error.message}`);
+      logger.warn(`[Socket] Authentication failed: ${error.message}`);
       next(new Error('Invalid token: ' + error.message));
     }
   })();
@@ -259,14 +337,14 @@ io.use((socket, next) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log(`[Socket] User ${socket.userId} connected:`, socket.id);
+  logger.info(`[Socket] User ${socket.userId} connected`, { socketId: socket.id });
 
   // Join a user-specific room
   socket.join(`user:${socket.userId}`);
 
   // Listen for disconnect
   socket.on('disconnect', () => {
-    console.log(`[Socket] User ${socket.userId} disconnected:`, socket.id);
+    logger.info(`[Socket] User ${socket.userId} disconnected`, { socketId: socket.id });
   });
 });
 
@@ -284,7 +362,7 @@ async function startServer(port = PORT) {
     httpServer.once('error', reject);
     httpServer.listen(port, () => {
       httpServer.removeListener('error', reject);
-      console.log(`Server running on port ${port} with Socket.IO enabled`);
+      logger.info(`Server running on port ${port} with Socket.IO enabled`);
       resolve();
     });
   });
@@ -292,9 +370,20 @@ async function startServer(port = PORT) {
   return httpServer;
 }
 
+// Catch unhandled rejections and uncaught exceptions
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection', { reason: reason?.message || reason, stack: reason?.stack });
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { message: err.message, stack: err.stack });
+  // Give logger time to flush, then let PM2 restart
+  setTimeout(() => process.exit(1), 1000);
+});
+
 if (require.main === module) {
   startServer().catch(err => {
-    console.error('Server startup error:', err);
+    logger.error('Server startup error', { message: err.message, stack: err.stack });
     process.exit(1);
   });
 }
