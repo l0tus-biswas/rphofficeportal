@@ -49,6 +49,7 @@ import { AdminOnboardingDetailComponent } from './components/admin/onboarding-ma
 import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
+import { PrintfulOrdersComponent } from './components/admin/printful-orders/printful-orders.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
 import { ExamfxProgressComponent } from './components/examfx-progress/examfx-progress.component';
@@ -304,6 +305,12 @@ const routes: Routes = [
   {
     path: 'admin/vistaprint-config',
     component: VistaprintConfigComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
+  },
+  {
+    path: 'admin/printful-orders',
+    component: PrintfulOrdersComponent,
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },

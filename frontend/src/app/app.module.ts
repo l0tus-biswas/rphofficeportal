@@ -64,6 +64,7 @@ import { AcaTrackerComponent } from './components/dashboard/aca-tracker/aca-trac
 import { AcaManagementComponent } from './components/admin/aca-management/aca-management.component';
 import { BusinessCardsComponent } from './components/business-cards/business-cards.component';
 import { VistaprintConfigComponent } from './components/admin/vistaprint-config/vistaprint-config.component';
+import { PrintfulOrdersComponent } from './components/admin/printful-orders/printful-orders.component';
 import { PromotionTrackerComponent } from './components/dashboard/promotion-tracker/promotion-tracker.component';
 import { PromotionLevelsComponent } from './components/admin/promotion-levels/promotion-levels.component';
 import { MyTeamComponent } from './components/my-team/my-team.component';
@@ -132,6 +133,7 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     AcaManagementComponent,
     BusinessCardsComponent,
     VistaprintConfigComponent,
+    PrintfulOrdersComponent,
     PromotionTrackerComponent,
     PromotionLevelsComponent,
     MyTeamComponent,

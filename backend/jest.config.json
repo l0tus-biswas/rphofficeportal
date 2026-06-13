@@ -2,11 +2,21 @@
   "testEnvironment": "node",
   "coverageDirectory": "./coverage",
   "collectCoverageFrom": [
-    "**/*.js",
+    "middleware/**/*.js",
+    "utils/**/*.js",
+    "config/**/*.js",
     "!**/node_modules/**",
     "!**/tests/**",
     "!**/coverage/**"
   ],
+  "coverageThreshold": {
+    "global": {
+      "statements": 50,
+      "branches": 40,
+      "functions": 40,
+      "lines": 50
+    }
+  },
   "testMatch": [
     "**/tests/**/*.test.js"
   ],
@@ -19,11 +29,7 @@
       "displayName": "unit",
       "testEnvironment": "node",
       "testMatch": [
-        "**/tests/high-priority-fixes.test.js",
-        "**/tests/medium-low-fixes.test.js",
-        "**/tests/medium-low-batch2.test.js",
-        "**/tests/medium-low-batch3.test.js",
-        "**/tests/remaining-high-fixes.test.js"
+        "**/tests/unit/**/*.test.js"
       ],
       "setupFilesAfterEnv": ["./tests/setup.js"]
     },
@@ -31,15 +37,10 @@
       "displayName": "integration",
       "testEnvironment": "node",
       "testMatch": [
-        "**/tests/api.test.js",
-        "**/tests/billing-payments.test.js",
-        "**/tests/document-hub-onboarding.test.js",
-        "**/tests/production-promotion-aca.test.js",
-        "**/tests/coupon-free-access.test.js",
-        "**/tests/security-fixes.test.js",
-        "**/tests/models.test.js"
+        "**/tests/integration/**/*.test.js"
       ],
-      "setupFilesAfterEnv": ["./tests/setup.js"]
+      "setupFilesAfterEnv": ["./tests/setup.js"],
+      "setupFiles": ["./tests/integration/setup-integration.js"]
     }
   ]
 }
