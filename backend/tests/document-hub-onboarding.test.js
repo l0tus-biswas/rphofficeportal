@@ -1,12 +1,12 @@
 /**
- * Document Hub / Onboarding Docs - Issue #11 Regression Tests
+ * RHP Vault / Onboarding Docs - Issue #11 Regression Tests
  *
  * Validates:
- * 1. Document Hub is focused on document storage/sharing (library)
- * 2. Request Document functionality is admin-only in Document Hub
- * 3. Agents can't access requests section in Document Hub
+ * 1. RHP Vault is focused on document storage/sharing (library)
+ * 2. Request Document functionality is admin-only in RHP Vault
+ * 3. Agents can't access requests section in RHP Vault
  * 4. Onboarding Docs shows pending + completed requests for agents
- * 5. Admin can still create/review requests via Document Hub
+ * 5. Admin can still create/review requests via RHP Vault
  * 6. Agent can submit responses via Onboarding Hub API
  */
 
@@ -52,9 +52,9 @@ afterAll(async () => {
 });
 
 // ============================================================================
-// 1. DOCUMENT HUB LIBRARY - Both roles can access
+// 1. RHP Vault LIBRARY - Both roles can access
 // ============================================================================
-describe('Document Hub: Library access', () => {
+describe('RHP Vault: Library access', () => {
   test('Admin can list folders', async () => {
     const res = await request(BASE_URL)
       .get('/api/document-hub/folders')

@@ -191,7 +191,7 @@ export class NotificationsComponent implements OnInit {
       'carrier_contract_requested': 'bi-file-earmark-plus-fill',
       'carrier_appointed':      'bi-building-fill-check',
       'carrier_unappointed':    'bi-building-fill-slash',
-      // Document Hub
+      // RHP Vault
       'document_request':       'bi-file-earmark-arrow-down-fill',
       'document_submitted':     'bi-file-earmark-arrow-up-fill',
       'document_reviewed':      'bi-file-earmark-check-fill',
@@ -239,7 +239,7 @@ export class NotificationsComponent implements OnInit {
       'carrier_contract_requested': 'info',
       'carrier_appointed':      'success',
       'carrier_unappointed':    'secondary',
-      // Document Hub
+      // RHP Vault
       'document_request':       'info',
       'document_submitted':     'primary',
       'document_reviewed':      'success',

@@ -390,9 +390,9 @@ test.describe('7. Production / Promotion Tracking', () => {
 });
 
 // =============================================
-// 8. DOCUMENT HUB
+// 8. RHP Vault
 // =============================================
-test.describe('8. Document Hub', () => {
+test.describe('8. RHP Vault', () => {
   test('API: List folders', async ({ request }) => {
     const res = await request.get(`${API_URL}/document-hub/folders`, {
       headers: { Authorization: `Bearer ${agentToken}` }
@@ -400,7 +400,7 @@ test.describe('8. Document Hub', () => {
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     expect(Array.isArray(data)).toBeTruthy();
-    console.log(`✓ Document Hub: ${data.length} folders`);
+    console.log(`✓ RHP Vault: ${data.length} folders`);
   });
 
   test('API: List files', async ({ request }) => {
@@ -410,7 +410,7 @@ test.describe('8. Document Hub', () => {
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     expect(Array.isArray(data)).toBeTruthy();
-    console.log(`✓ Document Hub: ${data.length} files`);
+    console.log(`✓ RHP Vault: ${data.length} files`);
   });
 
   test('API: Document requests (admin)', async ({ request }) => {
@@ -431,12 +431,12 @@ test.describe('8. Document Hub', () => {
     console.log('✓ Agent can view document requests');
   });
 
-  test('Browser: Document Hub page', async ({ page }) => {
+  test('Browser: RHP Vault page', async ({ page }) => {
     await loginAndGo(page, AGENT_EMAIL, AGENT_PASS, '/document-hub');
     await page.waitForTimeout(3000);
     const body = await page.textContent('body');
     expect(body.length).toBeGreaterThan(50);
-    console.log('✓ Document Hub page rendered');
+    console.log('✓ RHP Vault page rendered');
   });
 });
 

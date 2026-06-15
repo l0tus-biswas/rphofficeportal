@@ -362,9 +362,9 @@ test.describe('7. Production / Promotion Tracking', () => {
 });
 
 // =============================================
-// 8. DOCUMENT HUB
+// 8. RHP Vault
 // =============================================
-test.describe('8. Document Hub', () => {
+test.describe('8. RHP Vault', () => {
   test('API: List folders', async ({ request }) => {
     const res = await request.get(`${API_URL}/document-hub/folders`, {
       headers: { Authorization: `Bearer ${agentToken}` }
@@ -392,7 +392,7 @@ test.describe('8. Document Hub', () => {
     expect(data).toHaveProperty('requests');
   });
 
-  test('Browser: Document Hub page loads for agent', async ({ page }) => {
+  test('Browser: RHP Vault page loads for agent', async ({ page }) => {
     await loginAndGo(page, AGENT_EMAIL, AGENT_PASS, '/document-hub');
     await page.waitForTimeout(3000);
     const content = await page.textContent('body');

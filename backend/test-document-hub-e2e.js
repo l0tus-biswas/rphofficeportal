@@ -1,10 +1,10 @@
 /**
- * Document Hub — Deep E2E Test Suite
- * Item 18: Document Hub – Management, Structure & Upload Requests
+ * RHP Vault — Deep E2E Test Suite
+ * Item 18: RHP Vault – Management, Structure & Upload Requests
  *
  * Tests cover:
  *   18.1 - Folder & Subfolder System
- *   18.2 - Document Hub Management (Admin)
+ *   18.2 - RHP Vault Management (Admin)
  *   18.3 - Upload Requests (admin→agent workflow)
  *   18.4 - Purpose & Separation (not onboarding)
  */
@@ -251,7 +251,7 @@ async function section3_Files() {
   console.log('\n═══ SECTION 3: File Upload & Management (18.2) ═══');
 
   // Create a small test PDF-like file
-  const testFileContent = Buffer.from('%PDF-1.4 E2E test content for document hub validation');
+  const testFileContent = Buffer.from('%PDF-1.4 E2E test content for RHP Vault validation');
 
   // 3.1 Admin uploads file to root
   const up1 = await multipartUpload('/document-hub/files', {
@@ -650,32 +650,32 @@ async function section5_FolderCascade() {
 async function section6_Separation() {
   console.log('\n═══ SECTION 6: Purpose & Separation (18.4) ═══');
 
-  // 6.1 Document Hub and Onboarding are separate route paths
-  // Document Hub: /api/document-hub/*
+  // 6.1 RHP Vault and Onboarding are separate route paths
+  // RHP Vault: /api/document-hub/*
   // Onboarding: /api/agent/onboarding/* or /api/admin/onboarding/*
   const hubFolders = await req('GET', '/document-hub/folders', null, adminToken);
-  assert(hubFolders.status === 200, '6.1 Document Hub route exists (/api/document-hub/folders)');
+  assert(hubFolders.status === 200, '6.1 RHP Vault route exists (/api/document-hub/folders)');
 
   // 6.2 Onboarding route is separate
   const onboarding = await req('GET', '/agent/onboarding', null, agentToken);
   assert(onboarding.status === 200 || onboarding.status === 404,
     '6.2 Onboarding is a separate route path');
 
-  // 6.3 Document Hub has folder system (onboarding does not)
-  assert(Array.isArray(hubFolders.data), '6.3 Document Hub has folder system');
+  // 6.3 RHP Vault has folder system (onboarding does not)
+  assert(Array.isArray(hubFolders.data), '6.3 RHP Vault has folder system');
 
-  // 6.4 Document Hub supports visibility control
+  // 6.4 RHP Vault supports visibility control
   const files = await req('GET', '/document-hub/files', null, adminToken);
-  assert(files.status === 200, '6.4 Document Hub files endpoint exists');
+  assert(files.status === 200, '6.4 RHP Vault files endpoint exists');
 
-  // 6.5 Document Hub supports document requests
+  // 6.5 RHP Vault supports document requests
   const requests = await req('GET', '/document-hub/requests', null, adminToken);
-  assert(requests.status === 200, '6.5 Document Hub requests endpoint exists');
+  assert(requests.status === 200, '6.5 RHP Vault requests endpoint exists');
 
   // 6.6 Verify supported file types (general documents, not just PDFs)
   // The ALLOWED_MIMES in the route supports: pdf, jpg, png, gif, doc, docx, xls, xlsx, ppt, pptx, csv, txt, zip
   // This confirms it's for general documents, instructions, resources
-  assert(files.status === 200, '6.6 Document Hub supports multiple file types (pdf,doc,xls,ppt,csv,txt,zip)');
+  assert(files.status === 200, '6.6 RHP Vault supports multiple file types (pdf,doc,xls,ppt,csv,txt,zip)');
 }
 
 // ─── SECTION 7: Cleanup ──────────────────────────────────────────
@@ -701,7 +701,7 @@ async function section7_Cleanup() {
 // ─── Main ─────────────────────────────────────────────────────────
 (async () => {
   console.log('╔═════════════════════════════════════════════════════╗');
-  console.log('║  Document Hub — Deep E2E Test Suite                ║');
+  console.log('║  RHP Vault — Deep E2E Test Suite                ║');
   console.log('║  Item 18: Management, Structure & Upload Requests  ║');
   console.log('╚═════════════════════════════════════════════════════╝');
 

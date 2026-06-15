@@ -1,4 +1,4 @@
-# E2E Test Report: Document Hub / Request Documents — Issue #11
+# E2E Test Report: RHP Vault / Request Documents — Issue #11
 
 **Date:** 2026-06-01  
 **Tester:** Senior QA Engineer (Automated)  
@@ -9,10 +9,10 @@
 
 ## Executive Summary
 
-The Document Hub system had an **architectural UX issue** where the "Request Document" workflow mixed two distinct purposes into a single UI section. This report documents the findings and the fix applied.
+The RHP Vault system had an **architectural UX issue** where the "Request Document" workflow mixed two distinct purposes into a single UI section. This report documents the findings and the fix applied.
 
 ### Problem Statement
-> "The 'Request Document' feature appears to be in the wrong section. The purpose of Document Hub should primarily be for admins to upload documents, forms, training materials, and resources that agents can access. Document requests should instead be handled under the Onboarding Docs section."
+> "The 'Request Document' feature appears to be in the wrong section. The purpose of RHP Vault should primarily be for admins to upload documents, forms, training materials, and resources that agents can access. Document requests should instead be handled under the Onboarding Docs section."
 
 ---
 
@@ -20,32 +20,32 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 
 | Section | Purpose | Request Feature? |
 |---------|---------|-----------------|
-| **Document Hub** (`/document-hub`) | Admin uploads docs, agents browse/download | YES — Admin creates requests, Agents respond here |
-| **Onboarding Docs** (`/onboarding-hub`) | Fixed doc types for agent onboarding | Partial — Shows notification card but redirects to Document Hub |
+| **RHP Vault** (`/document-hub`) | Admin uploads docs, agents browse/download | YES — Admin creates requests, Agents respond here |
+| **Onboarding Docs** (`/onboarding-hub`) | Fixed doc types for agent onboarding | Partial — Shows notification card but redirects to RHP Vault |
 
 ### Issues Identified
 
 | # | Severity | Issue | Location |
 |---|----------|-------|----------|
-| 1 | **Medium** | Onboarding Hub page title incorrectly says "Document Hub" | `onboarding-hub.component.html` line 5 |
-| 2 | **High** | Agent's request response workflow is in Document Hub instead of Onboarding Docs | `document-hub.component.html` Requests tab (agent view) |
-| 3 | **Medium** | Onboarding Docs "Upload" button for requests redirects to Document Hub | `onboarding-hub.component.html` line 56 (original) |
-| 4 | **Low** | Agent Document Hub shows request stats (pending/overdue) that are now irrelevant | `document-hub.component.html` stats section |
+| 1 | **Medium** | Onboarding Hub page title incorrectly says "RHP Vault" | `onboarding-hub.component.html` line 5 |
+| 2 | **High** | Agent's request response workflow is in RHP Vault instead of Onboarding Docs | `document-hub.component.html` Requests tab (agent view) |
+| 3 | **Medium** | Onboarding Docs "Upload" button for requests redirects to RHP Vault | `onboarding-hub.component.html` line 56 (original) |
+| 4 | **Low** | Agent RHP Vault shows request stats (pending/overdue) that are now irrelevant | `document-hub.component.html` stats section |
 
 ---
 
 ## Test Scenarios Executed
 
-### TS-01: Admin Document Hub — Library Tab
+### TS-01: Admin RHP Vault — Library Tab
 | Step | Expected | Actual | Status |
 |------|----------|--------|--------|
 | Login as admin | Dashboard loads | ✓ | **PASS** |
-| Navigate to /document-hub | Document Hub page loads | ✓ | **PASS** |
+| Navigate to /document-hub | RHP Vault page loads | ✓ | **PASS** |
 | Verify admin buttons visible | "New Folder", "Upload Files", "Request Document" | All 3 present | **PASS** |
 | Verify Library tab content | Folders & files visible | 3 folders, 2 files shown | **PASS** |
 | Verify stats cards | Show subfolder/file/request counts | 3/2/1/3 shown | **PASS** |
 
-### TS-02: Admin Document Hub — Requests Tab
+### TS-02: Admin RHP Vault — Requests Tab
 | Step | Expected | Actual | Status |
 |------|----------|--------|--------|
 | Click "Requests" tab | Requests section loads | ✓ | **PASS** |
@@ -53,11 +53,11 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 | Verify agent response tracking | Shows per-agent status | Status badges visible (pending/submitted/approved) | **PASS** |
 | Verify review actions | Approve/reject buttons for submitted responses | Present for admin | **PASS** |
 
-### TS-03: Agent Document Hub — Library Only (After Fix)
+### TS-03: Agent RHP Vault — Library Only (After Fix)
 | Step | Expected | Actual | Status |
 |------|----------|--------|--------|
 | Login as agent (Melissa Test) | Dashboard loads | ✓ | **PASS** |
-| Navigate to /document-hub | Document Hub loads | Title + subtitle visible | **PASS** |
+| Navigate to /document-hub | RHP Vault loads | Title + subtitle visible | **PASS** |
 | Verify NO "Request Document" button | Only admin buttons hidden | No admin buttons shown | **PASS** |
 | Verify Library tab only (no Requests tab) | Requests tab hidden for agents | ✓ (after fix) | **PASS** |
 | Verify request stats hidden | Only subfolder/file stats shown | ✓ (after fix) | **PASS** |
@@ -85,7 +85,7 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 | Step | Expected | Actual | Status |
 |------|----------|--------|--------|
 | Sidebar shows "Onboarding Docs" | Links to /onboarding-hub | ✓ | **PASS** |
-| Sidebar shows "Document Hub" | Links to /document-hub | ✓ | **PASS** |
+| Sidebar shows "RHP Vault" | Links to /document-hub | ✓ | **PASS** |
 | Both pages load independently | No cross-dependency errors | ✓ | **PASS** |
 
 ---
@@ -94,7 +94,7 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 
 ### 1. Onboarding Hub Title Fix
 **File:** `frontend/src/app/components/onboarding/onboarding-hub/onboarding-hub.component.html`  
-**Change:** Title `"Document Hub"` → `"Onboarding Documents"`
+**Change:** Title `"RHP Vault"` → `"Onboarding Documents"`
 
 ### 2. Inline Request Response in Onboarding Docs
 **File:** `frontend/src/app/components/onboarding/onboarding-hub/onboarding-hub.component.html`  
@@ -112,7 +112,7 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 - Added methods: `toggleRequestUpload()`, `onRequestFileSelected()`, `submitRequestResponse()`, `isOverdue()`
 - Improved `loadPendingRequests()` filter to only show requests where the agent's status is 'pending'
 
-### 4. Document Hub — Agent View Cleanup
+### 4. RHP Vault — Agent View Cleanup
 **File:** `frontend/src/app/components/document-hub/document-hub.component.html`  
 **Changes:**
 - Hidden "Requests" tab for non-admin users (`*ngIf="isAdmin"`)
@@ -128,11 +128,11 @@ The Document Hub system had an **architectural UX issue** where the "Request Doc
 
 | Section | Purpose | Request Feature? |
 |---------|---------|-----------------|
-| **Document Hub** (`/document-hub`) | Admin uploads docs/forms/resources; agents browse & download | Admin-only: Create requests + review responses |
+| **RHP Vault** (`/document-hub`) | Admin uploads docs/forms/resources; agents browse & download | Admin-only: Create requests + review responses |
 | **Onboarding Docs** (`/onboarding-hub`) | Agent required document submission (fixed types + admin requests) | Agent: Respond to requests inline with file upload |
 
 ### Separation of Concerns (Clean):
-- **Document Hub** = Document library (storage, sharing, access)
+- **RHP Vault** = Document library (storage, sharing, access)
 - **Onboarding Docs** = Document collection (gathering required paperwork from agents)
 
 ---
@@ -160,4 +160,4 @@ ng build --configuration=development
 
 ## Conclusion
 
-All 6 test scenarios **PASS**. The architectural fix correctly separates Document Hub (document library) from Onboarding Docs (document collection). Agents now respond to admin document requests directly within the Onboarding Docs page without being redirected to a different section. The build compiles cleanly with no new warnings or errors.
+All 6 test scenarios **PASS**. The architectural fix correctly separates RHP Vault (document library) from Onboarding Docs (document collection). Agents now respond to admin document requests directly within the Onboarding Docs page without being redirected to a different section. The build compiles cleanly with no new warnings or errors.
