@@ -12,7 +12,7 @@ const { sendNotificationEmail } = require('../utils/neuzmail');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 
 // ---------------------------------------------------------------------------
-// Multer config for document hub uploads
+// Multer config for RHP Vault uploads
 // ---------------------------------------------------------------------------
 const uploadDir = path.join(__dirname, '../uploads/document-hub');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -337,7 +337,7 @@ router.get('/files', authenticate, async (req, res) => {
 });
 
 // @route   POST /api/document-hub/files
-// @desc    Upload file(s) to document hub (admin)
+// @desc    Upload file(s) to RHP Vault (admin)
 // @access  Admin
 router.post('/files', authenticate, authorize('admin'), handleMulterError(upload.array('files', 10)), async (req, res) => {
   try {
@@ -754,12 +754,12 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
 
     await request.save();
 
-    // If approved and a file exists, publish it into Document Hub files so admins can manage it there too.
+    // If approved and a file exists, publish it into RHP Vault files so admins can manage it there too.
     if (status === 'approved' && resp.filePath) {
       try {
         await publishApprovedRequestResponse(request, resp, req.user._id);
       } catch (hubErr) {
-        console.error('Failed to publish approved request file into document hub:', hubErr.message);
+        console.error('Failed to publish approved request file into RHP Vault:', hubErr.message);
       }
     }
 

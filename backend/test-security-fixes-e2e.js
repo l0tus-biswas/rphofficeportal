@@ -236,7 +236,7 @@ async function runTests() {
   // We can't directly test path traversal via the API since it relies on DB-stored paths,
   // but we can verify the download endpoint works for valid files
   const filesRes = await req('GET', '/document-hub/files', null, adminToken);
-  assert(filesRes.status === 200, '2.1 Document hub files endpoint accessible');
+  assert(filesRes.status === 200, '2.1 RHP Vault files endpoint accessible');
 
   // Verify safePath utility exists and works
   const { safePath } = require('./utils/helpers');

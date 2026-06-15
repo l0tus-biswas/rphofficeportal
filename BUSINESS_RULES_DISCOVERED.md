@@ -166,17 +166,17 @@
 
 ---
 
-## 5. DOCUMENT HUB
+## 5. RHP Vault
 
 ### BR-021: Three-Tier File Visibility
-- **Rule:** Files uploaded to Document Hub have one of three visibility levels: `all` (everyone), `admin` (admins only), `restricted` (specific agents listed in `visibleToAgents` array).
+- **Rule:** Files uploaded to RHP Vault have one of three visibility levels: `all` (everyone), `admin` (admins only), `restricted` (specific agents listed in `visibleToAgents` array).
 - **Rationale:** Different documents serve different audiences: public resources vs admin-only vs individual agent documents.
 - **Evidence:** `backend/routes/document-hub.routes.js` — visibility filtering in GET endpoints. `backend/models/DocumentHubFile.js` — `visibility` field with `visibleToAgents` array.
 - **Risk if Missing:** All documents visible to all users. Confidential admin documents exposed.
 - **Confidence:** HIGH
 
 ### BR-022: Nested Folder Hierarchy with Drag-Drop Reordering
-- **Rule:** Document Hub supports arbitrary folder nesting via `parentFolder` reference. Folders and files have `sortOrder` for custom ordering within a folder.
+- **Rule:** RHP Vault supports arbitrary folder nesting via `parentFolder` reference. Folders and files have `sortOrder` for custom ordering within a folder.
 - **Rationale:** Organizes large document collections. Drag-drop provides intuitive management.
 - **Evidence:** `backend/models/DocumentFolder.js` — `parentFolder` self-reference. `backend/routes/document-hub.routes.js` — `PATCH /reorder` endpoint.
 - **Risk if Missing:** Flat folder structure only. Poor organization for large document collections.
@@ -357,7 +357,7 @@
 | Promotion System | 8 | 8 HIGH |
 | Payment & Subscription | 4 | 4 HIGH |
 | Onboarding | 3 | 2 HIGH, 1 MEDIUM |
-| Document Hub | 3 | 3 HIGH |
+| RHP Vault | 3 | 3 HIGH |
 | Broadcast System | 4 | 3 HIGH, 1 MEDIUM |
 | Commission Statements | 2 | 2 HIGH |
 | Carrier Management | 2 | 2 HIGH |

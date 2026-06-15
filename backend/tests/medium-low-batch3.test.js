@@ -174,7 +174,7 @@ describe('Fix #53: Root path redirect when logged in', () => {
 });
 
 // ─────────────────────────────────────────────────────────
-// Fix #65: Document hub unique filePath index
+// Fix #65: RHP Vault unique filePath index
 // ─────────────────────────────────────────────────────────
 describe('Fix #65: DocumentHubFile unique filePath index', () => {
   const modelCode = fs.readFileSync(

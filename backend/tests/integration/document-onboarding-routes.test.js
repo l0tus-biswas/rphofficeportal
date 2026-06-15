@@ -1,5 +1,5 @@
 /**
- * Integration Tests: Document Hub, Onboarding, Production, Promotion Routes
+ * Integration Tests: RHP Vault, Onboarding, Production, Promotion Routes
  */
 const request = require('supertest');
 
@@ -7,7 +7,7 @@ const User = require('../../models/User');
 const SystemConfig = require('../../models/SystemConfig');
 const { generateTestToken, generateAdminToken, createMockUser, createMockAdmin } = require('../helpers/test-utils');
 
-describe('Integration: Document Hub Routes (/api/document-hub)', () => {
+describe('Integration: RHP Vault Routes (/api/document-hub)', () => {
   let app, agentToken, adminToken;
 
   beforeAll(() => {
@@ -27,7 +27,7 @@ describe('Integration: Document Hub Routes (/api/document-hub)', () => {
     }));
   });
 
-  it('should require authentication for document hub', async () => {
+  it('should require authentication for RHP Vault', async () => {
     const res = await request(app).get('/api/document-hub/files');
     expect(res.status).toBe(401);
   });

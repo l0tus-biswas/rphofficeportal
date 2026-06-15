@@ -170,7 +170,7 @@
   - Filters: carrier name, date range
   - Empty state: "No commission statements found."
 - **Onboarding Docs Hub**: Tested (visible in nav)
-- **Document Hub**: Tested
+- **RHP Vault**: Tested
   - Stats: subfolders, files, pending, overdue
   - Library/Requests tabs
   - Document requests with status (approved, overdue), file details, View/Download

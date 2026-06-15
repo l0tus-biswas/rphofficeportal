@@ -81,7 +81,7 @@
 
 ---
 
-## Issue #8: Document Hub / Request Documents
+## Issue #8: RHP Vault / Request Documents
 **Status:** ✅ Completed
 **Problem:** "Request Document" not visible in Onboarding Docs section where agents expect it.
 **Fix:** Added pending document requests section to onboarding-hub component showing admin-requested documents with upload link.

@@ -63,7 +63,7 @@
 | F-040 | Admin adds notes to commission statement | Happy Path | Medium |
 | F-041 | Agent views commission history sorted by date | Happy Path | Medium |
 
-### 1.5 Document Hub
+### 1.5 RHP Vault
 | ID | Scenario | Type | Priority |
 |----|----------|------|----------|
 | F-042 | Admin creates folder hierarchy (nested folders) | Happy Path | High |
@@ -230,7 +230,7 @@
 | PERF-004 | Promotion calculation for agent with 500 downline | Latency | < 3s |
 | PERF-005 | File upload (25MB) completion time | Throughput | < 10s |
 | PERF-006 | Broadcast email to 500 agents | Duration | < 30 min |
-| PERF-007 | Document Hub search across 10,000 files | Latency | < 1s |
+| PERF-007 | RHP Vault search across 10,000 files | Latency | < 1s |
 | PERF-008 | Hierarchy tree rendering with 1,000 agents | Latency | < 2s |
 | PERF-009 | 50 concurrent WebSocket connections | Stability | 0 drops |
 | PERF-010 | CSV import with 5,000 rows | Duration | < 60s |

@@ -150,7 +150,7 @@ RHP Office is an **all-in-one insurance agency back-office platform** that digit
 | **Failure Scenarios** | Wrong agent assignment, missing carrier association, file corruption |
 | **Business Risks** | Trust erosion if statements are late or incorrect |
 
-### Workflow 4: Document Hub & Requests
+### Workflow 4: RHP Vault & Requests
 | Attribute | Detail |
 |-----------|--------|
 | **Entry Point** | `/document-hub` |

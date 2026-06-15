@@ -72,7 +72,7 @@ This audit identified **67 findings** across the full RHP Office application. **
 | 32 | ✅ DONE | Error | `backend/routes/payment.routes.js` | **Stripe webhook signature verified.** `constructWebhookEvent` uses `stripe.webhooks.constructEvent` with `STRIPE_WEBHOOK_SECRET`. Added guards: rejects missing `stripe-signature` header (400), rejects unconfigured webhook secret (500). | All Stripe webhooks must verify signatures. | ✅ Confirmed implemented + added missing-header/secret guards. |
 | 33 | ✅ DONE | Data | `backend/routes/admin.routes.js:340-360` | **Stripe cancel failure handled gracefully.** On failure: subscription marked `cancel_pending`, error message stored in `cancelError`, timestamp in `cancelAttemptedAt`. Response includes warning to admin. User still deactivated (correct). | Use a transaction or at least mark subscription as "cancel_pending". | ✅ Fixed: cancel_pending state + error storage + admin warning. |
 | 34 | ✅ DONE | Logic | `backend/routes/broadcast.routes.js:82-84` | **Broadcast createdAt fallback fixed.** If user's `createdAt` is null/undefined, defaults to `new Date(0)` (epoch) so user sees all broadcasts instead of none. | Handle missing `createdAt` gracefully. | ✅ Fixed: fallback to epoch instead of current date. |
-| 35 | MEDIUM | Consistency | `backend/routes/document-hub.routes.js` | **Document hub files GET has `$text` search but model may not have text index.** If no text index exists on DocumentHubFile, the query will throw. | Ensure text index exists or use regex fallback. | Verify index exists in model; add `{ name: 'text', description: 'text' }` index. |
+| 35 | MEDIUM | Consistency | `backend/routes/document-hub.routes.js` | **RHP Vault files GET has `$text` search but model may not have text index.** If no text index exists on DocumentHubFile, the query will throw. | Ensure text index exists or use regex fallback. | Verify index exists in model; add `{ name: 'text', description: 'text' }` index. |
 | 36 | ✅ DONE | Security | `backend/middleware/rateLimiter.middleware.js:10` | **Rate limiter logs warning in dev.** Prints `[Rate Limiter] WARNING: Rate limiting is SKIPPED in development mode` on startup. Uses shared `shouldSkip` function. Skips only in `test` and `development` (production always enforced). | Consider warning instead of skipping, or only skip in test. | ✅ Fixed: startup warning + shared shouldSkip + explicit production enforcement. |
 | 37 | ✅ DONE | Validation | `backend/routes/carrier.routes.js:120-135` | **Carrier URL validation added.** `contractingLink` must be a valid HTTP/HTTPS URL. Validated using `new URL()` + protocol check on both POST and PUT. Rejects javascript:, ftp:, and invalid URLs. | Validate URL format for link fields. | ✅ Fixed: URL validation on create and update routes. |
 | 38 | ✅ DONE | Data | `backend/routes/production.routes.js:687` | **Submission date backdating restricted.** Non-admin users cannot set submissionDate more than 30 days in the past. Returns 400 error. Admins can set any date. | Validate date is within a reasonable range (e.g., not more than 30 days in the past for agents). | ✅ Fixed: 30-day limit for non-admin, admin unrestricted. |
@@ -121,8 +121,8 @@ This audit identified **67 findings** across the full RHP Office application. **
 |----------|-------|-------|--------|
 | Users CRUD | ✅ Full | ❌ Own profile only | ❌ |
 | Production | ✅ All records | ✅ Own + team(read), agentId bypass fixed (#5) | ❌ |
-| Document Hub Files | ✅ Full CRUD | 📖 Read (visibility-filtered) | ❌ |
-| Document Hub Requests | ✅ Create/Review | 📝 Respond to own | ❌ |
+| RHP Vault Files | ✅ Full CRUD | 📖 Read (visibility-filtered) | ❌ |
+| RHP Vault Requests | ✅ Create/Review | 📝 Respond to own | ❌ |
 | Commission Statements | ✅ Upload/View all | 📖 View own | ❌ |
 | Training Materials | ✅ Full CRUD | 📖 Read (access-level filtered) | ❌ |
 | Carriers | ✅ Full CRUD | 📖 Read active only | ❌ |
@@ -148,7 +148,7 @@ This audit identified **67 findings** across the full RHP Office application. **
 | Auth middleware | ❌ Missing | ❌ Missing | ❌ Missing |
 | Admin user CRUD | ❌ Missing | ❌ Missing | ❌ Missing |
 | Production submission | ✅ (e2e exists) | ❌ Missing | ❌ Missing |
-| Document hub | ✅ (e2e exists) | ❌ Missing | ❌ Missing |
+| RHP Vault | ✅ (e2e exists) | ❌ Missing | ❌ Missing |
 | Commission statements | ✅ (e2e exists) | ❌ Missing | ❌ Missing |
 | Promotion calculations | ❌ Missing | ❌ Missing | ❌ Missing |
 | Payment/Stripe webhooks | ❌ Missing | ❌ Missing | ❌ Missing |

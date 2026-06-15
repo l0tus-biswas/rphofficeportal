@@ -58,7 +58,7 @@ const notificationSchema = new mongoose.Schema({
       'carrier_contract_requested',
       'carrier_appointed',
       'carrier_unappointed',
-      // Document Hub
+      // RHP Vault
       'document_request',
       'document_submitted',
       'document_reviewed',

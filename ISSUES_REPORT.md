@@ -294,7 +294,7 @@
 ### ISS-024: Folder Deletion Doesn't Cascade to Nested Subfolders
 - **Severity:** MEDIUM
 - **Category:** Business Logic / Data Integrity
-- **Description:** Deleting a Document Hub folder moves immediate children to the parent but does not cascade to deeply nested subfolders.
+- **Description:** Deleting a RHP Vault folder moves immediate children to the parent but does not cascade to deeply nested subfolders.
 - **Expected Behavior:** All nested subfolders should be promoted to the deleted folder's parent.
 - **Actual Behavior:** Only direct children are moved. Deeply nested folders may become orphaned.
 - **Suggested Fix:** Implement recursive folder promotion or use a tree-walking algorithm.
@@ -302,10 +302,10 @@
 
 ---
 
-### ISS-025: Document Hub Text Search Assumes Index Exists
+### ISS-025: RHP Vault Text Search Assumes Index Exists
 - **Severity:** MEDIUM
 - **Category:** Reliability / Database
-- **Description:** Document Hub file search uses MongoDB `$text` operator which requires a text index. If the index doesn't exist, the query throws an error.
+- **Description:** RHP Vault file search uses MongoDB `$text` operator which requires a text index. If the index doesn't exist, the query throws an error.
 - **Expected Behavior:** Search should work with or without text index, falling back to regex search.
 - **Actual Behavior:** `$text: { $search: query }` fails with error if text index is missing.
 - **Suggested Fix:** Add index creation to startup or use regex-based fallback.
