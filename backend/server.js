@@ -68,6 +68,12 @@ app.use(helmet({
       baseUri: ["'self'"]
     }
   },
+  // Helmet defaults to "no-referrer", which strips the Referer header from the
+  // YouTube/Vimeo embed iframe — YouTube then rejects playback with
+  // "Error 153 / Video player configuration error". Send the origin on
+  // cross-origin requests so embeds can validate the embedding domain, while
+  // still not leaking full URLs/paths.
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false
 }));
