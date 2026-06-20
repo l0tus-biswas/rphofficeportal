@@ -106,8 +106,20 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Stripe webhooks must receive the RAW, unparsed body for signature
+// verification (the route applies express.raw itself). If the global JSON
+// parser ran first it would consume the stream and every webhook would fail
+// signature verification — silently breaking recurring-payment processing.
+const STRIPE_WEBHOOK_PATH = '/api/payments/webhook';
+const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === STRIPE_WEBHOOK_PATH;
+app.use((req, res, next) => {
+  if (isStripeWebhook(req)) return next();
+  express.json()(req, res, next);
+});
+app.use((req, res, next) => {
+  if (isStripeWebhook(req)) return next();
+  express.urlencoded({ extended: true })(req, res, next);
+});
 // HTTP request logging via Winston (structured JSON in production, dev format locally)
 if (process.env.NODE_ENV === 'production') {
   app.use(morgan('combined', { stream: logger.stream }));

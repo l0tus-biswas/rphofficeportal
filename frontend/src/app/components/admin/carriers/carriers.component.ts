@@ -87,6 +87,7 @@ export class CarriersComponent implements OnInit {
   openNewForm(): void {
     this.showForm = true;
     this.editMode = false;
+    this.error = '';
     this.currentCarrier = {
       name: '', category: [], isActive: true, notes: ''
     };
@@ -96,6 +97,7 @@ export class CarriersComponent implements OnInit {
   editCarrier(carrier: Carrier): void {
     this.showForm = true;
     this.editMode = true;
+    this.error = '';
     this.currentCarrier = {
       ...carrier,
       category: carrier.category ? [...carrier.category] : []
@@ -106,6 +108,7 @@ export class CarriersComponent implements OnInit {
   cancelForm(): void {
     this.showForm = false;
     this.editMode = false;
+    this.error = '';
     this.currentCarrier = {};
     this.levelGuideFile = null;
   }

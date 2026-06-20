@@ -69,13 +69,17 @@ router.get('/', authenticate, async (req, res) => {
         progressMap[record.agent.toString()] = record;
       });
 
-      // Map APA applications (self-reported licensing status) by user id
+      // Map APA applications (self-reported licensing status) by user id. APA
+      // links to the user via either `user` or `userId` depending on vintage,
+      // so match and index on both to avoid missing records.
+      const agentIds = agents.map(a => a._id);
       const apaRecords = await APAApplication.find({
-        user: { $in: agents.map(a => a._id) }
-      }).select('user licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
+        $or: [{ user: { $in: agentIds } }, { userId: { $in: agentIds } }]
+      }).select('user userId licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
       const apaMap = {};
       apaRecords.forEach(rec => {
-        if (rec.user) apaMap[rec.user.toString()] = rec;
+        const key = (rec.user || rec.userId);
+        if (key) apaMap[key.toString()] = rec;
       });
 
       // Build result with all agents
@@ -90,6 +94,11 @@ router.get('/', authenticate, async (req, res) => {
           // get bucketed as unlicensed in the admin view.
           obj.isLicensed = licensed;
           if (licensed) obj.completionPercentage = 100;
+          // A stale obtained date (final step later unchecked) shouldn't read as
+          // pipeline-completed; null it unless the final step is actually approved.
+          if (!progress.checklist?.stateAppointment?.approved) {
+            obj.licenseObtainedDate = null;
+          }
           obj.agent = {
             _id: agent._id,
             name: agent.name,
@@ -220,11 +229,15 @@ router.get('/:agentId', authenticate, async (req, res) => {
         .populate('lastUpdatedBy', 'name');
     }
     
-    // Get license types from APAApplication if it exists
-    const apaApplication = await APAApplication.findOne({ user: req.params.agentId });
+    // Get license types from APAApplication if it exists. APA links to the user
+    // through either `user` or `userId` depending on when it was created, so
+    // match on both to avoid missing the record.
+    const apaApplication = await APAApplication.findOne({
+      $or: [{ user: req.params.agentId }, { userId: req.params.agentId }]
+    });
     let licenseTypes = apaApplication?.licensingStatus?.licenseTypes || [];
     let isCurrentlyLicensed = apaApplication?.licensingStatus?.currentlyLicensed || false;
-    
+
     // Also check the agent's metadata for license information
     const agent = await User.findById(req.params.agentId);
     if (licenseTypes.length === 0 && agent?.metadata) {
@@ -253,11 +266,24 @@ router.get('/:agentId', authenticate, async (req, res) => {
     const responseData = licensingProgress.toObject();
     // Only include license types if user said they're currently licensed
     responseData.licenseTypes = isCurrentlyLicensed ? licenseTypes : [];
-    // If agent is currently licensed per APA, reflect that in the response
-    if (isCurrentlyLicensed && !responseData.isLicensed) {
-      responseData.isLicensed = true;
+
+    // Reconcile licensed status against the single source of truth so this
+    // detail view never disagrees with the dashboard / admin list. When an
+    // agent counts as licensed, surface 100% completion even if individual
+    // checklist boxes were never recorded — otherwise the page shows
+    // "Licensed!" alongside a contradictory "X pending" / sub-100% bar.
+    const licensed = isAgentLicensed(licensingProgress, apaApplication, agent?.metadata);
+    responseData.isLicensed = licensed;
+    if (licensed) responseData.completionPercentage = 100;
+
+    // licenseObtainedDate means "completed RHP's internal pipeline". Don't
+    // surface a stale value when the final step isn't approved — a null date is
+    // how the UI distinguishes a self-reported/existing license from one earned
+    // through the checklist.
+    if (!licensingProgress.checklist?.stateAppointment?.approved) {
+      responseData.licenseObtainedDate = null;
     }
-    
+
     res.json(responseData);
   } catch (error) {
     console.error('Error fetching licensing progress:', error);
@@ -381,40 +407,68 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
       if (checklistItem === 'diceApplication' && data.submitted) {
         licensingProgress.checklist[checklistItem].submittedDate = data.submittedDate || Date.now();
       }
-      if (checklistItem === 'stateAppointment' && data.approved) {
-        licensingProgress.checklist[checklistItem].approvedDate = data.approvedDate || Date.now();
-        // Mark as licensed when final step is approved
-        licensingProgress.isLicensed = true;
-        licensingProgress.licenseObtainedDate = Date.now();
-
-        // Notify the agent about licensing completion (§21.4)
-        Notification.createNotification({
-          userId: req.params.agentId,
-          type: 'license_approved',
-          title: 'You Are Now Licensed!',
-          message: 'Congratulations! Your licensing process is complete. You are now a fully licensed agent.',
-          link: '/licensing'
-        }, true).catch(() => {});
-
-        // Notify all admins about the newly licensed agent
-        try {
-          const admins = await User.find({ role: 'admin' }).select('_id').lean();
-          for (const admin of admins) {
-            Notification.createNotification({
-              userId: admin._id,
-              type: 'license_approved',
-              title: 'Agent Licensed',
-              message: `${agent.name} (${agent.email}) has completed all licensing requirements and is now a licensed agent.`,
-              link: '/admin/licensing',
-              data: { agentId: req.params.agentId }
-            }, false).catch(() => {});
-          }
-        } catch (notifErr) {
-          console.error('Failed to notify admins of licensing:', notifErr);
+      if (checklistItem === 'stateAppointment') {
+        // Tie the obtained date to the actual final step. Unchecking it clears
+        // the date so an admin can correct a mistaken approval.
+        if (data.approved) {
+          licensingProgress.checklist[checklistItem].approvedDate = data.approvedDate || Date.now();
+        } else if (data.approved === false) {
+          licensingProgress.checklist[checklistItem].approvedDate = null;
         }
       }
     }
-    
+
+    // Recompute licensed status from the underlying EVIDENCE so the stored flag
+    // always reflects reality: licensed when the final step is approved, or when
+    // the agent has a self-reported/existing license (APA / metadata). We pass a
+    // null progress to isAgentLicensed so it ignores the (possibly stale) stored
+    // flag and evaluates only the external signals — otherwise the recompute
+    // would be circular and unchecking the final step could never revert it.
+    const apaForLicense = await APAApplication.findOne({
+      $or: [{ user: req.params.agentId }, { userId: req.params.agentId }]
+    }).select('licensingStatus').lean();
+    const licensedExternally = isAgentLicensed(null, apaForLicense, agent.metadata);
+    licensingProgress.isLicensed = !!licensingProgress.checklist.stateAppointment.approved || licensedExternally;
+
+    // licenseObtainedDate tracks completion of RHP's pipeline specifically
+    // (the final state-appointment step), independent of an externally/
+    // self-reported license — so a null date signals "licensed without
+    // completing the internal checklist".
+    if (licensingProgress.checklist.stateAppointment.approved) {
+      if (!licensingProgress.licenseObtainedDate) {
+        licensingProgress.licenseObtainedDate = licensingProgress.checklist.stateAppointment.approvedDate || Date.now();
+      }
+    } else {
+      licensingProgress.licenseObtainedDate = null;
+    }
+
+    // Fire the "now licensed" notifications only on the false → true transition.
+    if (!wasLicensed && licensingProgress.isLicensed) {
+      Notification.createNotification({
+        userId: req.params.agentId,
+        type: 'license_approved',
+        title: 'You Are Now Licensed!',
+        message: 'Congratulations! Your licensing process is complete. You are now a fully licensed agent.',
+        link: '/licensing'
+      }, true).catch(() => {});
+
+      try {
+        const admins = await User.find({ role: 'admin' }).select('_id').lean();
+        for (const admin of admins) {
+          Notification.createNotification({
+            userId: admin._id,
+            type: 'license_approved',
+            title: 'Agent Licensed',
+            message: `${agent.name} (${agent.email}) has completed all licensing requirements and is now a licensed agent.`,
+            link: '/admin/licensing',
+            data: { agentId: req.params.agentId }
+          }, false).catch(() => {});
+        }
+      } catch (notifErr) {
+        console.error('Failed to notify admins of licensing:', notifErr);
+      }
+    }
+
     licensingProgress.lastUpdatedBy = req.user._id;
     await licensingProgress.save();
     await licensingProgress.populate('agent', 'name email phone');

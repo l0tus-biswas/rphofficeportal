@@ -391,13 +391,17 @@
 
 <!-- Submission Form Modal -->
 <div class="modal fade" [class.show]="showForm" [style.display]="showForm ? 'block' : 'none'" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">{{ editMode ? 'Edit' : 'New' }} Production Submission</h5>
         <button type="button" class="btn-close" (click)="cancelForm()"></button>
       </div>
       <div class="modal-body">
+        <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+          <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
+        </div>
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label">Submission Date *</label>
@@ -513,7 +517,7 @@
 
 <!-- 8.2: Custom Fields Config Modal (Admin) -->
 <div class="modal fade" [class.show]="showCustomFieldsConfig" [style.display]="showCustomFieldsConfig ? 'block' : 'none'" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-gear me-2"></i>Configure Custom Fields</h5>

@@ -14,6 +14,9 @@ const {
   cancelSubscriptionAtPeriodEnd,
   reactivateSubscription,
   retrieveSubscription,
+  retrieveCharge,
+  resolveStripeReceiptUrl,
+  createBillingPortalSession,
   constructWebhookEvent
 } = require('../utils/stripe');
 
@@ -348,6 +351,41 @@ router.post('/reactivate-subscription', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/payments/billing-portal
+// @desc    Create a Stripe Billing Portal session so the user can update their
+//          saved card, view invoices/receipts, and manage their subscription.
+// @access  Private
+router.post('/billing-portal', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (user.billingExempt) {
+      return sendResponse(res, 400, { message: 'Your account is billing exempt — there is nothing to manage.' });
+    }
+    if (!user.stripeCustomerId) {
+      return sendResponse(res, 404, { message: 'No billing profile found for your account yet.' });
+    }
+
+    const returnUrl = `${process.env.APP_URL || 'http://localhost:4200'}/transactions`;
+
+    let session;
+    try {
+      session = await createBillingPortalSession(user.stripeCustomerId, returnUrl);
+    } catch (stripeErr) {
+      // Most common cause: the Billing Portal hasn't been activated in the
+      // Stripe dashboard. Surface a clear, actionable message.
+      console.error('Billing portal session error:', stripeErr.message);
+      return sendResponse(res, 502, {
+        message: 'Unable to open the billing portal right now. Please contact support if this continues.'
+      });
+    }
+
+    sendResponse(res, 200, { url: session.url });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   POST /api/payments/webhook
 // @desc    Handle Stripe webhooks
 // @access  Public (Stripe only — verified via signature)
@@ -410,6 +448,14 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   if (payment) {
     payment.status = 'succeeded';
     payment.paidAt = new Date();
+    // Capture the Stripe receipt so it can be shown on the transactions page.
+    if (paymentIntent.latest_charge) {
+      payment.stripeChargeId = paymentIntent.latest_charge;
+      try {
+        const charge = await retrieveCharge(paymentIntent.latest_charge);
+        if (charge?.receipt_url) payment.receiptUrl = charge.receipt_url;
+      } catch (e) { /* receipt is best-effort; lazy resolver covers it later */ }
+    }
     await payment.save();
 
     const isSetupFeePayment = payment.type === 'setup_fee' || payment.type === 'one-time';
@@ -508,17 +554,28 @@ async function handleInvoicePaid(invoice) {
     const sub = await Subscription.findOne({ stripeSubscriptionId: invoice.subscription });
     
     if (sub) {
-      // Create payment record for subscription payment
-      await Payment.create({
-        user: sub.user,
-        type: 'subscription',
-        amount: invoice.amount_paid,
-        currency: invoice.currency,
-        stripeInvoiceId: invoice.id,
-        status: 'succeeded',
-        description: 'Monthly subscription payment',
-        paidAt: new Date()
-      });
+      // Stripe may deliver invoice.paid more than once — upsert by invoice id so
+      // we never create duplicate transaction rows for the same payment.
+      const receiptUrl = invoice.hosted_invoice_url || '';
+      await Payment.findOneAndUpdate(
+        { stripeInvoiceId: invoice.id },
+        {
+          $set: {
+            user: sub.user,
+            type: 'subscription',
+            amount: invoice.amount_paid,
+            currency: invoice.currency,
+            stripeInvoiceId: invoice.id,
+            stripeChargeId: invoice.charge || undefined,
+            stripeCustomerId: invoice.customer || undefined,
+            receiptUrl,
+            status: 'succeeded',
+            description: 'Monthly subscription payment',
+            paidAt: new Date()
+          }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
 
       // Update user last payment date
       const user = await User.findById(sub.user);

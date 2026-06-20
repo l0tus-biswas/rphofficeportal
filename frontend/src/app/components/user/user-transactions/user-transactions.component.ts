@@ -19,6 +19,10 @@ export class UserTransactionsComponent implements OnInit {
   actionMessage = '';
   actionError = '';
 
+  // Per-payment receipt loading state (keyed by payment id)
+  receiptLoading: { [id: string]: boolean } = {};
+  billingPortalLoading = false;
+
   currentPage = 1;
   pageSize = 20;
   totalItems = 0;
@@ -127,15 +131,77 @@ export class UserTransactionsComponent implements OnInit {
     });
   }
 
+  // Open the Stripe Billing Portal to update card / manage subscription. The
+  // portal is a full-page redirect (it returns the user to /transactions via
+  // return_url), so we navigate the current tab — no popup, no blank window.
+  openBillingPortal(): void {
+    this.billingPortalLoading = true;
+    this.actionError = '';
+    this.actionMessage = '';
+    this.paymentService.createBillingPortalSession().subscribe({
+      next: (res) => {
+        if (res?.url) {
+          window.location.href = res.url;
+        } else {
+          this.billingPortalLoading = false;
+          this.actionError = 'Could not start the billing portal session. Please try again or contact support.';
+        }
+      },
+      error: (err) => {
+        this.billingPortalLoading = false;
+        this.actionError = err?.error?.message
+          || 'Unable to open the billing portal right now. Please try again or contact support.';
+      }
+    });
+  }
+
   getStatusBadgeClass(status: string): string {
     const statusMap: any = {
       'succeeded': 'badge bg-success',
+      'completed': 'badge bg-success',
       'pending': 'badge bg-warning',
       'failed': 'badge bg-danger',
       'refunded': 'badge bg-secondary',
-      'canceled': 'badge bg-secondary'
+      'canceled': 'badge bg-secondary',
+      'expired': 'badge bg-secondary'
     };
     return statusMap[status] || 'badge bg-secondary';
+  }
+
+  // A receipt is only meaningful for a paid transaction.
+  hasReceipt(payment: any): boolean {
+    return !!payment && ['succeeded', 'completed'].includes(payment.status);
+  }
+
+  // Open the Stripe receipt for a payment. The tab is opened synchronously on
+  // click (before the async lookup) so the popup blocker doesn't kill it; we
+  // then point it at the resolved receipt URL. If the receipt is already cached
+  // on the record we use it directly.
+  viewReceipt(payment: any): void {
+    if (!payment?._id) return;
+    if (payment.receiptUrl) {
+      window.open(payment.receiptUrl, '_blank');
+      return;
+    }
+    const win = window.open('', '_blank');
+    this.receiptLoading[payment._id] = true;
+    this.actionError = '';
+    this.paymentService.getPaymentReceipt(payment._id).subscribe({
+      next: (res) => {
+        this.receiptLoading[payment._id] = false;
+        payment.receiptUrl = res.url;
+        if (win && !win.closed) {
+          win.location.href = res.url;
+        } else {
+          window.open(res.url, '_blank');
+        }
+      },
+      error: (err) => {
+        this.receiptLoading[payment._id] = false;
+        if (win && !win.closed) win.close();
+        this.actionError = err?.error?.message || 'Receipt is not available for this transaction yet.';
+      }
+    });
   }
 
   getSubscriptionStatusBadge(status: string): string {

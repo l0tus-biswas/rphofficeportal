@@ -112,6 +112,12 @@ jest.mock('../../utils/stripe', () => ({
     cancel_at_period_end: false
   }),
   retrieveSubscription: jest.fn().mockResolvedValue({ id: 'sub_mock', status: 'active' }),
+  retrievePaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_mock', latest_charge: 'ch_mock' }),
+  retrieveInvoice: jest.fn().mockResolvedValue({ id: 'in_mock', hosted_invoice_url: 'https://stripe.test/invoice' }),
+  retrieveCharge: jest.fn().mockResolvedValue({ id: 'ch_mock', receipt_url: 'https://stripe.test/receipt' }),
+  listInvoices: jest.fn().mockResolvedValue([]),
+  resolveStripeReceiptUrl: jest.fn().mockResolvedValue('https://stripe.test/receipt'),
+  createBillingPortalSession: jest.fn().mockResolvedValue({ url: 'https://stripe.test/portal' }),
   constructWebhookEvent: jest.fn(),
   constructEvent: jest.fn(),
 }));

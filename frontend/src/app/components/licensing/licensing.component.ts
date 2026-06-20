@@ -245,17 +245,35 @@ export class LicensingComponent implements OnInit {
     });
   }
 
+  // Whether this specific checklist step has actually been recorded. This must
+  // reflect the real per-item data so the badge never disagrees with the
+  // checkbox / dates the admin edits.
+  isItemComplete(item: any): boolean {
+    return !!(item && (item.completed || item.scheduled || item.submitted || item.approved));
+  }
+
+  // An already-licensed agent who never ran RHP's internal pipeline (e.g. they
+  // joined with an existing/self-reported license) has steps that are simply
+  // not required — show those blank steps as N/A rather than a contradictory
+  // "Completed" or an alarming "Pending".
+  isItemNotApplicable(item: any): boolean {
+    return !!this.selectedAgent?.isLicensed && !this.isItemComplete(item);
+  }
+
   getChecklistItemStatus(item: any): string {
-    if (item.completed || item.scheduled || item.submitted || item.approved) {
-      return 'Completed';
-    }
+    if (this.isItemComplete(item)) return 'Completed';
+    if (this.isItemNotApplicable(item)) return 'N/A';
     return 'Pending';
   }
 
   getChecklistItemClass(item: any): string {
-    if (item.completed || item.scheduled || item.submitted || item.approved) {
-      return 'list-group-item-success';
-    }
-    return '';
+    // Only genuinely completed steps get the green row — N/A and Pending stay neutral.
+    return this.isItemComplete(item) ? 'list-group-item-success' : '';
+  }
+
+  // True when the agent is licensed but did not complete the internal pipeline
+  // (no obtained date) — i.e. licensed via a self-reported / pre-existing license.
+  isSelfReportedLicense(): boolean {
+    return !!this.selectedAgent?.isLicensed && !this.selectedAgent?.licenseObtainedDate;
   }
 }

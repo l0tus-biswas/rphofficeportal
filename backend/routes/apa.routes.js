@@ -23,6 +23,7 @@ const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const { resolveStripeReceiptUrl } = require('../utils/stripe');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 
@@ -540,6 +541,17 @@ const verifyPaymentHandler = async (req, res) => {
     
     await application.save();
 
+    // Resolve a Stripe receipt for the transactions page. In subscription mode
+    // session.payment_intent is null — the charge lives on the first invoice —
+    // so we capture the invoice id and resolve from there (hosted invoice URL).
+    let receiptUrl = '';
+    try {
+      receiptUrl = (await resolveStripeReceiptUrl({
+        paymentIntentId: session.payment_intent,
+        invoiceId: session.invoice
+      })) || '';
+    } catch (e) { /* best-effort; lazy resolver will retry on demand */ }
+
     // Create payment record
     const payment = new Payment({
       user: null, // Will be updated after user creation
@@ -547,7 +559,10 @@ const verifyPaymentHandler = async (req, res) => {
       amount: session.amount_total, // store in cents to match other payment records
       status: 'completed',
       stripePaymentIntentId: session.payment_intent,
+      stripeInvoiceId: session.invoice,
       stripeCustomerId: session.customer,
+      receiptUrl,
+      description: 'RHP Office registration payment',
       metadata: {
         applicationId: applicationId,
         sessionId: session.id

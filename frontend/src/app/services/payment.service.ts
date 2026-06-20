@@ -44,6 +44,16 @@ export class PaymentService {
     return this.http.get(`${this.apiUrl}/user/subscription`, this.getHeaders());
   }
 
+  // Stripe receipt URL for a specific payment (resolved/cached server-side)
+  getPaymentReceipt(paymentId: string): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${this.apiUrl}/user/payments/${paymentId}/receipt`, this.getHeaders());
+  }
+
+  // Stripe Billing Portal session (update card, view invoices, manage subscription)
+  createBillingPortalSession(): Observable<{ url: string }> {
+    return this.http.post<{ url: string }>(`${this.apiUrl}/payments/billing-portal`, {}, this.getHeaders());
+  }
+
   // Agent self-service - cancel own subscription at end of current billing period
   cancelMySubscription(): Observable<any> {
     return this.http.post(`${this.apiUrl}/payments/cancel-subscription`, {}, this.getHeaders());

@@ -26,6 +26,19 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     sparse: true
   },
+  stripeChargeId: {
+    type: String,
+    sparse: true
+  },
+  stripeCustomerId: {
+    type: String
+  },
+  // Stripe-hosted receipt (charge receipt_url) or invoice URL, shown to the user
+  // on the transactions page. Cached here once resolved from Stripe.
+  receiptUrl: {
+    type: String,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['pending', 'succeeded', 'failed', 'refunded', 'canceled', 'completed', 'expired'],

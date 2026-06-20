@@ -9,6 +9,43 @@ const APAApplication = require('../models/APAApplication');
 const { protect } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
 const { downloadSignedDocument } = require('../utils/docusign');
+const { resolveStripeReceiptUrl, listInvoices } = require('../utils/stripe');
+
+// Reconcile a user's paid Stripe invoices into Payment records so every monthly
+// renewal shows up as a transaction (with a receipt) — independent of whether
+// the invoice.paid webhook was delivered. Idempotent (keyed by invoice id) and
+// best-effort: never throws, never clobbers an existing record (e.g. the
+// initial registration payment keeps its type/description via $setOnInsert).
+async function reconcileSubscriptionInvoices(user) {
+  if (!user?.stripeCustomerId) return;
+  try {
+    const invoices = await listInvoices(user.stripeCustomerId, 100);
+    for (const inv of invoices) {
+      if (inv.status !== 'paid' || !inv.amount_paid) continue;
+      await Payment.updateOne(
+        { stripeInvoiceId: inv.id },
+        {
+          $setOnInsert: {
+            user: user._id,
+            type: 'subscription',
+            amount: inv.amount_paid,
+            currency: inv.currency || 'usd',
+            stripeInvoiceId: inv.id,
+            stripeChargeId: inv.charge || undefined,
+            stripeCustomerId: inv.customer || undefined,
+            receiptUrl: inv.hosted_invoice_url || '',
+            status: 'succeeded',
+            description: 'Monthly subscription payment',
+            paidAt: new Date((inv.status_transitions?.paid_at || inv.created) * 1000)
+          }
+        },
+        { upsert: true }
+      );
+    }
+  } catch (err) {
+    console.error('[Billing] Invoice reconciliation failed:', err.message);
+  }
+}
 
 // @route   GET /api/user/payments
 // @desc    Get user's payment history
@@ -17,6 +54,10 @@ router.get('/payments', protect, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
+
+    // Backfill any subscription renewals that Stripe charged but we haven't
+    // recorded yet (e.g. a missed webhook), so the history is always complete.
+    await reconcileSubscriptionInvoices(req.user);
 
     const query = Payment.find({ user: req.user._id })
       .sort('-createdAt');
@@ -33,6 +74,54 @@ router.get('/payments', protect, async (req, res) => {
         pages: Math.ceil(total / limit)
       }
     });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/user/payments/:id/receipt
+// @desc    Get (resolving + caching from Stripe if needed) the receipt URL for
+//          a payment. Works for every payment type — charge receipts for
+//          one-time/PI payments and hosted invoice URLs for subscriptions.
+// @access  Private (owner or admin)
+router.get('/payments/:id/receipt', protect, async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) {
+      return sendResponse(res, 404, { message: 'Payment not found' });
+    }
+
+    // Owner or admin only
+    const isOwner = payment.user && payment.user.toString() === req.user._id.toString();
+    if (!isOwner && req.user.role !== 'admin') {
+      return sendResponse(res, 403, { message: 'Access denied' });
+    }
+
+    // Receipts only make sense for paid transactions
+    if (!['succeeded', 'completed'].includes(payment.status)) {
+      return sendResponse(res, 400, { message: 'No receipt is available for this transaction.' });
+    }
+
+    if (payment.receiptUrl) {
+      return sendResponse(res, 200, { url: payment.receiptUrl });
+    }
+
+    const url = await resolveStripeReceiptUrl({
+      paymentIntentId: payment.stripePaymentIntentId,
+      invoiceId: payment.stripeInvoiceId,
+      chargeId: payment.stripeChargeId,
+      sessionId: payment.metadata?.sessionId
+    });
+
+    if (!url) {
+      return sendResponse(res, 404, { message: 'Receipt is not available yet. Please try again shortly.' });
+    }
+
+    // Cache so we don't hit Stripe again next time
+    payment.receiptUrl = url;
+    await payment.save();
+
+    sendResponse(res, 200, { url });
   } catch (error) {
     errorResponse(res, error);
   }

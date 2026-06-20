@@ -87,6 +87,11 @@ export class CarrierService {
     return this.http.get<AgentCarrierStatus[]>(`${this.apiUrl}/my-statuses`);
   }
 
+  // Agent: request a contract with a carrier
+  requestContract(carrierId: string): Observable<{ message: string; status: AgentCarrierStatus }> {
+    return this.http.post<{ message: string; status: AgentCarrierStatus }>(`${this.apiUrl}/${carrierId}/request`, {});
+  }
+
   // Admin: list all agents (for the appointments agent selector)
   getAgentsForAppointments(): Observable<{ _id: string; name: string; email: string }[]> {
     return this.http.get<{ _id: string; name: string; email: string }[]>(`${this.apiUrl}/admin/agents`);

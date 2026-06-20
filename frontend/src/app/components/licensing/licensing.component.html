@@ -115,7 +115,12 @@
 
             <div *ngIf="selectedAgent.isLicensed" class="alert alert-success">
               <i class="bi bi-check-circle-fill me-2"></i>
-              <strong>Licensed!</strong> Obtained on {{ formatDate(selectedAgent.licenseObtainedDate) }}
+              <strong>Licensed!</strong>
+              <span *ngIf="!isSelfReportedLicense()">Obtained on {{ formatDate(selectedAgent.licenseObtainedDate) }}</span>
+              <span *ngIf="isSelfReportedLicense()">
+                Based on a self-reported / existing license<span *ngIf="selectedAgent.licenseTypes?.length"> ({{ selectedAgent.licenseTypes?.join(', ') }})</span>.
+                The checklist below is internal tracking only — steps marked <span class="badge bg-secondary">N/A</span> are not required.
+              </span>
             </div>
           </div>
         </div>
@@ -141,8 +146,8 @@
                       <small class="d-block text-muted">Example: ExamFX</small>
                     </label>
                   </div>
-                  <span class="badge" [class.bg-success]="selectedAgent.checklist.preLicenseCourse.completed" 
-                        [class.bg-secondary]="!selectedAgent.checklist.preLicenseCourse.completed">
+                  <span class="badge" [class.bg-success]="isItemComplete(selectedAgent.checklist.preLicenseCourse)"
+                        [class.bg-secondary]="!isItemComplete(selectedAgent.checklist.preLicenseCourse)">
                     {{ getChecklistItemStatus(selectedAgent.checklist.preLicenseCourse) }}
                   </span>
                 </div>
@@ -187,8 +192,8 @@
                       <strong>2. State Exam Scheduling</strong>
                     </label>
                   </div>
-                  <span class="badge" [class.bg-success]="selectedAgent.checklist.stateExam.scheduled" 
-                        [class.bg-secondary]="!selectedAgent.checklist.stateExam.scheduled">
+                  <span class="badge" [class.bg-success]="isItemComplete(selectedAgent.checklist.stateExam)"
+                        [class.bg-secondary]="!isItemComplete(selectedAgent.checklist.stateExam)">
                     {{ getChecklistItemStatus(selectedAgent.checklist.stateExam) }}
                   </span>
                 </div>
@@ -292,8 +297,8 @@
                       <strong>3. Fingerprinting Appointment Scheduled</strong>
                     </label>
                   </div>
-                  <span class="badge" [class.bg-success]="selectedAgent.checklist.fingerprinting.scheduled" 
-                        [class.bg-secondary]="!selectedAgent.checklist.fingerprinting.scheduled">
+                  <span class="badge" [class.bg-success]="isItemComplete(selectedAgent.checklist.fingerprinting)"
+                        [class.bg-secondary]="!isItemComplete(selectedAgent.checklist.fingerprinting)">
                     {{ getChecklistItemStatus(selectedAgent.checklist.fingerprinting) }}
                   </span>
                 </div>
@@ -396,8 +401,8 @@
                       <strong>4. License Application Submitted via DICE</strong>
                     </label>
                   </div>
-                  <span class="badge" [class.bg-success]="selectedAgent.checklist.diceApplication.submitted" 
-                        [class.bg-secondary]="!selectedAgent.checklist.diceApplication.submitted">
+                  <span class="badge" [class.bg-success]="isItemComplete(selectedAgent.checklist.diceApplication)"
+                        [class.bg-secondary]="!isItemComplete(selectedAgent.checklist.diceApplication)">
                     {{ getChecklistItemStatus(selectedAgent.checklist.diceApplication) }}
                   </span>
                 </div>
@@ -443,8 +448,8 @@
                       <small class="d-block text-muted">Final step to complete licensing</small>
                     </label>
                   </div>
-                  <span class="badge" [class.bg-success]="selectedAgent.checklist.stateAppointment.approved" 
-                        [class.bg-secondary]="!selectedAgent.checklist.stateAppointment.approved">
+                  <span class="badge" [class.bg-success]="isItemComplete(selectedAgent.checklist.stateAppointment)"
+                        [class.bg-secondary]="!isItemComplete(selectedAgent.checklist.stateAppointment)">
                     {{ getChecklistItemStatus(selectedAgent.checklist.stateAppointment) }}
                   </span>
                 </div>

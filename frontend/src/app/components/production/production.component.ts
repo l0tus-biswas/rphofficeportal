@@ -257,6 +257,7 @@ export class ProductionComponent implements OnInit {
   openNewSubmissionForm(): void {
     this.showForm = true;
     this.editMode = false;
+    this.error = '';
     const cf: Record<string, any> = {};
     this.customFieldDefs.forEach(d => cf[d.key] = d.type === 'checkbox' ? false : '');
     this.currentSubmission = {
@@ -282,6 +283,7 @@ export class ProductionComponent implements OnInit {
   editSubmission(submission: ProductionSubmission): void {
     this.showForm = true;
     this.editMode = true;
+    this.error = '';
     this.currentSubmission = {
       ...submission,
       submissionDate: submission.submissionDate ? new Date(submission.submissionDate).toISOString().split('T')[0] as any : '',
@@ -293,6 +295,7 @@ export class ProductionComponent implements OnInit {
   cancelForm(): void {
     this.showForm = false;
     this.editMode = false;
+    this.error = '';
     this.currentSubmission = { customFields: {} };
   }
 

@@ -29,6 +29,10 @@ export class AgentCarriersComponent implements OnInit {
   showDetailsModal = false;
   selectedCarrier: Carrier | null = null;
 
+  // Request-contract state
+  requesting = false;
+  requestSuccess = '';
+
   constructor(private carrierService: CarrierService) {}
 
   ngOnInit(): void {
@@ -94,12 +98,41 @@ export class AgentCarriersComponent implements OnInit {
 
   openDetails(carrier: Carrier): void {
     this.selectedCarrier = carrier;
+    this.requestSuccess = '';
+    this.error = '';
     this.showDetailsModal = true;
   }
 
   closeDetails(): void {
     this.showDetailsModal = false;
     this.selectedCarrier = null;
+    this.requestSuccess = '';
+  }
+
+  // An agent can request a contract only when there is no existing status record
+  canRequestContract(carrier: Carrier): boolean {
+    return !this.getStatus(carrier);
+  }
+
+  requestContract(carrier: Carrier): void {
+    if (!carrier._id || this.requesting) return;
+    this.requesting = true;
+    this.error = '';
+    this.requestSuccess = '';
+    this.carrierService.requestContract(carrier._id).subscribe({
+      next: (res) => {
+        this.requesting = false;
+        this.requestSuccess = 'Contract request submitted. Your admin has been notified.';
+        // Reflect the new status locally so the button hides immediately
+        if (carrier._id && res.status) {
+          this.myStatuses[carrier._id] = res.status;
+        }
+      },
+      error: (err) => {
+        this.requesting = false;
+        this.error = err?.error?.message || 'Failed to submit contract request';
+      }
+    });
   }
 
   getGuideUrl(path: string): string {

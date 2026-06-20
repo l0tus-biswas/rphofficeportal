@@ -102,7 +102,33 @@ function handleMulterError(multerMiddleware) {
   };
 }
 
-async function publishApprovedRequestResponse(request, response, uploadedBy) {
+// Resolve a sensible Content-Type from a filename so files render inline
+// (e.g. PDFs/images open in a browser tab) and downloads carry a real type.
+const EXT_MIME = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.csv': 'text/csv',
+  '.txt': 'text/plain',
+  '.zip': 'application/zip',
+};
+function mimeFromName(name) {
+  return EXT_MIME[path.extname(name || '').toLowerCase()] || 'application/octet-stream';
+}
+
+// Publish (or refresh) an agent's request response into the RHP Vault under the
+// request's configured "Save Uploaded Files To" folder, so admins can find the
+// collected document in the library. Admin-only visibility keeps an agent's
+// submission from leaking to other agents. Idempotent on filePath.
+async function publishRequestResponseToVault(request, response, uploadedBy) {
   if (!request || !response?.filePath) {
     return null;
   }
@@ -126,23 +152,7 @@ async function publishApprovedRequestResponse(request, response, uploadedBy) {
     }
   }
 
-  const extension = path.extname(response.originalFileName || response.filePath || '').toLowerCase();
-  const mimeType = ({
-    '.pdf': 'application/pdf',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.doc': 'application/msword',
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.xls': 'application/vnd.ms-excel',
-    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    '.ppt': 'application/vnd.ms-powerpoint',
-    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    '.csv': 'text/csv',
-    '.txt': 'text/plain',
-    '.zip': 'application/zip',
-  })[extension] || '';
+  const mimeType = mimeFromName(response.originalFileName || response.filePath);
 
   const update = {
     name: request.title,
@@ -151,7 +161,7 @@ async function publishApprovedRequestResponse(request, response, uploadedBy) {
     originalFileName: response.originalFileName || path.basename(response.filePath),
     mimeType,
     fileSize,
-    description: `Approved response from document request: ${request.title}`,
+    description: `Response to document request: ${request.title}`,
     notes: response.notes || '',
     visibility: 'admin',
     restrictedTo: [],
@@ -700,14 +710,23 @@ router.post('/requests/:id/respond', authenticate, handleMulterError(requestUplo
 
     await request.save();
 
+    // Replacing a prior submission: remove the old Vault copy (it pointed to the
+    // file being replaced) and the old physical file so nothing is orphaned.
     if (previousFilePath && previousFilePath !== resp.filePath) {
-      const isPublishedInHub = await DocumentHubFile.exists({ filePath: previousFilePath, isActive: true });
-      if (!isPublishedInHub) {
-        const previousFullPath = path.join(__dirname, '..', previousFilePath);
-        if (fs.existsSync(previousFullPath)) {
-          fs.unlink(previousFullPath, () => {});
-        }
+      await DocumentHubFile.deleteOne({ filePath: previousFilePath });
+      const previousFullPath = path.join(__dirname, '..', previousFilePath);
+      if (fs.existsSync(previousFullPath)) {
+        fs.unlink(previousFullPath, () => {});
       }
+    }
+
+    // File the submitted document into the request's configured folder so it is
+    // immediately available in RHP Vault (admin-only), as the request form
+    // promises. Best-effort: a filing failure must not fail the submission.
+    try {
+      await publishRequestResponseToVault(request, resp, req.user._id);
+    } catch (hubErr) {
+      console.error('Failed to file submitted request document into RHP Vault:', hubErr.message);
     }
 
     // Notify admin
@@ -754,12 +773,12 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
 
     await request.save();
 
-    // If approved and a file exists, publish it into RHP Vault files so admins can manage it there too.
-    if (status === 'approved' && resp.filePath) {
+    // Refresh the Vault copy on review so its metadata/notes stay in sync.
+    if (resp.filePath) {
       try {
-        await publishApprovedRequestResponse(request, resp, req.user._id);
+        await publishRequestResponseToVault(request, resp, req.user._id);
       } catch (hubErr) {
-        console.error('Failed to publish approved request file into RHP Vault:', hubErr.message);
+        console.error('Failed to refresh request file in RHP Vault:', hubErr.message);
       }
     }
 
@@ -813,9 +832,19 @@ router.get('/requests/:requestId/responses/:agentId/download', authenticate, asy
     if (!resp || !resp.filePath) return res.status(404).json({ message: 'No file found' });
 
     const fullPath = path.join(__dirname, '..', resp.filePath);
+    // Path traversal protection
+    const backendRoot = path.resolve(__dirname, '..');
+    if (!path.resolve(fullPath).startsWith(backendRoot + path.sep)) {
+      return res.status(403).json({ message: 'Access denied: invalid file path' });
+    }
     if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${resp.originalFileName || 'document'}"`);
+    const fileName = resp.originalFileName || 'document';
+    // `inline` lets the browser render it in a tab (View); the frontend still
+    // forces a download when the user clicks Download. Content-Type is required
+    // for inline rendering to work.
+    res.setHeader('Content-Type', mimeFromName(fileName));
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading response:', error);

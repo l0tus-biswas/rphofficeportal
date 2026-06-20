@@ -6,7 +6,7 @@ import { DocumentHubService, DocFolder, DocHubFile, DocRequest, DocRequestRespon
 import { AuthService } from '../../services/auth.service';
 import { AdminService } from '../../services/admin.service';
 import { User } from '../../models/user.model';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 
 @Component({
   selector: 'app-document-hub',
@@ -182,28 +182,70 @@ export class DocumentHubComponent implements OnInit {
   }
 
   // --- File actions ---
-  openFile(file: DocHubFile): void {
-    this.docHubService.downloadFile(file._id!).subscribe({
+  // Map a filename to a MIME type so the browser knows how to render it. The
+  // server's Content-Type can be missing/wrong for streamed files, which makes
+  // a new tab try to parse a PDF as XML ("Start tag expected"). Re-typing the
+  // blob on the client guarantees correct inline rendering.
+  private readonly EXT_MIME: { [ext: string]: string } = {
+    pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    gif: 'image/gif', txt: 'text/plain', csv: 'text/csv',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ppt: 'application/vnd.ms-powerpoint',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    zip: 'application/zip'
+  };
+
+  private mimeFromName(fileName: string): string {
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+    return this.EXT_MIME[ext] || 'application/octet-stream';
+  }
+
+  // Open a file blob in a new tab. The tab is opened SYNCHRONOUSLY on the click
+  // (before the async download) so it isn't killed by the popup blocker; once
+  // the blob arrives we point the tab at a correctly-typed blob URL. If the
+  // popup was blocked, we fall back to downloading the file.
+  private openBlobInNewTab(source: Observable<Blob>, fileName: string, errorMsg: string): void {
+    const win = window.open('', '_blank');
+    source.subscribe({
       next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        // Re-wrap with the right MIME type so the browser renders (not XML-parses) it.
+        const typed = blob.type && blob.type !== 'application/octet-stream'
+          ? blob
+          : new Blob([blob], { type: this.mimeFromName(fileName) });
+        const url = window.URL.createObjectURL(typed);
+        if (win && !win.closed) {
+          win.location.href = url;
+        } else {
+          this.triggerDownload(typed, fileName);
+        }
+        // Revoke later so the new tab has time to load the blob.
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
       },
-      error: () => { this.error = 'Failed to open file'; }
+      error: () => { if (win && !win.closed) win.close(); this.error = errorMsg; }
     });
+  }
+
+  private triggerDownload(blob: Blob, fileName: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'document';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }
+
+  openFile(file: DocHubFile): void {
+    this.openBlobInNewTab(this.docHubService.downloadFile(file._id!), file.originalFileName, 'Failed to open file');
   }
 
   downloadFile(file: DocHubFile): void {
     this.docHubService.downloadFile(file._id!).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.originalFileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      },
+      next: (blob) => this.triggerDownload(blob, file.originalFileName),
       error: () => { this.error = 'Failed to download file'; }
     });
   }
@@ -485,16 +527,7 @@ export class DocumentHubComponent implements OnInit {
 
   downloadResponse(requestId: string, agentId: string, fileName: string): void {
     this.docHubService.downloadResponse(requestId, agentId).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName || 'document';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      },
+      next: (blob) => this.triggerDownload(blob, fileName),
       error: () => { this.error = 'Failed to download'; }
     });
   }
@@ -511,13 +544,7 @@ export class DocumentHubComponent implements OnInit {
   }
 
   viewUploadedFile(requestId: string, agentId: string, fileName: string): void {
-    this.docHubService.downloadResponse(requestId, agentId).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        window.open(url, '_blank');
-      },
-      error: () => { this.error = 'Failed to open uploaded file'; }
-    });
+    this.openBlobInNewTab(this.docHubService.downloadResponse(requestId, agentId), fileName, 'Failed to open uploaded file');
   }
 
   // --- Drag & Drop ---

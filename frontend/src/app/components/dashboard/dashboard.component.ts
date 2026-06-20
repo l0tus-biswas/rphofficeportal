@@ -206,6 +206,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return (this.licensingProgress?.licenseTypes?.length || 0) > 0;
   }
 
+  // Licensed via a self-reported / pre-existing license rather than by completing
+  // RHP's internal pipeline (no pipeline-completion date). Keeps the dashboard
+  // message honest — they didn't "complete all licensing requirements".
+  isSelfReportedLicense(): boolean {
+    return !!this.licensingProgress?.isLicensed && !this.licensingProgress?.licenseObtainedDate;
+  }
+
   ngOnDestroy(): void {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);

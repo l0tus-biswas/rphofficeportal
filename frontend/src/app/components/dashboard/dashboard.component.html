@@ -86,7 +86,10 @@
             <i class="bi bi-check-circle-fill me-3" style="font-size: 2rem;"></i>
             <div>
               <h5 class="alert-heading mb-1">{{ "Licensed!" }}</h5>
-              <p class="mb-0">{{ "You have completed all licensing requirements" }}</p>
+              <p class="mb-0" *ngIf="!isSelfReportedLicense()">You have completed all licensing requirements</p>
+              <p class="mb-0" *ngIf="isSelfReportedLicense()">
+                You're licensed based on your existing license<span *ngIf="licensingProgress?.licenseTypes?.length"> ({{ licensingProgress?.licenseTypes?.join(', ') }})</span>
+              </p>
             </div>
           </div>
         </div>
