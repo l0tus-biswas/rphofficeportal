@@ -23,12 +23,11 @@ export class AgentCarriersComponent implements OnInit {
   myStatuses: { [carrierId: string]: AgentCarrierStatus } = {};
 
   loading = true;
-  statusLoading: { [carrierId: string]: boolean } = {};
   error = '';
-  success = '';
 
-  // Expanded carrier cards (for whatToExpect / productFactors)
-  expandedCards = new Set<string>();
+  // Details modal
+  showDetailsModal = false;
+  selectedCarrier: Carrier | null = null;
 
   constructor(private carrierService: CarrierService) {}
 
@@ -74,36 +73,33 @@ export class AgentCarriersComponent implements OnInit {
     });
   }
 
-  requestContract(carrier: Carrier): void {
-    if (!carrier._id) return;
-    this.statusLoading[carrier._id] = true;
-    this.error = '';
-
-    this.carrierService.requestContract(carrier._id).subscribe({
-      next: (res) => {
-        this.myStatuses[carrier._id!] = res.status;
-        this.success = `Contract request submitted for ${carrier.name}`;
-        this.statusLoading[carrier._id!] = false;
-        setTimeout(() => this.success = '', 4000);
-      },
-      error: (err) => {
-        this.error = err.error?.message || 'Failed to request contract';
-        this.statusLoading[carrier._id!] = false;
-      }
-    });
-  }
-
   getStatus(carrier: Carrier): AgentCarrierStatus | null {
     return carrier._id ? (this.myStatuses[carrier._id] || null) : null;
   }
 
-  toggleCard(carrierId: string): void {
-    if (this.expandedCards.has(carrierId)) this.expandedCards.delete(carrierId);
-    else this.expandedCards.add(carrierId);
+  // Map raw status to a friendly label for the agent view
+  statusLabel(status?: string): string {
+    if (status === 'Appointed') return 'Appointed';
+    if (status === 'Unappointed') return 'Unappointed';
+    if (status === 'Pending' || status === 'Requested') return 'Pending / In Progress';
+    return 'Not Set';
   }
 
-  isExpanded(carrierId: string): boolean {
-    return this.expandedCards.has(carrierId);
+  statusBadgeClass(status?: string): string {
+    if (status === 'Appointed') return 'bg-success';
+    if (status === 'Unappointed') return 'bg-secondary';
+    if (status === 'Pending' || status === 'Requested') return 'bg-warning text-dark';
+    return 'bg-light text-muted border';
+  }
+
+  openDetails(carrier: Carrier): void {
+    this.selectedCarrier = carrier;
+    this.showDetailsModal = true;
+  }
+
+  closeDetails(): void {
+    this.showDetailsModal = false;
+    this.selectedCarrier = null;
   }
 
   getGuideUrl(path: string): string {

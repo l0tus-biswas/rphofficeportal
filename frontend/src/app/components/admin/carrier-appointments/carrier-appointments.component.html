@@ -17,10 +17,97 @@
     <button type="button" class="btn-close" (click)="error = ''"></button>
   </div>
 
+  <!-- ===== Manual Tracking: select an agent and manage all carriers ===== -->
+  <div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0"><i class="bi bi-person-gear me-2"></i>Manage Agent Appointments</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small">
+        Select any agent to manually set their appointment status for each carrier.
+        Changes sync immediately to the agent's Carriers page.
+      </p>
+
+      <div class="row g-2 mb-3">
+        <div class="col-md-5">
+          <label class="form-label small fw-semibold">Search agent</label>
+          <input type="text" class="form-control" [(ngModel)]="agentSearch" placeholder="Search by name or email...">
+        </div>
+        <div class="col-md-7">
+          <label class="form-label small fw-semibold">Select agent</label>
+          <select class="form-select" [(ngModel)]="selectedAgentId" (change)="onAgentSelected()">
+            <option value="">-- Choose an agent --</option>
+            <option *ngFor="let a of filteredAgents" [value]="a._id">{{ a.name }} ({{ a.email }})</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Per-carrier status management -->
+      <div *ngIf="selectedAgentId">
+        <div *ngIf="manageLoading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+
+        <div *ngIf="!manageLoading && carriers.length === 0" class="text-center text-muted py-3">
+          No active carriers available.
+        </div>
+
+        <div *ngIf="!manageLoading && carriers.length > 0" class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Carrier</th>
+                <th>Category</th>
+                <th>Current Status</th>
+                <th class="text-end">Set Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let carrier of carriers">
+                <td><strong>{{ carrier.name }}</strong></td>
+                <td>
+                  <span *ngFor="let cat of carrier.category" class="badge bg-info text-dark me-1">{{ cat }}</span>
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="statusBadgeClass(currentStatus(carrier))">
+                    {{ currentStatus(carrier) === 'Requested' ? 'Pending' : currentStatus(carrier) }}
+                  </span>
+                </td>
+                <td class="text-end">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button *ngFor="let opt of STATUS_OPTIONS" type="button" class="btn"
+                      [ngClass]="{
+                        'btn-success': opt === 'Appointed' && currentStatus(carrier) === 'Appointed',
+                        'btn-outline-success': opt === 'Appointed' && currentStatus(carrier) !== 'Appointed',
+                        'btn-warning': opt === 'Pending' && (currentStatus(carrier) === 'Pending' || currentStatus(carrier) === 'Requested'),
+                        'btn-outline-warning': opt === 'Pending' && currentStatus(carrier) !== 'Pending' && currentStatus(carrier) !== 'Requested',
+                        'btn-secondary': opt === 'Unappointed' && currentStatus(carrier) === 'Unappointed',
+                        'btn-outline-secondary': opt === 'Unappointed' && currentStatus(carrier) !== 'Unappointed'
+                      }"
+                      [disabled]="savingStatusId === carrier._id"
+                      (click)="setStatus(carrier, opt)">
+                      <span *ngIf="savingStatusId === carrier._id" class="spinner-border spinner-border-sm me-1"></span>
+                      {{ opt }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Appointment records history ===== -->
+  <h5 class="mb-2"><i class="bi bi-clock-history me-2"></i>Appointment Records</h5>
+
   <!-- Filter -->
-  <div class="d-flex gap-2 mb-3">
+  <div class="d-flex gap-2 mb-3 flex-wrap">
     <button class="btn btn-sm" [class.btn-primary]="filterStatus === ''" [class.btn-outline-primary]="filterStatus !== ''"
       (click)="filterStatus = ''; applyFilter()">All</button>
+    <button class="btn btn-sm" [class.btn-warning]="filterStatus === 'Pending'" [class.btn-outline-warning]="filterStatus !== 'Pending'"
+      (click)="filterStatus = 'Pending'; applyFilter()">Pending</button>
     <button class="btn btn-sm" [class.btn-warning]="filterStatus === 'Requested'" [class.btn-outline-warning]="filterStatus !== 'Requested'"
       (click)="filterStatus = 'Requested'; applyFilter()">Requested</button>
     <button class="btn btn-sm" [class.btn-success]="filterStatus === 'Appointed'" [class.btn-outline-success]="filterStatus !== 'Appointed'"
@@ -67,10 +154,10 @@
               <td>
                 <span class="badge" [ngClass]="{
                   'bg-success': req.status === 'Appointed',
-                  'bg-warning text-dark': req.status === 'Requested',
+                  'bg-warning text-dark': req.status === 'Requested' || req.status === 'Pending',
                   'bg-secondary': req.status === 'Unappointed'
                 }">
-                  {{ req.status }}
+                  {{ req.status === 'Requested' ? 'Pending' : req.status }}
                 </span>
               </td>
               <td><small class="text-muted">{{ req.requestedAt | appDate:'medium' }}</small></td>
@@ -86,7 +173,7 @@
               </td>
               <td>
                 <div class="d-flex gap-1">
-                  <button *ngIf="req.status === 'Requested'" class="btn btn-success btn-sm"
+                  <button *ngIf="req.status === 'Requested' || req.status === 'Pending'" class="btn btn-success btn-sm"
                     (click)="appoint(req)" [disabled]="appointingId === req._id">
                     <span *ngIf="appointingId === req._id" class="spinner-border spinner-border-sm me-1"></span>
                     <i *ngIf="appointingId !== req._id" class="bi bi-check2-circle me-1"></i>Appoint

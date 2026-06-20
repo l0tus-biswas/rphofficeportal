@@ -3,19 +3,11 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
-export interface ProductFactor {
-  productName: string;
-  factor: number | null;
-  level?: string;
-}
-
 export interface Carrier {
   _id?: string;
   name: string;
   category: string[];
   isActive: boolean;
-  factor?: number | null;
-  productFactors?: ProductFactor[];
   contractingLink?: string;
   contractingInstructions?: string;
   whatToExpect?: string;
@@ -36,7 +28,7 @@ export interface AgentCarrierStatus {
   _id?: string;
   agent?: any;
   carrier: any;
-  status: 'Requested' | 'Appointed' | 'Unappointed';
+  status: 'Requested' | 'Pending' | 'Appointed' | 'Unappointed';
   requestedAt?: Date;
   appointedAt?: Date;
   appointedBy?: any;
@@ -95,9 +87,19 @@ export class CarrierService {
     return this.http.get<AgentCarrierStatus[]>(`${this.apiUrl}/my-statuses`);
   }
 
-  // Agent: request a contract with a carrier
-  requestContract(carrierId: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/${carrierId}/request`, {});
+  // Admin: list all agents (for the appointments agent selector)
+  getAgentsForAppointments(): Observable<{ _id: string; name: string; email: string }[]> {
+    return this.http.get<{ _id: string; name: string; email: string }[]>(`${this.apiUrl}/admin/agents`);
+  }
+
+  // Admin: get a single agent's carrier statuses
+  getAgentStatuses(agentId: string): Observable<AgentCarrierStatus[]> {
+    return this.http.get<AgentCarrierStatus[]>(`${this.apiUrl}/admin/agent/${agentId}/statuses`);
+  }
+
+  // Admin: manually set an agent's appointment status for a carrier
+  setAgentCarrierStatus(agentId: string, carrierId: string, status: 'Appointed' | 'Unappointed' | 'Pending'): Observable<any> {
+    return this.http.put(`${this.apiUrl}/admin/agent/${agentId}/carrier/${carrierId}/status`, { status });
   }
 
   // Admin: list all pending/all requests

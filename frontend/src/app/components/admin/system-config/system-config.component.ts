@@ -64,6 +64,7 @@ export class SystemConfigComponent implements OnInit {
   qboSyncResult: any = null;
   syncingAgentId = '';
   showSyncedList = false;
+  showNotLicensedList = false;
 
   constructor(private http: HttpClient, private route: ActivatedRoute) { }
 

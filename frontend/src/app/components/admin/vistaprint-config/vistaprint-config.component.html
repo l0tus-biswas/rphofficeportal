@@ -120,6 +120,43 @@
 
             <hr class="my-4">
 
+            <!-- Card Render Templates -->
+            <h6 class="fw-semibold mb-2">
+              <i class="bi bi-person-vcard me-1 text-primary"></i> Card Render Templates
+            </h6>
+            <p class="text-muted small mb-3">
+              Templates auto-place each agent's photo + details onto the card design and send a
+              print-ready file to Printful. Edit as JSON. Upload the background art and fonts below,
+              then paste the returned URLs into the template's <code>backgroundImage</code> / <code>fonts</code> fields.
+            </p>
+
+            <!-- Asset uploader -->
+            <div class="mb-3 p-3 rounded border bg-light">
+              <label class="form-label small fw-semibold mb-1">Upload template asset (PNG/JPG/SVG or TTF/OTF font)</label>
+              <div class="d-flex align-items-center gap-2">
+                <input type="file" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.svg,.ttf,.otf"
+                       (change)="onAssetSelected($event)" [disabled]="assetUploading">
+                <span *ngIf="assetUploading" class="spinner-border spinner-border-sm text-primary"></span>
+              </div>
+              <div *ngIf="assetUrl" class="small text-success mt-2">
+                <i class="bi bi-check-circle me-1"></i>Uploaded — URL:
+                <code class="user-select-all">{{ assetUrl }}</code>
+              </div>
+              <div *ngIf="assetError" class="small text-danger mt-2">{{ assetError }}</div>
+            </div>
+
+            <textarea class="form-control font-monospace" rows="12" [(ngModel)]="templatesJson"
+                      spellcheck="false" placeholder="[ ]"></textarea>
+            <div *ngIf="templatesError" class="text-danger small mt-1">
+              <i class="bi bi-exclamation-triangle me-1"></i>{{ templatesError }}
+            </div>
+            <div class="form-text">
+              Coordinates are in print-file pixels. For "Set of Business Cards": 750×1200 at 300 DPI,
+              placements <code>front</code> (default) + <code>back</code>.
+            </div>
+
+            <hr class="my-4">
+
             <!-- Save -->
             <div class="d-flex justify-content-end">
               <button class="btn btn-primary px-4" (click)="saveConfig()" [disabled]="saving">

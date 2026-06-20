@@ -1,5 +1,7 @@
 import { Component, OnInit } from '@angular/core';
-import { CarrierService, AgentCarrierStatus } from '../../../services/carrier.service';
+import { CarrierService, AgentCarrierStatus, Carrier } from '../../../services/carrier.service';
+
+type AppointmentStatus = 'Appointed' | 'Unappointed' | 'Pending';
 
 @Component({
   selector: 'app-carrier-appointments',
@@ -7,6 +9,17 @@ import { CarrierService, AgentCarrierStatus } from '../../../services/carrier.se
   styleUrls: ['./carrier-appointments.component.css']
 })
 export class CarrierAppointmentsComponent implements OnInit {
+  // ---- Manual tracking (agent-centric) ----
+  agents: { _id: string; name: string; email: string }[] = [];
+  agentSearch = '';
+  selectedAgentId = '';
+  carriers: Carrier[] = [];
+  // carrierId -> current status string for the selected agent
+  agentStatusMap: { [carrierId: string]: AgentCarrierStatus } = {};
+  manageLoading = false;
+  savingStatusId = '';
+
+  // ---- Existing appointment records table ----
   requests: AgentCarrierStatus[] = [];
   filteredRequests: AgentCarrierStatus[] = [];
   filterStatus = '';
@@ -22,12 +35,102 @@ export class CarrierAppointmentsComponent implements OnInit {
   newNoteText = '';
   addingNote = false;
 
+  readonly STATUS_OPTIONS: AppointmentStatus[] = ['Appointed', 'Pending', 'Unappointed'];
+
   constructor(private carrierService: CarrierService) {}
 
   ngOnInit(): void {
+    this.loadAgents();
+    this.loadCarriers();
     this.loadRequests();
   }
 
+  // -------------------------------------------------------------------------
+  // Manual tracking
+  // -------------------------------------------------------------------------
+  loadAgents(): void {
+    this.carrierService.getAgentsForAppointments().subscribe({
+      next: (agents) => { this.agents = agents; },
+      error: () => { this.error = 'Failed to load agents'; }
+    });
+  }
+
+  loadCarriers(): void {
+    this.carrierService.getAllCarriers(true).subscribe({
+      next: (carriers) => { this.carriers = carriers; },
+      error: () => { this.error = 'Failed to load carriers'; }
+    });
+  }
+
+  get filteredAgents(): { _id: string; name: string; email: string }[] {
+    const term = this.agentSearch.trim().toLowerCase();
+    if (!term) return this.agents;
+    return this.agents.filter(a =>
+      (a.name && a.name.toLowerCase().includes(term)) ||
+      (a.email && a.email.toLowerCase().includes(term))
+    );
+  }
+
+  get selectedAgent(): { _id: string; name: string; email: string } | undefined {
+    return this.agents.find(a => a._id === this.selectedAgentId);
+  }
+
+  onAgentSelected(): void {
+    this.agentStatusMap = {};
+    if (!this.selectedAgentId) return;
+    this.manageLoading = true;
+    this.carrierService.getAgentStatuses(this.selectedAgentId).subscribe({
+      next: (statuses) => {
+        const map: { [carrierId: string]: AgentCarrierStatus } = {};
+        for (const s of statuses) {
+          const carrierId = typeof s.carrier === 'object' ? s.carrier._id : s.carrier;
+          if (carrierId) map[carrierId] = s;
+        }
+        this.agentStatusMap = map;
+        this.manageLoading = false;
+      },
+      error: () => { this.error = 'Failed to load agent statuses'; this.manageLoading = false; }
+    });
+  }
+
+  currentStatus(carrier: Carrier): string {
+    return carrier._id && this.agentStatusMap[carrier._id]
+      ? this.agentStatusMap[carrier._id].status
+      : 'Not Set';
+  }
+
+  statusBadgeClass(status: string): string {
+    if (status === 'Appointed') return 'bg-success';
+    if (status === 'Unappointed') return 'bg-secondary';
+    if (status === 'Pending' || status === 'Requested') return 'bg-warning text-dark';
+    return 'bg-light text-muted border';
+  }
+
+  setStatus(carrier: Carrier, status: AppointmentStatus): void {
+    if (!this.selectedAgentId || !carrier._id) return;
+    if (this.currentStatus(carrier) === status) return;
+    this.savingStatusId = carrier._id;
+    this.error = '';
+
+    this.carrierService.setAgentCarrierStatus(this.selectedAgentId, carrier._id, status).subscribe({
+      next: (res) => {
+        if (carrier._id) this.agentStatusMap[carrier._id] = res.status;
+        this.success = `${this.selectedAgent?.name || 'Agent'} set to "${status}" for ${carrier.name}`;
+        this.savingStatusId = '';
+        // Keep the records table in sync
+        this.loadRequests();
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to update status';
+        this.savingStatusId = '';
+      }
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Existing appointment records
+  // -------------------------------------------------------------------------
   loadRequests(): void {
     this.loading = true;
     this.carrierService.getAllCarrierRequests().subscribe({
@@ -59,6 +162,7 @@ export class CarrierAppointmentsComponent implements OnInit {
         this.success = `Agent appointed for ${(request.carrier as any)?.name || 'carrier'}`;
         this.appointingId = '';
         this.loadRequests();
+        if (this.selectedAgentId) this.onAgentSelected();
         setTimeout(() => this.success = '', 4000);
       },
       error: (err) => {
@@ -79,6 +183,7 @@ export class CarrierAppointmentsComponent implements OnInit {
         this.success = `Agent unappointed from ${(request.carrier as any)?.name || 'carrier'}`;
         this.unappointingId = '';
         this.loadRequests();
+        if (this.selectedAgentId) this.onAgentSelected();
         setTimeout(() => this.success = '', 4000);
       },
       error: (err) => {

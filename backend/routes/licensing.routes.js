@@ -5,6 +5,8 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const APAApplication = require('../models/APAApplication');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
+const { isAgentLicensed } = require('../utils/licensing');
+const { syncAgentToQBO } = require('../utils/quickbooksSync');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
@@ -41,30 +43,9 @@ const upload = multer({
   }
 });
 
-/**
- * Single source of truth for whether an agent counts as licensed.
- * Mirrors the logic used in the dashboard/detail endpoints so the admin list,
- * agent profile, and dashboard never disagree. An agent is licensed if ANY of:
- *  - their LicensingProgress.isLicensed flag is set
- *  - the final checklist step (state appointment) is approved
- *  - their APA application self-reports a current license / license types
- *  - their user metadata flags currentlyLicensed (imported/migrated agents)
- */
-function isAgentLicensed(progress, apa, agentMetadata) {
-  if (progress) {
-    if (progress.isLicensed) return true;
-    if (progress.checklist?.stateAppointment?.approved) return true;
-  }
-  if (apa?.licensingStatus?.currentlyLicensed) return true;
-  if (apa?.licensingStatus?.licenseTypes?.length > 0) return true;
-  if (agentMetadata) {
-    const meta = agentMetadata.get
-      ? agentMetadata.get('currentlyLicensed')
-      : agentMetadata.currentlyLicensed;
-    if (meta === 'true' || meta === true) return true;
-  }
-  return false;
-}
+// isAgentLicensed is the single source of truth for licensed status — imported
+// from utils/licensing so the admin list, agent profile, dashboard, and the
+// QuickBooks sync gate never disagree.
 
 // @route   GET /api/licensing
 // @desc    Get all licensing progress (admin) or own progress (agent)
@@ -350,6 +331,10 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
       });
     }
     
+    // Track whether the agent was already licensed before this update so we can
+    // trigger the QuickBooks sync only on the transition into "licensed".
+    const wasLicensed = !!licensingProgress.isLicensed;
+
     const { checklistItem, data, action } = req.body;
 
     // Reschedule action: record a new scheduled attempt in the history,
@@ -433,7 +418,25 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
     licensingProgress.lastUpdatedBy = req.user._id;
     await licensingProgress.save();
     await licensingProgress.populate('agent', 'name email phone');
-    
+
+    // Agent just became licensed → this is when W-9 / direct-deposit collection
+    // and payroll setup become relevant, so sync them to QuickBooks now (and
+    // never before). Best-effort and non-blocking: if QuickBooks isn't connected
+    // the sync is skipped, and any failure must not fail the licensing update.
+    if (!wasLicensed && licensingProgress.isLicensed) {
+      syncAgentToQBO(req.params.agentId, req.user._id)
+        .then(result => {
+          if (result.status === 'created') {
+            console.log(`[QBO] Auto-synced newly licensed agent ${req.params.agentId} (employee ${result.qboEmployeeId})`);
+          } else if (result.status === 'already_exists') {
+            console.log(`[QBO] Newly licensed agent ${req.params.agentId} already existed in QuickBooks (linked)`);
+          } else {
+            console.log(`[QBO] Auto-sync on licensure skipped for ${req.params.agentId}: ${result.status}`);
+          }
+        })
+        .catch(err => console.error('[QBO] Auto-sync on licensure failed:', err.message));
+    }
+
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error updating checklist:', error);

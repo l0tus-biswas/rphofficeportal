@@ -17,14 +17,16 @@ const APAApplication = require('../models/APAApplication');
 const OAuthClient = require('intuit-oauth');
 const crypto = require('crypto');
 const qbo = require('../utils/quickbooks');
-const { decrypt } = require('../utils/encryption');
+const { syncAgentToQBO } = require('../utils/quickbooksSync');
+const { isAgentLicensed } = require('../utils/licensing');
+const LicensingProgress = require('../models/LicensingProgress');
 
 // ---------------------------------------------------------------------------
 // Helper: audit log
 // ---------------------------------------------------------------------------
-async function auditLog(actor, target, action, details) {
+async function auditLog(performedBy, targetUser, action, details) {
   try {
-    await AuditLog.create({ actor, targetAgent: target, action, details });
+    await AuditLog.create({ performedBy, targetUser, action, details });
   } catch (_) {}
 }
 
@@ -168,133 +170,45 @@ router.post('/disconnect', authenticate, authorize('admin'), async (req, res) =>
 
 // ---------------------------------------------------------------------------
 // @route   POST /api/quickbooks/sync-employee/:agentId
-// @desc    Create/update employee in QBO from agent data + Direct Deposit info
+// @desc    Create employee in QBO from agent data (W-9 / Direct Deposit info).
+//          Only permitted once the agent is licensed.
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.post('/sync-employee/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const agent = await User.findById(req.params.agentId).lean();
-    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+    const result = await syncAgentToQBO(req.params.agentId, req.user._id);
 
-    // Check if already synced
-    const existing = await qbo.findEmployeeByEmail(agent.email);
-    if (existing) {
-      // Link existing QBO employee to our user
-      await User.findByIdAndUpdate(req.params.agentId, {
-        qboEmployeeId: existing.Id,
-        qboSyncedAt: new Date()
-      });
-      return res.status(409).json({
-        message: 'Employee already exists in QuickBooks',
-        qboEmployeeId: existing.Id,
-        displayName: existing.DisplayName
-      });
+    switch (result.status) {
+      case 'not_found':
+        return res.status(404).json({ message: 'Agent not found' });
+      case 'skipped_unlicensed':
+        return res.status(400).json({ message: result.message });
+      case 'skipped_not_connected':
+        return res.status(400).json({ message: result.message });
+      case 'already_exists':
+        return res.status(409).json({
+          message: 'Employee already exists in QuickBooks',
+          qboEmployeeId: result.qboEmployeeId,
+          displayName: result.displayName
+        });
+      case 'created':
+        return res.json({
+          message: 'Employee created in QuickBooks',
+          employee: {
+            id: result.qboEmployeeId,
+            displayName: result.displayName,
+            email: result.email
+          },
+          dataIncluded: {
+            ssn: result.dataIncluded.ssn,
+            address: result.dataIncluded.address,
+            bankInfo: result.dataIncluded.bankInfo,
+            bankInfoNote: result.bankInfoNote
+          }
+        });
+      default:
+        return res.status(500).json({ message: 'Unexpected sync result' });
     }
-
-    // Fetch APA Application for W-9 data (SSN, legal name, address, DOB)
-    const apa = await APAApplication.findOne({ userId: req.params.agentId })
-      .select('personalInfo')
-      .lean();
-
-    // Use legal name from APA if available, otherwise parse from User
-    let givenName, middleName, familyName;
-    if (apa?.personalInfo) {
-      givenName = apa.personalInfo.legalFirstName || '';
-      middleName = apa.personalInfo.legalMiddleName || '';
-      familyName = apa.personalInfo.legalLastName || '';
-    } else {
-      const nameParts = (agent.name || '').trim().split(/\s+/);
-      givenName = nameParts[0] || 'Unknown';
-      familyName = nameParts.slice(1).join(' ') || 'Agent';
-    }
-
-    // Build employee data with W-9 fields
-    const employeeData = {
-      givenName,
-      middleName: middleName || undefined,
-      familyName,
-      email: agent.email,
-      phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined,
-      ssn: apa?.personalInfo?.ssn || undefined,
-      birthDate: apa?.personalInfo?.dateOfBirth || undefined,
-      gender: apa?.personalInfo?.gender || undefined
-    };
-
-    // Address from APA application (more complete than User model)
-    const addr = apa?.personalInfo?.homeAddress;
-    if (addr) {
-      employeeData.address = {
-        line1: addr.street,
-        city: addr.city,
-        state: addr.state,
-        zip: addr.zipCode
-      };
-    } else if (agent.address) {
-      employeeData.address = {
-        line1: agent.address.street || agent.address.line1,
-        city: agent.address.city,
-        state: agent.address.state,
-        zip: agent.address.zip || agent.address.zipCode
-      };
-    }
-
-    // Fetch Direct Deposit bank info (encrypted)
-    const ddDocType = await OnboardingDocType.findOne({
-      hasDirectDepositFields: true,
-      isActive: true
-    }).select('_id').lean();
-
-    let bankInfo = null;
-    if (ddDocType) {
-      const ddDoc = await OnboardingDocument.findOne({
-        agent: req.params.agentId,
-        docType: ddDocType._id,
-        deletedAt: null,
-        bankRoutingNumber: { $ne: null }
-      }).select('bankRoutingNumber bankAccountNumber bankAccountType').lean();
-
-      if (ddDoc) {
-        bankInfo = {
-          routingNumber: decrypt(ddDoc.bankRoutingNumber),
-          accountNumber: decrypt(ddDoc.bankAccountNumber),
-          accountType: ddDoc.bankAccountType
-        };
-      }
-    }
-
-    const qboEmployee = await qbo.createEmployee(employeeData);
-
-    // Mark agent as synced
-    await User.findByIdAndUpdate(req.params.agentId, {
-      qboEmployeeId: qboEmployee.Id,
-      qboSyncedAt: new Date()
-    });
-
-    const syncDetails = {
-      qboEmployeeId: qboEmployee.Id,
-      displayName: qboEmployee.DisplayName,
-      includedSSN: !!employeeData.ssn,
-      includedAddress: !!employeeData.address,
-      includedBankInfo: !!bankInfo
-    };
-    await auditLog(req.user._id, req.params.agentId, 'QBO_EMPLOYEE_SYNCED', syncDetails);
-
-    res.json({
-      message: 'Employee created in QuickBooks',
-      employee: {
-        id: qboEmployee.Id,
-        displayName: qboEmployee.DisplayName,
-        email: qboEmployee.PrimaryEmailAddr?.Address
-      },
-      dataIncluded: {
-        ssn: !!employeeData.ssn,
-        address: !!employeeData.address,
-        bankInfo: !!bankInfo,
-        bankInfoNote: bankInfo
-          ? 'Bank info retrieved but QBO Accounting API does not support direct deposit fields. Requires QBO Payroll subscription.'
-          : 'No bank info on file'
-      }
-    });
   } catch (error) {
     console.error('[QBO] Sync employee error:', error.message);
     res.status(500).json({ message: error.message });
@@ -374,105 +288,76 @@ router.post('/resync-employee/:agentId', authenticate, authorize('admin'), async
 
 // ---------------------------------------------------------------------------
 // @route   POST /api/quickbooks/sync-all-employees
-// @desc    Bulk sync all licensed agents to QBO
+// @desc    Bulk sync all LICENSED, not-yet-synced agents to QBO.
+//          Unlicensed agents are intentionally skipped.
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.post('/sync-all-employees', authenticate, authorize('admin'), async (req, res) => {
   try {
-    // Find all active agents without a QBO employee ID
-    const agents = await User.find({
+    const conn = await qbo.getConnectionStatus();
+    if (!conn.connected) {
+      return res.status(400).json({ message: 'QuickBooks is not connected.' });
+    }
+
+    // Candidate agents: active and not yet synced
+    const candidates = await User.find({
       role: 'agent',
       isActive: true,
       qboEmployeeId: { $exists: false }
-    }).select('_id name email phone address').lean();
+    }).select('_id name email metadata').lean();
 
-    if (agents.length === 0) {
-      return res.json({ message: 'All agents are already synced', synced: 0, errors: 0 });
+    if (candidates.length === 0) {
+      return res.json({ message: 'All agents are already synced', synced: 0, errors: 0, skippedUnlicensed: 0, total: 0, results: [] });
     }
 
-    // Pre-fetch all APA applications for these agents
-    const agentIds = agents.map(a => a._id);
-    const apaApps = await APAApplication.find({ userId: { $in: agentIds } })
-      .select('userId personalInfo')
-      .lean();
+    // Bulk-load licensing data to filter down to licensed agents only
+    const ids = candidates.map(a => a._id);
+    const [progresses, apaApps] = await Promise.all([
+      LicensingProgress.find({ agent: { $in: ids } }).lean(),
+      APAApplication.find({ userId: { $in: ids } }).select('userId licensingStatus').lean()
+    ]);
+    const progressByAgent = {};
+    progresses.forEach(p => { progressByAgent[p.agent.toString()] = p; });
     const apaByUser = {};
     apaApps.forEach(a => { apaByUser[a.userId.toString()] = a; });
+
+    const licensed = [];
+    let skippedUnlicensed = 0;
+    for (const agent of candidates) {
+      const id = agent._id.toString();
+      if (isAgentLicensed(progressByAgent[id], apaByUser[id], agent.metadata)) {
+        licensed.push(agent);
+      } else {
+        skippedUnlicensed++;
+      }
+    }
 
     let synced = 0;
     let errors = 0;
     const results = [];
 
-    for (const agent of agents) {
+    for (const agent of licensed) {
       try {
-        // Check if already in QBO by email
-        const existing = await qbo.findEmployeeByEmail(agent.email);
-        if (existing) {
-          await User.findByIdAndUpdate(agent._id, {
-            qboEmployeeId: existing.Id,
-            qboSyncedAt: new Date()
-          });
-          results.push({ agentId: agent._id, name: agent.name, status: 'already_exists', qboId: existing.Id });
+        // Already pre-filtered as licensed, so skip the per-agent re-check
+        const r = await syncAgentToQBO(agent._id, req.user._id, { requireLicensed: false });
+        if (r.status === 'created' || r.status === 'already_exists') {
+          results.push({ agentId: agent._id, name: agent.name, status: r.status, qboId: r.qboEmployeeId });
           synced++;
-          continue;
-        }
-
-        // Build employee data from APA Application (W-9 data)
-        const apa = apaByUser[agent._id.toString()];
-        let givenName, middleName, familyName;
-        if (apa?.personalInfo) {
-          givenName = apa.personalInfo.legalFirstName || '';
-          middleName = apa.personalInfo.legalMiddleName || '';
-          familyName = apa.personalInfo.legalLastName || '';
         } else {
-          const nameParts = (agent.name || '').trim().split(/\s+/);
-          givenName = nameParts[0] || 'Unknown';
-          familyName = nameParts.slice(1).join(' ') || 'Agent';
+          results.push({ agentId: agent._id, name: agent.name, status: r.status, message: r.message });
         }
-
-        const employeeData = {
-          givenName,
-          middleName: middleName || undefined,
-          familyName,
-          email: agent.email,
-          phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined,
-          ssn: apa?.personalInfo?.ssn || undefined,
-          birthDate: apa?.personalInfo?.dateOfBirth || undefined,
-          gender: apa?.personalInfo?.gender || undefined
-        };
-
-        const addr = apa?.personalInfo?.homeAddress;
-        if (addr) {
-          employeeData.address = { line1: addr.street, city: addr.city, state: addr.state, zip: addr.zipCode };
-        } else if (agent.address) {
-          employeeData.address = {
-            line1: agent.address.street || agent.address.line1,
-            city: agent.address.city,
-            state: agent.address.state,
-            zip: agent.address.zip || agent.address.zipCode
-          };
-        }
-
-        const qboEmployee = await qbo.createEmployee(employeeData);
-
-        await User.findByIdAndUpdate(agent._id, {
-          qboEmployeeId: qboEmployee.Id,
-          qboSyncedAt: new Date()
-        });
-
-        results.push({
-          agentId: agent._id, name: agent.name, status: 'created',
-          qboId: qboEmployee.Id, includedSSN: !!employeeData.ssn
-        });
-        synced++;
       } catch (err) {
         results.push({ agentId: agent._id, name: agent.name, status: 'error', error: err.message });
         errors++;
       }
     }
 
-    await auditLog(req.user._id, null, 'QBO_BULK_SYNC', { synced, errors, total: agents.length });
+    await auditLog(req.user._id, null, 'QBO_BULK_SYNC', { synced, errors, skippedUnlicensed, total: candidates.length });
 
-    res.json({ message: `Synced ${synced} employees`, synced, errors, total: agents.length, results });
+    res.json({
+      message: `Synced ${synced} licensed employee(s). Skipped ${skippedUnlicensed} unlicensed agent(s).`,
+      synced, errors, skippedUnlicensed, total: candidates.length, results
+    });
   } catch (error) {
     console.error('[QBO] Bulk sync error:', error.message);
     res.status(500).json({ message: error.message });
@@ -487,19 +372,41 @@ router.post('/sync-all-employees', authenticate, authorize('admin'), async (req,
 router.get('/sync-status', authenticate, authorize('admin'), async (req, res) => {
   try {
     const agents = await User.find({ role: 'agent', isActive: true })
-      .select('_id name email qboEmployeeId qboSyncedAt')
+      .select('_id name email qboEmployeeId qboSyncedAt metadata')
       .sort('name')
       .lean();
 
-    const synced = agents.filter(a => a.qboEmployeeId);
-    const unsynced = agents.filter(a => !a.qboEmployeeId);
+    // Bulk-load licensing data so we can flag who is eligible to sync
+    const ids = agents.map(a => a._id);
+    const [progresses, apaApps] = await Promise.all([
+      LicensingProgress.find({ agent: { $in: ids } }).lean(),
+      APAApplication.find({ userId: { $in: ids } }).select('userId licensingStatus').lean()
+    ]);
+    const progressByAgent = {};
+    progresses.forEach(p => { progressByAgent[p.agent.toString()] = p; });
+    const apaByUser = {};
+    apaApps.forEach(a => { apaByUser[a.userId.toString()] = a; });
+
+    const synced = [];
+    const unsynced = [];       // licensed but not yet synced (eligible)
+    const notLicensed = [];    // not eligible until licensed
+    for (const a of agents) {
+      const id = a._id.toString();
+      const licensed = isAgentLicensed(progressByAgent[id], apaByUser[id], a.metadata);
+      const view = { _id: a._id, name: a.name, email: a.email, qboEmployeeId: a.qboEmployeeId, qboSyncedAt: a.qboSyncedAt, licensed };
+      if (a.qboEmployeeId) synced.push(view);
+      else if (licensed) unsynced.push(view);
+      else notLicensed.push(view);
+    }
 
     res.json({
       total: agents.length,
       syncedCount: synced.length,
-      unsyncedCount: unsynced.length,
+      unsyncedCount: unsynced.length,       // licensed & awaiting sync
+      notLicensedCount: notLicensed.length, // not yet eligible
       synced,
-      unsynced
+      unsynced,
+      notLicensed
     });
   } catch (error) {
     console.error('[QBO] Sync status error:', error.message);

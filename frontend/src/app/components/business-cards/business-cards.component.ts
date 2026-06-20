@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord } from '../../services/business-cards.service';
+import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord, CardTemplate } from '../../services/business-cards.service';
 import { environment } from '../../../environments/environment';
 declare var Stripe: any;
 
@@ -26,6 +26,18 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   mockupUrl = '';
   mockupLoading = false;
   mockupStatus = '';
+
+  // Card templates (self-hosted personalization render)
+  templates: CardTemplate[] = [];
+  activeTemplate: CardTemplate | null = null;
+  cardFieldValues: { [key: string]: string } = {};
+  photoUrl = '';
+  photoUploading = false;
+  photoError = '';
+  previewUrl = '';
+  previewLoading = false;
+  previewError = '';
+  private previewTimer: any = null;
 
   // Order form
   showOrderForm = false;
@@ -60,7 +72,29 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadProducts();
+    this.loadTemplates();
     this.initStripe();
+  }
+
+  loadTemplates(): void {
+    this.businessCardsService.getTemplates().subscribe({
+      next: (res) => { this.templates = res.templates || []; },
+      error: () => { this.templates = []; }
+    });
+  }
+
+  /** True when the selected product has a personalization template. */
+  get isTemplated(): boolean {
+    return !!this.activeTemplate;
+  }
+
+  private resetPersonalization(): void {
+    this.activeTemplate = null;
+    this.cardFieldValues = {};
+    this.photoUrl = '';
+    this.photoError = '';
+    this.previewUrl = '';
+    this.previewError = '';
   }
 
   ngOnDestroy(): void {
@@ -104,6 +138,17 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     this.orderSuccess = '';
     this.orderError = '';
     this.mockupUrl = '';
+    this.resetPersonalization();
+
+    // Match a personalization template to this Printful product, if any.
+    this.activeTemplate = this.templates.find(t => t.syncProductId === product.id) || null;
+    if (this.activeTemplate) {
+      for (const side of this.activeTemplate.sides) {
+        for (const f of side.fields) {
+          if (!(f.key in this.cardFieldValues)) this.cardFieldValues[f.key] = '';
+        }
+      }
+    }
 
     this.businessCardsService.getProductDetail(product.id).subscribe({
       next: (res) => {
@@ -196,6 +241,81 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     }, 2000);
   }
 
+  // ── Personalized Card (template render) ──
+
+  onPhotoSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) return;
+    this.photoError = '';
+    this.photoUploading = true;
+    this.businessCardsService.uploadPhoto(file).subscribe({
+      next: (res) => {
+        this.photoUrl = res.photoUrl;
+        this.photoUploading = false;
+        this.schedulePreview();
+      },
+      error: (err) => {
+        this.photoError = err?.error?.message || 'Photo upload failed.';
+        this.photoUploading = false;
+      }
+    });
+  }
+
+  /** Debounced live preview so typing doesn't fire a render per keystroke. */
+  schedulePreview(): void {
+    if (!this.activeTemplate) return;
+    if (this.previewTimer) clearTimeout(this.previewTimer);
+    this.previewTimer = setTimeout(() => this.updateCardPreview(), 600);
+  }
+
+  updateCardPreview(): void {
+    if (!this.activeTemplate) return;
+    this.previewLoading = true;
+    this.previewError = '';
+    this.businessCardsService.renderPreview(
+      this.activeTemplate.id, this.cardFieldValues, this.photoUrl || undefined
+    ).subscribe({
+      next: (res) => {
+        this.previewUrl = res.previewUrl;
+        this.previewLoading = false;
+      },
+      error: (err) => {
+        this.previewError = err?.error?.message || 'Preview failed.';
+        this.previewLoading = false;
+      }
+    });
+  }
+
+  /** All required template fields filled (used to gate checkout). */
+  get personalizationComplete(): boolean {
+    if (!this.activeTemplate) return true;
+    for (const side of this.activeTemplate.sides) {
+      for (const f of side.fields) {
+        if (f.required && !(this.cardFieldValues[f.key] || '').trim()) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Whether any side of the active template expects a headshot. */
+  get templateNeedsPhoto(): boolean {
+    return !!this.activeTemplate && this.activeTemplate.sides.some(s => s.hasPhoto);
+  }
+
+  /** Unique fields across all sides (a key shared by front+back is shown once). */
+  get personalizationFields(): { key: string; label: string; required: boolean }[] {
+    if (!this.activeTemplate) return [];
+    const seen = new Set<string>();
+    const out: { key: string; label: string; required: boolean }[] = [];
+    for (const side of this.activeTemplate.sides) {
+      for (const f of side.fields) {
+        if (!seen.has(f.key)) { seen.add(f.key); out.push(f); }
+      }
+    }
+    return out;
+  }
+
   // ── Checkout Flow ──
 
   proceedToShipping(): void {
@@ -214,10 +334,20 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.activeTemplate && !this.personalizationComplete) {
+      this.orderError = 'Please complete all required card fields before continuing.';
+      this.checkoutStep = 'product';
+      return;
+    }
+
     this.processing = true;
     this.orderError = '';
 
-    const textVals = this.selectedProduct?.textFields?.length ? this.textValues : undefined;
+    // For templated cards the print render keys off the template field keys,
+    // so send cardFieldValues; otherwise fall back to the legacy text fields.
+    const textVals = this.activeTemplate
+      ? this.cardFieldValues
+      : (this.selectedProduct?.textFields?.length ? this.textValues : undefined);
 
     this.businessCardsService.createCheckout({
       variantId: this.selectedVariant.id,
@@ -229,7 +359,9 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       quantity: this.quantity,
       shippingAddress: this.shippingAddress,
       textValues: textVals,
-      mockupUrl: this.mockupUrl || undefined
+      mockupUrl: this.previewUrl || this.mockupUrl || undefined,
+      templateId: this.activeTemplate?.id,
+      photoUrl: this.photoUrl || undefined
     }).subscribe({
       next: (res) => {
         this.currentOrderId = res.orderId;
@@ -318,6 +450,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     this.mockupStatus = '';
     this.clientSecret = '';
     this.currentOrderId = '';
+    this.resetPersonalization();
     if (this.cardElement) {
       this.cardElement.destroy();
       this.cardElement = null;

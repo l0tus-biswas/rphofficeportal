@@ -13,8 +13,9 @@ const agentCarrierStatusSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Requested', 'Appointed', 'Unappointed'],
-    default: 'Requested'
+    // 'Requested' retained for legacy records; admin manual tracking uses 'Pending'
+    enum: ['Requested', 'Pending', 'Appointed', 'Unappointed'],
+    default: 'Pending'
   },
   requestedAt: {
     type: Date,

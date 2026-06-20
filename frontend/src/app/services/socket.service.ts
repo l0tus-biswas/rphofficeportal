@@ -50,7 +50,11 @@ export class SocketService {
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         reconnectionAttempts: 5,
-        transports: ['websocket', 'polling'],
+        // Start with HTTP long-polling (works through any reverse proxy/CDN),
+        // then upgrade to WebSocket when the proxy supports the upgrade. This
+        // avoids hard "wss:// failed" errors behind proxies that don't forward
+        // the WebSocket upgrade, while still using WebSocket where available.
+        transports: ['polling', 'websocket'],
         upgrade: true
       });
 
