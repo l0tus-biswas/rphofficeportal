@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { AuthService } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
 import { AdminService } from '../../services/admin.service';
@@ -31,6 +32,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   welcomeTitle = '';
   welcomeMessage = '';
   welcomeVideoUrl = '';
+  welcomeVideoEmbedUrl: SafeResourceUrl | null = null;
+  welcomeVideoIsFile = false;
   welcomeImageUrl = '';
   welcomePdfUrl = '';
 
@@ -41,7 +44,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private licensingService: LicensingService,
     private brandingService: BrandingService,
     private router: Router,
-    private http: HttpClient
+    private http: HttpClient,
+    private sanitizer: DomSanitizer
   ) { }
 
   ngOnInit(): void {
@@ -70,6 +74,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.welcomeTitle = res.title || '';
           this.welcomeMessage = res.message || '';
           this.welcomeVideoUrl = res.videoUrl || '';
+          this.setWelcomeVideo(this.welcomeVideoUrl);
           this.welcomeImageUrl = res.imageUrl || '';
           this.welcomePdfUrl = res.pdfUrl || '';
           this.showWelcomeModal = true;
@@ -77,6 +82,51 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       error: () => {}
     });
+  }
+
+  /**
+   * Normalizes any pasted video link into something that actually plays inside
+   * the popup. Handles YouTube watch/short/embed URLs, Vimeo, Loom, and direct
+   * video files (mp4/webm/etc). Without this, pasting a normal YouTube "watch"
+   * URL into an iframe produces a blank/broken area (YouTube blocks watch pages
+   * from being framed).
+   */
+  setWelcomeVideo(rawUrl: string): void {
+    this.welcomeVideoEmbedUrl = null;
+    this.welcomeVideoIsFile = false;
+
+    const url = (rawUrl || '').trim();
+    if (!url) return;
+
+    // Direct video file → play with native <video> element
+    if (/\.(mp4|webm|ogg|ogv|mov|m4v)(\?.*)?$/i.test(url)) {
+      this.welcomeVideoIsFile = true;
+      this.welcomeVideoEmbedUrl = this.sanitizer.bypassSecurityTrustResourceUrl(url);
+      return;
+    }
+
+    let embedUrl = url;
+
+    // YouTube: watch (?v=), short (youtu.be/), or already-embed URL
+    const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+    if (ytMatch) {
+      embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`;
+    } else {
+      // Loom share URL
+      const loomMatch = url.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9]+)/);
+      if (loomMatch) {
+        embedUrl = `https://www.loom.com/embed/${loomMatch[1]}`;
+      } else {
+        // Vimeo
+        const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+        if (vimeoMatch) {
+          embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+        }
+        // Any other URL: use as-is in the iframe
+      }
+    }
+
+    this.welcomeVideoEmbedUrl = this.sanitizer.bypassSecurityTrustResourceUrl(embedUrl);
   }
 
   dismissWelcomeMessage(): void {

@@ -82,7 +82,7 @@ export class NotificationsComponent implements OnInit {
           notification.isRead = true;
           this.notificationService.refreshUnreadCount();
           if (notification.link) {
-            this.router.navigate([notification.link]);
+            this.navigateToLink(notification.link);
           }
         },
         error: (error) => {
@@ -90,7 +90,17 @@ export class NotificationsComponent implements OnInit {
         }
       });
     } else if (notification.link) {
-      this.router.navigate([notification.link]);
+      this.navigateToLink(notification.link);
+    }
+  }
+
+  // Links may include a query string (e.g. /document-hub?section=requests).
+  // router.navigate([...]) would URL-encode the "?", so route those via navigateByUrl.
+  private navigateToLink(link: string): void {
+    if (link.includes('?')) {
+      this.router.navigateByUrl(link);
+    } else {
+      this.router.navigate([link]);
     }
   }
 

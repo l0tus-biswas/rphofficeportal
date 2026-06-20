@@ -242,7 +242,14 @@
                     <div class="fw-semibold">{{ sub.user?.name || 'Deleted User' }}</div>
                     <small class="text-muted">{{ sub.user?.email || '' }}</small>
                   </td>
-                  <td><span [ngClass]="getStatusBadge(sub.status)">{{ sub.status | titlecase }}</span></td>
+                  <td>
+                    <span [ngClass]="getStatusBadge(sub.status)">{{ sub.status | titlecase }}</span>
+                    <span *ngIf="sub.cancelAtPeriodEnd && sub.status !== 'canceled'"
+                          class="badge bg-warning text-dark d-block mt-1"
+                          title="Agent canceled — will not renew">
+                      <i class="bi bi-clock-history me-1"></i>Cancels at period end
+                    </span>
+                  </td>
                   <td class="fw-semibold">{{ formatAmount(sub.amount) }}<small class="text-muted">/{{ sub.interval || 'month' }}</small></td>
                   <td class="text-nowrap">
                     <small>{{ formatDate(sub.currentPeriodStart) }} – {{ formatDate(sub.currentPeriodEnd) }}</small>

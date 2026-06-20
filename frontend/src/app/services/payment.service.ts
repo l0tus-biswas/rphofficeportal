@@ -44,6 +44,16 @@ export class PaymentService {
     return this.http.get(`${this.apiUrl}/user/subscription`, this.getHeaders());
   }
 
+  // Agent self-service - cancel own subscription at end of current billing period
+  cancelMySubscription(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/payments/cancel-subscription`, {}, this.getHeaders());
+  }
+
+  // Agent self-service - undo a scheduled cancellation
+  reactivateMySubscription(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/payments/reactivate-subscription`, {}, this.getHeaders());
+  }
+
   // Admin - Get all payments
   getAllPayments(page: number = 1, limit: number = 50, filters?: any): Observable<any> {
     let url = `${this.apiUrl}/admin/payments?page=${page}&limit=${limit}`;

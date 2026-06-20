@@ -143,34 +143,42 @@
       <button type="button" class="btn-close" (click)="success = ''" aria-label="Close"></button>
     </div>
 
-    <!-- Stats Summary -->
-    <div *ngIf="stats" class="row mb-4">
-      <div class="col-md-3">
-        <div class="card bg-primary text-white">
+    <!-- Stats Summary (updates with the active filters) -->
+    <div *ngIf="stats" class="row g-3 mb-4">
+      <div class="col-6 col-md">
+        <div class="card bg-primary text-white h-100">
           <div class="card-body">
             <h3>{{ stats.summary.totalSubmissions }}</h3>
             <p class="mb-0">Total Submissions</p>
           </div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card bg-success text-white">
+      <div class="col-6 col-md">
+        <div class="card bg-success text-white h-100">
           <div class="card-body">
             <h3>{{ formatCurrency(stats.summary.totalPremium) }}</h3>
             <p class="mb-0">Total Premium</p>
           </div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card bg-warning text-dark">
+      <div class="col-6 col-md">
+        <div class="card text-white h-100" style="background-color:#6f42c1;">
+          <div class="card-body">
+            <h3>{{ stats.summary.totalMembers || 0 }}</h3>
+            <p class="mb-0">Members (ACA/Health)</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md">
+        <div class="card bg-warning text-dark h-100">
           <div class="card-body">
             <h3>{{ stats.summary.inForceCount || 0 }}</h3>
             <p class="mb-0">In Force</p>
           </div>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card bg-info text-white">
+      <div class="col-6 col-md">
+        <div class="card bg-info text-white h-100">
           <div class="card-body">
             <h3>{{ formatCurrency(stats.summary.inForcePremium || 0) }}</h3>
             <p class="mb-0">In-Force Premium</p>
@@ -438,11 +446,22 @@
             <label class="form-label">Premium Amount *</label>
             <input type="number" class="form-control" [(ngModel)]="currentSubmission.premiumAmount" min="0" step="0.01">
           </div>
-          <!-- 8.1: Number of Members -->
+          <!-- 8.1: Number of Members (ACA / health policies — counts members, not policies) -->
           <div class="col-md-6">
             <label class="form-label">Number of Members</label>
             <input type="number" class="form-control" [(ngModel)]="currentSubmission.numberOfMembers" min="0" step="1"
-                   placeholder="Leave blank if not applicable">
+                   placeholder="e.g. ACA policy with 5 members = 5">
+          </div>
+          <!-- Priority (built-in) -->
+          <div class="col-md-6">
+            <label class="form-label">Priority</label>
+            <select class="form-select" [(ngModel)]="currentSubmission.priority">
+              <option [ngValue]="null">None</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Urgent">Urgent</option>
+            </select>
           </div>
           <!-- 8.8: Training period -->
           <div class="col-md-6 d-flex align-items-end">

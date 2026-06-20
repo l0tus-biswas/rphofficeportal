@@ -93,7 +93,7 @@ const productionSubmissionSchema = new mongoose.Schema({
   // Status tracking
   status: {
     type: String,
-    enum: ['Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled'],
+    enum: ['Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled', 'Lost'],
     default: 'Submitted'
   },
   

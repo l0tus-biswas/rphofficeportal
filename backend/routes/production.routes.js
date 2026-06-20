@@ -727,13 +727,16 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
       return res.status(409).json({ message: 'Duplicate submission detected. Please wait before resubmitting.' });
     }
 
-    // Non-admin users can only submit with 'Submitted' or 'Pending' status
-    let resolvedStatus = status || 'Submitted';
-    if (req.user.role !== 'admin') {
-      const allowedAgentStatuses = ['Submitted', 'Pending'];
-      if (!allowedAgentStatuses.includes(resolvedStatus)) {
-        resolvedStatus = 'Submitted';
-      }
+    // Agents and admins can record any valid production status
+    // (Submitted, Pending, In Force, Lapsed, Cancelled). The Joi schema and the
+    // model enum validate the value, so an invalid status is rejected upstream.
+    const VALID_STATUSES = ['Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled', 'Lost'];
+    let resolvedStatus = status && VALID_STATUSES.includes(status) ? status : 'Submitted';
+
+    // If recording as "In Force" without an explicit date, default it to now
+    let resolvedInForceDate = inForceDate || null;
+    if (resolvedStatus === 'In Force' && !resolvedInForceDate) {
+      resolvedInForceDate = new Date();
     }
 
     // Non-admin: restrict submission date (no more than 1 year in the past)
@@ -761,10 +764,10 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
       status: resolvedStatus,
       isTrainingPeriod: isTrainingPeriod || false,
       customFields: customFields || {},
-      inForceDate: inForceDate || null,
+      inForceDate: resolvedInForceDate,
       priority: priority || null
     });
-    
+
     await submission.save();
     await submission.populate('agent', 'name email');
     await submission.populate('carrier', 'name');
@@ -776,7 +779,24 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
       message: `Your production submission for ${clientName} (${productSold}) has been submitted successfully.`,
       link: '/production'
     }, false).catch(() => {});
-    
+
+    // If created directly as "In Force", run the promotion check chain
+    if (submission.status === 'In Force') {
+      const agentId = submission.agent._id || submission.agent;
+      const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+      (async () => {
+        try {
+          await checkAndNotifyPromotion(agentId);
+          const uplineIds = await getUplineChainIds(agentId);
+          for (const uplineId of uplineIds) {
+            await checkAndNotifyPromotion(uplineId);
+          }
+        } catch (promoErr) {
+          console.error('[Production Create] Promotion chain check error:', promoErr.message);
+        }
+      })();
+    }
+
     res.status(201).json(submission);
   } catch (error) {
     console.error('Error creating production submission:', error);
@@ -841,22 +861,15 @@ router.put('/:id', authenticate, async (req, res) => {
     if (inForceDate !== undefined) submission.inForceDate = inForceDate;
     if (priority !== undefined) submission.priority = priority;
     
-    // Status changes: admins can set any status; agents can only set Submitted/Pending
+    // Status changes: agents and admins can set any valid production status so
+    // they can keep records accurate (In Force, Lapsed, Cancelled, etc.).
     const previousStatus = submission.status;
-    if (status) {
-      if (req.user.role === 'admin') {
-        submission.status = status;
-        // Auto-set inForceDate when status changes to "In Force" and no explicit inForceDate provided
-        if (status === 'In Force' && !submission.inForceDate && !inForceDate) {
-          submission.inForceDate = new Date();
-        }
-      } else {
-        // Agents can only set Submitted or Pending (cannot self-approve)
-        const agentAllowedStatuses = ['Submitted', 'Pending'];
-        if (agentAllowedStatuses.includes(status)) {
-          submission.status = status;
-        }
-        // Silently ignore disallowed status changes by agents
+    const VALID_STATUSES = ['Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled', 'Lost'];
+    if (status && VALID_STATUSES.includes(status)) {
+      submission.status = status;
+      // Auto-set inForceDate when status becomes "In Force" and none provided
+      if (status === 'In Force' && !submission.inForceDate && !inForceDate) {
+        submission.inForceDate = new Date();
       }
     }
     

@@ -81,5 +81,26 @@ jest.mock('../../utils/quickbooks', () => ({
 jest.mock('../../utils/stripe', () => ({
   createPaymentIntent: jest.fn().mockResolvedValue({ client_secret: 'mock_secret' }),
   createCustomer: jest.fn().mockResolvedValue({ id: 'cus_mock' }),
+  createSubscription: jest.fn().mockResolvedValue({
+    id: 'sub_mock',
+    status: 'active',
+    current_period_start: 1700000000,
+    current_period_end: 1702592000,
+    latest_invoice: { payment_intent: { client_secret: 'mock_secret' } }
+  }),
+  cancelSubscription: jest.fn().mockResolvedValue({ id: 'sub_mock', status: 'canceled' }),
+  cancelSubscriptionAtPeriodEnd: jest.fn().mockResolvedValue({
+    id: 'sub_mock',
+    status: 'active',
+    cancel_at_period_end: true,
+    current_period_end: 1702592000
+  }),
+  reactivateSubscription: jest.fn().mockResolvedValue({
+    id: 'sub_mock',
+    status: 'active',
+    cancel_at_period_end: false
+  }),
+  retrieveSubscription: jest.fn().mockResolvedValue({ id: 'sub_mock', status: 'active' }),
+  constructWebhookEvent: jest.fn(),
   constructEvent: jest.fn(),
 }));

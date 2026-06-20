@@ -11,6 +11,8 @@ const {
   createPaymentIntent,
   createSubscription,
   cancelSubscription,
+  cancelSubscriptionAtPeriodEnd,
+  reactivateSubscription,
   retrieveSubscription,
   constructWebhookEvent
 } = require('../utils/stripe');
@@ -224,6 +226,122 @@ router.get('/status', protect, async (req, res) => {
       lastPaymentDate: user.lastPaymentDate,
       paymentAccessEnabled: user.paymentAccessEnabled || subscriptionActive,
       subscription: subscriptionDetails
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/payments/cancel-subscription
+// @desc    Agent self-service: cancel own subscription at the end of the current
+//          billing period (keeps access for the period already paid; not billed
+//          the following cycle). Syncs Stripe + local subscription record.
+// @access  Private
+router.post('/cancel-subscription', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (user.billingExempt) {
+      return sendResponse(res, 400, { message: 'Your account is billing exempt — there is no subscription to cancel.' });
+    }
+
+    if (!user.stripeSubscriptionId) {
+      return sendResponse(res, 404, { message: 'No active subscription found to cancel.' });
+    }
+
+    const subscription = await Subscription.findOne({
+      stripeSubscriptionId: user.stripeSubscriptionId
+    });
+
+    if (subscription && (subscription.status === 'canceled' || subscription.endedAt)) {
+      return sendResponse(res, 400, { message: 'Your subscription is already canceled.' });
+    }
+
+    if (subscription && subscription.cancelAtPeriodEnd) {
+      return sendResponse(res, 400, {
+        message: 'Your subscription is already scheduled to cancel at the end of the current billing period.'
+      });
+    }
+
+    // Schedule cancellation at period end in Stripe (source of truth)
+    const stripeSubscription = await cancelSubscriptionAtPeriodEnd(user.stripeSubscriptionId);
+
+    const periodEnd = stripeSubscription.current_period_end
+      ? new Date(stripeSubscription.current_period_end * 1000)
+      : (subscription ? subscription.currentPeriodEnd : user.nextBillingDate);
+
+    // Sync local subscription record (webhook customer.subscription.updated will
+    // also confirm this, but we update immediately for a responsive UI/admin view)
+    if (subscription) {
+      subscription.cancelAtPeriodEnd = true;
+      subscription.canceledAt = new Date();
+      if (stripeSubscription.current_period_end) {
+        subscription.currentPeriodEnd = periodEnd;
+      }
+      await subscription.save();
+    }
+
+    // Keep status/access unchanged — agent retains access until period end.
+    Notification.createNotification({
+      userId: user._id,
+      type: 'subscription_canceled',
+      title: 'Subscription Cancellation Scheduled',
+      message: `Your subscription will not renew. You'll keep access until ${periodEnd ? periodEnd.toLocaleDateString('en-US') : 'the end of the current billing period'}, and you won't be billed for the next cycle.`,
+      link: '/transactions'
+    }, false).catch(() => {});
+
+    sendResponse(res, 200, {
+      message: 'Your subscription has been canceled. You will not be billed for the next cycle and will keep access until the end of the current billing period.',
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: periodEnd
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/payments/reactivate-subscription
+// @desc    Agent self-service: undo a scheduled cancellation (re-enable renewal)
+//          before the current period ends.
+// @access  Private
+router.post('/reactivate-subscription', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user.stripeSubscriptionId) {
+      return sendResponse(res, 404, { message: 'No subscription found.' });
+    }
+
+    const subscription = await Subscription.findOne({
+      stripeSubscriptionId: user.stripeSubscriptionId
+    });
+
+    if (subscription && subscription.endedAt) {
+      return sendResponse(res, 400, {
+        message: 'Your subscription has already ended and cannot be reactivated. Please start a new subscription.'
+      });
+    }
+
+    const stripeSubscription = await reactivateSubscription(user.stripeSubscriptionId);
+
+    if (subscription) {
+      subscription.cancelAtPeriodEnd = false;
+      subscription.canceledAt = null;
+      subscription.status = stripeSubscription.status || subscription.status;
+      await subscription.save();
+    }
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'subscription_updated',
+      title: 'Subscription Reactivated',
+      message: 'Your subscription will continue to renew as normal.',
+      link: '/transactions'
+    }, false).catch(() => {});
+
+    sendResponse(res, 200, {
+      message: 'Your subscription has been reactivated and will continue to renew.',
+      cancelAtPeriodEnd: false
     });
   } catch (error) {
     errorResponse(res, error);

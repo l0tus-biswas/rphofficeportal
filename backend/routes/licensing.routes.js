@@ -41,6 +41,31 @@ const upload = multer({
   }
 });
 
+/**
+ * Single source of truth for whether an agent counts as licensed.
+ * Mirrors the logic used in the dashboard/detail endpoints so the admin list,
+ * agent profile, and dashboard never disagree. An agent is licensed if ANY of:
+ *  - their LicensingProgress.isLicensed flag is set
+ *  - the final checklist step (state appointment) is approved
+ *  - their APA application self-reports a current license / license types
+ *  - their user metadata flags currentlyLicensed (imported/migrated agents)
+ */
+function isAgentLicensed(progress, apa, agentMetadata) {
+  if (progress) {
+    if (progress.isLicensed) return true;
+    if (progress.checklist?.stateAppointment?.approved) return true;
+  }
+  if (apa?.licensingStatus?.currentlyLicensed) return true;
+  if (apa?.licensingStatus?.licenseTypes?.length > 0) return true;
+  if (agentMetadata) {
+    const meta = agentMetadata.get
+      ? agentMetadata.get('currentlyLicensed')
+      : agentMetadata.currentlyLicensed;
+    if (meta === 'true' || meta === true) return true;
+  }
+  return false;
+}
+
 // @route   GET /api/licensing
 // @desc    Get all licensing progress (admin) or own progress (agent)
 // @access  Private
@@ -48,76 +73,91 @@ router.get('/', authenticate, async (req, res) => {
   try {
     // If admin, return all agents with their licensing progress
     if (req.user.role === 'admin') {
-      // Get all agents
+      // Get all agents (include metadata so we can resolve imported license flags)
       const agents = await User.find({ role: 'agent', isActive: true })
-        .select('name email phone')
+        .select('name email phone metadata createdAt')
         .sort({ name: 1 });
-      
+
       // Get all licensing progress records
       const progressRecords = await LicensingProgress.find()
         .populate('lastUpdatedBy', 'name');
-      
+
       // Map progress to agents
       const progressMap = {};
       progressRecords.forEach(record => {
         progressMap[record.agent.toString()] = record;
       });
-      
+
+      // Map APA applications (self-reported licensing status) by user id
+      const apaRecords = await APAApplication.find({
+        user: { $in: agents.map(a => a._id) }
+      }).select('user licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
+      const apaMap = {};
+      apaRecords.forEach(rec => {
+        if (rec.user) apaMap[rec.user.toString()] = rec;
+      });
+
       // Build result with all agents
       const result = agents.map(agent => {
         const progress = progressMap[agent._id.toString()];
+        const apa = apaMap[agent._id.toString()];
+        const licensed = isAgentLicensed(progress, apa, agent.metadata);
+
         if (progress) {
-          return {
-            ...progress.toObject(),
-            agent: {
-              _id: agent._id,
-              name: agent.name,
-              email: agent.email,
-              phone: agent.phone
-            }
+          const obj = progress.toObject();
+          // Reflect cross-source licensing status so licensed agents never
+          // get bucketed as unlicensed in the admin view.
+          obj.isLicensed = licensed;
+          if (licensed) obj.completionPercentage = 100;
+          obj.agent = {
+            _id: agent._id,
+            name: agent.name,
+            email: agent.email,
+            phone: agent.phone
           };
-        } else {
-          // Create default progress object for agents without records
-          const enrollmentDate = agent.createdAt || new Date();
-          const licensingDeadline = new Date(enrollmentDate);
-          licensingDeadline.setDate(licensingDeadline.getDate() + 60);
-          
-          const now = new Date();
-          const diffTime = licensingDeadline - now;
-          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          return {
-            agent: {
-              _id: agent._id,
-              name: agent.name,
-              email: agent.email,
-              phone: agent.phone
-            },
-            enrollmentDate: enrollmentDate,
-            licensingDeadline: licensingDeadline,
-            daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
-            isLicensed: false,
-            completionPercentage: 0,
-            checklist: {
-              preLicenseCourse: { completed: false },
-              stateExam: { scheduled: false, attempts: 0 },
-              fingerprinting: { scheduled: false },
-              diceApplication: { submitted: false },
-              stateAppointment: { approved: false }
-            },
-            documents: [],
-            adminNotes: ''
-          };
+          return obj;
         }
+
+        // Create default progress object for agents without records
+        const enrollmentDate = agent.createdAt || new Date();
+        const licensingDeadline = new Date(enrollmentDate);
+        licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+
+        const now = new Date();
+        const diffTime = licensingDeadline - now;
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+          agent: {
+            _id: agent._id,
+            name: agent.name,
+            email: agent.email,
+            phone: agent.phone
+          },
+          enrollmentDate: enrollmentDate,
+          licensingDeadline: licensingDeadline,
+          daysRemaining: licensed ? 0 : (daysRemaining > 0 ? daysRemaining : 0),
+          isLicensed: licensed,
+          completionPercentage: licensed ? 100 : 0,
+          checklist: {
+            preLicenseCourse: { completed: false },
+            stateExam: { scheduled: false, attempts: 0, scheduleHistory: [] },
+            fingerprinting: { scheduled: false, attempts: 0, scheduleHistory: [] },
+            diceApplication: { submitted: false },
+            stateAppointment: { approved: false }
+          },
+          documents: [],
+          adminNotes: ''
+        };
       });
-      
+
       // Apply filters if provided
       let filteredResult = result;
       if (req.query.isLicensed !== undefined) {
         const isLicensed = req.query.isLicensed === 'true';
         filteredResult = result.filter(r => r.isLicensed === isLicensed);
       }
-      
+
       return res.json(filteredResult);
     }
     
@@ -310,12 +350,39 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
       });
     }
     
-    const { checklistItem, data } = req.body;
-    
+    const { checklistItem, data, action } = req.body;
+
+    // Reschedule action: record a new scheduled attempt in the history,
+    // bump the attempt counter, and update the current date. Lets admins
+    // clearly track agents who schedule the state exam / fingerprinting
+    // more than once.
+    if (action === 'addReschedule' && checklistItem &&
+        (checklistItem === 'stateExam' || checklistItem === 'fingerprinting')) {
+      const item = licensingProgress.checklist[checklistItem];
+      const entry = {
+        date: data?.date || Date.now(),
+        outcome: data?.outcome || 'Scheduled',
+        notes: data?.notes || '',
+        recordedAt: Date.now(),
+        recordedBy: req.user._id
+      };
+      if (!Array.isArray(item.scheduleHistory)) item.scheduleHistory = [];
+      item.scheduleHistory.push(entry);
+      item.attempts = (item.attempts || 0) + 1;
+      item.scheduled = true;
+      if (checklistItem === 'stateExam') item.scheduledDate = entry.date;
+      if (checklistItem === 'fingerprinting') item.appointmentDate = entry.date;
+
+      licensingProgress.lastUpdatedBy = req.user._id;
+      await licensingProgress.save();
+      await licensingProgress.populate('agent', 'name email phone');
+      return res.json(licensingProgress);
+    }
+
     // Update specific checklist item
     if (checklistItem && licensingProgress.checklist[checklistItem]) {
       Object.assign(licensingProgress.checklist[checklistItem], data);
-      
+
       // If marking as completed/scheduled/approved, set date
       if (checklistItem === 'preLicenseCourse' && data.completed) {
         licensingProgress.checklist[checklistItem].completedDate = data.completedDate || Date.now();

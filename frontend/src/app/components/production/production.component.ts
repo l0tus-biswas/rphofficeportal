@@ -48,9 +48,10 @@ export class ProductionComponent implements OnInit {
   productCategoryMap: Record<string, string> = {};
   statusValues = STATUS_VALUES;
   
-  // Agents can only use Submitted/Pending; Admins can use all statuses
+  // All users (agents + admins) can record the full set of production statuses
+  // (Submitted, Pending, In Force, Lapsed, Cancelled) so records stay accurate.
   get allowedStatuses(): string[] {
-    return this.isAdmin ? this.statusValues : ['Submitted', 'Pending'];
+    return this.statusValues;
   }
   
   // Form for new/edit submission
@@ -268,6 +269,7 @@ export class ProductionComponent implements OnInit {
       notes: '',
       status: 'Submitted',
       numberOfMembers: null,
+      priority: null,
       isTrainingPeriod: false,
       customFields: cf
     };
@@ -326,7 +328,7 @@ export class ProductionComponent implements OnInit {
         },
         error: (error) => {
           console.error('Error updating submission:', error);
-          this.error = 'Failed to update submission';
+          this.error = this.extractError(error, 'Failed to update submission');
           this.saving = false;
         }
       });
@@ -342,11 +344,21 @@ export class ProductionComponent implements OnInit {
         },
         error: (error) => {
           console.error('Error creating submission:', error);
-          this.error = 'Failed to create submission';
+          this.error = this.extractError(error, 'Failed to create submission');
           this.saving = false;
         }
       });
     }
+  }
+
+  /** Pull the real server error message (validation detail or message) so the
+   *  user sees WHY a submission failed instead of a generic error. */
+  private extractError(error: any, fallback: string): string {
+    const body = error?.error;
+    if (body?.errors?.length) {
+      return body.errors.map((e: any) => e.message || e).join('; ');
+    }
+    return body?.message || error?.message || fallback;
   }
 
   deleteSubmission(id: string): void {
@@ -407,7 +419,8 @@ export class ProductionComponent implements OnInit {
       'Pending': 'bg-warning',
       'In Force': 'bg-success',
       'Lapsed': 'bg-secondary',
-      'Cancelled': 'bg-danger'
+      'Cancelled': 'bg-danger',
+      'Lost': 'bg-dark'
     };
     return classes[status] || 'bg-secondary';
   }

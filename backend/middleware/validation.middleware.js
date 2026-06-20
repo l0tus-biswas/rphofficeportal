@@ -146,7 +146,7 @@ exports.schemas = {
     carrier: Joi.string().hex().length(24).required(),
     premiumAmount: Joi.number().min(0).required(),
     notes: Joi.string().trim().max(2000).optional().allow('', null),
-    status: Joi.string().valid('Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled').optional(),
+    status: Joi.string().valid('Submitted', 'Pending', 'In Force', 'Lapsed', 'Cancelled', 'Lost').optional(),
     isTrainingPeriod: Joi.boolean().optional(),
     customFields: Joi.object().optional(),
     inForceDate: Joi.date().optional().allow(null),

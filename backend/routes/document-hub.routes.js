@@ -640,8 +640,8 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
         userId: agentId,
         type: 'document_request',
         title: 'Document Requested',
-        message: `Admin has requested: "${title}". ${dueDate ? 'Due: ' + new Date(dueDate).toLocaleDateString() : ''}`,
-        link: '/document-hub'
+        message: `Admin has requested: "${title}". Upload it from RHP Vault.${dueDate ? ' Due: ' + new Date(dueDate).toLocaleDateString() : ''}`,
+        link: '/document-hub?section=requests'
       }, false).catch(() => {});
     }
 
@@ -653,8 +653,8 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
         sendNotificationEmail({
           toEmail: agent.email,
           title: 'Document Requested',
-          message: `Hello ${agent.name},\n\nA document has been requested from you: "${title}".${dueLine}\n\n${description || ''}`.trim(),
-          link: '/document-hub',
+          message: `Hello ${agent.name},\n\nA document has been requested from you: "${title}".${dueLine}\n\nUpload it directly from the RHP Vault page.\n\n${description || ''}`.trim(),
+          link: '/document-hub?section=requests',
           actionLabel: 'Upload Document'
         }).catch(err => console.error('Failed to send document request email:', err.message));
       }
@@ -716,7 +716,7 @@ router.post('/requests/:id/respond', authenticate, handleMulterError(requestUplo
       type: 'document_submitted',
       title: 'Document Submitted',
       message: `${req.user.name} responded to "${request.title}"`,
-      link: '/document-hub'
+      link: '/document-hub?section=requests'
     }, false).catch(() => {});
 
     res.json({ message: 'Document submitted successfully' });
@@ -769,7 +769,7 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
       type: 'document_reviewed',
       title: `Document ${status === 'approved' ? 'Approved' : 'Needs Revision'}`,
       message: `Your submission for "${request.title}" was ${status}.${reviewNotes ? ' Notes: ' + reviewNotes : ''}`,
-      link: '/document-hub'
+      link: '/document-hub?section=requests'
     }, false).catch(() => {});
 
     res.json({ message: `Response ${status}` });

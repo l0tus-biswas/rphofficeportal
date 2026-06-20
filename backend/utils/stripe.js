@@ -85,6 +85,36 @@ const cancelSubscription = async (subscriptionId) => {
   }
 };
 
+// Schedule cancellation at the end of the current billing period.
+// The subscription stays active (access retained) until period end, and Stripe
+// does not bill the following cycle.
+const cancelSubscriptionAtPeriodEnd = async (subscriptionId) => {
+  ensureStripeConfigured();
+  try {
+    const subscription = await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true
+    });
+    return subscription;
+  } catch (error) {
+    console.error('Stripe schedule cancellation error:', error);
+    throw error;
+  }
+};
+
+// Undo a scheduled cancellation (re-enable auto-renew) while still active.
+const reactivateSubscription = async (subscriptionId) => {
+  ensureStripeConfigured();
+  try {
+    const subscription = await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false
+    });
+    return subscription;
+  } catch (error) {
+    console.error('Stripe reactivate subscription error:', error);
+    throw error;
+  }
+};
+
 const updateSubscription = async (subscriptionId, params) => {
   ensureStripeConfigured();
   try {
@@ -150,6 +180,8 @@ module.exports = {
   createPaymentIntent,
   createSubscription,
   cancelSubscription,
+  cancelSubscriptionAtPeriodEnd,
+  reactivateSubscription,
   updateSubscription,
   retrieveSubscription,
   retrievePaymentIntent,

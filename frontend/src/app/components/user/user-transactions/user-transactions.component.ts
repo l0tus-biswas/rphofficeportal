@@ -14,7 +14,11 @@ export class UserTransactionsComponent implements OnInit {
   
   loading = true;
   error = '';
-  
+
+  cancelProcessing = false;
+  actionMessage = '';
+  actionError = '';
+
   currentPage = 1;
   pageSize = 20;
   totalItems = 0;
@@ -62,6 +66,63 @@ export class UserTransactionsComponent implements OnInit {
       },
       error: (error) => {
         console.log('No subscription found');
+      }
+    });
+  }
+
+  get canCancel(): boolean {
+    return !!this.subscription
+      && ['active', 'trialing', 'past_due'].includes(this.subscription.status)
+      && !this.subscription.cancelAtPeriodEnd;
+  }
+
+  get cancellationScheduled(): boolean {
+    return !!this.subscription
+      && this.subscription.cancelAtPeriodEnd
+      && this.subscription.status !== 'canceled';
+  }
+
+  cancelSubscription(): void {
+    const endDate = this.subscription?.currentPeriodEnd
+      ? this.formatDate(this.subscription.currentPeriodEnd)
+      : 'the end of your current billing period';
+    const confirmed = confirm(
+      `Are you sure you want to cancel your subscription?\n\n` +
+      `You'll keep access until ${endDate}, and you won't be billed for the next cycle.`
+    );
+    if (!confirmed) return;
+
+    this.cancelProcessing = true;
+    this.actionMessage = '';
+    this.actionError = '';
+    this.paymentService.cancelMySubscription().subscribe({
+      next: (response) => {
+        this.actionMessage = response?.message || 'Your subscription has been canceled.';
+        this.cancelProcessing = false;
+        this.loadSubscription();
+        this.loadPaymentStatus();
+      },
+      error: (error) => {
+        this.actionError = error.error?.message || 'Failed to cancel subscription. Please try again or contact support.';
+        this.cancelProcessing = false;
+      }
+    });
+  }
+
+  reactivateSubscription(): void {
+    this.cancelProcessing = true;
+    this.actionMessage = '';
+    this.actionError = '';
+    this.paymentService.reactivateMySubscription().subscribe({
+      next: (response) => {
+        this.actionMessage = response?.message || 'Your subscription has been reactivated.';
+        this.cancelProcessing = false;
+        this.loadSubscription();
+        this.loadPaymentStatus();
+      },
+      error: (error) => {
+        this.actionError = error.error?.message || 'Failed to reactivate subscription. Please try again or contact support.';
+        this.cancelProcessing = false;
       }
     });
   }
