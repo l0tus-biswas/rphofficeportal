@@ -16,7 +16,7 @@ export interface LicensingProgress {
   checklist: {
     preLicenseCourse: ChecklistItem;
     stateExam: StateExamItem;
-    fingerprinting: ChecklistItem;
+    fingerprinting: FingerprintingItem;
     diceApplication: ChecklistItem;
     stateAppointment: ChecklistItem;
   };
@@ -39,9 +39,23 @@ export interface ChecklistItem {
   notes?: string;
 }
 
+export interface ScheduleHistoryEntry {
+  date?: Date;
+  outcome?: string;
+  notes?: string;
+  recordedAt?: Date;
+  recordedBy?: any;
+}
+
 export interface StateExamItem extends ChecklistItem {
   attempts: number;
   scheduledDate?: Date;
+  scheduleHistory?: ScheduleHistoryEntry[];
+}
+
+export interface FingerprintingItem extends ChecklistItem {
+  attempts?: number;
+  scheduleHistory?: ScheduleHistoryEntry[];
 }
 
 export interface Document {
@@ -81,6 +95,15 @@ export class LicensingService {
   // Update checklist item
   updateChecklistItem(agentId: string, checklistItem: string, data: any): Observable<LicensingProgress> {
     return this.http.put<LicensingProgress>(`${this.apiUrl}/${agentId}/checklist`, {
+      checklistItem,
+      data
+    });
+  }
+
+  // Record a new scheduled attempt / reschedule for stateExam or fingerprinting
+  addReschedule(agentId: string, checklistItem: string, data: { date: string; outcome?: string; notes?: string }): Observable<LicensingProgress> {
+    return this.http.put<LicensingProgress>(`${this.apiUrl}/${agentId}/checklist`, {
+      action: 'addReschedule',
       checklistItem,
       data
     });

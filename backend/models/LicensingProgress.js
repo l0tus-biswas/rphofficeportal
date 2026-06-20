@@ -59,6 +59,21 @@ const licensingProgressSchema = new mongoose.Schema({
         default: 0
       },
       scheduledDate: Date,
+      // History of every scheduled/rescheduled attempt
+      scheduleHistory: [{
+        date: Date,
+        outcome: {
+          type: String,
+          enum: ['Scheduled', 'Passed', 'Failed', 'No-show', 'Rescheduled', 'Cancelled'],
+          default: 'Scheduled'
+        },
+        notes: String,
+        recordedAt: { type: Date, default: Date.now },
+        recordedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User'
+        }
+      }],
       documents: [{
         filename: String,
         url: String,
@@ -70,14 +85,33 @@ const licensingProgressSchema = new mongoose.Schema({
       }],
       notes: String
     },
-    
+
     // 3. Fingerprinting appointment scheduled
     fingerprinting: {
       scheduled: {
         type: Boolean,
         default: false
       },
+      attempts: {
+        type: Number,
+        default: 0
+      },
       appointmentDate: Date,
+      // History of every scheduled/rescheduled appointment
+      scheduleHistory: [{
+        date: Date,
+        outcome: {
+          type: String,
+          enum: ['Scheduled', 'Completed', 'No-show', 'Rescheduled', 'Cancelled'],
+          default: 'Scheduled'
+        },
+        notes: String,
+        recordedAt: { type: Date, default: Date.now },
+        recordedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'User'
+        }
+      }],
       documents: [{
         filename: String,
         url: String,

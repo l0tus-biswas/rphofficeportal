@@ -1,13 +1,14 @@
 /**
- * RHP Vault / Onboarding Docs - Issue #11 Regression Tests
+ * RHP Vault Document Requests - Regression Tests
  *
  * Validates:
- * 1. RHP Vault is focused on document storage/sharing (library)
- * 2. Request Document functionality is admin-only in RHP Vault
- * 3. Agents can't access requests section in RHP Vault
- * 4. Onboarding Docs shows pending + completed requests for agents
- * 5. Admin can still create/review requests via RHP Vault
- * 6. Agent can submit responses via Onboarding Hub API
+ * 1. RHP Vault library: both roles read, only admin writes folders/files
+ * 2. Request Document creation/review is admin-only
+ * 3. Agents see and respond to their own requests directly in RHP Vault
+ *    (the "Document Requests" section), without being redirected elsewhere
+ * 4. Admin can create/review/delete requests
+ * 5. Agent submits responses via the document-hub respond API
+ * 6. Onboarding Hub endpoints remain independent
  */
 
 const request = require('supertest');

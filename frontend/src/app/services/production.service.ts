@@ -16,7 +16,7 @@ export interface ProductionSubmission {
   carrier: any;
   premiumAmount: number;
   notes?: string;
-  status: 'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled';
+  status: 'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled' | 'Lost';
   priority?: 'Low' | 'Medium' | 'High' | 'Urgent' | null;
   isTrainingPeriod?: boolean;
   customFields?: Record<string, any>;
@@ -137,12 +137,13 @@ export const PRODUCT_TYPES = [
   'Other'
 ];
 
-export const STATUS_VALUES: Array<'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled'> = [
+export const STATUS_VALUES: Array<'Submitted' | 'Pending' | 'In Force' | 'Lapsed' | 'Cancelled' | 'Lost'> = [
   'Submitted',
   'Pending',
   'In Force',
   'Lapsed',
-  'Cancelled'
+  'Cancelled',
+  'Lost'
 ];
 
 export type ProductCategory =

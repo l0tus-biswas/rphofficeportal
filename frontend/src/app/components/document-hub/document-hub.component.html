@@ -54,6 +54,14 @@
         </div>
       </div>
     </div>
+    <div *ngIf="!isAdmin" class="col-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100 stat-card">
+        <div class="card-body">
+          <div class="text-muted small">Pending Requests</div>
+          <div class="h4 mb-0" [class.text-warning]="pendingRequestCount > 0">{{ pendingRequestCount }}</div>
+        </div>
+      </div>
+    </div>
     <div *ngIf="isAdmin" class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm h-100 stat-card">
         <div class="card-body">
@@ -68,18 +76,21 @@
     <button class="btn btn-sm" [class.btn-primary]="activeSection === 'library'" [class.btn-outline-primary]="activeSection !== 'library'" (click)="switchSection('library')">
       <i class="bi bi-archive me-1"></i>Library
     </button>
-    <button *ngIf="isAdmin" class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
-      <i class="bi bi-send me-1"></i>Requests
+    <button class="btn btn-sm" [class.btn-primary]="activeSection === 'requests'" [class.btn-outline-primary]="activeSection !== 'requests'" (click)="switchSection('requests')">
+      <i class="bi bi-send me-1"></i>{{ isAdmin ? 'Requests' : 'Document Requests' }}
+      <span *ngIf="!isAdmin && pendingRequestCount > 0" class="badge bg-danger ms-1">{{ pendingRequestCount }}</span>
     </button>
   </div>
 
-  <!-- Agent notice: document requests are in Onboarding Docs -->
-  <div *ngIf="!loading && !isAdmin && pendingRequestCount > 0" class="alert alert-info d-flex align-items-center mb-3">
-    <i class="bi bi-info-circle-fill me-2"></i>
+  <!-- Agent notice: upload requested documents right here in RHP Vault -->
+  <div *ngIf="!loading && !isAdmin && pendingRequestCount > 0 && activeSection !== 'requests'" class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
     <div>
+      <i class="bi bi-info-circle-fill me-2"></i>
       You have <strong>{{ pendingRequestCount }}</strong> pending document request{{ pendingRequestCount > 1 ? 's' : '' }}.
-      <a routerLink="/onboarding-hub" class="alert-link">Go to Onboarding Docs</a> to upload required documents.
     </div>
+    <button class="btn btn-sm btn-primary" (click)="switchSection('requests')">
+      <i class="bi bi-upload me-1"></i>Upload Requested Document{{ pendingRequestCount > 1 ? 's' : '' }}
+    </button>
   </div>
 
   <!-- Breadcrumb + Search -->
@@ -216,9 +227,9 @@
     </div>
   </div>
 
-  <!-- Document Requests Section (Admin Only) -->
-  <div *ngIf="!loading && activeSection === 'requests' && isAdmin" class="mt-4">
-    <h5 class="mb-3"><i class="bi bi-send me-2"></i>Document Requests</h5>
+  <!-- Document Requests Section -->
+  <div *ngIf="!loading && activeSection === 'requests'" class="mt-4">
+    <h5 class="mb-3"><i class="bi bi-send me-2"></i>{{ isAdmin ? 'Document Requests' : 'My Document Requests' }}</h5>
     <div *ngIf="requests.length === 0" class="card border-0 shadow-sm">
       <div class="card-body text-center py-4 text-muted">
         <i class="bi bi-inbox fs-2 d-block mb-2"></i>

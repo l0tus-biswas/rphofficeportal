@@ -78,7 +78,7 @@
 
     <!-- Subscription Details -->
     <div class="card mb-4" *ngIf="subscription">
-      <div class="card-header">
+      <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Current Subscription</h5>
       </div>
       <div class="card-body">
@@ -96,8 +96,42 @@
             <strong>Started:</strong> {{ formatDate(subscription.currentPeriodStart) }}
           </div>
           <div class="col-md-3 mb-2">
-            <strong>Renews:</strong> {{ formatDate(subscription.currentPeriodEnd) }}
+            <strong>{{ cancellationScheduled ? 'Access ends:' : 'Renews:' }}</strong>
+            {{ formatDate(subscription.currentPeriodEnd) }}
           </div>
+        </div>
+
+        <!-- Action feedback -->
+        <div *ngIf="actionMessage" class="alert alert-success mt-3 mb-0">
+          <i class="bi bi-check-circle-fill me-2"></i>{{ actionMessage }}
+        </div>
+        <div *ngIf="actionError" class="alert alert-danger mt-3 mb-0">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ actionError }}
+        </div>
+
+        <!-- Cancellation scheduled notice + undo -->
+        <div *ngIf="cancellationScheduled" class="alert alert-warning mt-3 mb-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <span>
+            <i class="bi bi-clock-history me-2"></i>
+            Your subscription is set to cancel on <strong>{{ formatDate(subscription.currentPeriodEnd) }}</strong>.
+            You won't be billed again and will keep access until then.
+          </span>
+          <button class="btn btn-sm btn-outline-success" (click)="reactivateSubscription()" [disabled]="cancelProcessing">
+            <span *ngIf="cancelProcessing" class="spinner-border spinner-border-sm me-1"></span>
+            Keep Subscription
+          </button>
+        </div>
+
+        <!-- Cancel button -->
+        <div *ngIf="canCancel" class="mt-3">
+          <button class="btn btn-outline-danger" (click)="cancelSubscription()" [disabled]="cancelProcessing">
+            <span *ngIf="cancelProcessing" class="spinner-border spinner-border-sm me-1"></span>
+            <i *ngIf="!cancelProcessing" class="bi bi-x-circle me-1"></i>
+            Cancel Subscription
+          </button>
+          <small class="text-muted d-block mt-2">
+            You'll keep access until the end of your current billing period and won't be charged for the next cycle.
+          </small>
         </div>
       </div>
     </div>

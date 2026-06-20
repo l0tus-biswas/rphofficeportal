@@ -146,8 +146,12 @@
                     {{ getChecklistItemStatus(selectedAgent.checklist.preLicenseCourse) }}
                   </span>
                 </div>
-                <div *ngIf="selectedAgent.checklist.preLicenseCourse.completed" class="small text-muted mb-2">
-                  Completed: {{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}
+                <div class="mb-2">
+                  <label class="small fw-semibold d-block">Completed Date:</label>
+                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                         [value]="toDateInput(selectedAgent.checklist.preLicenseCourse.completedDate)"
+                         (change)="updateChecklistDate('preLicenseCourse', 'completedDate', $any($event.target).value)">
+                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['preLicenseCourse']">
@@ -190,17 +194,68 @@
                 </div>
                 <div class="row g-2 mb-2">
                   <div class="col-md-6">
-                    <label class="small">Attempts:</label>
-                    <input type="number" 
-                           class="form-control form-control-sm" 
+                    <label class="small fw-semibold">Scheduled Date:</label>
+                    <input *ngIf="isAdmin" type="date" class="form-control form-control-sm"
+                           [value]="toDateInput(selectedAgent.checklist.stateExam.scheduledDate)"
+                           (change)="updateChecklistDate('stateExam', 'scheduledDate', $any($event.target).value)">
+                    <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small fw-semibold">Attempts:</label>
+                    <input type="number"
+                           class="form-control form-control-sm"
                            [value]="selectedAgent.checklist.stateExam.attempts"
                            [disabled]="!isAdmin"
                            (change)="updateChecklistItem('stateExam', 'attempts', ($any($event.target)).value)"
                            min="0">
                   </div>
-                  <div class="col-md-6" *ngIf="selectedAgent.checklist.stateExam.scheduledDate">
-                    <label class="small">Scheduled Date:</label>
-                    <div class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
+                </div>
+
+                <!-- Attempt / reschedule history -->
+                <div *ngIf="selectedAgent.checklist.stateExam.scheduleHistory?.length" class="mb-2">
+                  <strong class="small d-block mb-1">Attempts / Reschedules:</strong>
+                  <ul class="list-group list-group-flush small">
+                    <li *ngFor="let h of selectedAgent.checklist.stateExam.scheduleHistory; let i = index"
+                        class="list-group-item px-2 py-1">
+                      <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
+                      <strong>{{ formatDate(h.date) }}</strong>
+                      <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
+                      <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Add attempt / reschedule (admin) -->
+                <div *ngIf="isAdmin" class="mb-2">
+                  <button class="btn btn-sm btn-outline-secondary" (click)="toggleReschedule('stateExam')">
+                    <i class="bi bi-calendar-plus"></i> {{ showReschedule['stateExam'] ? 'Cancel' : 'Add Attempt / Reschedule' }}
+                  </button>
+                  <div *ngIf="showReschedule['stateExam']" class="border rounded p-2 mt-2 bg-light">
+                    <div class="row g-2">
+                      <div class="col-md-5">
+                        <label class="small">Date</label>
+                        <input type="date" class="form-control form-control-sm" [(ngModel)]="rescheduleForm['stateExam'].date">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="small">Outcome</label>
+                        <select class="form-select form-select-sm" [(ngModel)]="rescheduleForm['stateExam'].outcome">
+                          <option>Scheduled</option>
+                          <option>Passed</option>
+                          <option>Failed</option>
+                          <option>No-show</option>
+                          <option>Rescheduled</option>
+                          <option>Cancelled</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="small">Notes</label>
+                        <input type="text" class="form-control form-control-sm" [(ngModel)]="rescheduleForm['stateExam'].notes" placeholder="Optional">
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-primary mt-2" (click)="addReschedule('stateExam')" [disabled]="savingReschedule['stateExam']">
+                      <span *ngIf="savingReschedule['stateExam']" class="spinner-border spinner-border-sm me-1"></span>
+                      Save Attempt
+                    </button>
                   </div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
@@ -242,8 +297,70 @@
                     {{ getChecklistItemStatus(selectedAgent.checklist.fingerprinting) }}
                   </span>
                 </div>
-                <div *ngIf="selectedAgent.checklist.fingerprinting.appointmentDate" class="small text-muted mb-2">
-                  Appointment: {{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="small fw-semibold">Appointment Date:</label>
+                    <input *ngIf="isAdmin" type="date" class="form-control form-control-sm"
+                           [value]="toDateInput(selectedAgent.checklist.fingerprinting.appointmentDate)"
+                           (change)="updateChecklistDate('fingerprinting', 'appointmentDate', $any($event.target).value)">
+                    <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}</div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="small fw-semibold">Attempts:</label>
+                    <input type="number"
+                           class="form-control form-control-sm"
+                           [value]="selectedAgent.checklist.fingerprinting.attempts || 0"
+                           [disabled]="!isAdmin"
+                           (change)="updateChecklistItem('fingerprinting', 'attempts', ($any($event.target)).value)"
+                           min="0">
+                  </div>
+                </div>
+
+                <!-- Attempt / reschedule history -->
+                <div *ngIf="selectedAgent.checklist.fingerprinting.scheduleHistory?.length" class="mb-2">
+                  <strong class="small d-block mb-1">Attempts / Reschedules:</strong>
+                  <ul class="list-group list-group-flush small">
+                    <li *ngFor="let h of selectedAgent.checklist.fingerprinting.scheduleHistory; let i = index"
+                        class="list-group-item px-2 py-1">
+                      <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
+                      <strong>{{ formatDate(h.date) }}</strong>
+                      <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
+                      <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Add attempt / reschedule (admin) -->
+                <div *ngIf="isAdmin" class="mb-2">
+                  <button class="btn btn-sm btn-outline-secondary" (click)="toggleReschedule('fingerprinting')">
+                    <i class="bi bi-calendar-plus"></i> {{ showReschedule['fingerprinting'] ? 'Cancel' : 'Add Attempt / Reschedule' }}
+                  </button>
+                  <div *ngIf="showReschedule['fingerprinting']" class="border rounded p-2 mt-2 bg-light">
+                    <div class="row g-2">
+                      <div class="col-md-5">
+                        <label class="small">Date</label>
+                        <input type="date" class="form-control form-control-sm" [(ngModel)]="rescheduleForm['fingerprinting'].date">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="small">Outcome</label>
+                        <select class="form-select form-select-sm" [(ngModel)]="rescheduleForm['fingerprinting'].outcome">
+                          <option>Scheduled</option>
+                          <option>Completed</option>
+                          <option>No-show</option>
+                          <option>Rescheduled</option>
+                          <option>Cancelled</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="small">Notes</label>
+                        <input type="text" class="form-control form-control-sm" [(ngModel)]="rescheduleForm['fingerprinting'].notes" placeholder="Optional">
+                      </div>
+                    </div>
+                    <button class="btn btn-sm btn-primary mt-2" (click)="addReschedule('fingerprinting')" [disabled]="savingReschedule['fingerprinting']">
+                      <span *ngIf="savingReschedule['fingerprinting']" class="spinner-border spinner-border-sm me-1"></span>
+                      Save Attempt
+                    </button>
+                  </div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['fingerprinting']">
@@ -284,8 +401,12 @@
                     {{ getChecklistItemStatus(selectedAgent.checklist.diceApplication) }}
                   </span>
                 </div>
-                <div *ngIf="selectedAgent.checklist.diceApplication.submittedDate" class="small text-muted mb-2">
-                  Submitted: {{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}
+                <div class="mb-2">
+                  <label class="small fw-semibold d-block">Submitted Date:</label>
+                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                         [value]="toDateInput(selectedAgent.checklist.diceApplication.submittedDate)"
+                         (change)="updateChecklistDate('diceApplication', 'submittedDate', $any($event.target).value)">
+                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['diceApplication']">
@@ -327,8 +448,12 @@
                     {{ getChecklistItemStatus(selectedAgent.checklist.stateAppointment) }}
                   </span>
                 </div>
-                <div *ngIf="selectedAgent.checklist.stateAppointment.approvedDate" class="small text-muted mb-2">
-                  Approved: {{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}
+                <div class="mb-2">
+                  <label class="small fw-semibold d-block">Approved Date:</label>
+                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                         [value]="toDateInput(selectedAgent.checklist.stateAppointment.approvedDate)"
+                         (change)="updateChecklistDate('stateAppointment', 'approvedDate', $any($event.target).value)">
+                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateAppointment']">

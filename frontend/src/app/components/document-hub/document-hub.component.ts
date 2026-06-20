@@ -1,5 +1,6 @@
 import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { DocumentHubService, DocFolder, DocHubFile, DocRequest, DocRequestResponse } from '../../services/document-hub.service';
 import { AuthService } from '../../services/auth.service';
@@ -106,13 +107,18 @@ export class DocumentHubComponent implements OnInit {
   constructor(
     private docHubService: DocumentHubService,
     private authService: AuthService,
-    private adminService: AdminService
+    private adminService: AdminService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
     this.isAdmin = user?.role === 'admin';
-    this.activeSection = 'library';
+    // Allow deep-linking straight to the requests section (e.g. from a
+    // document-request notification: /document-hub?section=requests).
+    this.activeSection = this.route.snapshot.queryParamMap.get('section') === 'requests'
+      ? 'requests'
+      : 'library';
     this.loadFolders();
     this.loadFiles();
     this.loadRequests();

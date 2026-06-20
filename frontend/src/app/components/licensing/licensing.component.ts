@@ -25,6 +25,11 @@ export class LicensingComponent implements OnInit {
   uploadingFile: { [key: string]: boolean } = {};
   uploadFileNotes: { [key: string]: string } = {};
 
+  // Reschedule form state (per checklist item)
+  rescheduleForm: { [key: string]: { date: string; outcome: string; notes: string } } = {};
+  showReschedule: { [key: string]: boolean } = {};
+  savingReschedule: { [key: string]: boolean } = {};
+
   constructor(
     private licensingService: LicensingService,
     private authService: AuthService,
@@ -185,6 +190,59 @@ export class LicensingComponent implements OnInit {
   formatDate(date: any): string {
     if (!date) return 'Not set';
     return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
+  }
+
+  // Convert a stored date into the YYYY-MM-DD value an <input type="date"> needs
+  toDateInput(date: any): string {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const tz = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tz).toISOString().substring(0, 10);
+  }
+
+  // Save a date field for a checklist item (e.g. scheduledDate, appointmentDate)
+  updateChecklistDate(item: string, field: string, value: string): void {
+    if (!this.isAdmin) return;
+    // Empty string clears the date
+    this.updateChecklistItem(item, field, value || null);
+  }
+
+  toggleReschedule(item: string): void {
+    this.showReschedule[item] = !this.showReschedule[item];
+    if (this.showReschedule[item] && !this.rescheduleForm[item]) {
+      this.rescheduleForm[item] = { date: '', outcome: 'Scheduled', notes: '' };
+    }
+  }
+
+  addReschedule(item: string): void {
+    if (!this.selectedAgent || !this.isAdmin) return;
+    const form = this.rescheduleForm[item];
+    if (!form || !form.date) {
+      alert('Please choose a date for this attempt.');
+      return;
+    }
+
+    this.savingReschedule[item] = true;
+    this.licensingService.addReschedule(this.selectedAgent.agent._id, item, {
+      date: form.date,
+      outcome: form.outcome,
+      notes: form.notes
+    }).subscribe({
+      next: (updated) => {
+        this.selectedAgent = updated;
+        const index = this.licensingProgress.findIndex(p => p.agent._id === updated.agent._id);
+        if (index !== -1) this.licensingProgress[index] = updated;
+        this.savingReschedule[item] = false;
+        this.showReschedule[item] = false;
+        this.rescheduleForm[item] = { date: '', outcome: 'Scheduled', notes: '' };
+      },
+      error: (error) => {
+        console.error('Error adding reschedule:', error);
+        alert('Failed to record attempt');
+        this.savingReschedule[item] = false;
+      }
+    });
   }
 
   getChecklistItemStatus(item: any): string {
