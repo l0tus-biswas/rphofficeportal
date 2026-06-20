@@ -72,6 +72,17 @@ jest.mock('../../utils/docusign', () => ({
   getEnvelopeStatus: jest.fn().mockResolvedValue({ status: 'completed' }),
   downloadDocument: jest.fn().mockResolvedValue(Buffer.from('mock-pdf')),
 }));
+// puppeteer ships ESM that Jest can't transform; mock it (used by the
+// business-cards card renderer, pulled in transitively via server.js).
+jest.mock('puppeteer', () => ({
+  launch: jest.fn().mockResolvedValue({
+    newPage: jest.fn().mockResolvedValue({
+      setContent: jest.fn(), pdf: jest.fn(), screenshot: jest.fn(), close: jest.fn()
+    }),
+    close: jest.fn()
+  })
+}), { virtual: true });
+
 jest.mock('../../utils/quickbooks', () => ({
   getAuthUrl: jest.fn().mockReturnValue('https://mock-qb-auth'),
   handleCallback: jest.fn().mockResolvedValue({ success: true }),

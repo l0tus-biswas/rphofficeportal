@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { CarrierService, Carrier, ProductFactor } from '../../../services/carrier.service';
+import { CarrierService, Carrier } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-carriers',
@@ -19,7 +19,7 @@ export class CarriersComponent implements OnInit {
   // Form
   showForm = false;
   editMode = false;
-  currentCarrier: Partial<Carrier> & { newProductFactor?: ProductFactor } = {};
+  currentCarrier: Partial<Carrier> = {};
   levelGuideFile: File | null = null;
 
   readonly CATEGORIES = [
@@ -88,8 +88,7 @@ export class CarriersComponent implements OnInit {
     this.showForm = true;
     this.editMode = false;
     this.currentCarrier = {
-      name: '', category: [], isActive: true, notes: '',
-      productFactors: [], newProductFactor: { productName: '', factor: null, level: '' }
+      name: '', category: [], isActive: true, notes: ''
     };
     this.levelGuideFile = null;
   }
@@ -99,9 +98,7 @@ export class CarriersComponent implements OnInit {
     this.editMode = true;
     this.currentCarrier = {
       ...carrier,
-      category: carrier.category ? [...carrier.category] : [],
-      productFactors: carrier.productFactors ? [...carrier.productFactors] : [],
-      newProductFactor: { productName: '', factor: null, level: '' }
+      category: carrier.category ? [...carrier.category] : []
     };
     this.levelGuideFile = null;
   }
@@ -132,18 +129,6 @@ export class CarriersComponent implements OnInit {
     this.levelGuideFile = input.files && input.files.length > 0 ? input.files[0] : null;
   }
 
-  addProductFactor(): void {
-    const pf = this.currentCarrier.newProductFactor;
-    if (!pf || !pf.productName) return;
-    if (!this.currentCarrier.productFactors) this.currentCarrier.productFactors = [];
-    this.currentCarrier.productFactors.push({ productName: pf.productName, factor: pf.factor ?? null, level: pf.level || '' });
-    this.currentCarrier.newProductFactor = { productName: '', factor: null, level: '' };
-  }
-
-  removeProductFactor(index: number): void {
-    this.currentCarrier.productFactors?.splice(index, 1);
-  }
-
   saveCarrier(): void {
     if (!this.currentCarrier.name) { this.error = 'Carrier name is required'; return; }
     if (!this.currentCarrier.category || this.currentCarrier.category.length === 0) { this.error = 'At least one carrier category is required'; return; }
@@ -152,10 +137,6 @@ export class CarriersComponent implements OnInit {
     formData.append('name', this.currentCarrier.name);
     formData.append('category', JSON.stringify(this.currentCarrier.category));
     formData.append('isActive', String(this.currentCarrier.isActive ?? true));
-    if (this.currentCarrier.factor != null) formData.append('factor', String(this.currentCarrier.factor));
-    if (this.currentCarrier.productFactors?.length) {
-      formData.append('productFactors', JSON.stringify(this.currentCarrier.productFactors));
-    }
     if (this.currentCarrier.contractingLink) formData.append('contractingLink', this.currentCarrier.contractingLink);
     if (this.currentCarrier.contractingInstructions) formData.append('contractingInstructions', this.currentCarrier.contractingInstructions);
     if (this.currentCarrier.whatToExpect) formData.append('whatToExpect', this.currentCarrier.whatToExpect);

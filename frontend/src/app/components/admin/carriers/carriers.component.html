@@ -53,13 +53,9 @@
           </div>
         </div>
 
-        <!-- Row 2: Base factor + Contracting link -->
+        <!-- Row 2: Contracting link -->
         <div class="row">
-          <div class="col-md-3 mb-3">
-            <label class="form-label">Base Commission Factor (%)</label>
-            <input type="number" class="form-control" [(ngModel)]="currentCarrier.factor" name="factor" min="0" max="200" placeholder="e.g. 80">
-          </div>
-          <div class="col-md-9 mb-3">
+          <div class="col-md-12 mb-3">
             <label class="form-label">Contracting Link</label>
             <input type="url" class="form-control" [(ngModel)]="currentCarrier.contractingLink" name="contractingLink" placeholder="https://...">
           </div>
@@ -75,41 +71,6 @@
         <div class="mb-3">
           <label class="form-label">What to Expect</label>
           <textarea class="form-control" [(ngModel)]="currentCarrier.whatToExpect" name="whatToExpect" rows="3" placeholder="Timeline, next steps after contracting..."></textarea>
-        </div>
-
-        <!-- Product Factors -->
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Per-Product Commission Factors <span class="text-muted fw-normal">(for multi-product carriers)</span></label>
-          <div class="table-responsive mb-2" *ngIf="currentCarrier.productFactors && currentCarrier.productFactors.length > 0">
-            <table class="table table-sm table-bordered align-middle">
-              <thead class="table-light">
-                <tr><th>Product Name</th><th>Factor (%)</th><th>Level</th><th></th></tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let pf of currentCarrier.productFactors; let i = index">
-                  <td>{{ pf.productName }}</td>
-                  <td>{{ pf.factor ?? '—' }}</td>
-                  <td>{{ pf.level || '—' }}</td>
-                  <td><button type="button" class="btn btn-link text-danger p-0" (click)="removeProductFactor(i)"><i class="bi bi-trash"></i></button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <!-- Add new product factor row -->
-          <div class="row g-2 align-items-end" *ngIf="currentCarrier.newProductFactor">
-            <div class="col-md-5">
-              <input type="text" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.productName" name="pfName" placeholder="Product name">
-            </div>
-            <div class="col-md-3">
-              <input type="number" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.factor" name="pfFactor" placeholder="Factor %" min="0" max="200">
-            </div>
-            <div class="col-md-2">
-              <input type="text" class="form-control form-control-sm" [(ngModel)]="currentCarrier.newProductFactor!.level" name="pfLevel" placeholder="Level (opt.)">
-            </div>
-            <div class="col-md-2">
-              <button type="button" class="btn btn-outline-primary btn-sm" (click)="addProductFactor()"><i class="bi bi-plus"></i> Add</button>
-            </div>
-          </div>
         </div>
 
         <!-- Supplemental Level Guide PDF -->
@@ -174,7 +135,6 @@
                 }"></i>
               </th>
               <th>Category</th>
-              <th>Factor</th>
               <th role="button" (click)="toggleSort('status')" class="sortable-th">
                 Status
                 <i class="bi ms-1" [ngClass]="{
@@ -193,13 +153,6 @@
               <td><strong>{{ carrier.name }}</strong></td>
               <td>
                 <span *ngFor="let cat of carrier.category" class="badge bg-info text-dark me-1">{{ cat }}</span>
-              </td>
-              <td>
-                <span *ngIf="carrier.factor != null">{{ carrier.factor }}%</span>
-                <span *ngIf="carrier.productFactors && carrier.productFactors.length > 0" class="ms-1">
-                  <span class="badge bg-secondary" title="Multi-product factors available">+{{ carrier.productFactors.length }}</span>
-                </span>
-                <span *ngIf="carrier.factor == null && (!carrier.productFactors || carrier.productFactors.length === 0)" class="text-muted">—</span>
               </td>
               <td>
                 <span class="badge" [ngClass]="carrier.isActive ? 'bg-success' : 'bg-secondary'">

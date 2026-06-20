@@ -1,11 +1,5 @@
 const mongoose = require('mongoose');
 
-const productFactorSchema = new mongoose.Schema({
-  productName: { type: String, required: true, trim: true },
-  factor: { type: Number, min: 0, max: 200 },
-  level: { type: String, trim: true } // e.g. 'Level 1', 'Level 2' for supplemental
-}, { _id: false });
-
 const carrierSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -27,17 +21,6 @@ const carrierSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-
-  // Base / default commission factor (%)
-  factor: {
-    type: Number,
-    min: 0,
-    max: 200,
-    default: null
-  },
-
-  // Per-product commission factors (for multi-product carriers)
-  productFactors: [productFactorSchema],
 
   // Contracting
   contractingLink: {

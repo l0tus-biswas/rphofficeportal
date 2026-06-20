@@ -47,6 +47,14 @@ const printfulOrderSchema = new mongoose.Schema({
   mockupUrl: String,
   mockupTaskKey: String,
 
+  // Self-hosted render (personalized print files sent to Printful)
+  templateId: String,        // CardTemplate.id used for this order
+  photoUrl: String,          // agent headshot (private /uploads/business-card-photos/...)
+  printFiles: {              // PUBLIC rendered print files, keyed by placement
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
   // Shipping
   shippingAddress: {
     name: String,

@@ -143,11 +143,18 @@
 
               <!-- Sync status table -->
               <div *ngIf="qboSyncData">
-                <div class="d-flex gap-3 mb-2">
+                <div class="d-flex gap-3 mb-2 flex-wrap">
                   <span class="badge bg-success">{{ qboSyncData.syncedCount }} Synced</span>
-                  <span class="badge bg-warning text-dark">{{ qboSyncData.unsyncedCount }} Not Synced</span>
+                  <span class="badge bg-warning text-dark">{{ qboSyncData.unsyncedCount }} Licensed &amp; Not Synced</span>
+                  <span class="badge bg-light text-muted border">{{ qboSyncData.notLicensedCount }} Not Licensed Yet</span>
                   <span class="badge bg-secondary">{{ qboSyncData.total }} Total</span>
                 </div>
+                <p class="small text-muted mb-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Agents are only synced to QuickBooks after they become licensed (when W-9 and direct
+                  deposit collection apply). Newly licensed agents sync automatically; the list below is
+                  for licensed agents still awaiting sync.
+                </p>
 
                 <div *ngIf="qboSyncData.unsynced?.length > 0" class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                   <table class="table table-sm table-bordered mb-0">
@@ -210,6 +217,27 @@
                     </table>
                   </div>
                 </div>
+
+                <!-- Not-yet-licensed agents (ineligible for sync) -->
+                <div *ngIf="qboSyncData.notLicensed?.length > 0" class="mt-2">
+                  <button class="btn btn-link btn-sm p-0 text-muted" (click)="showNotLicensedList = !showNotLicensedList">
+                    {{ showNotLicensedList ? 'Hide' : 'Show' }} agents not yet licensed ({{ qboSyncData.notLicensedCount }})
+                  </button>
+                  <div *ngIf="showNotLicensedList" class="table-responsive mt-1" style="max-height: 200px; overflow-y: auto;">
+                    <table class="table table-sm table-bordered mb-0">
+                      <thead class="table-light">
+                        <tr><th>Agent</th><th>Email</th><th>Status</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngFor="let agent of qboSyncData.notLicensed">
+                          <td>{{ agent.name }}</td>
+                          <td class="small">{{ agent.email }}</td>
+                          <td><span class="badge bg-light text-muted border">Not licensed</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
 
               <!-- Sync results -->
@@ -217,7 +245,9 @@
                    [ngClass]="qboSyncResult.errors > 0 ? 'alert-warning' : 'alert-success'">
                 <strong>{{ qboSyncResult.message }}</strong>
                 <div class="small mt-1">
-                  Synced: {{ qboSyncResult.synced }} | Errors: {{ qboSyncResult.errors }} | Total: {{ qboSyncResult.total }}
+                  Synced: {{ qboSyncResult.synced }} | Errors: {{ qboSyncResult.errors }}
+                  <span *ngIf="qboSyncResult.skippedUnlicensed != null"> | Skipped (unlicensed): {{ qboSyncResult.skippedUnlicensed }}</span>
+                  | Total: {{ qboSyncResult.total }}
                 </div>
               </div>
             </div>

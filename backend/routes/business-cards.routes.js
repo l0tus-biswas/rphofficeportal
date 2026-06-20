@@ -6,6 +6,7 @@ const PrintfulOrder = require('../models/PrintfulOrder');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { stripe, createPaymentIntent } = require('../utils/stripe');
+const { renderCard } = require('../services/cardRenderer');
 
 // ---------------------------------------------------------------------------
 // Printful API Configuration
@@ -16,7 +17,8 @@ const KEYS = {
   API_KEY:     'printful_api_key',
   STORE_ID:    'printful_store_id',
   ENABLED:     'printful_enabled',
-  TEXT_FIELDS: 'printful_text_fields' // JSON array of {id, label, required}
+  TEXT_FIELDS: 'printful_text_fields', // JSON array of {id, label, required}
+  TEMPLATES:   'printful_card_templates' // JSON array of CardTemplate (see cardRenderer.js)
 };
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,21 @@ async function upsertConfig(key, value, updatedBy) {
     { key, value: storedValue, category: 'application', description: `Printful: ${key}`, updatedBy },
     { upsert: true, new: true }
   );
+}
+
+async function getCardTemplates() {
+  const rec = await SystemConfig.findOne({ key: KEYS.TEMPLATES }).lean();
+  try { return rec?.value ? JSON.parse(rec.value) : []; } catch (_) { return []; }
+}
+
+async function getTemplateById(id) {
+  const all = await getCardTemplates();
+  return all.find(t => t.id === id) || null;
+}
+
+function buildPrintFileUrl(filename) {
+  const base = (process.env.API_URL || '').replace(/\/$/, '');
+  return `${base}/uploads/business-card-prints/${filename}`;
 }
 
 function getPrintfulClient(apiKey, storeId) {
@@ -84,6 +101,28 @@ const photoUpload = multer({
   }
 });
 
+// Template assets (background art + fonts) — admin only, stored privately.
+const templateDir = path.join(__dirname, '..', 'uploads', 'card-templates');
+if (!fs.existsSync(templateDir)) fs.mkdirSync(templateDir, { recursive: true });
+const templateStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, templateDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const base = path.basename(file.originalname, ext).replace(/[^a-z0-9_-]/gi, '');
+    cb(null, `${base}-${Date.now()}${ext}`);
+  }
+});
+const templateUpload = multer({
+  storage: templateStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['.jpg', '.jpeg', '.png', '.svg', '.ttf', '.otf'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) cb(null, true);
+    else cb(new Error('Only PNG/JPG/SVG images or TTF/OTF fonts allowed'));
+  }
+});
+
 // ===========================================================================
 // AGENT ROUTES
 // ===========================================================================
@@ -102,6 +141,62 @@ router.post('/upload-photo', authenticate, photoUpload.single('photo'), async (r
     sendResponse(res, 200, { photoUrl, message: 'Photo uploaded successfully' });
   } catch (error) {
     errorResponse(res, error);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   GET /api/business-cards/templates
+// @desc    Get the agent-facing card templates (without internal-only data)
+// @access  Private (agent + admin)
+// ---------------------------------------------------------------------------
+router.get('/templates', authenticate, async (req, res) => {
+  try {
+    const templates = await getCardTemplates();
+    // Expose only what the agent UI needs to render the form + order.
+    const safe = templates.map(t => ({
+      id: t.id,
+      name: t.name,
+      syncProductId: t.syncProductId,
+      variants: t.variants || [],
+      orientation: t.orientation || 'portrait',
+      printFile: t.printFile,
+      sides: (t.sides || []).map(s => ({
+        placement: s.placement,
+        label: s.label || s.placement,
+        hasPhoto: !!s.photo,
+        fields: (s.fields || []).map(f => ({ key: f.key, label: f.label || f.key, required: !!f.required }))
+      }))
+    }));
+    return sendResponse(res, 200, { templates: safe });
+  } catch (err) {
+    return errorResponse(res, err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/render-preview
+// @desc    Render the agent's personalized card to PNG(s) for live preview
+// @access  Private (agent + admin)
+// ---------------------------------------------------------------------------
+router.post('/render-preview', authenticate, async (req, res) => {
+  try {
+    const { templateId, fieldValues, photoUrl } = req.body;
+    const template = await getTemplateById(templateId);
+    if (!template) return sendResponse(res, 404, { message: 'Card template not found.' });
+
+    const rendered = await renderCard(
+      template, fieldValues || {}, photoUrl || '', `preview-${req.user._id}`);
+
+    const previews = rendered.map(r => ({
+      placement: r.placement,
+      url: buildPrintFileUrl(r.filename)
+    }));
+    return sendResponse(res, 200, {
+      previews,
+      previewUrl: previews[0]?.url || ''
+    });
+  } catch (err) {
+    return errorResponse(res, err);
   }
 });
 
@@ -481,7 +576,8 @@ router.post('/estimate', authenticate, async (req, res) => {
 router.post('/checkout', authenticate, async (req, res) => {
   try {
     const { variantId, variantName, productName, productThumbnail,
-            sku, unitPrice, quantity, shippingAddress, textValues, mockupUrl } = req.body;
+            sku, unitPrice, quantity, shippingAddress, textValues, mockupUrl,
+            templateId, photoUrl } = req.body;
 
     // Validate required fields
     if (!variantId) return sendResponse(res, 400, { message: 'Product variant ID is required.' });
@@ -523,6 +619,8 @@ router.post('/checkout', authenticate, async (req, res) => {
       },
       textValues: textValues || {},
       mockupUrl: mockupUrl || '',
+      templateId: templateId || '',
+      photoUrl: photoUrl || '',
       shippingAddress: {
         name: shippingAddress.name,
         address1: shippingAddress.address1,
@@ -625,6 +723,30 @@ router.post('/checkout/confirm', authenticate, async (req, res) => {
           sync_variant_id: order.product.variantId,
           quantity: order.product.quantity
         };
+
+        // Render the agent's personalized print files and override the sync
+        // product's default files (front + back). If rendering fails, the order
+        // is still created but left for admin review rather than auto-confirmed.
+        if (order.templateId) {
+          try {
+            const template = await getTemplateById(order.templateId);
+            if (template) {
+              const rendered = await renderCard(
+                template, order.textValues || {}, order.photoUrl || '', `order-${order._id}`);
+
+              const printFiles = {};
+              orderItem.files = rendered.map(r => {
+                const url = buildPrintFileUrl(r.filename);
+                printFiles[r.placement] = url;
+                return { type: r.placement, url };
+              });
+              order.printFiles = printFiles;
+            }
+          } catch (renderErr) {
+            console.error('Card render failed for order', String(order._id), '-', renderErr.message);
+            // Leave orderItem without files; admin reviews before Printful confirm.
+          }
+        }
 
         const orderPayload = {
           recipient: {
@@ -745,8 +867,10 @@ router.get('/admin/config', authenticate, authorize('admin'), async (req, res) =
     let textFields = [];
     try { textFields = tfRecord?.value ? JSON.parse(tfRecord.value) : []; } catch (_) {}
 
+    const templates = await getCardTemplates();
+
     return sendResponse(res, 200, {
-      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields }
+      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields, templates }
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -760,7 +884,7 @@ router.get('/admin/config', authenticate, authorize('admin'), async (req, res) =
 // ---------------------------------------------------------------------------
 router.post('/admin/config', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { apiKey, storeId, enabled, textFields } = req.body;
+    const { apiKey, storeId, enabled, textFields, templates } = req.body;
 
     if (apiKey !== undefined) await upsertConfig(KEYS.API_KEY, apiKey, req.user._id);
     if (storeId !== undefined) await upsertConfig(KEYS.STORE_ID, storeId, req.user._id);
@@ -768,6 +892,10 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
     if (textFields !== undefined) {
       // textFields is an array of {id, label, required}
       await upsertConfig(KEYS.TEXT_FIELDS, JSON.stringify(textFields), req.user._id);
+    }
+    if (templates !== undefined) {
+      // templates is an array of CardTemplate objects (see cardRenderer.js)
+      await upsertConfig(KEYS.TEMPLATES, JSON.stringify(templates), req.user._id);
     }
 
     const config = await getPrintfulConfig();
@@ -778,14 +906,33 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
     let currentTextFields = [];
     try { currentTextFields = tfRecord?.value ? JSON.parse(tfRecord.value) : []; } catch (_) {}
 
+    const currentTemplates = await getCardTemplates();
+
     return sendResponse(res, 200, {
       message: 'Printful configuration updated.',
-      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields: currentTextFields }
+      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey,
+                textFields: currentTextFields, templates: currentTemplates }
     });
   } catch (err) {
     return errorResponse(res, err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// @route   POST /api/business-cards/admin/template-asset
+// @desc    Upload a template background image or font; returns its /uploads URL
+// @access  Admin only
+// ---------------------------------------------------------------------------
+router.post('/admin/template-asset', authenticate, authorize('admin'),
+  templateUpload.single('asset'), (req, res) => {
+    try {
+      if (!req.file) return sendResponse(res, 400, { message: 'No asset uploaded.' });
+      const url = `/uploads/card-templates/${req.file.filename}`;
+      return sendResponse(res, 200, { url, message: 'Asset uploaded.' });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
+  });
 
 // ---------------------------------------------------------------------------
 // @route   POST /api/business-cards/admin/test-connection

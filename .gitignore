@@ -55,3 +55,6 @@ scripts/git-hook.js
 scripts/install-git-hooks.js
 scripts/auto-history.js
 history/
+
+# Playwright MCP browser-test artifacts
+.playwright-mcp/

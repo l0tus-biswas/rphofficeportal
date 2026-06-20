@@ -100,12 +100,42 @@ export interface AdminOrderRecord {
   created: string;
 }
 
+export interface CardTemplateField {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+export interface CardTemplateSideMeta {
+  placement: string;
+  label: string;
+  hasPhoto: boolean;
+  fields: CardTemplateField[];
+}
+
+export interface CardTemplateVariant {
+  label: string;
+  syncVariantId: number;
+  price: number;
+}
+
+export interface CardTemplate {
+  id: string;
+  name: string;
+  syncProductId: number;
+  variants: CardTemplateVariant[];
+  orientation: string;
+  printFile: { widthPx: number; heightPx: number; dpi: number };
+  sides: CardTemplateSideMeta[];
+}
+
 export interface PrintfulAdminConfig {
   apiKey: string;
   hasApiKey: boolean;
   storeId: string;
   enabled: boolean;
   textFields: OptionField[];
+  templates?: any[];
 }
 
 @Injectable({
@@ -124,6 +154,31 @@ export class BusinessCardsService {
 
   getProductDetail(id: number): Observable<{ product: ProductDetail }> {
     return this.http.get<{ product: ProductDetail }>(`${this.apiUrl}/business-cards/products/${id}`);
+  }
+
+  // ── Card Templates (self-hosted render) ──
+
+  getTemplates(): Observable<{ templates: CardTemplate[] }> {
+    return this.http.get<{ templates: CardTemplate[] }>(`${this.apiUrl}/business-cards/templates`);
+  }
+
+  renderPreview(templateId: string, fieldValues: { [key: string]: string }, photoUrl?: string):
+    Observable<{ previews: { placement: string; url: string }[]; previewUrl: string }> {
+    return this.http.post<any>(`${this.apiUrl}/business-cards/render-preview`, {
+      templateId, fieldValues, photoUrl
+    });
+  }
+
+  uploadPhoto(file: File): Observable<{ photoUrl: string; message: string }> {
+    const form = new FormData();
+    form.append('photo', file);
+    return this.http.post<any>(`${this.apiUrl}/business-cards/upload-photo`, form);
+  }
+
+  uploadTemplateAsset(file: File): Observable<{ url: string; message: string }> {
+    const form = new FormData();
+    form.append('asset', file);
+    return this.http.post<any>(`${this.apiUrl}/business-cards/admin/template-asset`, form);
   }
 
   // ── Mockup Generator ──
@@ -159,6 +214,8 @@ export class BusinessCardsService {
     shippingAddress: ShippingAddress;
     textValues?: { [key: string]: string };
     mockupUrl?: string;
+    templateId?: string;
+    photoUrl?: string;
   }): Observable<{ orderId: string; clientSecret: string; total: number; subtotal: number; shipping: number }> {
     return this.http.post<any>(`${this.apiUrl}/business-cards/checkout`, data);
   }
@@ -179,7 +236,7 @@ export class BusinessCardsService {
     return this.http.get<{ config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`);
   }
 
-  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean; textFields: OptionField[] }>): Observable<{ message: string; config: PrintfulAdminConfig }> {
+  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean; textFields: OptionField[]; templates: any[] }>): Observable<{ message: string; config: PrintfulAdminConfig }> {
     return this.http.post<{ message: string; config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`, body);
   }
 

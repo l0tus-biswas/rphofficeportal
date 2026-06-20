@@ -71,20 +71,30 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false
 }));
+// Shared CORS origin resolver — used by both Express and Socket.IO so they
+// never disagree. Supports comma-separated APP_URL (multiple origins) and
+// always allows localhost during local development.
+const resolveAllowedOrigins = () => (process.env.APP_URL || 'http://localhost:4200')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  // Requests with no Origin header (curl, mobile apps, server-to-server)
+  if (!origin) return true;
+  if (resolveAllowedOrigins().includes(origin)) return true;
+  // Always allow localhost in non-production for local dev (any port)
+  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+};
+
+const corsOriginFn = (origin, callback) => {
+  if (isOriginAllowed(origin)) callback(null, true);
+  else callback(new Error('Not allowed by CORS'));
+};
+
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, server-to-server)
-    if (!origin) return callback(null, true);
-    // Support comma-separated origins in APP_URL env var
-    const allowedOrigins = (process.env.APP_URL || 'http://localhost:4200')
-      .split(',')
-      .map(o => o.trim());
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: corsOriginFn,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -113,7 +123,7 @@ app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', process.env.APP_URL || 'http://localhost:4200');
 
   // Allow public access to branding, welcome, and broadcast images
-  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/'];
+  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/', '/business-card-prints/'];
   const isPublicPath = publicPrefixes.some(prefix => req.path.startsWith(prefix));
 
   if (isPublicPath) {
@@ -288,7 +298,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   path: '/socket.io/',
   cors: {
-    origin: process.env.APP_URL || 'http://localhost:4200',
+    origin: corsOriginFn,
     methods: ['GET', 'POST'],
     credentials: true
   },

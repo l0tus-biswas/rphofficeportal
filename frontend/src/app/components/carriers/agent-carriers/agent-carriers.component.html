@@ -2,16 +2,12 @@
 <div class="container-fluid py-4">
   <div class="row mb-4">
     <div class="col">
-      <h2 class="mb-0"><i class="bi bi-building me-2"></i>Carriers & Contracting</h2>
-      <p class="text-muted">View available carriers, commission factors, and request contracts.</p>
+      <h2 class="mb-0"><i class="bi bi-building me-2"></i>Carriers</h2>
+      <p class="text-muted">View available carriers and the instructions and requirements provided by your admin.</p>
     </div>
   </div>
 
   <!-- Alerts -->
-  <div class="alert alert-success alert-dismissible fade show" *ngIf="success" role="alert">
-    <i class="bi bi-check-circle me-2"></i>{{ success }}
-    <button type="button" class="btn-close" (click)="success = ''"></button>
-  </div>
   <div class="alert alert-danger alert-dismissible fade show" *ngIf="error" role="alert">
     <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
     <button type="button" class="btn-close" (click)="error = ''"></button>
@@ -45,142 +41,138 @@
         <div class="card h-100 shadow-sm">
           <div class="card-header d-flex align-items-center justify-content-between">
             <strong>{{ carrier.name }}</strong>
-            <!-- Status badge -->
-            <ng-container *ngIf="getStatus(carrier) as status; else noStatus">
-              <span class="badge" [ngClass]="{
-                'bg-success': status.status === 'Appointed',
-                'bg-warning text-dark': status.status === 'Requested',
-                'bg-secondary': status.status === 'Unappointed'
-              }">
-                {{ status.status }}
-              </span>
-            </ng-container>
-            <ng-template #noStatus>
-              <span class="badge bg-light text-muted border">Not Requested</span>
-            </ng-template>
+            <!-- Appointment status badge -->
+            <span class="badge" [ngClass]="statusBadgeClass(getStatus(carrier)?.status)">
+              {{ statusLabel(getStatus(carrier)?.status) }}
+            </span>
           </div>
 
-          <div class="card-body">
-            <!-- Commission factor -->
-            <div class="mb-2" *ngIf="carrier.factor != null">
-              <small class="text-muted">Commission Factor</small>
-              <div class="fw-bold text-success fs-5">{{ carrier.factor }}%</div>
-            </div>
-            <div class="mb-2" *ngIf="carrier.productFactors && carrier.productFactors.length > 0 && carrier.factor == null">
-              <small class="text-muted">Commission Factor</small>
-              <div class="fw-semibold text-info">Multiple products — see schedule</div>
+          <div class="card-body d-flex flex-column">
+            <div class="mb-3">
+              <span *ngFor="let cat of carrier.category" class="badge bg-info text-dark me-1">{{ cat }}</span>
             </div>
 
-            <!-- Contracting Link button -->
-            <a *ngIf="carrier.contractingLink" [href]="carrier.contractingLink" target="_blank" class="btn btn-outline-primary btn-sm w-100 mb-2">
-              <i class="bi bi-link-45deg me-1"></i>Start Contracting
-            </a>
-
-            <!-- Supplemental level guide -->
-            <a *ngIf="carrier.supplementalLevelGuide" [href]="getGuideUrl(carrier.supplementalLevelGuide)" target="_blank" class="btn btn-outline-secondary btn-sm w-100 mb-2">
-              <i class="bi bi-file-earmark-pdf me-1"></i>Download Level Guide
-            </a>
-
-            <!-- Expand / collapse -->
-            <button class="btn btn-link btn-sm p-0 text-muted w-100 text-start"
-              *ngIf="carrier.whatToExpect || carrier.contractingInstructions || carrier.notes || carrier.contactInfo?.phone || carrier.contactInfo?.email || carrier.contactInfo?.website || (carrier.productFactors && carrier.productFactors.length > 0)"
-              (click)="toggleCard(carrier._id!)">
-              <i class="bi me-1" [class.bi-chevron-down]="!isExpanded(carrier._id!)" [class.bi-chevron-up]="isExpanded(carrier._id!)"></i>
-              {{ isExpanded(carrier._id!) ? 'Hide details' : 'View details' }}
-            </button>
-
-            <!-- Expanded content -->
-            <ng-container *ngIf="isExpanded(carrier._id!)">
-              <!-- Product factors table -->
-              <div class="mt-3" *ngIf="carrier.productFactors && carrier.productFactors.length > 0">
-                <small class="fw-semibold text-muted d-block mb-1">Product Commission Schedule</small>
-                <table class="table table-sm table-bordered mb-0">
-                  <thead class="table-light"><tr><th>Product</th><th>Factor</th><th>Level</th></tr></thead>
-                  <tbody>
-                    <tr *ngFor="let pf of carrier.productFactors">
-                      <td>{{ pf.productName }}</td>
-                      <td>{{ pf.factor != null ? pf.factor + '%' : '—' }}</td>
-                      <td>{{ pf.level || '—' }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- Contracting instructions -->
-              <div class="mt-3" *ngIf="carrier.contractingInstructions">
-                <small class="fw-semibold text-muted d-block mb-1">Contracting Instructions</small>
-                <p class="small mb-0" style="white-space: pre-line">{{ carrier.contractingInstructions }}</p>
-              </div>
-
-              <!-- What to expect -->
-              <div class="mt-3" *ngIf="carrier.whatToExpect">
-                <small class="fw-semibold text-muted d-block mb-1">What to Expect</small>
-                <p class="small mb-0" style="white-space: pre-line">{{ carrier.whatToExpect }}</p>
-              </div>
-
-              <!-- Notes -->
-              <div class="mt-3" *ngIf="carrier.notes">
-                <small class="fw-semibold text-muted d-block mb-1">Notes</small>
-                <p class="small mb-0" style="white-space: pre-line">{{ carrier.notes }}</p>
-              </div>
-
-              <!-- Contact Info -->
-              <div class="mt-3" *ngIf="carrier.contactInfo?.phone || carrier.contactInfo?.email || carrier.contactInfo?.website">
-                <small class="fw-semibold text-muted d-block mb-1">Contact Information</small>
-                <ul class="list-unstyled small mb-0">
-                  <li *ngIf="carrier.contactInfo?.phone">
-                    <i class="bi bi-telephone me-1 text-muted"></i>{{ carrier.contactInfo?.phone }}
-                  </li>
-                  <li *ngIf="carrier.contactInfo?.email">
-                    <i class="bi bi-envelope me-1 text-muted"></i>
-                    <a [href]="'mailto:' + carrier.contactInfo?.email">{{ carrier.contactInfo?.email }}</a>
-                  </li>
-                  <li *ngIf="carrier.contactInfo?.website">
-                    <i class="bi bi-globe me-1 text-muted"></i>
-                    <a [href]="carrier.contactInfo?.website" target="_blank">{{ carrier.contactInfo?.website }}</a>
-                  </li>
-                </ul>
-              </div>
-            </ng-container>
-          </div>
-
-          <div class="card-footer bg-transparent">
-            <!-- Request Contract button -->
-            <ng-container *ngIf="!getStatus(carrier)">
-              <button class="btn btn-primary btn-sm w-100"
-                (click)="requestContract(carrier)"
-                [disabled]="statusLoading[carrier._id!]">
-                <span *ngIf="statusLoading[carrier._id!]" class="spinner-border spinner-border-sm me-1"></span>
-                <i *ngIf="!statusLoading[carrier._id!]" class="bi bi-send me-1"></i>
-                Request Contract
-              </button>
-            </ng-container>
+            <!-- Appointment summary -->
             <ng-container *ngIf="getStatus(carrier) as status">
-              <div class="text-center small" [ngClass]="status.status === 'Unappointed' ? 'text-secondary' : 'text-muted'">
+              <div class="small mb-3" [ngClass]="status.status === 'Unappointed' ? 'text-secondary' : 'text-muted'">
                 <i class="bi me-1" [ngClass]="{
                   'bi-check-circle': status.status === 'Appointed',
-                  'bi-clock': status.status === 'Requested',
+                  'bi-clock': status.status === 'Pending' || status.status === 'Requested',
                   'bi-x-circle': status.status === 'Unappointed'
                 }"></i>
                 <span *ngIf="status.status === 'Appointed'">Appointed on {{ status.appointedAt | appDate:'mediumDate' }}</span>
-                <span *ngIf="status.status === 'Requested'">Requested — awaiting admin approval</span>
+                <span *ngIf="status.status === 'Pending' || status.status === 'Requested'">Pending / In Progress</span>
                 <span *ngIf="status.status === 'Unappointed'">Unappointed</span>
               </div>
-
-              <!-- Admin Notes -->
-              <div *ngIf="status.notes && status.notes.length > 0" class="mt-2 text-start">
-                <small class="fw-semibold text-muted d-block mb-1"><i class="bi bi-chat-left-text me-1"></i>Admin Notes</small>
-                <div *ngFor="let note of status.notes" class="border rounded p-2 mb-1 bg-light">
-                  <p class="small mb-0" style="white-space: pre-line">{{ note.text }}</p>
-                  <small class="text-muted">
-                    {{ note.addedBy?.name || 'Admin' }} — {{ note.addedAt | appDate:'medium' }}
-                  </small>
-                </div>
-              </div>
             </ng-container>
+
+            <!-- View Details -->
+            <button class="btn btn-primary btn-sm w-100 mt-auto" (click)="openDetails(carrier)">
+              <i class="bi bi-info-circle me-1"></i>View Details
+            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Carrier Details Modal -->
+<div class="modal fade" [class.show]="showDetailsModal" [style.display]="showDetailsModal ? 'block' : 'none'"
+  tabindex="-1" *ngIf="showDetailsModal && selectedCarrier as carrier">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-building me-2"></i>{{ carrier.name }}
+        </h5>
+        <button type="button" class="btn-close" (click)="closeDetails()"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Categories + status -->
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+          <div>
+            <span *ngFor="let cat of carrier.category" class="badge bg-info text-dark me-1">{{ cat }}</span>
+          </div>
+          <span class="badge" [ngClass]="statusBadgeClass(getStatus(carrier)?.status)">
+            {{ statusLabel(getStatus(carrier)?.status) }}
+          </span>
+        </div>
+
+        <!-- Contracting Instructions -->
+        <div class="mb-3" *ngIf="carrier.contractingInstructions">
+          <h6 class="fw-semibold text-muted"><i class="bi bi-list-check me-1"></i>Contracting Instructions</h6>
+          <p class="mb-0" style="white-space: pre-line">{{ carrier.contractingInstructions }}</p>
+        </div>
+
+        <!-- What to Expect -->
+        <div class="mb-3" *ngIf="carrier.whatToExpect">
+          <h6 class="fw-semibold text-muted"><i class="bi bi-signpost-2 me-1"></i>What to Expect</h6>
+          <p class="mb-0" style="white-space: pre-line">{{ carrier.whatToExpect }}</p>
+        </div>
+
+        <!-- Notes / Requirements -->
+        <div class="mb-3" *ngIf="carrier.notes">
+          <h6 class="fw-semibold text-muted"><i class="bi bi-card-text me-1"></i>Additional Information</h6>
+          <p class="mb-0" style="white-space: pre-line">{{ carrier.notes }}</p>
+        </div>
+
+        <!-- Contracting link -->
+        <div class="mb-3" *ngIf="carrier.contractingLink">
+          <a [href]="carrier.contractingLink" target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-link-45deg me-1"></i>Open Contracting Link
+          </a>
+        </div>
+
+        <!-- Supplemental level guide -->
+        <div class="mb-3" *ngIf="carrier.supplementalLevelGuide">
+          <a [href]="getGuideUrl(carrier.supplementalLevelGuide)" target="_blank" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Download Level Guide
+          </a>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="mb-3" *ngIf="carrier.contactInfo?.phone || carrier.contactInfo?.email || carrier.contactInfo?.website">
+          <h6 class="fw-semibold text-muted"><i class="bi bi-person-rolodex me-1"></i>Contact Information</h6>
+          <ul class="list-unstyled mb-0">
+            <li *ngIf="carrier.contactInfo?.phone">
+              <i class="bi bi-telephone me-1 text-muted"></i>{{ carrier.contactInfo?.phone }}
+            </li>
+            <li *ngIf="carrier.contactInfo?.email">
+              <i class="bi bi-envelope me-1 text-muted"></i>
+              <a [href]="'mailto:' + carrier.contactInfo?.email">{{ carrier.contactInfo?.email }}</a>
+            </li>
+            <li *ngIf="carrier.contactInfo?.website">
+              <i class="bi bi-globe me-1 text-muted"></i>
+              <a [href]="carrier.contactInfo?.website" target="_blank">{{ carrier.contactInfo?.website }}</a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Admin Notes on the agent's appointment -->
+        <ng-container *ngIf="getStatus(carrier) as status">
+          <div *ngIf="status.notes && status.notes.length > 0" class="mb-1">
+            <h6 class="fw-semibold text-muted"><i class="bi bi-chat-left-text me-1"></i>Admin Notes</h6>
+            <div *ngFor="let note of status.notes" class="border rounded p-2 mb-1 bg-light">
+              <p class="small mb-0" style="white-space: pre-line">{{ note.text }}</p>
+              <small class="text-muted">{{ note.addedBy?.name || 'Admin' }} — {{ note.addedAt | appDate:'medium' }}</small>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- Empty state -->
+        <div *ngIf="!carrier.contractingInstructions && !carrier.whatToExpect && !carrier.notes
+              && !carrier.contractingLink && !carrier.supplementalLevelGuide
+              && !carrier.contactInfo?.phone && !carrier.contactInfo?.email && !carrier.contactInfo?.website"
+          class="text-center text-muted py-3">
+          <i class="bi bi-info-circle display-6 d-block mb-2"></i>
+          No additional details have been provided for this carrier yet.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeDetails()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade show" *ngIf="showDetailsModal"></div>

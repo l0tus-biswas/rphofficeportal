@@ -37,7 +37,7 @@ const guideUpload = multer({
 router.get('/my-statuses', authenticate, authorize('agent', 'admin'), async (req, res) => {
   try {
     const statuses = await AgentCarrierStatus.find({ agent: req.user._id })
-      .populate('carrier', 'name category factor')
+      .populate('carrier', 'name category')
       .populate('notes.addedBy', 'name')
       .sort('-requestedAt');
     res.json(statuses);
@@ -66,6 +66,37 @@ router.get('/admin/all-requests', authenticate, authorize('admin'), async (req, 
     res.json(requests);
   } catch (error) {
     console.error('Error fetching all requests:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/carriers/admin/agents
+// @desc    Admin: list all agents (for the appointments agent selector)
+// @access  Admin only
+router.get('/admin/agents', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const agents = await User.find({ role: 'agent', isActive: true, deletedAt: null })
+      .select('name email')
+      .sort('name');
+    res.json(agents);
+  } catch (error) {
+    console.error('Error fetching agents:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/carriers/admin/agent/:agentId/statuses
+// @desc    Admin: get a single agent's carrier status records (across all carriers)
+// @access  Admin only
+router.get('/admin/agent/:agentId/statuses', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const statuses = await AgentCarrierStatus.find({ agent: req.params.agentId })
+      .populate('carrier', 'name category')
+      .populate('notes.addedBy', 'name')
+      .sort('-updatedAt');
+    res.json(statuses);
+  } catch (error) {
+    console.error('Error fetching agent statuses:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -124,7 +155,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuideFile'), async (req, res) => {
   try {
     const {
-      name, category, isActive, factor, productFactors,
+      name, category, isActive,
       contractingLink, contractingInstructions, whatToExpect,
       contactInfo, notes
     } = req.body;
@@ -164,11 +195,6 @@ router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuid
       addedBy: req.user._id, lastModifiedBy: req.user._id
     };
 
-    if (factor !== undefined && factor !== '') carrierData.factor = parseFloat(factor);
-    if (productFactors) {
-      try { carrierData.productFactors = typeof productFactors === 'string' ? JSON.parse(productFactors) : productFactors; }
-      catch (e) { /* ignore */ }
-    }
     if (contactInfo) {
       try { carrierData.contactInfo = typeof contactInfo === 'string' ? JSON.parse(contactInfo) : contactInfo; }
       catch (e) { carrierData.contactInfo = contactInfo; }
@@ -194,7 +220,7 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
     if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
 
     const {
-      name, category, isActive, factor, productFactors,
+      name, category, isActive,
       contractingLink, contractingInstructions, whatToExpect,
       contactInfo, notes
     } = req.body;
@@ -219,11 +245,6 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
       }
     }
     if (isActive !== undefined) carrier.isActive = isActive;
-    if (factor !== undefined && factor !== '') carrier.factor = parseFloat(factor);
-    if (productFactors) {
-      try { carrier.productFactors = typeof productFactors === 'string' ? JSON.parse(productFactors) : productFactors; }
-      catch (e) { /* ignore */ }
-    }
     if (contractingLink !== undefined) {
       if (contractingLink && contractingLink.trim()) {
         try {
@@ -416,6 +437,73 @@ router.post('/admin/status/:statusId/notes', authenticate, authorize('admin'), a
     res.json({ message: 'Note added', status: updated });
   } catch (error) {
     console.error('Error adding note:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/carriers/admin/agent/:agentId/carrier/:carrierId/status
+// @desc    Admin: manually set an agent's appointment status for a carrier.
+//          Upserts the AgentCarrierStatus record so admins can manage
+//          appointments without waiting for an agent request. Syncs to the
+//          agent's Carriers page.
+// @access  Admin only
+router.put('/admin/agent/:agentId/carrier/:carrierId/status', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowed = ['Appointed', 'Unappointed', 'Pending'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: `Status must be one of: ${allowed.join(', ')}` });
+    }
+
+    const agent = await User.findById(req.params.agentId).select('name role');
+    if (!agent) return res.status(404).json({ message: 'Agent not found' });
+
+    const carrier = await Carrier.findById(req.params.carrierId).select('name');
+    if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
+
+    let record = await AgentCarrierStatus.findOne({ agent: agent._id, carrier: carrier._id });
+    if (!record) {
+      record = new AgentCarrierStatus({ agent: agent._id, carrier: carrier._id });
+    }
+
+    record.status = status;
+    if (status === 'Appointed') {
+      record.appointedAt = new Date();
+      record.appointedBy = req.user._id;
+    } else if (status === 'Unappointed') {
+      record.unappointedAt = new Date();
+      record.unappointedBy = req.user._id;
+    }
+    await record.save();
+
+    // Notify the agent that their carrier status changed
+    try {
+      const notifMap = {
+        Appointed: { type: 'carrier_appointed', title: 'Carrier Appointment Updated', message: `You have been appointed for ${carrier.name}.` },
+        Unappointed: { type: 'carrier_unappointed', title: 'Carrier Appointment Updated', message: `Your appointment for ${carrier.name} has been removed.` },
+        Pending: { type: 'carrier_appointed', title: 'Carrier Appointment Updated', message: `Your appointment for ${carrier.name} is now pending / in progress.` }
+      };
+      const n = notifMap[status];
+      await Notification.createNotification({
+        userId: agent._id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        data: { carrierId: String(carrier._id) },
+        link: '/carriers'
+      });
+    } catch (notifErr) {
+      console.error('Error sending status notification:', notifErr);
+    }
+
+    const updated = await AgentCarrierStatus.findById(record._id)
+      .populate('agent', 'name email')
+      .populate('carrier', 'name category')
+      .populate('notes.addedBy', 'name');
+
+    res.json({ message: `Status set to ${status}`, status: updated });
+  } catch (error) {
+    console.error('Error setting agent carrier status:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
