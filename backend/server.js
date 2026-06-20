@@ -63,7 +63,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https://translate.google.com"],
       connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:", "https://api.stripe.com", "https://js.stripe.com"],
-      frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com"],
+      frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com", "https://www.loom.com"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"]
     }
