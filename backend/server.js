@@ -28,10 +28,53 @@ const app = express();
 // Trust proxy - necessary for getting real IP behind reverse proxy
 app.set('trust proxy', true);
 
-// Real-time monitoring dashboard at /status
+// Shared CORS origin resolver — used by Express, Socket.IO, and the status
+// monitor so they never disagree. Supports comma-separated APP_URL (multiple
+// origins) and always allows localhost during local development.
+const resolveAllowedOrigins = () => (process.env.APP_URL || 'http://localhost:4200')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+  // Requests with no Origin header (curl, mobile apps, server-to-server)
+  if (!origin) return true;
+  if (resolveAllowedOrigins().includes(origin)) return true;
+  // Always allow localhost in non-production for local dev (any port)
+  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+};
+
+const corsOriginFn = (origin, callback) => {
+  if (isOriginAllowed(origin)) callback(null, true);
+  else callback(new Error('Not allowed by CORS'));
+};
+
+// Create the HTTP server + the single Socket.IO instance up front so the status
+// monitor can REUSE it (via the `websocket` option below) instead of attaching
+// a SECOND socket.io server to the same HTTP server on the default '/socket.io/'
+// path. Two socket.io servers sharing one path corrupt every handshake
+// ("server error" / "Session ID unknown") and break ALL real-time features.
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  path: '/socket.io/',
+  cors: {
+    origin: corsOriginFn,
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 60000,
+  allowEIO3: true
+});
+
+// Real-time monitoring dashboard at /status — reuse the app's Socket.IO
+// instance (websocket: io) so it does not spawn a conflicting server.
 const statusMonitor = require('express-status-monitor')({
   title: 'RHP Office Status',
   path: '/status',
+  websocket: io,
   spans: [
     { interval: 1, retention: 60 },    // 1s for last 60s
     { interval: 5, retention: 60 },    // 5s for last 5 min
@@ -77,27 +120,8 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false
 }));
-// Shared CORS origin resolver — used by both Express and Socket.IO so they
-// never disagree. Supports comma-separated APP_URL (multiple origins) and
-// always allows localhost during local development.
-const resolveAllowedOrigins = () => (process.env.APP_URL || 'http://localhost:4200')
-  .split(',')
-  .map(o => o.trim())
-  .filter(Boolean);
-
-const isOriginAllowed = (origin) => {
-  // Requests with no Origin header (curl, mobile apps, server-to-server)
-  if (!origin) return true;
-  if (resolveAllowedOrigins().includes(origin)) return true;
-  // Always allow localhost in non-production for local dev (any port)
-  if (process.env.NODE_ENV !== 'production' && /^https?:\/\/localhost(:\d+)?$/.test(origin)) return true;
-  return false;
-};
-
-const corsOriginFn = (origin, callback) => {
-  if (isOriginAllowed(origin)) callback(null, true);
-  else callback(new Error('Not allowed by CORS'));
-};
+// (CORS origin resolver + Socket.IO instance are defined above, before the
+// status monitor, so the monitor can reuse the same io instance.)
 
 app.use(cors({
   origin: corsOriginFn,
@@ -311,20 +335,8 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Create HTTP server with Socket.IO
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  path: '/socket.io/',
-  cors: {
-    origin: corsOriginFn,
-    methods: ['GET', 'POST'],
-    credentials: true
-  },
-  transports: ['websocket', 'polling'],
-  pingInterval: 25000,
-  pingTimeout: 60000,
-  allowEIO3: true
-});
+// (httpServer + io are created near the top of this file, before the status
+// monitor, so the monitor can reuse the same Socket.IO instance.)
 
 // Middleware: Authenticate socket connections
 io.use((socket, next) => {
