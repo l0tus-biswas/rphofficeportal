@@ -415,11 +415,9 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   proceedToShipping(): void {
     this.checkoutStep = 'shipping';
     this.orderError = '';
-    // One-shot server render so the order has a print-accurate thumbnail
-    // (admin order view). The live editing preview is the in-browser canvas.
-    if (this.activeTemplate && !this.previewUrl) {
-      this.updateCardPreview();
-    }
+    // The live preview is the in-browser canvas, so we no longer call the
+    // server render here. The print-ready file is rendered server-side only at
+    // order confirmation; the order thumbnail falls back to the template image.
   }
 
   backToProduct(): void {
@@ -458,7 +456,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       quantity: this.quantity,
       shippingAddress: this.shippingAddress,
       textValues: textVals,
-      mockupUrl: this.previewUrl || this.mockupUrl || undefined,
+      mockupUrl: this.previewUrl || this.activeTemplate?.previewImage || this.mockupUrl || undefined,
       templateId: this.activeTemplate?.id,
       photoUrl: this.photoUrl || undefined
     }).subscribe({
