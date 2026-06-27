@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { forkJoin } from 'rxjs';
 import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord, CardTemplate } from '../../services/business-cards.service';
+import { PublicConfigService } from '../../services/public-config.service';
 import { environment } from '../../../environments/environment';
 
 // A store tile: one per template (a designed card), plus any product without a template.
@@ -80,7 +81,10 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   loadingOrders = false;
   showOrders = false;
 
-  constructor(private businessCardsService: BusinessCardsService) {}
+  constructor(
+    private businessCardsService: BusinessCardsService,
+    private publicConfig: PublicConfigService
+  ) {}
 
   ngOnInit(): void {
     this.loadCatalog();
@@ -161,7 +165,8 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       document.head.appendChild(script);
       await new Promise<void>(resolve => { script.onload = () => resolve(); });
     }
-    this.stripe = Stripe(environment.stripePublishableKey);
+    const key = await this.publicConfig.stripeKey();
+    this.stripe = Stripe(key);
   }
 
   loadProducts(): void {

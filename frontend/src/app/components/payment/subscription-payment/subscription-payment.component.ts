@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { Router } from '@angular/router';
 import { PaymentService } from '../../../services/payment.service';
+import { PublicConfigService } from '../../../services/public-config.service';
 import { loadStripe, Stripe, StripeElements, StripePaymentElement } from '@stripe/stripe-js';
 import { environment } from '../../../../environments/environment';
 
@@ -26,7 +27,8 @@ export class SubscriptionPaymentComponent implements OnInit, OnDestroy {
 
   constructor(
     private paymentService: PaymentService,
-    private router: Router
+    private router: Router,
+    private publicConfig: PublicConfigService
   ) { }
 
   async ngOnInit() {
@@ -63,8 +65,8 @@ export class SubscriptionPaymentComponent implements OnInit, OnDestroy {
         next: async (response) => {
           this.clientSecret = response.clientSecret;
           
-          // Initialize Stripe
-          this.stripe = await loadStripe(environment.stripePublishableKey);
+          // Initialize Stripe with the publishable key served from backend .env
+          this.stripe = await loadStripe(await this.publicConfig.stripeKey());
           
           if (!this.stripe) {
             this.error = 'Failed to load payment system';

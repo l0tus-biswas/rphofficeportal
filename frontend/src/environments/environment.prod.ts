@@ -3,5 +3,7 @@ export const environment = {
   apiUrl: 'https://rhpoffice.com/api',
   baseUrl: 'https://rhpoffice.com',
   appUrl: 'https://rhpoffice.com',
-  stripePublishableKey: 'pk_live_your_stripe_publishable_key'
+  // Stripe publishable key is served at runtime from the backend .env
+  // (GET /api/public/stripe-key). This is only a fallback if that fetch fails.
+  stripePublishableKey: ''
 };

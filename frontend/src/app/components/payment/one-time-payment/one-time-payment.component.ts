@@ -4,6 +4,7 @@ import { PaymentService } from '../../../services/payment.service';
 import { PublicService } from '../../../services/public.service';
 import { AuthService } from '../../../services/auth.service';
 import { OnboardingService } from '../../../services/onboarding.service';
+import { PublicConfigService } from '../../../services/public-config.service';
 import { loadStripe, Stripe, StripeElements, StripePaymentElement } from '@stripe/stripe-js';
 import { environment } from '../../../../environments/environment';
 
@@ -36,7 +37,8 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
     private onboardingService: OnboardingService,
     private router: Router,
     private route: ActivatedRoute,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private publicConfig: PublicConfigService
   ) { }
 
   async ngOnInit() {
@@ -145,10 +147,9 @@ export class OneTimePaymentComponent implements OnInit, OnDestroy {
       this.clientSecret = clientSecret;
       this.amount = amount;
       
-      console.log('Loading Stripe.js with key:', environment.stripePublishableKey.substring(0, 20) + '...');
-      
-      // Initialize Stripe
-      this.stripe = await loadStripe(environment.stripePublishableKey);
+      // Initialize Stripe with the publishable key served from the backend .env
+      const publishableKey = await this.publicConfig.stripeKey();
+      this.stripe = await loadStripe(publishableKey);
       
       if (!this.stripe) {
         this.error = 'Failed to load payment system. Please check your internet connection.';

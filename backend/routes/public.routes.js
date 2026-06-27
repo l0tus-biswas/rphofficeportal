@@ -40,6 +40,15 @@ router.get('/timezone', async (req, res) => {
   }
 });
 
+// @route   GET /api/public/stripe-key
+// @desc    Return the Stripe publishable key from backend env. Publishable keys
+//          are designed to be exposed to the browser, so this is safe and lets
+//          us keep the key in one place (.env) instead of the frontend build.
+// @access  Public
+router.get('/stripe-key', (req, res) => {
+  sendResponse(res, 200, { publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '' });
+});
+
 // @route   GET /api/public/site-access
 // @desc    Get emergency site access state and message
 // @access  Public
