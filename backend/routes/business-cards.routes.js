@@ -206,14 +206,26 @@ const photoStorage = multer.diskStorage({
 });
 const photoUpload = multer({
   storage: photoStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 12 * 1024 * 1024 },   // phone headshots are often 3–8 MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png'];
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowed.includes(ext)) cb(null, true);
-    else cb(new Error('Only JPG/PNG images allowed'));
+    else cb(new Error('Unsupported image format. Please upload a JPG, PNG, or WEBP (iPhone HEIC photos are not supported — re-save as JPG).'));
   }
 });
+
+// Wrap a multer middleware so its errors become friendly 400s instead of a
+// raw 500 (the upload would otherwise hit the generic error handler).
+function runUpload(mw) {
+  return (req, res, next) => mw(req, res, (err) => {
+    if (!err) return next();
+    const msg = err.code === 'LIMIT_FILE_SIZE'
+      ? 'That image is too large. Please upload a file under 12 MB.'
+      : (err.message || 'Upload failed.');
+    return sendResponse(res, 400, { message: msg });
+  });
+}
 
 // Template assets (background art + fonts) — admin only, stored privately.
 const templateDir = path.join(__dirname, '..', 'uploads', 'card-templates');
@@ -246,7 +258,7 @@ const templateUpload = multer({
 // @desc    Upload a headshot/photo for business card personalization
 // @access  Private (agent + admin)
 // ---------------------------------------------------------------------------
-router.post('/upload-photo', authenticate, photoUpload.single('photo'), async (req, res) => {
+router.post('/upload-photo', authenticate, runUpload(photoUpload.single('photo')), async (req, res) => {
   try {
     if (!req.file) {
       return sendResponse(res, 400, { message: 'No photo uploaded' });
@@ -1008,7 +1020,7 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.post('/admin/template-asset', authenticate, authorize('admin'),
-  templateUpload.single('asset'), (req, res) => {
+  runUpload(templateUpload.single('asset')), (req, res) => {
     try {
       if (!req.file) return sendResponse(res, 400, { message: 'No asset uploaded.' });
       const url = `/uploads/card-templates/${req.file.filename}`;

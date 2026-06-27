@@ -2,8 +2,18 @@
      (pointerdown)="editable && selectKey.emit(null)">
   <div class="cc-stage"
        [style.width.px]="pw" [style.height.px]="ph"
-       [style.transform]="'scale(' + scale + ')'"
-       [ngStyle]="bgStyle()">
+       [style.transform]="'scale(' + scale + ')'">
+
+    <!-- Background image layer (positionable/resizable) -->
+    <div *ngIf="bgUrl"
+         class="cc-item cc-bg"
+         [class.cc-selected]="editable && selectedKey === 'bg'"
+         [class.cc-editable]="editable"
+         [ngStyle]="bgRectStyle()"
+         (pointerdown)="startMove($event, 'bg')">
+      <img [src]="bgUrl" [style.object-fit]="bgFit" class="cc-bg-img" alt="">
+      <span *ngIf="editable && selectedKey === 'bg'" class="cc-resize" (pointerdown)="startResize($event, 'bg')"></span>
+    </div>
 
     <!-- Safety-area guide (designer only): keep important content inside this box -->
     <div *ngIf="editable" class="cc-safety"
@@ -19,7 +29,7 @@
          (pointerdown)="startMove($event, 'photo')">
       <img *ngIf="photoDataUrl" [src]="photoDataUrl" class="cc-photo-img" alt="">
       <div *ngIf="!photoDataUrl && editable" class="cc-photo-ph">Photo</div>
-      <span *ngIf="editable && selectedKey === 'photo'" class="cc-resize" (pointerdown)="startResize($event)"></span>
+      <span *ngIf="editable && selectedKey === 'photo'" class="cc-resize" (pointerdown)="startResize($event, 'photo')"></span>
     </div>
 
     <!-- Text fields -->

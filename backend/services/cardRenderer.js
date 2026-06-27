@@ -74,6 +74,14 @@ function buildHtml(printFile, side, fieldValues, photoWebPath) {
     }`).join('\n');
 
   const bgUri = fileToDataUri(side.backgroundImage);
+  // Background can be positioned/resized. Default = full bleed (cover the whole
+  // print area), which matches templates that don't define a bgRect.
+  const bgRect = side.bgRect || { x: 0, y: 0, w: widthPx, h: heightPx };
+  const bgFit = side.bgFit || 'fill';
+  const bgHtml = bgUri
+    ? `<img src="${bgUri}" style="position:absolute;left:${bgRect.x}px;top:${bgRect.y}px;
+        width:${bgRect.w}px;height:${bgRect.h}px;object-fit:${bgFit};display:block;"/>`
+    : '';
 
   let photoHtml = '';
   if (side.photo && photoWebPath) {
@@ -105,10 +113,9 @@ function buildHtml(printFile, side, fieldValues, photoWebPath) {
     * { margin:0; padding:0; box-sizing:border-box; }
     html,body { width:${widthPx}px; height:${heightPx}px; }
     #card { position:relative; width:${widthPx}px; height:${heightPx}px; overflow:hidden;
-            background-color:#ffffff;
-            ${bgUri ? `background-image:url('${bgUri}');background-size:${widthPx}px ${heightPx}px;background-repeat:no-repeat;` : ''} }
+            background-color:#ffffff; }
   </style></head><body>
-    <div id="card">${photoHtml}${fieldsHtml}</div>
+    <div id="card">${bgHtml}${photoHtml}${fieldsHtml}</div>
   </body></html>`;
 }
 

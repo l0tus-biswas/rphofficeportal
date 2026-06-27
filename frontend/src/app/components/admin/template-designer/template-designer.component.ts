@@ -187,16 +187,32 @@ export class TemplateDesignerComponent {
     this.emit();
   }
 
+  // ── Background layer (position/resize) ──
+  ensureBgRect(): any {
+    if (!this.side.bgRect) this.side.bgRect = { x: 0, y: 0, w: this.pw, h: this.ph };
+    if (!this.side.bgFit) this.side.bgFit = 'fill';
+    return this.side.bgRect;
+  }
+  selectBgLayer(): void { this.ensureBgRect(); this.onSelect('bg'); }
+  resetBg(): void { this.side.bgRect = { x: 0, y: 0, w: this.pw, h: this.ph }; this.emit(); }
+
   // ── Canvas events ──
   onSelect(key: string | null): void { this.selectedKey = key; }
 
+  private targetFor(key: string): any {
+    if (key === 'photo') return this.side.photo;
+    if (key === 'bg') return this.ensureBgRect();
+    return (this.side.fields || []).find((f: any) => f.key === key);
+  }
+
   onMove(e: { key: string; x: number; y: number }): void {
-    const item = e.key === 'photo' ? this.side.photo : (this.side.fields || []).find((f: any) => f.key === e.key);
+    const item = this.targetFor(e.key);
     if (item) { item.x = e.x; item.y = e.y; this.emit(); }
   }
 
-  onResizePhoto(e: { w: number; h: number }): void {
-    if (this.side.photo) { this.side.photo.w = e.w; this.side.photo.h = e.h; this.emit(); }
+  onResizeItem(e: { key: string; w: number; h: number }): void {
+    const item = this.targetFor(e.key);
+    if (item) { item.w = e.w; item.h = e.h; this.emit(); }
   }
 
   // Any inline field/style edit funnels through here to bubble persistence.

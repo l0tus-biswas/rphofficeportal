@@ -1,5 +1,5 @@
 .td-wrap {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 /* Full-width, centered container the canvas measures itself against (autoFit). */
@@ -11,9 +11,17 @@
 }
 
 .td-wrap .form-label.small {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: #6c757d;
   margin-bottom: 0.15rem;
+  white-space: nowrap;
+}
+
+/* Keep number inputs wide enough that values (e.g. 1050) are never clipped. */
+.td-wrap input[type="number"] {
+  min-width: 58px;
+  padding-left: 0.4rem;
+  padding-right: 0.25rem;
 }
 
 .td-wrap .btn .bi-x {

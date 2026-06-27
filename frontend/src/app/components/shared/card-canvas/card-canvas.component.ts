@@ -28,7 +28,7 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
 
   @Output() selectKey = new EventEmitter<string | null>();
   @Output() moveItem = new EventEmitter<{ key: string; x: number; y: number }>();
-  @Output() resizePhoto = new EventEmitter<{ w: number; h: number }>();
+  @Output() resizeItem = new EventEmitter<{ key: string; w: number; h: number }>();
 
   private ro: ResizeObserver | null = null;
 
@@ -77,11 +77,20 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
     return p.startsWith('/') ? origin + p : origin + '/' + p;
   }
 
-  bgStyle(): { [k: string]: string } {
-    const url = this.assetUrl(this.side?.backgroundImage);
-    return url
-      ? { 'background-image': `url('${url}')`, 'background-size': `${this.pw}px ${this.ph}px`, 'background-repeat': 'no-repeat' }
-      : {};
+  get bgUrl(): string { return this.assetUrl(this.side?.backgroundImage); }
+  get bgFit(): string { return this.side?.bgFit || 'fill'; }
+  // Background placement rect; defaults to full bleed when not set.
+  get bgRect(): { x: number; y: number; w: number; h: number } {
+    return this.side?.bgRect || { x: 0, y: 0, w: this.pw, h: this.ph };
+  }
+  bgRectStyle(): { [k: string]: string } {
+    const r = this.bgRect;
+    return {
+      position: 'absolute',
+      left: (r.x || 0) + 'px', top: (r.y || 0) + 'px',
+      width: (r.w || 0) + 'px', height: (r.h || 0) + 'px',
+      overflow: 'hidden'
+    };
   }
 
   fieldText(f: any): string {
@@ -123,11 +132,17 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
 
   // ── Drag / resize (editable mode only) ──
 
+  private itemFor(key: string): any {
+    if (key === 'photo') return this.side?.photo;
+    if (key === 'bg') return this.bgRect;   // defaults to full bleed
+    return (this.side?.fields || []).find((f: any) => f.key === key);
+  }
+
   startMove(ev: PointerEvent, key: string): void {
     if (!this.editable) return;
     ev.preventDefault(); ev.stopPropagation();
     this.selectKey.emit(key);
-    const item = key === 'photo' ? this.side.photo : (this.side.fields || []).find((f: any) => f.key === key);
+    const item = this.itemFor(key);
     if (!item) return;
     this.drag = {
       key, mode: 'move', startX: ev.clientX, startY: ev.clientY,
@@ -136,14 +151,15 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
     this.attachDocListeners();
   }
 
-  startResize(ev: PointerEvent): void {
-    if (!this.editable || !this.side?.photo) return;
+  startResize(ev: PointerEvent, key: string): void {
+    if (!this.editable) return;
     ev.preventDefault(); ev.stopPropagation();
-    this.selectKey.emit('photo');
-    const p = this.side.photo;
+    this.selectKey.emit(key);
+    const item = this.itemFor(key);
+    if (!item) return;
     this.drag = {
-      key: 'photo', mode: 'resize', startX: ev.clientX, startY: ev.clientY,
-      origX: p.x || 0, origY: p.y || 0, origW: p.w || 0, origH: p.h || 0
+      key, mode: 'resize', startX: ev.clientX, startY: ev.clientY,
+      origX: item.x || 0, origY: item.y || 0, origW: item.w || 0, origH: item.h || 0
     };
     this.attachDocListeners();
   }
@@ -157,9 +173,9 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
       const y = Math.round(this.clamp(this.drag.origY + dy, 0, this.ph));
       this.moveItem.emit({ key: this.drag.key, x, y });
     } else {
-      const w = Math.round(this.clamp(this.drag.origW + dx, 20, this.pw));
-      const h = Math.round(this.clamp(this.drag.origH + dy, 20, this.ph));
-      this.resizePhoto.emit({ w, h });
+      const w = Math.round(this.clamp(this.drag.origW + dx, 20, this.pw * 2));
+      const h = Math.round(this.clamp(this.drag.origH + dy, 20, this.ph * 2));
+      this.resizeItem.emit({ key: this.drag.key, w, h });
     }
   };
 

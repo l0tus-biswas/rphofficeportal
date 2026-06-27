@@ -93,8 +93,8 @@
       <div class="td-canvas-wrap mb-2">
         <app-card-canvas *ngIf="side"
           [side]="side" [printFile]="template.printFile" [values]="previewValues"
-          [autoFit]="true" [maxWidth]="560" [displayWidth]="displayWidth" [editable]="true" [selectedKey]="selectedKey"
-          (selectKey)="onSelect($event)" (moveItem)="onMove($event)" (resizePhoto)="onResizePhoto($event)">
+          [autoFit]="true" [maxWidth]="640" [displayWidth]="displayWidth" [editable]="true" [selectedKey]="selectedKey"
+          (selectKey)="onSelect($event)" (moveItem)="onMove($event)" (resizeItem)="onResizeItem($event)">
         </app-card-canvas>
       </div>
 
@@ -134,6 +134,8 @@
                   (click)="onSelect(f.key)">{{ f.label || f.key }}</button>
           <button type="button" class="btn btn-sm" [class.btn-info]="selectedKey === 'photo'" [class.btn-outline-info]="selectedKey !== 'photo'"
                   *ngIf="side.photo" (click)="onSelect('photo')"><i class="bi bi-image"></i> Photo</button>
+          <button type="button" class="btn btn-sm" [class.btn-info]="selectedKey === 'bg'" [class.btn-outline-info]="selectedKey !== 'bg'"
+                  *ngIf="side.backgroundImage" (click)="selectBgLayer()"><i class="bi bi-aspect-ratio"></i> Background</button>
         </div>
 
         <!-- Field inspector -->
@@ -221,8 +223,30 @@
           </div>
         </div>
 
-        <div *ngIf="!selectedField && selectedKey !== 'photo'" class="text-muted small">
-          Select a field or the photo on the card to edit its style.
+        <!-- Background inspector (position / resize the background image) -->
+        <div *ngIf="selectedKey === 'bg' && side.bgRect as bg">
+          <div class="small text-muted mb-2"><i class="bi bi-aspect-ratio me-1"></i>Position &amp; resize the background image.</div>
+          <div class="row g-2">
+            <div class="col-3"><label class="form-label small mb-1">X</label><input type="number" class="form-control form-control-sm" [(ngModel)]="bg.x" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">Y</label><input type="number" class="form-control form-control-sm" [(ngModel)]="bg.y" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">W</label><input type="number" class="form-control form-control-sm" [(ngModel)]="bg.w" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">H</label><input type="number" class="form-control form-control-sm" [(ngModel)]="bg.h" (ngModelChange)="changed()"></div>
+            <div class="col-12">
+              <label class="form-label small mb-1">Scale (mode)</label>
+              <select class="form-select form-select-sm" [(ngModel)]="side.bgFit" (ngModelChange)="changed()">
+                <option value="fill">Fill — stretch to the box</option>
+                <option value="cover">Cover — fill &amp; crop, keep aspect</option>
+                <option value="contain">Contain — fit whole image, keep aspect</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary mt-3 w-100" (click)="resetBg()">
+            <i class="bi bi-arrows-fullscreen me-1"></i> Reset to full card
+          </button>
+        </div>
+
+        <div *ngIf="!selectedField && selectedKey !== 'photo' && selectedKey !== 'bg'" class="text-muted small">
+          Select a field, the photo, or the background on the card to edit it.
         </div>
       </div>
     </div>

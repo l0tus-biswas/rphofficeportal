@@ -1,6 +1,6 @@
 
 <div class="vistaprint-config-page py-4">
-  <div class="container">
+  <div class="container-fluid px-3 px-lg-4">
 
     <!-- Page Header -->
     <div class="page-header mb-4">
@@ -120,44 +120,6 @@
 
             <hr class="my-4">
 
-            <!-- Card Render Templates -->
-            <h6 class="fw-semibold mb-2">
-              <i class="bi bi-person-vcard me-1 text-primary"></i> Card Render Templates
-            </h6>
-            <p class="text-muted small mb-3">
-              Design the front &amp; back visually. Drag fields and the photo frame to position them,
-              upload background art per side, and style each field. The exact layout you see is sent
-              to Printful as a print-ready file when an agent orders. Don't forget to
-              <strong>Save Configuration</strong> below.
-            </p>
-
-            <!-- Visual designer -->
-            <app-template-designer [templates]="templates" (templatesChange)="onTemplatesChange($event)"></app-template-designer>
-
-            <!-- Advanced raw JSON (escape hatch) -->
-            <div class="mt-3">
-              <button type="button" class="btn btn-sm btn-link p-0" (click)="toggleAdvanced()">
-                <i class="bi" [class.bi-chevron-right]="!showAdvanced" [class.bi-chevron-down]="showAdvanced"></i>
-                Advanced: edit raw JSON
-              </button>
-              <div *ngIf="showAdvanced" class="mt-2">
-                <textarea class="form-control font-monospace" rows="12" [(ngModel)]="advancedJson"
-                          spellcheck="false" placeholder="[ ]"></textarea>
-                <div *ngIf="advancedError" class="text-danger small mt-1">
-                  <i class="bi bi-exclamation-triangle me-1"></i>{{ advancedError }}
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" (click)="applyAdvancedJson()">
-                  <i class="bi bi-arrow-up-circle me-1"></i>Load JSON into designer
-                </button>
-                <div class="form-text">
-                  Coordinates are in print-file pixels (e.g. 750×1200 at 300 DPI). Placements:
-                  <code>default</code> (front print area) + <code>back</code>.
-                </div>
-              </div>
-            </div>
-
-            <hr class="my-4">
-
             <!-- Save -->
             <div class="d-flex justify-content-end">
               <button class="btn btn-primary px-4" (click)="saveConfig()" [disabled]="saving">
@@ -205,5 +167,55 @@
       </div>
 
     </div>
+
+    <!-- ═══════════ CARD DESIGNER (full width) ═══════════ -->
+    <div *ngIf="!loading" class="row g-4 mt-1">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0 fw-semibold">
+              <i class="bi bi-person-vcard me-2 text-primary"></i> Card Designer
+            </h5>
+            <button class="btn btn-primary px-4" (click)="saveConfig()" [disabled]="saving">
+              <span *ngIf="saving" class="spinner-border spinner-border-sm me-2"></span>
+              <i *ngIf="!saving" class="bi bi-floppy-fill me-2"></i>
+              {{ saving ? 'Saving…' : 'Save Configuration' }}
+            </button>
+          </div>
+          <div class="card-body p-4">
+            <p class="text-muted small mb-3">
+              Design the front &amp; back visually. Drag fields and the photo frame to position them,
+              upload background art per side, and style each field. The exact layout you see is sent
+              to Printful as a print-ready file when an agent orders. Remember to <strong>Save Configuration</strong>.
+            </p>
+
+            <app-template-designer [templates]="templates" (templatesChange)="onTemplatesChange($event)"></app-template-designer>
+
+            <!-- Advanced raw JSON (escape hatch) -->
+            <div class="mt-3">
+              <button type="button" class="btn btn-sm btn-link p-0" (click)="toggleAdvanced()">
+                <i class="bi" [class.bi-chevron-right]="!showAdvanced" [class.bi-chevron-down]="showAdvanced"></i>
+                Advanced: edit raw JSON
+              </button>
+              <div *ngIf="showAdvanced" class="mt-2">
+                <textarea class="form-control font-monospace" rows="12" [(ngModel)]="advancedJson"
+                          spellcheck="false" placeholder="[ ]"></textarea>
+                <div *ngIf="advancedError" class="text-danger small mt-1">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{ advancedError }}
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" (click)="applyAdvancedJson()">
+                  <i class="bi bi-arrow-up-circle me-1"></i>Load JSON into designer
+                </button>
+                <div class="form-text">
+                  Coordinates are in print-file pixels (e.g. 750×1200 at 300 DPI). Placements:
+                  <code>default</code> (front print area) + <code>back</code>.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
