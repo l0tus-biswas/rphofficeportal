@@ -56,9 +56,123 @@ async function getTemplateById(id) {
   return all.find(t => t.id === id) || null;
 }
 
-function buildPrintFileUrl(filename) {
-  const base = (process.env.API_URL || '').replace(/\/$/, '');
+function buildPrintFileUrl(filename, fallbackBase) {
+  // Printful fetches these files from a PUBLIC URL, so the host must be
+  // internet-reachable. Prefer explicit config, then the request host.
+  const base = (process.env.API_URL || process.env.BACKEND_URL || fallbackBase || '').replace(/\/$/, '');
   return `${base}/uploads/business-card-prints/${filename}`;
+}
+
+// Printful rejects orders whose file URLs are relative or point at a host it
+// cannot reach (localhost/private). Validate before attaching to an order.
+function isPublicHttpUrl(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' ||
+        host.endsWith('.local') || host.startsWith('192.168.') ||
+        host.startsWith('10.') || host.startsWith('172.16.')) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Public, internet-reachable base URL for assets Printful must fetch.
+function getPublicBaseUrl(req) {
+  return process.env.API_URL || process.env.BACKEND_URL ||
+    (req ? `${req.protocol}://${req.get('host')}` : '');
+}
+
+// Build the Printful order payload from a local order and submit it as a draft.
+// Mutates `order` (printFiles, printfulOrderId, printfulStatus, adminNotes).
+// Throws on Printful API error so callers can record/surface it; an error with
+// `.notConfigured === true` means Printful isn't set up (a no-op, not a failure).
+async function submitOrderToPrintful(order, publicBase) {
+  const config = await getPrintfulConfig();
+  if (!config.apiKey) {
+    const err = new Error('Printful integration not configured.');
+    err.notConfigured = true;
+    throw err;
+  }
+  const printful = getPrintfulClient(config.apiKey, config.storeId);
+
+  const orderItem = {
+    sync_variant_id: order.product.variantId,
+    quantity: order.product.quantity
+  };
+
+  // Render the agent's personalized print files and override the sync product's
+  // default files (front + back). If rendering fails, submit without custom
+  // files so the order still reaches Printful for admin review.
+  if (order.templateId) {
+    try {
+      const template = await getTemplateById(order.templateId);
+      if (template) {
+        const rendered = await renderCard(
+          template, order.textValues || {}, order.photoUrl || '', `order-${order._id}`);
+
+        const printFiles = {};
+        const builtFiles = rendered.map(r => {
+          const url = buildPrintFileUrl(r.filename, publicBase);
+          printFiles[r.placement] = url;
+          return { type: r.placement, url };
+        });
+        order.printFiles = printFiles;
+
+        // A relative or localhost URL makes Printful reject the WHOLE order
+        // ("file URL is not a valid URL"), so only attach reachable URLs.
+        if (builtFiles.length && builtFiles.every(f => isPublicHttpUrl(f.url))) {
+          orderItem.files = builtFiles;
+        } else {
+          console.error(
+            `Order ${order._id}: print file URLs are not publicly reachable ` +
+            `(e.g. "${builtFiles[0] && builtFiles[0].url}"). Submitting to Printful ` +
+            `without custom files. Set API_URL/BACKEND_URL to your public backend URL.`);
+          order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
+            'WARNING: personalized print files were NOT attached — API_URL/BACKEND_URL ' +
+            'is missing or not publicly reachable. Admin must attach files before confirming.';
+        }
+      }
+    } catch (renderErr) {
+      console.error('Card render failed for order', String(order._id), '-', renderErr.message);
+      // Leave orderItem without files; admin reviews before Printful confirm.
+    }
+  }
+
+  const orderPayload = {
+    recipient: {
+      name: order.shippingAddress.name,
+      address1: order.shippingAddress.address1,
+      address2: order.shippingAddress.address2 || '',
+      city: order.shippingAddress.city,
+      state_code: order.shippingAddress.state,
+      country_code: order.shippingAddress.country || 'US',
+      zip: order.shippingAddress.zip,
+      phone: order.shippingAddress.phone || '',
+      email: order.userEmail
+    },
+    items: [orderItem]
+  };
+
+  // Add personalization notes
+  if (order.textValues && Object.keys(order.textValues).length > 0) {
+    const noteLines = Object.entries(order.textValues)
+      .filter(([, val]) => val)
+      .map(([key, val]) => `${key}: ${val}`);
+    if (noteLines.length > 0) {
+      orderPayload.packing_slip = { message: 'CARD PERSONALIZATION:\n' + noteLines.join('\n') };
+    }
+  }
+
+  const pfResponse = await printful.post('/orders', orderPayload);
+  const pfOrder = pfResponse.data?.result;
+  if (pfOrder) {
+    order.printfulOrderId = pfOrder.id;
+    order.printfulStatus = pfOrder.status || 'draft';
+  }
+  return pfOrder;
 }
 
 function getPrintfulClient(apiKey, storeId) {
@@ -152,19 +266,27 @@ router.post('/upload-photo', authenticate, photoUpload.single('photo'), async (r
 router.get('/templates', authenticate, async (req, res) => {
   try {
     const templates = await getCardTemplates();
-    // Expose only what the agent UI needs to render the form + order.
+    const base = getPublicBaseUrl(req).replace(/\/$/, '');
+    const abs = (u) => !u ? '' : (/^https?:/i.test(u) ? u : base + (u.startsWith('/') ? u : '/' + u));
+    // Return the full layout so the agent UI can render an instant in-browser
+    // preview that matches the print output. Layout coords/backgrounds are not
+    // sensitive (backgrounds are public assets). hasPhoto kept for compatibility.
     const safe = templates.map(t => ({
       id: t.id,
       name: t.name,
       syncProductId: t.syncProductId,
+      previewImage: abs(t.previewImage || ''),
       variants: t.variants || [],
       orientation: t.orientation || 'portrait',
       printFile: t.printFile,
       sides: (t.sides || []).map(s => ({
         placement: s.placement,
         label: s.label || s.placement,
+        backgroundImage: s.backgroundImage || '',
+        fonts: s.fonts || [],
+        photo: s.photo || null,
         hasPhoto: !!s.photo,
-        fields: (s.fields || []).map(f => ({ key: f.key, label: f.label || f.key, required: !!f.required }))
+        fields: (s.fields || []).map(f => ({ ...f, label: f.label || f.key, required: !!f.required }))
       }))
     }));
     return sendResponse(res, 200, { templates: safe });
@@ -220,6 +342,20 @@ router.get('/products', authenticate, async (req, res) => {
     const response = await printful.get('/store/products');
     const products = response.data?.result || [];
 
+    // For products that have a personalization template, show the RHP design
+    // (preview render, or the front background) as the tile thumbnail instead
+    // of Printful's generic image. Map by syncProductId (first template wins).
+    const templates = await getCardTemplates();
+    const base = getPublicBaseUrl(req).replace(/\/$/, '');
+    const abs = (u) => !u ? '' : (/^https?:/i.test(u) ? u : base + (u.startsWith('/') ? u : '/' + u));
+    const tplThumb = {};
+    for (const t of templates) {
+      if (t.syncProductId == null || tplThumb[t.syncProductId]) continue;
+      const front = (t.sides || []).find(s => s.placement === 'default') || (t.sides || [])[0];
+      const img = t.previewImage || (front && front.backgroundImage);
+      if (img) tplThumb[t.syncProductId] = abs(img);
+    }
+
     // Return simplified product list with thumbnails
     const simplified = products.map(p => ({
       id: p.id,
@@ -227,7 +363,7 @@ router.get('/products', authenticate, async (req, res) => {
       name: p.name,
       variants: p.variants || 0,
       synced: p.synced,
-      thumbnail: p.thumbnail_url || ''
+      thumbnail: tplThumb[p.id] || p.thumbnail_url || ''
     }));
 
     return sendResponse(res, 200, { enabled: true, products: simplified });
@@ -713,87 +849,35 @@ router.post('/checkout/confirm', authenticate, async (req, res) => {
       order.paidAt = new Date();
     }
 
-    // Submit to Printful as draft
-    const config = await getPrintfulConfig();
-    if (config.apiKey) {
-      try {
-        const printful = getPrintfulClient(config.apiKey, config.storeId);
-
-        const orderItem = {
-          sync_variant_id: order.product.variantId,
-          quantity: order.product.quantity
-        };
-
-        // Render the agent's personalized print files and override the sync
-        // product's default files (front + back). If rendering fails, the order
-        // is still created but left for admin review rather than auto-confirmed.
-        if (order.templateId) {
-          try {
-            const template = await getTemplateById(order.templateId);
-            if (template) {
-              const rendered = await renderCard(
-                template, order.textValues || {}, order.photoUrl || '', `order-${order._id}`);
-
-              const printFiles = {};
-              orderItem.files = rendered.map(r => {
-                const url = buildPrintFileUrl(r.filename);
-                printFiles[r.placement] = url;
-                return { type: r.placement, url };
-              });
-              order.printFiles = printFiles;
-            }
-          } catch (renderErr) {
-            console.error('Card render failed for order', String(order._id), '-', renderErr.message);
-            // Leave orderItem without files; admin reviews before Printful confirm.
-          }
-        }
-
-        const orderPayload = {
-          recipient: {
-            name: order.shippingAddress.name,
-            address1: order.shippingAddress.address1,
-            address2: order.shippingAddress.address2 || '',
-            city: order.shippingAddress.city,
-            state_code: order.shippingAddress.state,
-            country_code: order.shippingAddress.country || 'US',
-            zip: order.shippingAddress.zip,
-            phone: order.shippingAddress.phone || '',
-            email: order.userEmail
-          },
-          items: [orderItem]
-        };
-
-        // Add personalization notes
-        if (order.textValues && Object.keys(order.textValues).length > 0) {
-          const noteLines = Object.entries(order.textValues)
-            .filter(([, val]) => val)
-            .map(([key, val]) => `${key}: ${val}`);
-          if (noteLines.length > 0) {
-            orderPayload.packing_slip = {
-              message: 'CARD PERSONALIZATION:\n' + noteLines.join('\n')
-            };
-          }
-        }
-
-        const pfResponse = await printful.post('/orders', orderPayload);
-        const pfOrder = pfResponse.data?.result;
-        if (pfOrder) {
-          order.printfulOrderId = pfOrder.id;
-          order.printfulStatus = pfOrder.status || 'draft';
-        }
-      } catch (pfErr) {
-        // Log but don't fail — order is paid, admin can submit manually
+    // Submit to Printful as draft. Failures are recorded (not swallowed) so the
+    // order doesn't look "submitted" while never reaching Printful.
+    let pfSubmitError = '';
+    try {
+      await submitOrderToPrintful(order, getPublicBaseUrl(req));
+    } catch (pfErr) {
+      if (!pfErr.notConfigured) {
+        const detail = pfErr.response?.data?.result ||
+          pfErr.response?.data?.error?.message || pfErr.message;
         console.error('Printful order submission failed:', pfErr.response?.data || pfErr.message);
+        pfSubmitError = String(detail);
+        order.printfulStatus = 'not_submitted';
+        order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
+          `Printful submission failed: ${pfSubmitError}`;
       }
     }
 
     await order.save();
 
+    const printfulSubmitted = !!order.printfulOrderId;
     return sendResponse(res, 200, {
-      message: 'Payment confirmed! Your order has been submitted.',
+      message: printfulSubmitted
+        ? 'Payment confirmed! Your order has been submitted.'
+        : 'Payment confirmed! Your order is recorded and pending fulfillment review.',
       order: {
         id: order._id,
         printfulOrderId: order.printfulOrderId,
+        printfulSubmitted,
+        printfulError: pfSubmitError || undefined,
         paymentStatus: order.paymentStatus,
         adminStatus: order.adminStatus,
         total: order.total,
@@ -1085,23 +1169,44 @@ router.put('/admin/orders/:id/approve', authenticate, authorize('admin'), async 
     order.reviewedAt = new Date();
     if (notes !== undefined) order.adminNotes = notes;
 
-    // If paid and has Printful order, try to confirm it
-    if (order.paymentStatus === 'paid' && order.printfulOrderId) {
+    // Push the order to fulfillment. If the initial checkout submission failed
+    // (e.g. broken file URL), the draft won't exist yet — create it now, then
+    // confirm. This is the recovery path for orders stuck "paid but not in Printful".
+    let pfError = '';
+    if (order.paymentStatus === 'paid') {
       try {
-        const config = await getPrintfulConfig();
-        if (config.apiKey) {
-          const printful = getPrintfulClient(config.apiKey, config.storeId);
-          await printful.post(`/orders/${order.printfulOrderId}/confirm`);
-          order.printfulStatus = 'pending';
+        if (!order.printfulOrderId) {
+          await submitOrderToPrintful(order, getPublicBaseUrl(req));
+        }
+        if (order.printfulOrderId) {
+          const config = await getPrintfulConfig();
+          if (config.apiKey) {
+            const printful = getPrintfulClient(config.apiKey, config.storeId);
+            await printful.post(`/orders/${order.printfulOrderId}/confirm`);
+            order.printfulStatus = 'pending';
+          }
         }
       } catch (pfErr) {
         // Log but don't block approval
-        console.error('Printful confirm failed:', pfErr.response?.data || pfErr.message);
+        if (!pfErr.notConfigured) {
+          pfError = String(pfErr.response?.data?.result ||
+            pfErr.response?.data?.error?.message || pfErr.message);
+          console.error('Printful submit/confirm failed:', pfErr.response?.data || pfErr.message);
+        }
       }
     }
 
     await order.save();
-    return sendResponse(res, 200, { message: 'Order approved.', order: { id: order._id, adminStatus: order.adminStatus } });
+    return sendResponse(res, 200, {
+      message: pfError ? `Order approved, but Printful submission failed: ${pfError}` : 'Order approved.',
+      order: {
+        id: order._id,
+        adminStatus: order.adminStatus,
+        printfulOrderId: order.printfulOrderId,
+        printfulStatus: order.printfulStatus,
+        printfulError: pfError || undefined
+      }
+    });
   } catch (err) {
     return errorResponse(res, err);
   }

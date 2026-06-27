@@ -15,9 +15,12 @@ export class VistaprintConfigComponent implements OnInit {
   // Text fields for personalization
   textFields: OptionField[] = [];
 
-  // Card render templates (edited as JSON for v1)
-  templatesJson = '';
-  templatesError = '';
+  // Card render templates — edited visually (designer is source of truth).
+  templates: any[] = [];
+  // Advanced raw-JSON escape hatch (power users).
+  showAdvanced = false;
+  advancedJson = '';
+  advancedError = '';
   assetUploading = false;
   assetUrl = '';
   assetError = '';
@@ -48,7 +51,7 @@ export class VistaprintConfigComponent implements OnInit {
         this.storeId = res.config.storeId || '';
         this.enabled = res.config.enabled;
         this.textFields = res.config.textFields || [];
-        this.templatesJson = JSON.stringify(res.config.templates || [], null, 2);
+        this.templates = res.config.templates || [];
         this.loading = false;
       },
       error: (err) => {
@@ -56,6 +59,30 @@ export class VistaprintConfigComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  onTemplatesChange(templates: any[]): void {
+    this.templates = templates;
+  }
+
+  toggleAdvanced(): void {
+    this.showAdvanced = !this.showAdvanced;
+    if (this.showAdvanced) {
+      this.advancedJson = JSON.stringify(this.templates, null, 2);
+      this.advancedError = '';
+    }
+  }
+
+  applyAdvancedJson(): void {
+    this.advancedError = '';
+    try {
+      const parsed = JSON.parse(this.advancedJson);
+      if (!Array.isArray(parsed)) throw new Error('Templates must be a JSON array.');
+      this.templates = parsed;
+      this.advancedError = '';
+    } catch (e: any) {
+      this.advancedError = 'Invalid JSON: ' + (e?.message || 'parse error');
+    }
   }
 
   saveConfig(): void {
@@ -66,24 +93,9 @@ export class VistaprintConfigComponent implements OnInit {
     const body: any = {
       storeId: this.storeId,
       enabled: this.enabled,
-      textFields: this.textFields
+      textFields: this.textFields,
+      templates: this.templates || []
     };
-
-    // Parse + validate templates JSON before saving.
-    this.templatesError = '';
-    if (this.templatesJson && this.templatesJson.trim()) {
-      try {
-        const parsed = JSON.parse(this.templatesJson);
-        if (!Array.isArray(parsed)) throw new Error('Templates must be a JSON array.');
-        body.templates = parsed;
-      } catch (e: any) {
-        this.templatesError = 'Invalid templates JSON: ' + (e?.message || 'parse error');
-        this.saving = false;
-        return;
-      }
-    } else {
-      body.templates = [];
-    }
 
     if (this.apiKey) {
       body.apiKey = this.apiKey;
@@ -93,7 +105,7 @@ export class VistaprintConfigComponent implements OnInit {
       next: (res) => {
         this.config = res.config;
         this.textFields = res.config.textFields || [];
-        this.templatesJson = JSON.stringify(res.config.templates || [], null, 2);
+        this.templates = res.config.templates || [];
         this.successMessage = 'Configuration saved.';
         this.saving = false;
         this.apiKey = '';

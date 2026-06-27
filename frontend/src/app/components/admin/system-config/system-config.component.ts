@@ -37,6 +37,13 @@ export class SystemConfigComponent implements OnInit {
 
   siteAccessEnabled: boolean = true;
   siteAccessMessage: string = 'RHP Office is temporarily under maintenance. Please check back shortly.';
+
+  // Email configuration state
+  emailConfig = { fromName: '', fromEmail: '', replyTo: '' };
+  emailLoading: boolean = false;
+  emailSaving: boolean = false;
+  emailTesting: boolean = false;
+  testEmailRecipient: string = '';
   
   editingConfig: SystemConfig | null = null;
   editValue: string = '';
@@ -71,6 +78,7 @@ export class SystemConfigComponent implements OnInit {
   ngOnInit(): void {
     this.loadConfigs();
     this.loadSiteAccess();
+    this.loadEmailConfig();
     this.loadQBOStatus();
 
     // Handle redirect from QuickBooks OAuth
@@ -124,6 +132,76 @@ export class SystemConfigComponent implements OnInit {
 
   onSiteAccessToggle(): void {
     this.saveSiteAccess();
+  }
+
+  // ── Email Configuration ───────────────────────────────────────────────
+
+  loadEmailConfig(): void {
+    this.emailLoading = true;
+    this.http.get<any>(`${environment.apiUrl}/admin/config/email`).subscribe({
+      next: (response) => {
+        const email = response?.email ?? response?.data?.email;
+        if (email) {
+          this.emailConfig = {
+            fromName: email.fromName || '',
+            fromEmail: email.fromEmail || '',
+            replyTo: email.replyTo || ''
+          };
+        }
+        this.emailLoading = false;
+      },
+      error: () => {
+        this.emailLoading = false;
+      }
+    });
+  }
+
+  saveEmailConfig(): void {
+    if (!this.emailConfig.fromName?.trim() || !this.emailConfig.fromEmail?.trim()) {
+      this.error = 'Sender name and sender email are required';
+      setTimeout(() => this.error = '', 3000);
+      return;
+    }
+
+    this.emailSaving = true;
+    this.error = '';
+    this.success = '';
+
+    this.http.put<any>(`${environment.apiUrl}/admin/config/email`, {
+      fromName: this.emailConfig.fromName,
+      fromEmail: this.emailConfig.fromEmail,
+      replyTo: this.emailConfig.replyTo
+    }).subscribe({
+      next: (response) => {
+        this.success = response?.message || 'Email configuration updated';
+        this.emailSaving = false;
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to update email configuration';
+        this.emailSaving = false;
+      }
+    });
+  }
+
+  sendTestEmail(): void {
+    this.emailTesting = true;
+    this.error = '';
+    this.success = '';
+
+    this.http.post<any>(`${environment.apiUrl}/admin/config/email/test`, {
+      email: this.testEmailRecipient?.trim() || undefined
+    }).subscribe({
+      next: (response) => {
+        this.success = response?.message || 'Test email sent';
+        this.emailTesting = false;
+        setTimeout(() => this.success = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to send test email';
+        this.emailTesting = false;
+      }
+    });
   }
 
   loadConfigs(): void {

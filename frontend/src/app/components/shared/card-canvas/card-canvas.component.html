@@ -1,0 +1,34 @@
+<div class="cc-viewport" [style.width.px]="displayWidth" [style.height.px]="displayHeight"
+     (pointerdown)="editable && selectKey.emit(null)">
+  <div class="cc-stage"
+       [style.width.px]="pw" [style.height.px]="ph"
+       [style.transform]="'scale(' + scale + ')'"
+       [ngStyle]="bgStyle()">
+
+    <!-- Safety-area guide (designer only): keep important content inside this box -->
+    <div *ngIf="editable" class="cc-safety"
+         [style.left.px]="pw * 0.04" [style.top.px]="ph * 0.04"
+         [style.width.px]="pw * 0.92" [style.height.px]="ph * 0.92"></div>
+
+    <!-- Photo frame -->
+    <div *ngIf="side?.photo"
+         class="cc-item cc-photo"
+         [class.cc-selected]="editable && selectedKey === 'photo'"
+         [class.cc-editable]="editable"
+         [ngStyle]="photoStyle()"
+         (pointerdown)="startMove($event, 'photo')">
+      <img *ngIf="photoDataUrl" [src]="photoDataUrl" class="cc-photo-img" alt="">
+      <div *ngIf="!photoDataUrl && editable" class="cc-photo-ph">Photo</div>
+      <span *ngIf="editable && selectedKey === 'photo'" class="cc-resize" (pointerdown)="startResize($event)"></span>
+    </div>
+
+    <!-- Text fields -->
+    <div *ngFor="let f of (side?.fields || [])"
+         class="cc-item cc-field"
+         [class.cc-selected]="editable && selectedKey === f.key"
+         [class.cc-editable]="editable"
+         [class.cc-placeholder]="editable && !(values[f.key] || '').trim()"
+         [ngStyle]="fieldStyle(f)"
+         (pointerdown)="startMove($event, f.key)">{{ fieldText(f) }}</div>
+  </div>
+</div>

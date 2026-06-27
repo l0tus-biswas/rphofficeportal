@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, interval, EMPTY } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthService } from './auth.service';
+import { SocketService } from './socket.service';
 
 export interface Notification {
   _id: string;
@@ -26,19 +26,39 @@ export class NotificationService {
   private unreadCountSubject = new BehaviorSubject<number>(0);
   public unreadCount$ = this.unreadCountSubject.asObservable();
 
-  constructor(private http: HttpClient, private authService: AuthService) {
-    // Poll every 30 s only while a user is authenticated.
-    // When currentUser$ emits null (logged-out / login page), switchMap to EMPTY
-    // so no HTTP requests are made until the user logs back in.
-    this.authService.currentUser$.pipe(
-      switchMap(user => (user ? interval(30000) : EMPTY))
-    ).subscribe(() => {
-      this.refreshUnreadCount();
+  // Emits each new notification pushed over the socket (for live list updates).
+  private newNotificationSubject = new BehaviorSubject<Notification | null>(null);
+  public newNotification$ = this.newNotificationSubject.asObservable();
+
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService,
+    private socketService: SocketService
+  ) {
+    // Real-time: a new notification arriving over the WebSocket refreshes the
+    // badge instantly — no periodic polling needed.
+    this.socketService.on<Notification>('notification:new').subscribe({
+      next: (notification) => {
+        this.newNotificationSubject.next(notification);
+        this.refreshUnreadCount();
+      },
+      error: (err) => console.error('[Notification] Socket listener error:', err)
     });
 
-    // Reset badge to 0 whenever the user logs out
+    // Resync the count after every (re)connect to catch anything missed while
+    // the socket was down, and do the initial fetch once connected.
+    this.socketService.connectionState$.subscribe(state => {
+      if (state === 'connected') {
+        this.refreshUnreadCount();
+      }
+    });
+
+    // Reset badge to 0 whenever the user logs out; fetch once on login so the
+    // badge is correct even before the socket finishes connecting.
     this.authService.currentUser$.subscribe(user => {
-      if (!user) {
+      if (user) {
+        this.refreshUnreadCount();
+      } else {
         this.unreadCountSubject.next(0);
       }
     });

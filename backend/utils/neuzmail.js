@@ -8,9 +8,79 @@
  */
 
 const axios = require('axios');
+const mongoose = require('mongoose');
+const SystemConfig = require('../models/SystemConfig');
 
 const NEUZMAIL_API_URL = 'https://app.neuzmail.in/api/v1/transactional/send';
 const NEUZMAIL_API_TOKEN = process.env.NEUZMAIL_API_TOKEN;
+
+// ── Email sender settings (admin-configurable via SystemConfig) ─────────────────
+// These keys are managed from Admin → System Configuration → Email Configuration.
+// Source of truth is the database; environment variables are used as fallback so
+// the app keeps working before any admin override has been saved.
+const EMAIL_SETTING_KEYS = {
+  fromName: 'email_from_name',
+  fromEmail: 'email_from_email',
+  replyTo: 'email_reply_to',
+};
+
+const DEFAULT_FROM_EMAIL = 'contracting@rhpoffice.com';
+const DEFAULT_FROM_NAME = 'RHP Office';
+
+const SETTINGS_CACHE_TTL_MS = 30000;
+let _settingsCache = null;
+let _settingsCachedAt = 0;
+
+/**
+ * Resolve the active email sender settings.
+ * Order of precedence: SystemConfig (DB) → environment variable → hardcoded default.
+ * Results are cached briefly to avoid a DB hit on every email.
+ */
+async function getEmailSettings(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _settingsCache && (now - _settingsCachedAt) < SETTINGS_CACHE_TTL_MS) {
+    return _settingsCache;
+  }
+
+  const byKey = {};
+  try {
+    // Skip the DB read when not connected (early boot / unit tests) to avoid
+    // mongoose command buffering, which would otherwise hang.
+    if (mongoose.connection?.readyState === 1) {
+      const docs = await SystemConfig.find({
+        key: { $in: Object.values(EMAIL_SETTING_KEYS) }
+      }).lean();
+      for (const doc of docs) {
+        if (doc.value !== undefined && doc.value !== null && String(doc.value).trim() !== '') {
+          byKey[doc.key] = String(doc.value).trim();
+        }
+      }
+    }
+  } catch (error) {
+    // DB unavailable — fall back to env/defaults silently so email still sends.
+    console.error('[Neuzmail] Could not load email settings from DB, using env fallback:', error.message);
+  }
+
+  const settings = {
+    fromName: byKey[EMAIL_SETTING_KEYS.fromName] || process.env.SMTP_FROM_NAME || DEFAULT_FROM_NAME,
+    fromEmail: byKey[EMAIL_SETTING_KEYS.fromEmail] || process.env.SMTP_FROM_EMAIL || DEFAULT_FROM_EMAIL,
+    replyTo: byKey[EMAIL_SETTING_KEYS.replyTo] || process.env.SMTP_REPLY_TO || '',
+  };
+
+  _settingsCache = settings;
+  _settingsCachedAt = now;
+  return settings;
+}
+
+/** Clear the cached settings so the next send reloads from the DB immediately. */
+function invalidateEmailSettingsCache() {
+  _settingsCache = null;
+  _settingsCachedAt = 0;
+}
+
+exports.EMAIL_SETTING_KEYS = EMAIL_SETTING_KEYS;
+exports.getEmailSettings = getEmailSettings;
+exports.invalidateEmailSettingsCache = invalidateEmailSettingsCache;
 
 function isAbsoluteUrl(url) {
   return /^https?:\/\//i.test(url || '');
@@ -58,7 +128,7 @@ const TEMPLATE_UIDS = {
 /**
  * Core: Send a transactional email via Neuzmail API
  */
-async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}, fromEmail, fromName }) {
+async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}, fromEmail, fromName, replyTo }) {
   if (!NEUZMAIL_API_TOKEN) {
     throw new Error('NEUZMAIL_API_TOKEN is not configured');
   }
@@ -66,14 +136,22 @@ async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}
     throw new Error('Template UID is not configured for this email type');
   }
 
+  const settings = await getEmailSettings();
+
   const payload = {
     template_uid: templateUid,
     to_email: toEmail,
     subject,
     merge_fields: mergeFields,
-    from_email: fromEmail || process.env.SMTP_FROM_EMAIL || 'contracting@rhpoffice.com',
-    from_name: fromName || process.env.SMTP_FROM_NAME || 'RHP Office',
+    from_email: fromEmail || settings.fromEmail,
+    from_name: fromName || settings.fromName,
   };
+
+  // Only include reply_to when configured, so we never send an empty/invalid value.
+  const resolvedReplyTo = replyTo || settings.replyTo;
+  if (resolvedReplyTo) {
+    payload.reply_to = resolvedReplyTo;
+  }
 
   try {
     const response = await axios.post(NEUZMAIL_API_URL, payload, {
@@ -88,25 +166,30 @@ async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}
       console.log(`[Neuzmail] Email sent: ${response.data.data.message_id} → ${toEmail}`);
       return { success: true, messageId: response.data.data.message_id };
     } else {
-      console.error(`[Neuzmail] API error: ${response.data.message}`);
+      console.error(`[Neuzmail] API error (from=${payload.from_email}, to=${toEmail}): ${response.data.message}`);
       throw new Error(response.data.message || 'Neuzmail email send failed');
     }
   } catch (error) {
+    // Preserve the underlying reason so callers/UI can show something actionable
+    // (e.g. "no valid recipients", "sender not authorized") instead of a generic message.
+    let reason = error.message;
     if (error.response) {
-      console.error(`[Neuzmail] HTTP ${error.response.status}:`, error.response.data);
+      reason = error.response.data?.message || reason;
+      console.error(`[Neuzmail] HTTP ${error.response.status} (from=${payload.from_email}, to=${toEmail}):`, error.response.data);
     } else {
-      console.error('[Neuzmail] Request error:', error.message);
+      console.error(`[Neuzmail] Request error (from=${payload.from_email}, to=${toEmail}):`, error.message);
     }
-    throw new Error('Email could not be sent via Neuzmail');
+    throw new Error(`Email could not be sent via Neuzmail: ${reason}`);
   }
 }
 
 // ── Helper to get common merge fields ──────────────────────────────────────────
 
-function commonFields() {
+async function commonFields() {
   const appUrl = (process.env.APP_URL || 'https://rhpoffice.com').replace(/\/+$/, '');
+  const settings = await getEmailSettings();
   return {
-    APP_NAME: process.env.SMTP_FROM_NAME || 'RHP Office',
+    APP_NAME: settings.fromName,
     APP_URL: appUrl,
     LOGIN_URL: `${appUrl}/login`,
     CURRENT_YEAR: new Date().getFullYear().toString(),
@@ -120,7 +203,7 @@ function commonFields() {
  * Trigger: Admin creates user / referral signup / post-payment account creation
  */
 exports.sendWelcomeEmail = async (user, password, referredByAgent = null) => {
-  const common = commonFields();
+  const common = await commonFields();
 
   await sendViaNeuzmail({
     templateUid: TEMPLATE_UIDS.WELCOME_WITH_PASSWORD,
@@ -143,7 +226,7 @@ exports.sendWelcomeEmail = async (user, password, referredByAgent = null) => {
  * Trigger: Admin creates user with set-password token (no temp password shared)
  */
 exports.sendWelcomeSetPasswordEmail = async (user, setPasswordToken, referredByAgent = null) => {
-  const common = commonFields();
+  const common = await commonFields();
   const setPasswordUrl = `${common.APP_URL}/reset-password?token=${setPasswordToken}`;
 
   await sendViaNeuzmail({
@@ -166,7 +249,7 @@ exports.sendWelcomeSetPasswordEmail = async (user, setPasswordToken, referredByA
  * Trigger: User clicks "Forgot Password"
  */
 exports.sendPasswordResetEmail = async (user, resetToken) => {
-  const common = commonFields();
+  const common = await commonFields();
   const resetUrl = `${common.APP_URL}/reset-password?token=${resetToken}`;
 
   await sendViaNeuzmail({
@@ -188,7 +271,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
  */
 exports.sendApplicationConfirmationEmail = async (application) => {
   const { legalFirstName, legalLastName, email } = application.personalInfo;
-  const common = commonFields();
+  const common = await commonFields();
 
   await sendViaNeuzmail({
     templateUid: TEMPLATE_UIDS.APA_APPLICATION_CONFIRM,
@@ -209,7 +292,7 @@ exports.sendApplicationConfirmationEmail = async (application) => {
  */
 exports.sendPaymentLinkEmail = async (application) => {
   const { legalFirstName, email } = application.personalInfo;
-  const common = commonFields();
+  const common = await commonFields();
   const paymentUrl = `${common.APP_URL}/apa-payment?applicationId=${application._id}`;
 
   await sendViaNeuzmail({
@@ -229,7 +312,7 @@ exports.sendPaymentLinkEmail = async (application) => {
  * Trigger: After payment is completed successfully
  */
 exports.sendAccountActivatedEmail = async (user, password) => {
-  const common = commonFields();
+  const common = await commonFields();
 
   await sendViaNeuzmail({
     templateUid: TEMPLATE_UIDS.ACCOUNT_ACTIVATED,
@@ -257,7 +340,7 @@ exports.sendNotificationEmail = async ({
   imageUrl = null,
   actionLabel = 'View Details'
 }) => {
-  const common = commonFields();
+  const common = await commonFields();
   const actionUrl = link ? toAbsoluteUrl(link, common.APP_URL) : '';
   const resolvedImageUrl = imageUrl ? toAbsoluteUrl(imageUrl, common.APP_URL) : '';
   const notificationMessage = withEmailFallbackContent(message, actionUrl, resolvedImageUrl);
@@ -284,7 +367,7 @@ exports.sendNotificationEmail = async ({
  * Falls back to the notification template with raw content.
  */
 exports.sendEmail = async (options) => {
-  const common = commonFields();
+  const common = await commonFields();
 
   await sendViaNeuzmail({
     templateUid: TEMPLATE_UIDS.SYSTEM_NOTIFICATION,

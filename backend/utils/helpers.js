@@ -14,9 +14,10 @@ exports.generatePassword = (length = 10) => {
 };
 
 // Generate JWT token
-exports.generateToken = (user, secret, expiresIn) => {
+// extraClaims lets callers embed additional payload fields (e.g. impersonatorId)
+exports.generateToken = (user, secret, expiresIn, extraClaims = {}) => {
   const jwt = require('jsonwebtoken');
-  return jwt.sign({ id: user._id }, secret, { expiresIn });
+  return jwt.sign({ id: user._id, ...extraClaims }, secret, { expiresIn });
 };
 
 // Response formatter

@@ -1,6 +1,16 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { forkJoin } from 'rxjs';
 import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord, CardTemplate } from '../../services/business-cards.service';
 import { environment } from '../../../environments/environment';
+
+// A store tile: one per template (a designed card), plus any product without a template.
+interface StoreCard {
+  templateId: string | null;
+  name: string;
+  thumbnail: string;
+  syncProductId: number;
+  variants: number;
+}
 declare var Stripe: any;
 
 @Component({
@@ -11,6 +21,7 @@ declare var Stripe: any;
 export class BusinessCardsComponent implements OnInit, OnDestroy {
   // Products list
   products: PrintfulProduct[] = [];
+  cards: StoreCard[] = [];          // store tiles (one per template + untemplated products)
   loading = true;
   enabled = false;
   error = '';
@@ -32,6 +43,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   activeTemplate: CardTemplate | null = null;
   cardFieldValues: { [key: string]: string } = {};
   photoUrl = '';
+  photoDataUrl = '';            // client-side data URL for instant in-browser preview
   photoUploading = false;
   photoError = '';
   previewUrl = '';
@@ -71,16 +83,52 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   constructor(private businessCardsService: BusinessCardsService) {}
 
   ngOnInit(): void {
-    this.loadProducts();
-    this.loadTemplates();
+    this.loadCatalog();
     this.initStripe();
   }
 
-  loadTemplates(): void {
-    this.businessCardsService.getTemplates().subscribe({
-      next: (res) => { this.templates = res.templates || []; },
-      error: () => { this.templates = []; }
+  /** Load products + templates together, then build the store tiles. */
+  loadCatalog(): void {
+    this.loading = true;
+    forkJoin({
+      products: this.businessCardsService.getProducts(),
+      templates: this.businessCardsService.getTemplates()
+    }).subscribe({
+      next: ({ products, templates }) => {
+        this.enabled = products.enabled;
+        this.products = products.products || [];
+        this.templates = templates.templates || [];
+        this.buildCatalog();
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.message || 'Failed to load the store.';
+        this.loading = false;
+      }
     });
+  }
+
+  /** One tile per template (a designed card); plus any product with no template. */
+  private buildCatalog(): void {
+    const cards: StoreCard[] = [];
+    const usedProducts = new Set<number>();
+    for (const t of this.templates) {
+      const prod = this.products.find(p => p.id === t.syncProductId);
+      cards.push({
+        templateId: t.id,
+        name: t.name,
+        thumbnail: t.previewImage || prod?.thumbnail || '',
+        syncProductId: t.syncProductId,
+        variants: prod?.variants || (t.variants?.length || 0)
+      });
+      usedProducts.add(t.syncProductId);
+    }
+    for (const p of this.products) {
+      if (!usedProducts.has(p.id)) {
+        cards.push({ templateId: null, name: p.name, thumbnail: p.thumbnail, syncProductId: p.id, variants: p.variants });
+      }
+    }
+    this.cards = cards;
   }
 
   /** True when the selected product has a personalization template. */
@@ -92,6 +140,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     this.activeTemplate = null;
     this.cardFieldValues = {};
     this.photoUrl = '';
+    this.photoDataUrl = '';
     this.photoError = '';
     this.previewUrl = '';
     this.previewError = '';
@@ -126,6 +175,45 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.error = err?.error?.message || 'Failed to load products.';
         this.loading = false;
+      }
+    });
+  }
+
+  /** Select a store tile: apply its template (if any) and load orderable variants. */
+  selectCard(card: StoreCard): void {
+    this.loadingDetail = true;
+    this.selectedProduct = null;
+    this.selectedVariant = null;
+    this.checkoutStep = 'product';
+    this.orderSuccess = '';
+    this.orderError = '';
+    this.mockupUrl = '';
+    this.resetPersonalization();
+
+    this.activeTemplate = card.templateId
+      ? (this.templates.find(t => t.id === card.templateId) || null)
+      : null;
+    if (this.activeTemplate) {
+      for (const side of this.activeTemplate.sides) {
+        for (const f of side.fields) {
+          if (!(f.key in this.cardFieldValues)) this.cardFieldValues[f.key] = '';
+        }
+      }
+    }
+
+    this.businessCardsService.getProductDetail(card.syncProductId).subscribe({
+      next: (res) => {
+        this.selectedProduct = res.product;
+        this.textValues = {};
+        if (res.product.textFields) {
+          for (const field of res.product.textFields) this.textValues[field.label] = '';
+        }
+        if (res.product.variants.length === 1) this.selectedVariant = res.product.variants[0];
+        this.loadingDetail = false;
+      },
+      error: (err) => {
+        this.error = err?.error?.message || 'Failed to load product details.';
+        this.loadingDetail = false;
       }
     });
   }
@@ -248,12 +336,18 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     const file = input.files && input.files[0];
     if (!file) return;
     this.photoError = '';
+
+    // Instant in-browser preview (no server round-trip).
+    const reader = new FileReader();
+    reader.onload = () => { this.photoDataUrl = reader.result as string; };
+    reader.readAsDataURL(file);
+
+    // Upload to the server so the print render at checkout can use it.
     this.photoUploading = true;
     this.businessCardsService.uploadPhoto(file).subscribe({
       next: (res) => {
         this.photoUrl = res.photoUrl;
         this.photoUploading = false;
-        this.schedulePreview();
       },
       error: (err) => {
         this.photoError = err?.error?.message || 'Photo upload failed.';
@@ -300,7 +394,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
 
   /** Whether any side of the active template expects a headshot. */
   get templateNeedsPhoto(): boolean {
-    return !!this.activeTemplate && this.activeTemplate.sides.some(s => s.hasPhoto);
+    return !!this.activeTemplate && this.activeTemplate.sides.some(s => s.hasPhoto || !!s.photo);
   }
 
   /** Unique fields across all sides (a key shared by front+back is shown once). */
@@ -321,6 +415,11 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   proceedToShipping(): void {
     this.checkoutStep = 'shipping';
     this.orderError = '';
+    // One-shot server render so the order has a print-accurate thumbnail
+    // (admin order view). The live editing preview is the in-browser canvas.
+    if (this.activeTemplate && !this.previewUrl) {
+      this.updateCardPreview();
+    }
   }
 
   backToProduct(): void {
@@ -459,7 +558,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
 
   startNewOrder(): void {
     this.backToProducts();
-    this.loadProducts();
+    this.loadCatalog();
   }
 
   // ── Order History ──

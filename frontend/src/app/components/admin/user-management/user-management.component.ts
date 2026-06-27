@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { AdminService } from '../../../services/admin.service';
+import { AuthService } from '../../../services/auth.service';
 import { environment } from '../../../../environments/environment';
 
 @Component({
@@ -40,7 +42,15 @@ export class UserManagementComponent implements OnInit {
   eligibleUplines: any[] = [];
   filteredUplines: any[] = [];
 
-  constructor(private adminService: AdminService, private http: HttpClient) { }
+  // Impersonation
+  impersonating = false;
+
+  constructor(
+    private adminService: AdminService,
+    private authService: AuthService,
+    private http: HttpClient,
+    private router: Router
+  ) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -198,6 +208,25 @@ export class UserManagementComponent implements OnInit {
       error: (error) => {
         this.error = error.error?.message || 'Failed to delete user';
         this.loading = false;
+      }
+    });
+  }
+
+  loginAsUser(user: any): void {
+    if (!confirm(`Log in as ${user.name} (${user.email})?\n\nYou will see the platform exactly as this user does. Use "Exit impersonation" to return to your admin account.`)) return;
+
+    this.impersonating = true;
+    this.error = '';
+    this.authService.impersonate(user._id).subscribe({
+      next: () => {
+        this.impersonating = false;
+        // Navigate to the impersonated user's dashboard and reload so all
+        // services pick up the new session/user context.
+        this.router.navigate(['/dashboard']).then(() => window.location.reload());
+      },
+      error: (error) => {
+        this.error = error.error?.message || 'Failed to log in as user';
+        this.impersonating = false;
       }
     });
   }

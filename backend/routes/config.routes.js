@@ -3,6 +3,7 @@ const router = express.Router();
 const SystemConfig = require('../models/SystemConfig');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
+const neuzmail = require('../utils/neuzmail');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -147,6 +148,132 @@ router.put('/site-access', protect, authorize('admin'), async (req, res) => {
     });
   } catch (error) {
     errorResponse(res, error);
+  }
+});
+
+// ── Email sender configuration ──────────────────────────────────────────────
+// Dedicated, validated controls for the system email "From" identity and
+// "Reply-To" address. Stored in SystemConfig (source of truth) and mirrored to
+// process.env so any env-based readers stay in sync within the running process.
+
+const EMAIL_KEYS = neuzmail.EMAIL_SETTING_KEYS; // { fromName, fromEmail, replyTo }
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(value) {
+  return typeof value === 'string' && EMAIL_REGEX.test(value.trim());
+}
+
+async function upsertEmailSetting(key, value, description, updatedBy) {
+  await SystemConfig.findOneAndUpdate(
+    { key },
+    {
+      key,
+      value,
+      category: 'email',
+      description,
+      isSecret: false,
+      isEditable: true,
+      updatedBy
+    },
+    { upsert: true, new: true }
+  );
+}
+
+// @route   GET /api/admin/config/email
+// @desc    Get the active email sender configuration (From name/email, Reply-To)
+// @access  Private/Admin
+router.get('/email', protect, authorize('admin'), async (req, res) => {
+  try {
+    const settings = await neuzmail.getEmailSettings(true);
+    sendResponse(res, 200, {
+      email: {
+        fromName: settings.fromName,
+        fromEmail: settings.fromEmail,
+        replyTo: settings.replyTo || ''
+      }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/admin/config/email
+// @desc    Update email sender name, sender (from) address, and reply-to address
+// @access  Private/Admin
+router.put('/email', protect, authorize('admin'), async (req, res) => {
+  try {
+    const fromName = (req.body.fromName || '').trim();
+    const fromEmail = (req.body.fromEmail || '').trim();
+    const replyTo = (req.body.replyTo || '').trim();
+
+    if (!fromName) {
+      return sendResponse(res, 400, { message: 'Sender name (fromName) is required' });
+    }
+    if (!isValidEmail(fromEmail)) {
+      return sendResponse(res, 400, { message: 'A valid sender email address (fromEmail) is required' });
+    }
+    if (replyTo && !isValidEmail(replyTo)) {
+      return sendResponse(res, 400, { message: 'Reply-To must be a valid email address' });
+    }
+
+    await Promise.all([
+      upsertEmailSetting(EMAIL_KEYS.fromName, fromName, 'Display name shown as the email sender', req.user._id),
+      upsertEmailSetting(EMAIL_KEYS.fromEmail, fromEmail, 'Email address used as the sender (From)', req.user._id),
+      upsertEmailSetting(EMAIL_KEYS.replyTo, replyTo, 'Reply-To address for outbound system emails', req.user._id)
+    ]);
+
+    // Keep env-based readers (and fallbacks) aligned within this process.
+    process.env.SMTP_FROM_NAME = fromName;
+    process.env.SMTP_FROM_EMAIL = fromEmail;
+    process.env.SMTP_REPLY_TO = replyTo;
+
+    // Force the email service to pick up the new values immediately.
+    neuzmail.invalidateEmailSettingsCache();
+
+    sendResponse(res, 200, {
+      message: 'Email configuration updated successfully',
+      email: { fromName, fromEmail, replyTo }
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/config/email/test
+// @desc    Send a test email using the current configuration to verify it works
+// @access  Private/Admin
+router.post('/email/test', protect, authorize('admin'), async (req, res) => {
+  try {
+    const recipient = (req.body.email || req.user.email || '').trim();
+    if (!isValidEmail(recipient)) {
+      return sendResponse(res, 400, { message: 'A valid recipient email address is required' });
+    }
+
+    // Ensure the test reflects the most recently saved settings.
+    const settings = await neuzmail.getEmailSettings(true);
+
+    await neuzmail.sendNotificationEmail({
+      toEmail: recipient,
+      title: 'RHP Office — Email Configuration Test',
+      message: `This is a test email confirming your system email configuration is working.<br><br>` +
+        `<strong>From:</strong> ${settings.fromName} &lt;${settings.fromEmail}&gt;<br>` +
+        `<strong>Reply-To:</strong> ${settings.replyTo || '(not set — replies go to the From address)'}`,
+      actionLabel: 'Open RHP Office'
+    });
+
+    sendResponse(res, 200, {
+      message: `Test email sent to ${recipient}`,
+      email: {
+        fromName: settings.fromName,
+        fromEmail: settings.fromEmail,
+        replyTo: settings.replyTo || ''
+      }
+    });
+  } catch (error) {
+    // Surface a clear, actionable message for common misconfiguration.
+    return sendResponse(res, 502, {
+      message: error.message || 'Test email could not be sent. Check the email service configuration.'
+    });
   }
 });
 

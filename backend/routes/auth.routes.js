@@ -220,7 +220,7 @@ router.get('/me', require('../middleware/auth.middleware').protect, async (req, 
     const user = await User.findById(req.user._id)
       .select('-password')
       .populate('referredBy', 'name email phone referralCode');
-    sendResponse(res, 200, { user });
+    sendResponse(res, 200, { user, impersonating: !!req.impersonatorId });
   } catch (error) {
     errorResponse(res, error);
   }
@@ -308,6 +308,56 @@ router.post('/token-exchange', authLimiter, async (req, res) => {
       .populate('referredBy', 'name email phone referralCode');
 
     sendResponse(res, 200, { token: jwtToken, user: userResponse });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/auth/stop-impersonation
+// @desc    End an impersonation session and return a fresh token for the
+//          original admin. Verifies the token inline so it works even when
+//          non-admin access is otherwise restricted (e.g. maintenance mode).
+// @access  Private (valid impersonation token)
+router.post('/stop-impersonation', async (req, res) => {
+  try {
+    const jwt = require('jsonwebtoken');
+
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) {
+      return sendResponse(res, 401, { message: 'Not authorized to access this route' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return sendResponse(res, 401, { message: 'Token is invalid or expired' });
+    }
+
+    if (!decoded.impersonatorId) {
+      return sendResponse(res, 400, { message: 'Not an impersonation session' });
+    }
+
+    const admin = await User.findById(decoded.impersonatorId).select('-password');
+
+    if (!admin || admin.role !== 'admin' || admin.deletedAt || !admin.isActive) {
+      return sendResponse(res, 403, { message: 'Original admin account is no longer available.' });
+    }
+
+    const adminToken = generateToken(admin, process.env.JWT_SECRET, process.env.JWT_EXPIRE);
+
+    const adminResponse = await User.findById(admin._id)
+      .select('-password')
+      .populate('referredBy', 'name email phone referralCode');
+
+    sendResponse(res, 200, {
+      message: 'Impersonation ended',
+      token: adminToken,
+      user: adminResponse
+    });
   } catch (error) {
     errorResponse(res, error);
   }

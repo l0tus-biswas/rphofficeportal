@@ -13,7 +13,7 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
-const { generatePassword, sendResponse, errorResponse, paginate } = require('../utils/helpers');
+const { generatePassword, generateToken, sendResponse, errorResponse, paginate } = require('../utils/helpers');
 const { cancelSubscription } = require('../utils/stripe');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
@@ -183,6 +183,61 @@ router.get('/users/:userId', async (req, res) => {
     sendResponse(res, 200, {
       user,
       downline
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/admin/users/:userId/impersonate
+// @desc    Admin logs in as another user (impersonation). Returns a JWT scoped to
+//          the target user that also carries the admin's id so the session can be
+//          identified and reverted later.
+// @access  Private (Admin only)
+router.post('/users/:userId/impersonate', logAction('IMPERSONATE_USER'), async (req, res) => {
+  try {
+    const adminId = String(req.user._id);
+
+    // Block impersonating a session that is already impersonating
+    if (req.impersonatorId) {
+      return sendResponse(res, 400, { message: 'Stop the current impersonation before starting a new one.' });
+    }
+
+    const target = await User.findById(req.params.userId).select('-password');
+
+    if (!target) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    if (String(target._id) === adminId) {
+      return sendResponse(res, 400, { message: 'You cannot impersonate yourself.' });
+    }
+
+    if (target.deletedAt) {
+      return sendResponse(res, 400, { message: 'Cannot impersonate a deleted account.' });
+    }
+
+    if (!target.isActive) {
+      return sendResponse(res, 400, { message: 'Cannot impersonate a deactivated account.' });
+    }
+
+    // Short-lived token scoped to the target, tagged with the admin's id
+    const token = generateToken(
+      target,
+      process.env.JWT_SECRET,
+      '1h',
+      { impersonatorId: adminId }
+    );
+
+    const userResponse = await User.findById(target._id)
+      .select('-password')
+      .populate('referredBy', 'name email phone referralCode');
+
+    sendResponse(res, 200, {
+      message: `Now viewing as ${target.name}`,
+      token,
+      user: userResponse,
+      impersonating: true
     });
   } catch (error) {
     errorResponse(res, error);

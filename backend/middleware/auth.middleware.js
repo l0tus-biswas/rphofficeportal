@@ -47,7 +47,11 @@ exports.protect = async (req, res, next) => {
     
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
+
+      // When an admin is impersonating, the token carries the original admin's id.
+      // Expose it so routes can detect/audit impersonated sessions.
+      req.impersonatorId = decoded.impersonatorId || null;
+
       req.user = await User.findById(decoded.id).select('-password');
       
       if (!req.user) {

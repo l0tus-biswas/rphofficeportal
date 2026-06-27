@@ -14,6 +14,12 @@ export class AuthService {
   public currentUser$ = this.currentUserSubject.asObservable();
   public currentUser = this.currentUserSubject.asObservable();
 
+  // Impersonation state — true when an admin is logged in as another user
+  private impersonatingSubject = new BehaviorSubject<boolean>(
+    localStorage.getItem('impersonating') === 'true'
+  );
+  public isImpersonating$ = this.impersonatingSubject.asObservable();
+
   constructor(private http: HttpClient) {
     this.loadCurrentUser();
   }
@@ -65,7 +71,82 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('impersonating');
+    this.impersonatingSubject.next(false);
     this.currentUserSubject.next(null);
+  }
+
+  isImpersonating(): boolean {
+    return this.impersonatingSubject.value;
+  }
+
+  // Admin starts impersonating another user. Saves the admin's own session so it
+  // can be restored, then swaps the active session to the target user.
+  impersonate(userId: string): Observable<LoginResponse> {
+    return this.http.post<LoginResponse>(`${this.apiUrl}/admin/users/${userId}/impersonate`, {})
+      .pipe(
+        tap(response => {
+          if (response.success && response.token) {
+            // Preserve the admin's session (only if not already impersonating)
+            if (localStorage.getItem('impersonating') !== 'true') {
+              localStorage.setItem('admin_token', this.getToken() || '');
+              localStorage.setItem('admin_user', localStorage.getItem('user') || '');
+            }
+            localStorage.setItem('token', response.token);
+            localStorage.setItem('user', JSON.stringify(response.user));
+            localStorage.setItem('impersonating', 'true');
+            this.currentUserSubject.next(response.user);
+            this.impersonatingSubject.next(true);
+          }
+        })
+      );
+  }
+
+  // Ends impersonation and restores the original admin session. Tries the backend
+  // for a fresh admin token; falls back to the locally saved admin session.
+  stopImpersonation(): Observable<any> {
+    return new Observable(observer => {
+      const restoreLocally = () => {
+        const adminToken = localStorage.getItem('admin_token');
+        const adminUserStr = localStorage.getItem('admin_user');
+        if (adminToken && adminUserStr) {
+          localStorage.setItem('token', adminToken);
+          localStorage.setItem('user', adminUserStr);
+          this.currentUserSubject.next(JSON.parse(adminUserStr));
+        }
+        this.clearImpersonationState();
+      };
+
+      this.http.post(`${this.apiUrl}/auth/stop-impersonation`, {}).subscribe({
+        next: (response: any) => {
+          if (response.success && response.token) {
+            localStorage.setItem('token', response.token);
+            localStorage.setItem('user', JSON.stringify(response.user));
+            this.currentUserSubject.next(response.user);
+            this.clearImpersonationState();
+          } else {
+            restoreLocally();
+          }
+          observer.next(response);
+          observer.complete();
+        },
+        error: (err) => {
+          // Backend unreachable/expired — fall back to the saved admin session
+          restoreLocally();
+          observer.next({ success: true, fallback: true });
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  private clearImpersonationState(): void {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('impersonating');
+    this.impersonatingSubject.next(false);
   }
 
   getToken(): string | null {

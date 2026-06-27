@@ -125,7 +125,27 @@ notificationSchema.statics.createNotification = async function(data, sendEmail =
   }
 
   const notification = await this.create(data);
-  
+
+  // Real-time push so the client badge updates instantly instead of polling.
+  // Emitted to the user's room (`user:<id>`); clients refresh their unread
+  // count / list on receipt. Best-effort — never let a socket issue break
+  // notification creation.
+  try {
+    const { emitToUser } = require('../utils/socketIO');
+    emitToUser(data.userId, 'notification:new', {
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      link: notification.link || null,
+      data: notification.data,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt
+    });
+  } catch (e) {
+    console.error('[Notification] Socket emit failed:', e.message);
+  }
+
   if (sendEmail) {
     // Check if email channel is enabled for this user+type
     const emailEnabled = await NotificationPreference.isEnabled(data.userId, data.type, 'email');

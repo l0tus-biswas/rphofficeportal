@@ -1,0 +1,26 @@
+.td-wrap {
+  font-size: 0.9rem;
+}
+
+/* Full-width, centered container the canvas measures itself against (autoFit). */
+.td-canvas-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+}
+
+.td-wrap .form-label.small {
+  font-size: 0.72rem;
+  color: #6c757d;
+  margin-bottom: 0.15rem;
+}
+
+.td-wrap .btn .bi-x {
+  cursor: pointer;
+}
+
+.td-wrap input[type="color"].form-control-color {
+  height: calc(1.5em + 0.5rem + 2px);
+  padding: 0.1rem;
+}

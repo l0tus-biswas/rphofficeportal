@@ -1,3 +1,20 @@
+<!-- Impersonation banner: shown while an admin is logged in as another user -->
+<div *ngIf="isImpersonating$ | async"
+     class="impersonation-banner d-flex align-items-center justify-content-center gap-3 px-3 py-2 text-white"
+     style="background:#b02a37; position:sticky; top:0; z-index:1080; font-size:.9rem;">
+  <span>
+    <i class="bi bi-incognito me-1"></i>
+    You are viewing as <strong>{{ (currentUser$ | async)?.name }}</strong>
+    ({{ (currentUser$ | async)?.email }})
+  </span>
+  <button type="button" class="btn btn-sm btn-light fw-semibold"
+          (click)="exitImpersonation()" [disabled]="exitingImpersonation">
+    <span *ngIf="exitingImpersonation" class="spinner-border spinner-border-sm me-1"></span>
+    <i *ngIf="!exitingImpersonation" class="bi bi-box-arrow-left me-1"></i>
+    Exit impersonation
+  </button>
+</div>
+
 <div class="app-shell d-flex" style="min-height: 100vh">
   <app-sidebar></app-sidebar>
   <div class="app-content flex-grow-1 overflow-auto">

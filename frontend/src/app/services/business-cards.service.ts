@@ -110,7 +110,10 @@ export interface CardTemplateSideMeta {
   placement: string;
   label: string;
   hasPhoto: boolean;
-  fields: CardTemplateField[];
+  backgroundImage?: string;
+  fonts?: any[];
+  photo?: any;
+  fields: any[];   // full field layout (key,label,required,x,y,style...)
 }
 
 export interface CardTemplateVariant {
@@ -123,10 +126,49 @@ export interface CardTemplate {
   id: string;
   name: string;
   syncProductId: number;
+  previewImage?: string;
   variants: CardTemplateVariant[];
   orientation: string;
   printFile: { widthPx: number; heightPx: number; dpi: number };
   sides: CardTemplateSideMeta[];
+}
+
+// Full template layout (admin designer + server renderer). The agent-facing
+// CardTemplate above is a stripped subset of this.
+export interface CardFieldFull {
+  key: string;
+  label: string;
+  required: boolean;
+  x: number; y: number; w?: number;
+  align?: 'left' | 'center' | 'right';
+  family?: string; weight?: number; style?: 'normal' | 'italic';
+  size?: number; color?: string;
+  lineHeight?: number; letterSpacing?: number;
+  transform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+}
+
+export interface CardPhotoFrame {
+  x: number; y: number; w: number; h: number;
+  fit?: 'cover' | 'contain'; shape?: 'circle' | 'rect'; borderRadius?: number;
+}
+
+export interface CardSideFull {
+  placement: string;        // 'default' (front print area) | 'back'
+  label: string;
+  backgroundImage?: string;
+  fonts?: { family: string; weight?: number; style?: string; file: string }[];
+  photo?: CardPhotoFrame | null;
+  fields: CardFieldFull[];
+}
+
+export interface CardTemplateFull {
+  id: string;
+  name: string;
+  syncProductId: number;
+  variants: CardTemplateVariant[];
+  orientation: 'portrait' | 'landscape';
+  printFile: { widthPx: number; heightPx: number; dpi: number };
+  sides: CardSideFull[];
 }
 
 export interface PrintfulAdminConfig {

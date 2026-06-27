@@ -134,6 +134,13 @@
                       <button class="btn btn-outline-primary" (click)="openEditModal(user)" title="Edit">
                         <i class="bi bi-pencil-square"></i>
                       </button>
+                      <button class="btn btn-outline-dark"
+                        *ngIf="user.isActive && !user.deletedAt"
+                        (click)="loginAsUser(user)"
+                        [disabled]="impersonating"
+                        title="Log in as this user (impersonate)">
+                        <i class="bi bi-box-arrow-in-right"></i>
+                      </button>
                       <button *ngIf="user.role === 'agent'" 
                         class="btn btn-outline-info" 
                         (click)="promoteAgent(user)" 

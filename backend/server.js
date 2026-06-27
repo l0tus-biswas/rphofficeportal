@@ -69,6 +69,10 @@ const io = new Server(httpServer, {
   allowEIO3: true
 });
 
+// Register the io instance so modules without a request object (e.g. the
+// Notification model) can emit real-time events via utils/socketIO.
+require('./utils/socketIO').setIO(io);
+
 // Real-time monitoring dashboard at /status — reuse the app's Socket.IO
 // instance (websocket: io) so it does not spawn a conflicting server.
 const statusMonitor = require('express-status-monitor')({
@@ -164,8 +168,10 @@ app.use('/uploads', (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Access-Control-Allow-Origin', process.env.APP_URL || 'http://localhost:4200');
 
-  // Allow public access to branding, welcome, and broadcast images
-  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/', '/business-card-prints/'];
+  // Allow public access to branding, welcome, and broadcast images.
+  // card-templates holds design backgrounds/fonts (not sensitive) so the
+  // in-browser template designer/preview can load them without auth.
+  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/', '/business-card-prints/', '/card-templates/'];
   const isPublicPath = publicPrefixes.some(prefix => req.path.startsWith(prefix));
 
   if (isPublicPath) {

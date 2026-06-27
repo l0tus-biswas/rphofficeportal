@@ -68,6 +68,84 @@
     </div>
   </div>
 
+  <!-- Email Configuration -->
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card border-primary">
+        <div class="card-header bg-primary-subtle d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="bi bi-envelope-at me-2"></i>Email Configuration</h5>
+          <span class="badge bg-info">SYSTEM EMAIL</span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted mb-3">
+            Controls the sender identity for all outbound system emails (welcome, password reset,
+            notifications, etc.). Changes apply immediately to newly sent emails.
+          </p>
+
+          <div *ngIf="emailLoading" class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            Loading email configuration...
+          </div>
+
+          <div *ngIf="!emailLoading">
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label class="form-label"><strong>Sender Name (From)</strong></label>
+                <input type="text" class="form-control"
+                       [(ngModel)]="emailConfig.fromName"
+                       [disabled]="emailSaving"
+                       placeholder="e.g., RHP Office">
+                <small class="form-text text-muted">The display name recipients see as the sender.</small>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label"><strong>Sender Email (From)</strong></label>
+                <input type="email" class="form-control"
+                       [(ngModel)]="emailConfig.fromEmail"
+                       [disabled]="emailSaving"
+                       placeholder="e.g., contracting@rhpoffice.com">
+                <small class="form-text text-muted">The "From" address on outbound emails.</small>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label"><strong>Reply-To Address</strong></label>
+                <input type="email" class="form-control"
+                       [(ngModel)]="emailConfig.replyTo"
+                       [disabled]="emailSaving"
+                       placeholder="(optional) e.g., support@rhpoffice.com">
+                <small class="form-text text-muted">
+                  Where replies are routed. Leave blank to use the sender email.
+                </small>
+              </div>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+              <button class="btn btn-primary" (click)="saveEmailConfig()" [disabled]="emailSaving">
+                <span *ngIf="emailSaving" class="spinner-border spinner-border-sm me-1"></span>
+                <i *ngIf="!emailSaving" class="bi bi-save me-1"></i>
+                {{ emailSaving ? 'Saving...' : 'Save Email Settings' }}
+              </button>
+
+              <div class="ms-md-auto d-flex gap-2 align-items-end">
+                <div>
+                  <label class="form-label small mb-1">Send a test email to</label>
+                  <input type="email" class="form-control form-control-sm"
+                         [(ngModel)]="testEmailRecipient"
+                         [disabled]="emailTesting"
+                         placeholder="defaults to your email"
+                         style="min-width: 230px;">
+                </div>
+                <button class="btn btn-outline-primary" (click)="sendTestEmail()" [disabled]="emailTesting">
+                  <span *ngIf="emailTesting" class="spinner-border spinner-border-sm me-1"></span>
+                  <i *ngIf="!emailTesting" class="bi bi-send me-1"></i>
+                  {{ emailTesting ? 'Sending...' : 'Send Test' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- QuickBooks Integration -->
   <div class="row mb-4">
     <div class="col-md-12">

@@ -1,0 +1,230 @@
+<div class="td-wrap">
+
+  <!-- Template tabs -->
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <button *ngFor="let t of templates; let i = index" type="button"
+            class="btn btn-sm" [class.btn-primary]="i === tplIndex" [class.btn-outline-secondary]="i !== tplIndex"
+            (click)="selectTemplate(i)">
+      {{ t.name || 'Untitled' }}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-success" (click)="addTemplate()">
+      <i class="bi bi-plus-lg"></i> New Template
+    </button>
+  </div>
+
+  <div *ngIf="!template" class="text-muted small">No templates yet — click <strong>New Template</strong> to start.</div>
+
+  <div *ngIf="template" class="row g-3">
+
+    <!-- LEFT: template + side settings -->
+    <div class="col-12 col-xl-3">
+      <div class="border rounded p-3 bg-light h-100">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold small">Template</span>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" title="Duplicate" (click)="duplicateTemplate(tplIndex)"><i class="bi bi-files"></i></button>
+            <button class="btn btn-outline-danger" title="Delete" (click)="deleteTemplate(tplIndex)"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+
+        <label class="form-label small mb-1">Name</label>
+        <input class="form-control form-control-sm mb-2" [(ngModel)]="template.name" (ngModelChange)="changed()">
+
+        <label class="form-label small mb-1">Template ID</label>
+        <input class="form-control form-control-sm mb-2" [(ngModel)]="template.id" (ngModelChange)="changed()">
+
+        <label class="form-label small mb-1">Printful Sync Product ID</label>
+        <input type="number" class="form-control form-control-sm mb-2" [(ngModel)]="template.syncProductId" (ngModelChange)="changed()">
+
+        <label class="form-label small mb-1">Orientation</label>
+        <div class="btn-group btn-group-sm w-100 mb-2">
+          <button type="button" class="btn" [class.btn-primary]="orientation === 'landscape'" [class.btn-outline-secondary]="orientation !== 'landscape'" (click)="setOrientation('landscape')">
+            <i class="bi bi-aspect-ratio me-1"></i>Landscape
+          </button>
+          <button type="button" class="btn" [class.btn-primary]="orientation === 'portrait'" [class.btn-outline-secondary]="orientation !== 'portrait'" (click)="setOrientation('portrait')">
+            <i class="bi bi-phone me-1"></i>Portrait
+          </button>
+        </div>
+
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small mb-1">Width</label>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="template.printFile.widthPx" (ngModelChange)="changed()">
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-1">Height</label>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="template.printFile.heightPx" (ngModelChange)="changed()">
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-1">DPI</label>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="template.printFile.dpi" (ngModelChange)="changed()">
+          </div>
+        </div>
+
+        <!-- Variants -->
+        <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
+          <span class="fw-semibold small">Variants (price tiers)</span>
+          <button class="btn btn-sm btn-outline-success py-0" (click)="addVariant()"><i class="bi bi-plus-lg"></i></button>
+        </div>
+        <div *ngFor="let v of template.variants; let vi = index" class="row g-1 mb-1 align-items-center">
+          <div class="col-4"><input class="form-control form-control-sm" placeholder="Label" [(ngModel)]="v.label" (ngModelChange)="changed()"></div>
+          <div class="col-4"><input type="number" class="form-control form-control-sm" placeholder="Variant ID" [(ngModel)]="v.syncVariantId" (ngModelChange)="changed()"></div>
+          <div class="col-3"><input type="number" class="form-control form-control-sm" placeholder="$" [(ngModel)]="v.price" (ngModelChange)="changed()"></div>
+          <div class="col-1 px-0"><button class="btn btn-sm btn-link text-danger p-0" (click)="removeVariant(vi)"><i class="bi bi-x-lg"></i></button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: canvas -->
+    <div class="col-12 col-xl-5">
+      <!-- Side tabs -->
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <button *ngFor="let s of template.sides; let i = index" type="button"
+                class="btn btn-sm" [class.btn-dark]="i === sideIndex" [class.btn-outline-dark]="i !== sideIndex"
+                (click)="selectSide(i)">
+          {{ s.label || s.placement }}
+          <i *ngIf="template.sides.length > 1" class="bi bi-x ms-1" (click)="$event.stopPropagation(); removeSide(i)"></i>
+        </button>
+        <button *ngIf="template.sides.length < 2" type="button" class="btn btn-sm btn-outline-success" (click)="addSide()">
+          <i class="bi bi-plus-lg"></i> Add Side
+        </button>
+      </div>
+
+      <div class="td-canvas-wrap mb-2">
+        <app-card-canvas *ngIf="side"
+          [side]="side" [printFile]="template.printFile" [values]="previewValues"
+          [autoFit]="true" [maxWidth]="560" [displayWidth]="displayWidth" [editable]="true" [selectedKey]="selectedKey"
+          (selectKey)="onSelect($event)" (moveItem)="onMove($event)" (resizePhoto)="onResizePhoto($event)">
+        </app-card-canvas>
+      </div>
+
+      <div class="d-flex align-items-center justify-content-center gap-2 small text-muted">
+        <i class="bi bi-arrows-move"></i> Drag fields/photo to position. Click to select.
+      </div>
+
+      <!-- Side background + photo -->
+      <div class="border rounded p-2 mt-2 bg-light">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <label class="form-label small mb-0 flex-shrink-0">Background ({{ side.label }})</label>
+          <input type="file" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.svg"
+                 (change)="onBgSelected($event)" [disabled]="bgUploading">
+          <span *ngIf="bgUploading" class="spinner-border spinner-border-sm"></span>
+          <button *ngIf="side.backgroundImage" class="btn btn-sm btn-outline-danger" (click)="clearBg()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div *ngIf="bgError" class="text-danger small mb-1">{{ bgError }}</div>
+        <button class="btn btn-sm" [class.btn-primary]="side.photo" [class.btn-outline-secondary]="!side.photo" (click)="togglePhoto()">
+          <i class="bi" [class.bi-person-bounding-box]="!side.photo" [class.bi-check2]="side.photo"></i>
+          {{ side.photo ? 'Photo frame enabled' : 'Add photo frame' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: inspector -->
+    <div class="col-12 col-xl-4">
+      <div class="border rounded p-3 h-100">
+
+        <!-- Fields list -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold small">Fields on {{ side.label }}</span>
+          <button class="btn btn-sm btn-outline-success py-0" (click)="addField()"><i class="bi bi-plus-lg"></i> Add</button>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mb-3">
+          <button *ngFor="let f of side.fields" type="button"
+                  class="btn btn-sm" [class.btn-info]="selectedKey === f.key" [class.btn-outline-info]="selectedKey !== f.key"
+                  (click)="onSelect(f.key)">{{ f.label || f.key }}</button>
+          <button type="button" class="btn btn-sm" [class.btn-info]="selectedKey === 'photo'" [class.btn-outline-info]="selectedKey !== 'photo'"
+                  *ngIf="side.photo" (click)="onSelect('photo')"><i class="bi bi-image"></i> Photo</button>
+        </div>
+
+        <!-- Field inspector -->
+        <div *ngIf="selectedField as f">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small mb-1">Field key</label>
+              <input class="form-control form-control-sm" [(ngModel)]="f.key" (ngModelChange)="changed()">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Label</label>
+              <input class="form-control form-control-sm" [(ngModel)]="f.label" (ngModelChange)="changed()">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Font</label>
+              <select class="form-select form-select-sm" [(ngModel)]="f.family" (ngModelChange)="changed()">
+                <option *ngFor="let ft of FONTS" [value]="ft">{{ ft }}</option>
+              </select>
+            </div>
+            <div class="col-3">
+              <label class="form-label small mb-1">Weight</label>
+              <select class="form-select form-select-sm" [(ngModel)]="f.weight" (ngModelChange)="changed()">
+                <option *ngFor="let w of WEIGHTS" [ngValue]="w">{{ w }}</option>
+              </select>
+            </div>
+            <div class="col-3">
+              <label class="form-label small mb-1">Size</label>
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="f.size" (ngModelChange)="changed()">
+            </div>
+            <div class="col-4">
+              <label class="form-label small mb-1">Color</label>
+              <input type="color" class="form-control form-control-sm form-control-color w-100" [(ngModel)]="f.color" (ngModelChange)="changed()">
+            </div>
+            <div class="col-4">
+              <label class="form-label small mb-1">Align</label>
+              <select class="form-select form-select-sm" [(ngModel)]="f.align" (ngModelChange)="changed()">
+                <option *ngFor="let a of ALIGNS" [value]="a">{{ a }}</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label small mb-1">Box width</label>
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="f.w" (ngModelChange)="changed()">
+            </div>
+            <div class="col-4">
+              <label class="form-label small mb-1">X</label>
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="f.x" (ngModelChange)="changed()">
+            </div>
+            <div class="col-4">
+              <label class="form-label small mb-1">Y</label>
+              <input type="number" class="form-control form-control-sm" [(ngModel)]="f.y" (ngModelChange)="changed()">
+            </div>
+            <div class="col-4 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" [(ngModel)]="f.required" (ngModelChange)="changed()" id="req-{{f.key}}">
+                <label class="form-check-label small" for="req-{{f.key}}">Required</label>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline-danger mt-3 w-100" (click)="removeField(f.key)">
+            <i class="bi bi-trash me-1"></i> Remove field
+          </button>
+        </div>
+
+        <!-- Photo inspector -->
+        <div *ngIf="selectedKey === 'photo' && side.photo as p">
+          <div class="row g-2">
+            <div class="col-3"><label class="form-label small mb-1">X</label><input type="number" class="form-control form-control-sm" [(ngModel)]="p.x" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">Y</label><input type="number" class="form-control form-control-sm" [(ngModel)]="p.y" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">W</label><input type="number" class="form-control form-control-sm" [(ngModel)]="p.w" (ngModelChange)="changed()"></div>
+            <div class="col-3"><label class="form-label small mb-1">H</label><input type="number" class="form-control form-control-sm" [(ngModel)]="p.h" (ngModelChange)="changed()"></div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Shape</label>
+              <select class="form-select form-select-sm" [(ngModel)]="p.shape" (ngModelChange)="changed()">
+                <option value="circle">Circle</option>
+                <option value="rect">Rectangle</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Fit</label>
+              <select class="form-select form-select-sm" [(ngModel)]="p.fit" (ngModelChange)="changed()">
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div *ngIf="!selectedField && selectedKey !== 'photo'" class="text-muted small">
+          Select a field or the photo on the card to edit its style.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -6,8 +6,10 @@ import { BroadcastService } from './services/broadcast.service';
 import { BroadcastPopupService } from './services/broadcast-popup.service';
 import { SocketService } from './services/socket.service';
 import { TimezoneService } from './services/timezone.service';
+import { AuthService } from './services/auth.service';
 import { filter } from 'rxjs/operators';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
+import { User } from './models/user.model';
 
 @Component({
   selector: 'app-root',
@@ -20,6 +22,11 @@ export class AppComponent implements OnInit, OnDestroy {
   private broadcastSubscription?: Subscription;
   private broadcastQueueSubscription?: Subscription;
 
+  // Impersonation banner state
+  isImpersonating$: Observable<boolean>;
+  currentUser$: Observable<User | null>;
+  exitingImpersonation = false;
+
   constructor(
     private titleService: Title,
     private metaService: Meta,
@@ -28,8 +35,25 @@ export class AppComponent implements OnInit, OnDestroy {
     private broadcastService: BroadcastService,
     private broadcastPopupService: BroadcastPopupService,
     private socketService: SocketService,
-    private timezoneService: TimezoneService
-  ) {}
+    private timezoneService: TimezoneService,
+    private authService: AuthService
+  ) {
+    this.isImpersonating$ = this.authService.isImpersonating$;
+    this.currentUser$ = this.authService.currentUser$;
+  }
+
+  exitImpersonation(): void {
+    this.exitingImpersonation = true;
+    this.authService.stopImpersonation().subscribe({
+      next: () => {
+        // Reload so every service rebinds to the restored admin session
+        this.router.navigate(['/admin/users']).then(() => window.location.reload());
+      },
+      error: () => {
+        this.exitingImpersonation = false;
+      }
+    });
+  }
 
   ngOnInit(): void {
     // Subscribe to branding changes and update title and favicon dynamically

@@ -1,0 +1,87 @@
+:host {
+  display: block;
+  max-width: 100%;
+}
+
+.cc-viewport {
+  max-width: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.cc-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  background-color: #ffffff;
+}
+
+.cc-item {
+  box-sizing: border-box;
+}
+
+/* Safety-area guide — print "keep inside" boundary, shown in the designer only */
+.cc-safety {
+  position: absolute;
+  border: 2px dashed rgba(40, 167, 120, 0.8);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cc-editable {
+  cursor: move;
+}
+
+.cc-editable.cc-field:hover,
+.cc-editable.cc-photo:hover {
+  outline: 1px dashed #6c8cff;
+}
+
+.cc-selected {
+  outline: 2px solid #2f6fed !important;
+  outline-offset: 0;
+}
+
+.cc-placeholder {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.cc-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cc-photo-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(120, 130, 150, 0.15);
+  border: 2px dashed rgba(90, 100, 120, 0.5);
+  color: #5a6478;
+  font-size: 40px;
+  font-family: Arial, sans-serif;
+}
+
+/* Resize handle sits at the photo's bottom-right corner; sized in stage px so
+   it scales with the stage transform. */
+.cc-resize {
+  position: absolute;
+  right: -16px;
+  bottom: -16px;
+  width: 32px;
+  height: 32px;
+  background: #2f6fed;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+}
