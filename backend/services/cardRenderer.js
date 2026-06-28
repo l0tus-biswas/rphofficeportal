@@ -13,9 +13,20 @@
  * from local disk and inlined (data URI) so it never has to be public; only
  * the rendered output goes to the public /uploads/business-card-prints folder.
  */
-const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
+
+// Puppeteer 23+ is ESM-only. Loading it via require() throws ERR_REQUIRE_ESM on
+// Node < 22 (prod runs Node 18), so import it lazily with dynamic import(),
+// which works in CommonJS on every Node version. Cached after first load.
+let _puppeteer = null;
+async function getPuppeteer() {
+  if (!_puppeteer) {
+    const mod = await import('puppeteer');
+    _puppeteer = mod.default || mod;
+  }
+  return _puppeteer;
+}
 
 const PRINTS_DIR = path.join(__dirname, '..', 'uploads', 'business-card-prints');
 if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
@@ -31,6 +42,7 @@ function browserAlive(b) {
 
 async function getBrowser() {
   if (browserAlive(_browser)) return _browser;
+  const puppeteer = await getPuppeteer();
   _browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
