@@ -135,9 +135,10 @@
             <tbody>
               <tr *ngFor="let order of orders" class="order-row" style="cursor: pointer;">
                 <td (click)="viewOrder(order)">
-                  <img *ngIf="order.product?.thumbnail || order.mockupUrl"
-                       [src]="order.mockupUrl || order.product?.thumbnail" class="rounded" style="width: 36px; height: 36px; object-fit: cover;">
-                  <div *ngIf="!order.product?.thumbnail && !order.mockupUrl" class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                  <img *ngIf="!orderImgMissing(order)"
+                       [src]="orderImg(order)" (error)="onOrderImgError(order)"
+                       class="rounded" style="width: 36px; height: 36px; object-fit: cover;">
+                  <div *ngIf="orderImgMissing(order)" class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
                     <i class="bi bi-box text-muted small"></i>
                   </div>
                 </td>
@@ -146,7 +147,7 @@
                   <div class="text-muted" style="font-size: 0.7rem;">{{ order.user?.email }}</div>
                 </td>
                 <td (click)="viewOrder(order)">
-                  <div class="small">{{ order.product?.name || 'Product' }}</div>
+                  <div class="small fw-semibold">{{ order.cardName || order.product?.name || 'Product' }}</div>
                   <div class="text-muted" style="font-size: 0.7rem;">{{ order.product?.variantName }}</div>
                 </td>
                 <td class="text-center" (click)="viewOrder(order)">{{ order.product?.quantity || 1 }}</td>
@@ -223,19 +224,39 @@
 
               <!-- Product Info -->
               <div class="d-flex align-items-start gap-3 mb-4">
-                <img *ngIf="selectedOrder!.mockupUrl || selectedOrder!.product?.thumbnail"
-                     [src]="selectedOrder!.mockupUrl || selectedOrder!.product?.thumbnail"
+                <img *ngIf="!orderImgMissing(selectedOrder!)"
+                     [src]="orderImg(selectedOrder!)" (error)="onOrderImgError(selectedOrder!)"
                      class="rounded shadow-sm" style="width: 100px; height: 100px; object-fit: cover;">
-                <div>
-                  <h6 class="fw-bold mb-1">{{ selectedOrder!.product?.name }}</h6>
+                <div *ngIf="orderImgMissing(selectedOrder!)"
+                     class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 100px; height: 100px;">
+                  <i class="bi bi-box text-muted display-6"></i>
+                </div>
+                <div class="flex-grow-1">
+                  <h6 class="fw-bold mb-1">{{ selectedOrder!.cardName || selectedOrder!.product?.name }}</h6>
+                  <div *ngIf="selectedOrder!.cardName && selectedOrder!.product?.name && selectedOrder!.cardName !== selectedOrder!.product?.name"
+                       class="text-muted small">{{ selectedOrder!.product?.name }}</div>
                   <div class="text-muted small">{{ selectedOrder!.product?.variantName }}</div>
                   <div class="text-muted small">SKU: {{ selectedOrder!.product?.sku }}</div>
-                  <div class="mt-1">
-                    <span class="fw-semibold">Qty: {{ selectedOrder!.product?.quantity }}</span>
-                    <span class="mx-2">×</span>
-                    <span>${{ selectedOrder!.product?.unitPrice?.toFixed(2) }}</span>
-                    <span class="mx-2">=</span>
-                    <span class="fw-bold text-success">${{ selectedOrder!.total?.toFixed(2) }}</span>
+
+                  <!-- Cost breakdown -->
+                  <div class="mt-2" style="max-width: 280px;">
+                    <div class="d-flex justify-content-between small">
+                      <span class="text-muted">{{ selectedOrder!.product?.quantity }} × ${{ selectedOrder!.product?.unitPrice?.toFixed(2) }}</span>
+                      <span>${{ selectedOrder!.subtotal?.toFixed(2) }}</span>
+                    </div>
+                    <div *ngFor="let fee of selectedOrder!.fees" class="d-flex justify-content-between small mt-1">
+                      <span class="text-muted">{{ fee.label }}</span>
+                      <span>${{ (+fee.amount).toFixed(2) }}</span>
+                    </div>
+                    <div *ngIf="selectedOrder!.shipping" class="d-flex justify-content-between small mt-1">
+                      <span class="text-muted">Shipping</span>
+                      <span>${{ selectedOrder!.shipping?.toFixed(2) }}</span>
+                    </div>
+                    <hr class="my-1">
+                    <div class="d-flex justify-content-between fw-bold">
+                      <span>Total</span>
+                      <span class="text-success">${{ selectedOrder!.total?.toFixed(2) }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -388,7 +409,7 @@
               </div>
               <div class="d-flex justify-content-between small mb-1">
                 <span class="text-muted">Product</span>
-                <span>{{ receipt.product?.name }}</span>
+                <span>{{ receipt.cardName || receipt.product?.name }}</span>
               </div>
               <div class="d-flex justify-content-between small mb-1">
                 <span class="text-muted">Variant</span>
@@ -402,6 +423,10 @@
               <div class="d-flex justify-content-between small mb-1">
                 <span class="text-muted">Subtotal</span>
                 <span>${{ receipt.subtotal?.toFixed(2) }}</span>
+              </div>
+              <div *ngFor="let fee of receipt.fees" class="d-flex justify-content-between small mb-1">
+                <span class="text-muted">{{ fee.label }}</span>
+                <span>${{ (+fee.amount).toFixed(2) }}</span>
               </div>
               <div class="d-flex justify-content-between small mb-1">
                 <span class="text-muted">Shipping</span>

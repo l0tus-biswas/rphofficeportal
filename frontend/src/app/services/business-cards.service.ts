@@ -28,6 +28,13 @@ export interface OptionField {
   required: boolean;
 }
 
+// Admin-configured convenience fee added on top of the card price.
+export interface ConvenienceFee {
+  id?: string;
+  label: string;
+  amount: number;
+}
+
 export interface ProductDetail {
   id: number;
   name: string;
@@ -52,11 +59,15 @@ export interface PrintfulOrderRecord {
   printfulOrderId: number | null;
   productName: string;
   variantName: string;
+  sku?: string;
   thumbnail: string;
   quantity: number;
   unitPrice: number;
   total: number;
   subtotal: number;
+  shipping?: number;
+  fees?: ConvenienceFee[];
+  feesTotal?: number;
   paymentStatus: string;
   adminStatus: string;
   printfulStatus: string;
@@ -67,11 +78,13 @@ export interface PrintfulOrderRecord {
   adminNotes: string;
   created: string;
   paidAt: string;
+  imgFailed?: boolean;   // UI-only: set when the order thumbnail fails to load
 }
 
 export interface AdminOrderRecord {
   id: string;
   user: { id?: string; name: string; email: string };
+  cardName?: string;   // resolved designed-card name (e.g. "RHP Business Card (English)")
   product: {
     name: string;
     variantId: number;
@@ -86,6 +99,8 @@ export interface AdminOrderRecord {
   shippingAddress: ShippingAddress;
   subtotal: number;
   shipping: number;
+  fees?: ConvenienceFee[];
+  feesTotal?: number;
   total: number;
   paymentStatus: string;
   adminStatus: string;
@@ -98,6 +113,7 @@ export interface AdminOrderRecord {
   reviewedAt: string | null;
   paidAt: string | null;
   created: string;
+  imgFailed?: boolean;   // UI-only: set when the order thumbnail fails to load
 }
 
 export interface CardTemplateField {
@@ -178,6 +194,7 @@ export interface PrintfulAdminConfig {
   enabled: boolean;
   textFields: OptionField[];
   templates?: any[];
+  fees?: ConvenienceFee[];
 }
 
 @Injectable({
@@ -190,8 +207,8 @@ export class BusinessCardsService {
 
   // ── Agent Product Browsing ──
 
-  getProducts(): Observable<{ enabled: boolean; products: PrintfulProduct[] }> {
-    return this.http.get<{ enabled: boolean; products: PrintfulProduct[] }>(`${this.apiUrl}/business-cards/products`);
+  getProducts(): Observable<{ enabled: boolean; products: PrintfulProduct[]; fees?: ConvenienceFee[] }> {
+    return this.http.get<{ enabled: boolean; products: PrintfulProduct[]; fees?: ConvenienceFee[] }>(`${this.apiUrl}/business-cards/products`);
   }
 
   getProductDetail(id: number): Observable<{ product: ProductDetail }> {
@@ -258,7 +275,7 @@ export class BusinessCardsService {
     mockupUrl?: string;
     templateId?: string;
     photoUrl?: string;
-  }): Observable<{ orderId: string; clientSecret: string; total: number; subtotal: number; shipping: number }> {
+  }): Observable<{ orderId: string; clientSecret: string; total: number; subtotal: number; shipping: number; fees?: ConvenienceFee[]; feesTotal?: number }> {
     return this.http.post<any>(`${this.apiUrl}/business-cards/checkout`, data);
   }
 

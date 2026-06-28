@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { BusinessCardsService, PrintfulAdminConfig, OptionField } from '../../../services/business-cards.service';
+import { BusinessCardsService, PrintfulAdminConfig, OptionField, ConvenienceFee } from '../../../services/business-cards.service';
 
 @Component({
   selector: 'app-vistaprint-config',
@@ -14,6 +14,9 @@ export class VistaprintConfigComponent implements OnInit {
 
   // Text fields for personalization
   textFields: OptionField[] = [];
+
+  // Convenience fees added on top of every card order
+  fees: ConvenienceFee[] = [];
 
   // Card render templates — edited visually (designer is source of truth).
   templates: any[] = [];
@@ -51,6 +54,7 @@ export class VistaprintConfigComponent implements OnInit {
         this.storeId = res.config.storeId || '';
         this.enabled = res.config.enabled;
         this.textFields = res.config.textFields || [];
+        this.fees = res.config.fees || [];
         this.templates = res.config.templates || [];
         this.loading = false;
       },
@@ -94,6 +98,7 @@ export class VistaprintConfigComponent implements OnInit {
       storeId: this.storeId,
       enabled: this.enabled,
       textFields: this.textFields,
+      fees: (this.fees || []).filter(f => (f.label || '').trim() && +f.amount > 0),
       templates: this.templates || []
     };
 
@@ -105,6 +110,7 @@ export class VistaprintConfigComponent implements OnInit {
       next: (res) => {
         this.config = res.config;
         this.textFields = res.config.textFields || [];
+        this.fees = res.config.fees || [];
         this.templates = res.config.templates || [];
         this.successMessage = 'Configuration saved.';
         this.saving = false;
@@ -143,6 +149,18 @@ export class VistaprintConfigComponent implements OnInit {
 
   removeTextField(index: number): void {
     this.textFields.splice(index, 1);
+  }
+
+  addFee(): void {
+    this.fees.push({ id: Date.now().toString(), label: '', amount: 0 });
+  }
+
+  removeFee(index: number): void {
+    this.fees.splice(index, 1);
+  }
+
+  get feesTotal(): number {
+    return Math.round((this.fees || []).reduce((s, f) => s + (+f.amount || 0), 0) * 100) / 100;
   }
 
   testConnection(): void {

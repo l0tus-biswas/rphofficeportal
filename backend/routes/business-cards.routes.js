@@ -18,7 +18,8 @@ const KEYS = {
   STORE_ID:    'printful_store_id',
   ENABLED:     'printful_enabled',
   TEXT_FIELDS: 'printful_text_fields', // JSON array of {id, label, required}
-  TEMPLATES:   'printful_card_templates' // JSON array of CardTemplate (see cardRenderer.js)
+  TEMPLATES:   'printful_card_templates', // JSON array of CardTemplate (see cardRenderer.js)
+  FEES:        'printful_convenience_fees' // JSON array of {id, label, amount}
 };
 
 // ---------------------------------------------------------------------------
@@ -51,9 +52,33 @@ async function getCardTemplates() {
   try { return rec?.value ? JSON.parse(rec.value) : []; } catch (_) { return []; }
 }
 
+// Admin-configured convenience fees added on top of the card price. Returns a
+// normalized list of { label, amount } with only valid, positive entries.
+async function getConvenienceFees() {
+  const rec = await SystemConfig.findOne({ key: KEYS.FEES }).lean();
+  let fees = [];
+  try { fees = rec?.value ? JSON.parse(rec.value) : []; } catch (_) { fees = []; }
+  if (!Array.isArray(fees)) return [];
+  return fees
+    .map(f => ({ label: String(f.label || '').trim(), amount: Math.round((parseFloat(f.amount) || 0) * 100) / 100 }))
+    .filter(f => f.label && f.amount > 0);
+}
+
+function sumFees(fees) {
+  return Math.round((fees || []).reduce((s, f) => s + (parseFloat(f.amount) || 0), 0) * 100) / 100;
+}
+
 async function getTemplateById(id) {
   const all = await getCardTemplates();
   return all.find(t => t.id === id) || null;
+}
+
+// Map of templateId -> template name, for resolving "which card" on orders.
+async function getTemplateNameMap() {
+  const all = await getCardTemplates();
+  const map = {};
+  for (const t of all) if (t && t.id) map[t.id] = t.name;
+  return map;
 }
 
 function buildPrintFileUrl(filename, fallbackBase) {
@@ -129,6 +154,14 @@ async function submitOrderToPrintful(order, publicBase) {
           return { type: r.placement, url };
         });
         order.printFiles = printFiles;
+
+        // Persist a STABLE per-order image (the rendered front, "order-<id>")
+        // as the order thumbnail. The agent's live-preview file is transient
+        // ("preview-<userId>", overwritten on every keystroke), so orders that
+        // stored it ended up with a broken/incorrect image in the admin/agent
+        // views. The per-order render never changes, so it's safe to keep.
+        const frontFile = printFiles['default'] || printFiles[Object.keys(printFiles)[0]];
+        if (frontFile) order.mockupUrl = frontFile;
 
         // A relative or localhost URL makes Printful reject the WHOLE order
         // ("file URL is not a valid URL"), so only attach reachable URLs.
@@ -396,7 +429,7 @@ router.get('/products', authenticate, async (req, res) => {
       thumbnail: tplThumb[p.id] || p.thumbnail_url || ''
     }));
 
-    return sendResponse(res, 200, { enabled: true, products: simplified });
+    return sendResponse(res, 200, { enabled: true, products: simplified, fees: await getConvenienceFees() });
   } catch (err) {
     if (err.response && err.response.data) {
       return sendResponse(res, err.response.status || 500, {
@@ -767,7 +800,11 @@ router.post('/checkout', authenticate, async (req, res) => {
     const price = parseFloat(unitPrice);
     const subtotal = Math.round(price * qty * 100) / 100; // round to 2 decimals
     const shippingCost = 0; // Will be included in Printful fulfillment cost
-    const total = subtotal + shippingCost;
+    // Admin-configured convenience fees, snapshotted onto the order so the
+    // charged amount stays auditable if the fee config changes later.
+    const fees = await getConvenienceFees();
+    const feesTotal = sumFees(fees);
+    const total = Math.round((subtotal + shippingCost + feesTotal) * 100) / 100;
 
     // Create local order record
     const order = await PrintfulOrder.create({
@@ -799,6 +836,8 @@ router.post('/checkout', authenticate, async (req, res) => {
       },
       subtotal,
       shipping: shippingCost,
+      fees,
+      feesTotal,
       total,
       paymentStatus: 'pending'
     });
@@ -824,7 +863,9 @@ router.post('/checkout', authenticate, async (req, res) => {
       clientSecret: paymentIntent.client_secret,
       total,
       subtotal,
-      shipping: shippingCost
+      shipping: shippingCost,
+      fees,
+      feesTotal
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -934,17 +975,23 @@ router.get('/orders', authenticate, async (req, res) => {
     .limit(50)
     .lean();
 
+    const tplName = await getTemplateNameMap();
+
     return sendResponse(res, 200, {
       orders: orders.map(o => ({
         id: o._id,
         printfulOrderId: o.printfulOrderId,
-        productName: o.product?.name || 'Product',
+        productName: tplName[o.templateId] || o.product?.name || 'Product',
         variantName: o.product?.variantName || '',
-        thumbnail: o.product?.thumbnail || '',
+        sku: o.product?.sku || '',
+        thumbnail: sanitizeAssetUrl(o.product?.thumbnail || '', req),
         quantity: o.product?.quantity || 1,
         unitPrice: o.product?.unitPrice || 0,
         total: o.total,
         subtotal: o.subtotal,
+        shipping: o.shipping || 0,
+        fees: o.fees || [],
+        feesTotal: o.feesTotal || 0,
         paymentStatus: o.paymentStatus,
         adminStatus: o.adminStatus,
         printfulStatus: o.printfulStatus,
@@ -982,9 +1029,10 @@ router.get('/admin/config', authenticate, authorize('admin'), async (req, res) =
     try { textFields = tfRecord?.value ? JSON.parse(tfRecord.value) : []; } catch (_) {}
 
     const templates = await getCardTemplates();
+    const fees = await getConvenienceFees();
 
     return sendResponse(res, 200, {
-      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields, templates }
+      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields, templates, fees }
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -998,7 +1046,7 @@ router.get('/admin/config', authenticate, authorize('admin'), async (req, res) =
 // ---------------------------------------------------------------------------
 router.post('/admin/config', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { apiKey, storeId, enabled, textFields, templates } = req.body;
+    const { apiKey, storeId, enabled, textFields, templates, fees } = req.body;
 
     if (apiKey !== undefined) await upsertConfig(KEYS.API_KEY, apiKey, req.user._id);
     if (storeId !== undefined) await upsertConfig(KEYS.STORE_ID, storeId, req.user._id);
@@ -1011,6 +1059,13 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
       // templates is an array of CardTemplate objects (see cardRenderer.js)
       await upsertConfig(KEYS.TEMPLATES, JSON.stringify(templates), req.user._id);
     }
+    if (fees !== undefined) {
+      // fees is an array of { label, amount } convenience fees added to every order
+      const clean = (Array.isArray(fees) ? fees : [])
+        .map(f => ({ label: String(f.label || '').trim(), amount: Math.round((parseFloat(f.amount) || 0) * 100) / 100 }))
+        .filter(f => f.label && f.amount > 0);
+      await upsertConfig(KEYS.FEES, JSON.stringify(clean), req.user._id);
+    }
 
     const config = await getPrintfulConfig();
     const maskedKey = config.apiKey ? '••••••••' + config.apiKey.slice(-4) : '';
@@ -1021,11 +1076,12 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
     try { currentTextFields = tfRecord?.value ? JSON.parse(tfRecord.value) : []; } catch (_) {}
 
     const currentTemplates = await getCardTemplates();
+    const currentFees = await getConvenienceFees();
 
     return sendResponse(res, 200, {
       message: 'Printful configuration updated.',
       config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey,
-                textFields: currentTextFields, templates: currentTemplates }
+                textFields: currentTextFields, templates: currentTemplates, fees: currentFees }
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -1126,6 +1182,11 @@ router.get('/admin/orders', authenticate, authorize('admin'), async (req, res) =
       PrintfulOrder.countDocuments({ deletedAt: null })
     ]);
 
+    // Resolve each order's designed-card name (e.g. "RHP Business Card (English)")
+    // from its templateId so the language/card is visible even on older orders
+    // whose product.name only has the generic Printful name.
+    const tplName = await getTemplateNameMap();
+
     return sendResponse(res, 200, {
       orders: orders.map(o => ({
         id: o._id,
@@ -1134,12 +1195,16 @@ router.get('/admin/orders', authenticate, authorize('admin'), async (req, res) =
           name: `${o.user.firstName || ''} ${o.user.lastName || ''}`.trim() || o.userEmail,
           email: o.user.email || o.userEmail
         } : { name: o.userName, email: o.userEmail },
-        product: o.product,
+        product: o.product ? { ...o.product, thumbnail: sanitizeAssetUrl(o.product.thumbnail || '', req) } : o.product,
+        cardName: tplName[o.templateId] || o.product?.name || 'Product',
+        templateId: o.templateId || '',
         textValues: o.textValues,
         mockupUrl: sanitizeAssetUrl(o.mockupUrl, req),
         shippingAddress: o.shippingAddress,
         subtotal: o.subtotal,
         shipping: o.shipping,
+        fees: o.fees || [],
+        feesTotal: o.feesTotal || 0,
         total: o.total,
         paymentStatus: o.paymentStatus,
         adminStatus: o.adminStatus,
@@ -1176,6 +1241,11 @@ router.get('/admin/orders/:id', authenticate, authorize('admin'), async (req, re
       .lean();
 
     if (!order) return sendResponse(res, 404, { message: 'Order not found.' });
+
+    order.mockupUrl = sanitizeAssetUrl(order.mockupUrl, req);
+    if (order.product) order.product.thumbnail = sanitizeAssetUrl(order.product.thumbnail || '', req);
+    const tplName = await getTemplateNameMap();
+    order.cardName = tplName[order.templateId] || order.product?.name || 'Product';
 
     return sendResponse(res, 200, { order });
   } catch (err) {
@@ -1369,9 +1439,12 @@ router.get('/admin/orders/:id/receipt', authenticate, authorize('admin'), async 
           email: order.user.email
         } : { name: order.userName, email: order.userEmail },
         product: order.product,
+        cardName: (await getTemplateNameMap())[order.templateId] || order.product?.name || 'Product',
         shippingAddress: order.shippingAddress,
         subtotal: order.subtotal,
         shipping: order.shipping,
+        fees: order.fees || [],
+        feesTotal: order.feesTotal || 0,
         total: order.total,
         paymentStatus: order.paymentStatus,
         paidAt: order.paidAt,

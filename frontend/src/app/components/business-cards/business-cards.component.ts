@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { forkJoin } from 'rxjs';
-import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord, CardTemplate } from '../../services/business-cards.service';
+import { BusinessCardsService, PrintfulProduct, ProductDetail, ProductVariant, ShippingAddress, PrintfulOrderRecord, CardTemplate, ConvenienceFee } from '../../services/business-cards.service';
 import { PublicConfigService } from '../../services/public-config.service';
 import { environment } from '../../../environments/environment';
 
@@ -29,6 +29,12 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   loading = true;
   enabled = false;
   error = '';
+
+  // Admin-configured convenience fees added on top of the card price.
+  fees: ConvenienceFee[] = [];
+  get feesTotal(): number {
+    return Math.round(this.fees.reduce((s, f) => s + (+f.amount || 0), 0) * 100) / 100;
+  }
 
   // Product detail / ordering
   selectedProduct: ProductDetail | null = null;
@@ -77,12 +83,60 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   orderTotal = 0;
   orderSubtotal = 0;
   orderShipping = 0;
+  orderFees: ConvenienceFee[] = [];
+  orderFeesTotal = 0;
   receiptUrl = '';
+
+  /** Card price × quantity (before convenience fees). */
+  get cardSubtotal(): number {
+    return Math.round((+(this.selectedVariant?.price || 0) * this.quantity) * 100) / 100;
+  }
+
+  /** Estimated total shown before checkout = card subtotal + convenience fees. */
+  get estimatedTotal(): number {
+    return Math.round((this.cardSubtotal + this.feesTotal) * 100) / 100;
+  }
 
   // Order history
   orders: PrintfulOrderRecord[] = [];
   loadingOrders = false;
   showOrders = false;
+  expandedOrders = new Set<string>();
+
+  toggleOrderDetails(order: PrintfulOrderRecord): void {
+    if (this.expandedOrders.has(order.id)) this.expandedOrders.delete(order.id);
+    else this.expandedOrders.add(order.id);
+  }
+
+  isOrderExpanded(order: PrintfulOrderRecord): boolean {
+    return this.expandedOrders.has(order.id);
+  }
+
+  /** Number of personalization fields filled (for the order-history summary). */
+  orderFieldCount(order: PrintfulOrderRecord): number {
+    return order.textValues ? Object.keys(order.textValues).length : 0;
+  }
+
+  /** Best available order image: stable mockup, falling back to the product thumbnail. */
+  orderImg(order: PrintfulOrderRecord): string {
+    if ((order as any)._triedThumb) return order.thumbnail || '';
+    return order.mockupUrl || order.thumbnail || '';
+  }
+
+  /** On image load failure, try the product thumbnail once, then the placeholder. */
+  onOrderImgError(order: PrintfulOrderRecord): void {
+    const o = order as any;
+    if (!o._triedThumb && order.mockupUrl && order.thumbnail && order.thumbnail !== order.mockupUrl) {
+      o._triedThumb = true;   // retry <img> with the product thumbnail
+    } else {
+      order.imgFailed = true; // give up — show the placeholder box
+    }
+  }
+
+  /** True once we've exhausted both image sources (or there were none). */
+  orderImgMissing(order: PrintfulOrderRecord): boolean {
+    return !!order.imgFailed || (!order.mockupUrl && !order.thumbnail);
+  }
 
   constructor(
     private businessCardsService: BusinessCardsService,
@@ -104,6 +158,7 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
       next: ({ products, templates }) => {
         this.enabled = products.enabled;
         this.products = products.products || [];
+        this.fees = products.fees || [];
         this.templates = templates.templates || [];
         this.buildCatalog();
         this.loading = false;
@@ -505,7 +560,10 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     this.businessCardsService.createCheckout({
       variantId: this.selectedVariant.id,
       variantName: this.selectedVariant.name,
-      productName: this.selectedProduct?.name || 'Product',
+      // Prefer the designed card's name (e.g. "RHP Business Card (English)") so
+      // the admin/agent order views show which card — and language — was ordered,
+      // instead of the generic Printful product name.
+      productName: this.activeTemplate?.name || this.selectedProduct?.name || 'Product',
       productThumbnail: this.selectedProduct?.thumbnail || '',
       sku: this.selectedVariant.sku,
       unitPrice: this.selectedVariant.price,
@@ -522,6 +580,8 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
         this.orderTotal = res.total;
         this.orderSubtotal = res.subtotal;
         this.orderShipping = res.shipping;
+        this.orderFees = res.fees || [];
+        this.orderFeesTotal = res.feesTotal || 0;
         this.checkoutStep = 'payment';
         this.processing = false;
 

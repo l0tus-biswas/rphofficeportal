@@ -249,4 +249,26 @@ export class PrintfulOrdersComponent implements OnInit {
   toUpper(val: string): string {
     return val ? val.toUpperCase() : '';
   }
+
+  /** Best available order image: stable mockup, falling back to the product thumbnail. */
+  orderImg(order: AdminOrderRecord): string {
+    if ((order as any)._triedThumb) return order.product?.thumbnail || '';
+    return order.mockupUrl || order.product?.thumbnail || '';
+  }
+
+  /** On image load failure, try the product thumbnail once, then the placeholder. */
+  onOrderImgError(order: AdminOrderRecord): void {
+    const o = order as any;
+    const thumb = order.product?.thumbnail;
+    if (!o._triedThumb && order.mockupUrl && thumb && thumb !== order.mockupUrl) {
+      o._triedThumb = true;
+    } else {
+      order.imgFailed = true;
+    }
+  }
+
+  /** True once we've exhausted both image sources (or there were none). */
+  orderImgMissing(order: AdminOrderRecord): boolean {
+    return !!order.imgFailed || (!order.mockupUrl && !order.product?.thumbnail);
+  }
 }

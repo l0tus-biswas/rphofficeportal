@@ -349,7 +349,11 @@
                 <hr>
                 <div class="d-flex justify-content-between small">
                   <span>Subtotal</span>
-                  <span class="fw-semibold">${{ (+(selectedVariant?.price || 0) * quantity).toFixed(2) }}</span>
+                  <span class="fw-semibold">${{ cardSubtotal.toFixed(2) }}</span>
+                </div>
+                <div *ngFor="let fee of fees" class="d-flex justify-content-between small mt-1">
+                  <span class="text-muted">{{ fee.label }}</span>
+                  <span>${{ (+fee.amount).toFixed(2) }}</span>
                 </div>
                 <div class="d-flex justify-content-between small text-muted mt-1">
                   <span>Shipping</span>
@@ -358,7 +362,7 @@
                 <hr>
                 <div class="d-flex justify-content-between fw-bold">
                   <span>Estimated Total</span>
-                  <span class="text-success">${{ (+(selectedVariant?.price || 0) * quantity).toFixed(2) }}</span>
+                  <span class="text-success">${{ estimatedTotal.toFixed(2) }}</span>
                 </div>
               </div>
             </div>
@@ -382,12 +386,25 @@
             <div class="alert alert-light border mb-4">
               <div class="d-flex justify-content-between align-items-center">
                 <div>
-                  <strong>{{ selectedProduct?.name }}</strong>
+                  <strong>{{ activeTemplate?.name || selectedProduct?.name }}</strong>
                   <br><small class="text-muted">{{ selectedVariant?.name }} × {{ quantity }}</small>
                 </div>
                 <div class="text-end">
                   <div class="h5 fw-bold text-success mb-0">${{ orderTotal.toFixed(2) }}</div>
                 </div>
+              </div>
+              <hr class="my-2">
+              <div class="d-flex justify-content-between small">
+                <span class="text-muted">Subtotal</span>
+                <span>${{ orderSubtotal.toFixed(2) }}</span>
+              </div>
+              <div *ngFor="let fee of orderFees" class="d-flex justify-content-between small mt-1">
+                <span class="text-muted">{{ fee.label }}</span>
+                <span>${{ (+fee.amount).toFixed(2) }}</span>
+              </div>
+              <div class="d-flex justify-content-between fw-semibold mt-1">
+                <span>Total</span>
+                <span class="text-success">${{ orderTotal.toFixed(2) }}</span>
               </div>
             </div>
 
@@ -485,15 +502,20 @@
           <div *ngFor="let order of orders" class="col-12">
             <div class="card border-0 shadow-sm">
               <div class="card-body p-3">
-                <div class="d-flex align-items-center gap-3">
-                  <img *ngIf="order.thumbnail || order.mockupUrl" [src]="order.mockupUrl || order.thumbnail"
+                <div class="d-flex align-items-center gap-3" style="cursor: pointer;" (click)="toggleOrderDetails(order)">
+                  <img *ngIf="!orderImgMissing(order)"
+                       [src]="orderImg(order)" (error)="onOrderImgError(order)"
                        class="rounded" style="width: 50px; height: 50px; object-fit: cover;">
-                  <div *ngIf="!order.thumbnail && !order.mockupUrl" class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                  <div *ngIf="orderImgMissing(order)" class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
                     <i class="bi bi-box text-muted"></i>
                   </div>
                   <div class="flex-grow-1">
                     <div class="fw-semibold small">{{ order.productName }}</div>
                     <div class="text-muted" style="font-size: 0.75rem;">{{ order.variantName }} · Qty: {{ order.quantity }}</div>
+                    <div class="text-primary" style="font-size: 0.7rem;">
+                      <i class="bi" [class.bi-chevron-down]="!isOrderExpanded(order)" [class.bi-chevron-up]="isOrderExpanded(order)"></i>
+                      {{ isOrderExpanded(order) ? 'Hide' : 'View' }} details
+                    </div>
                   </div>
                   <div class="text-center">
                     <span class="badge" [ngClass]="getStatusClass(order.paymentStatus)">{{ getStatusLabel(order.paymentStatus) }}</span>
@@ -504,12 +526,65 @@
                     <div class="fw-bold small">${{ order.total?.toFixed(2) }}</div>
                     <div class="text-muted" style="font-size: 0.7rem;">{{ order.created | appDate:'MMM d, y' }}</div>
                   </div>
-                  <div *ngIf="order.receiptUrl">
+                  <div *ngIf="order.receiptUrl" (click)="$event.stopPropagation()">
                     <a [href]="order.receiptUrl" target="_blank" class="btn btn-outline-secondary btn-sm" title="Receipt">
                       <i class="bi bi-receipt"></i>
                     </a>
                   </div>
                 </div>
+
+                <!-- Expandable order details -->
+                <div *ngIf="isOrderExpanded(order)" class="mt-3 pt-3 border-top">
+                  <div class="row g-3">
+                    <!-- Cost breakdown -->
+                    <div class="col-12 col-md-6">
+                      <h6 class="fw-semibold small mb-2"><i class="bi bi-receipt me-1 text-primary"></i> Cost Breakdown</h6>
+                      <div class="d-flex justify-content-between small">
+                        <span class="text-muted">{{ order.quantity }} × ${{ (+order.unitPrice).toFixed(2) }}</span>
+                        <span>${{ (+order.subtotal).toFixed(2) }}</span>
+                      </div>
+                      <div *ngFor="let fee of order.fees" class="d-flex justify-content-between small mt-1">
+                        <span class="text-muted">{{ fee.label }}</span>
+                        <span>${{ (+fee.amount).toFixed(2) }}</span>
+                      </div>
+                      <div *ngIf="order.shipping" class="d-flex justify-content-between small mt-1">
+                        <span class="text-muted">Shipping</span>
+                        <span>${{ (+order.shipping).toFixed(2) }}</span>
+                      </div>
+                      <hr class="my-1">
+                      <div class="d-flex justify-content-between fw-semibold small">
+                        <span>Total</span>
+                        <span class="text-success">${{ (+order.total).toFixed(2) }}</span>
+                      </div>
+                      <div class="text-muted mt-2" style="font-size: 0.7rem;">
+                        <span *ngIf="order.sku">SKU: {{ order.sku }}<br></span>
+                        <span *ngIf="order.printfulOrderId">Printful Order #{{ order.printfulOrderId }}<br></span>
+                        Ordered: {{ order.created | appDate:'MMM d, y, h:mm a' }}
+                        <span *ngIf="order.paidAt"><br>Paid: {{ order.paidAt | appDate:'MMM d, y, h:mm a' }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Shipping + personalization -->
+                    <div class="col-12 col-md-6">
+                      <h6 class="fw-semibold small mb-2"><i class="bi bi-truck me-1 text-primary"></i> Ship To</h6>
+                      <div class="small text-muted" *ngIf="order.shippingAddress">
+                        {{ order.shippingAddress.name }}<br>
+                        {{ order.shippingAddress.address1 }}<span *ngIf="order.shippingAddress.address2">, {{ order.shippingAddress.address2 }}</span><br>
+                        {{ order.shippingAddress.city }}, {{ order.shippingAddress.state }} {{ order.shippingAddress.zip }}
+                        <span *ngIf="order.shippingAddress.phone"><br>{{ order.shippingAddress.phone }}</span>
+                      </div>
+
+                      <div *ngIf="orderFieldCount(order) > 0" class="mt-3">
+                        <h6 class="fw-semibold small mb-2"><i class="bi bi-pencil-square me-1 text-primary"></i> Card Details</h6>
+                        <div *ngFor="let item of order.textValues | keyvalue" class="d-flex small">
+                          <span class="text-muted me-2">{{ item.key }}:</span>
+                          <span>{{ item.value }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div *ngIf="order.adminNotes" class="mt-2 small">
                   <span class="badge bg-info me-1">Admin Note</span>
                   <span class="text-muted">{{ order.adminNotes }}</span>

@@ -71,6 +71,13 @@ const printfulOrderSchema = new mongoose.Schema({
   subtotal: { type: Number, default: 0 },
   shipping: { type: Number, default: 0 },
   tax: { type: Number, default: 0 },
+  // Admin-configured convenience fees, snapshotted at order time so the charge
+  // is auditable even if the admin later changes the fee config.
+  fees: {
+    type: [{ label: String, amount: Number }],
+    default: []
+  },
+  feesTotal: { type: Number, default: 0 },
   total: { type: Number, default: 0 },
 
   // Payment / Stripe
