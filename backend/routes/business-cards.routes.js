@@ -85,6 +85,15 @@ function getPublicBaseUrl(req) {
     (req ? `${req.protocol}://${req.get('host')}` : '');
 }
 
+// Rewrite any stale localhost asset URL to the current public host so prod never
+// surfaces a localhost reference (e.g. orders created via a local backend against
+// the shared DB). Read-time only — does not mutate stored data.
+function sanitizeAssetUrl(u, req) {
+  if (typeof u !== 'string' || !u) return u || '';
+  const base = getPublicBaseUrl(req).replace(/\/$/, '');
+  return base ? u.replace(/https?:\/\/localhost(?::\d+)?/gi, base) : u;
+}
+
 // Build the Printful order payload from a local order and submit it as a draft.
 // Mutates `order` (printFiles, printfulOrderId, printfulStatus, adminNotes).
 // Throws on Printful API error so callers can record/surface it; an error with
@@ -136,8 +145,14 @@ async function submitOrderToPrintful(order, publicBase) {
         }
       }
     } catch (renderErr) {
+      // Record the real error on the order so a render failure is visible
+      // (e.g. ERR_REQUIRE_ESM or a missing Chromium library on the server)
+      // instead of silently shipping the product's default print file.
       console.error('Card render failed for order', String(order._id), '-', renderErr.message);
-      // Leave orderItem without files; admin reviews before Printful confirm.
+      order.renderError = String(renderErr.message || renderErr);
+      order.adminNotes = (order.adminNotes ? order.adminNotes + '\n' : '') +
+        `WARNING: print render FAILED (${order.renderError}). Order submitted without ` +
+        `personalized files — Printful used the product default. Check server render setup.`;
     }
   }
 
@@ -933,7 +948,7 @@ router.get('/orders', authenticate, async (req, res) => {
         receiptUrl: o.stripeReceiptUrl || '',
         shippingAddress: o.shippingAddress,
         textValues: o.textValues,
-        mockupUrl: o.mockupUrl || '',
+        mockupUrl: sanitizeAssetUrl(o.mockupUrl, req),
         adminNotes: o.adminNotes || '',
         created: o.createdAt,
         paidAt: o.paidAt
@@ -1118,7 +1133,7 @@ router.get('/admin/orders', authenticate, authorize('admin'), async (req, res) =
         } : { name: o.userName, email: o.userEmail },
         product: o.product,
         textValues: o.textValues,
-        mockupUrl: o.mockupUrl || '',
+        mockupUrl: sanitizeAssetUrl(o.mockupUrl, req),
         shippingAddress: o.shippingAddress,
         subtotal: o.subtotal,
         shipping: o.shipping,
