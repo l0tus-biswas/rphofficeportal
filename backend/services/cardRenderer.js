@@ -35,8 +35,19 @@ if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
 // the default /tmp isn't writable by the app user, so Chrome fails to launch
 // with "ftruncate() failed: Permission denied". Point it at a dir we know is
 // writable — under uploads/, which the app already writes renders into.
-const CHROME_DATA_DIR = path.join(__dirname, '..', 'uploads', '.chrome');
-if (!fs.existsSync(CHROME_DATA_DIR)) fs.mkdirSync(CHROME_DATA_DIR, { recursive: true });
+const CHROME_BASE_DIR = path.join(__dirname, '..', 'uploads', '.chrome');
+
+// A profile dir is unique per worker process (pm2 may run several), so multiple
+// workers don't fight over one profile ("browser is already running"). Stale
+// singleton locks from a crashed launch are cleared before reuse.
+function chromeProfileDir() {
+  const dir = path.join(CHROME_BASE_DIR, 'p-' + process.pid);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  for (const lock of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+    try { fs.rmSync(path.join(dir, lock), { force: true }); } catch (_) {}
+  }
+  return dir;
+}
 
 // Reuse one Chromium across renders.
 let _browser = null;
@@ -54,11 +65,13 @@ async function getBrowser() {
   // (e.g. Plesk), where Chrome otherwise crashes on launch with
   // "Connection closed." --single-process + --no-zygote avoid the process
   // forking that those environments block.
+  const profileDir = chromeProfileDir();
   _browser = await puppeteer.launch({
     headless: 'new',
-    // Use a writable profile dir + temp so Chrome can launch as the restricted
-    // app user (avoids "ftruncate() failed: Permission denied").
-    userDataDir: CHROME_DATA_DIR,
+    // Use a writable, per-process profile dir + temp so Chrome can launch as the
+    // restricted app user (avoids "ftruncate() failed: Permission denied") and
+    // multiple workers don't collide on one profile.
+    userDataDir: profileDir,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -69,12 +82,12 @@ async function getBrowser() {
       '--no-first-run',
       '--disable-extensions',
       '--disable-crash-reporter',
-      '--crash-dumps-dir=' + CHROME_DATA_DIR,
-      '--user-data-dir=' + CHROME_DATA_DIR
+      '--crash-dumps-dir=' + profileDir,
+      '--user-data-dir=' + profileDir
     ],
     // Force Chrome's temp files into the writable dir too (default /tmp is
     // blocked for the Plesk user).
-    env: { ...process.env, TMPDIR: CHROME_DATA_DIR, TMP: CHROME_DATA_DIR, TEMP: CHROME_DATA_DIR }
+    env: { ...process.env, TMPDIR: profileDir, TMP: profileDir, TEMP: profileDir }
   });
   return _browser;
 }
