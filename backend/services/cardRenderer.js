@@ -31,6 +31,13 @@ async function getPuppeteer() {
 const PRINTS_DIR = path.join(__dirname, '..', 'uploads', 'business-card-prints');
 if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
 
+// Chrome needs a writable profile + temp dir. On restricted hosting (e.g. Plesk)
+// the default /tmp isn't writable by the app user, so Chrome fails to launch
+// with "ftruncate() failed: Permission denied". Point it at a dir we know is
+// writable — under uploads/, which the app already writes renders into.
+const CHROME_DATA_DIR = path.join(__dirname, '..', 'uploads', '.chrome');
+if (!fs.existsSync(CHROME_DATA_DIR)) fs.mkdirSync(CHROME_DATA_DIR, { recursive: true });
+
 // Reuse one Chromium across renders.
 let _browser = null;
 function browserAlive(b) {
@@ -49,14 +56,25 @@ async function getBrowser() {
   // forking that those environments block.
   _browser = await puppeteer.launch({
     headless: 'new',
+    // Use a writable profile dir + temp so Chrome can launch as the restricted
+    // app user (avoids "ftruncate() failed: Permission denied").
+    userDataDir: CHROME_DATA_DIR,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-zygote',
-      '--single-process'
-    ]
+      '--single-process',
+      '--no-first-run',
+      '--disable-extensions',
+      '--disable-crash-reporter',
+      '--crash-dumps-dir=' + CHROME_DATA_DIR,
+      '--user-data-dir=' + CHROME_DATA_DIR
+    ],
+    // Force Chrome's temp files into the writable dir too (default /tmp is
+    // blocked for the Plesk user).
+    env: { ...process.env, TMPDIR: CHROME_DATA_DIR, TMP: CHROME_DATA_DIR, TEMP: CHROME_DATA_DIR }
   });
   return _browser;
 }
