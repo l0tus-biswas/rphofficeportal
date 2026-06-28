@@ -345,7 +345,10 @@ router.post('/render-preview', authenticate, async (req, res) => {
       previewUrl: previews[0]?.url || ''
     });
   } catch (err) {
-    return errorResponse(res, err);
+    // Surface the real render error (e.g. Chromium "Connection closed.") so the
+    // preview failure is diagnosable instead of a generic 500.
+    console.error('render-preview failed:', err.message);
+    return sendResponse(res, 500, { message: 'Card preview render failed.', error: String(err.message || err) });
   }
 });
 
