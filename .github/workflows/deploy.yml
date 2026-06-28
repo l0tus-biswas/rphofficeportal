@@ -83,6 +83,10 @@ jobs:
             npm install --production
             cd backend && npm install && cd ..
             cd frontend && npm install && npx ng build --configuration=production && cd ..
-            pm2 restart rhp-office-portal || pm2 start ecosystem.config.json
+            # Ensure Puppeteer's Chrome is installed in the SAME cache the running
+            # app uses, so card rendering works (otherwise "Could not find Chrome").
+            export PUPPETEER_CACHE_DIR="$HOME/.cache/puppeteer"
+            cd backend && npx puppeteer browsers install chrome && cd ..
+            pm2 restart rhp-office-portal --update-env || pm2 start ecosystem.config.json
             pm2 save
             echo "Deploy complete: $(date)"

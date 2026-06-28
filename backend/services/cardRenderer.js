@@ -43,9 +43,20 @@ function browserAlive(b) {
 async function getBrowser() {
   if (browserAlive(_browser)) return _browser;
   const puppeteer = await getPuppeteer();
+  // Extra flags beyond no-sandbox are needed on restricted/shared hosting
+  // (e.g. Plesk), where Chrome otherwise crashes on launch with
+  // "Connection closed." --single-process + --no-zygote avoid the process
+  // forking that those environments block.
   _browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process'
+    ]
   });
   return _browser;
 }
