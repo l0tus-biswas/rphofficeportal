@@ -15,6 +15,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // Puppeteer 23+ is ESM-only. Loading it via require() throws ERR_REQUIRE_ESM on
 // Node < 22 (prod runs Node 18), so import it lazily with dynamic import(),
@@ -32,16 +33,37 @@ const PRINTS_DIR = path.join(__dirname, '..', 'uploads', 'business-card-prints')
 if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
 
 // Chrome needs a writable profile + temp dir. On restricted hosting (e.g. Plesk)
-// the default /tmp isn't writable by the app user, so Chrome fails to launch
-// with "ftruncate() failed: Permission denied". Point it at a dir we know is
-// writable — under uploads/, which the app already writes renders into.
-const CHROME_BASE_DIR = path.join(__dirname, '..', 'uploads', '.chrome');
+// the default /tmp isn't writable by the app user (Chrome fails with
+// "ftruncate() failed: Permission denied"), and a pre-existing dir may be owned
+// by root (EACCES on mkdir). So pick — and verify — a writable base dir at
+// runtime, trying the known-writable render output dir first, then HOME, /tmp.
+let _chromeBase = null;
+function chromeBaseDir() {
+  if (_chromeBase) return _chromeBase;
+  const candidates = [
+    path.join(PRINTS_DIR, '.chrome'),           // proven writable (renders land here)
+    path.join(os.homedir() || '', '.rhp-chrome'),
+    path.join(os.tmpdir(), 'rhp-chrome')
+  ];
+  for (const base of candidates) {
+    try {
+      fs.mkdirSync(base, { recursive: true });
+      fs.accessSync(base, fs.constants.W_OK);
+      _chromeBase = base;
+      return base;
+    } catch (_) { /* try next */ }
+  }
+  // Last resort: a unique tmp dir.
+  _chromeBase = path.join(os.tmpdir(), 'rhp-chrome-' + process.pid);
+  fs.mkdirSync(_chromeBase, { recursive: true });
+  return _chromeBase;
+}
 
 // A profile dir is unique per worker process (pm2 may run several), so multiple
 // workers don't fight over one profile ("browser is already running"). Stale
 // singleton locks from a crashed launch are cleared before reuse.
 function chromeProfileDir() {
-  const dir = path.join(CHROME_BASE_DIR, 'p-' + process.pid);
+  const dir = path.join(chromeBaseDir(), 'p-' + process.pid);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   for (const lock of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
     try { fs.rmSync(path.join(dir, lock), { force: true }); } catch (_) {}
