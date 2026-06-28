@@ -2,197 +2,70 @@
  * cardRenderer.js
  * ---------------------------------------------------------------------------
  * Renders personalized, print-ready business-card files (one PNG per side)
- * for Printful product 724 "Set of Business Cards".
+ * using `sharp` (libvips) — NO headless browser.
  *
- * Print spec (from Printful printfiles endpoint, catalog product 724):
- *   - print file: 1200 x 750 px @ 300 DPI (landscape) / 750 x 1200 (portrait)
- *   - placements: front + back (double-sided supported)
+ * We previously used Puppeteer/Chromium, but the production host (Plesk) blocks
+ * Chrome at the kernel level for the app user (ftruncate/inotify/dbus denied),
+ * so Chrome can't launch there. sharp composites the background + photo + text
+ * directly with no browser, no temp files, and no special permissions.
  *
  * A "template" describes the static design + where the agent's photo and text
- * fields land, in print-file pixel coordinates. The agent's headshot is read
- * from local disk and inlined (data URI) so it never has to be public; only
- * the rendered output goes to the public /uploads/business-card-prints folder.
+ * fields land, in print-file pixel coordinates.
  */
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
-
-// Puppeteer 23+ is ESM-only. Loading it via require() throws ERR_REQUIRE_ESM on
-// Node < 22 (prod runs Node 18), so import it lazily with dynamic import(),
-// which works in CommonJS on every Node version. Cached after first load.
-let _puppeteer = null;
-async function getPuppeteer() {
-  if (!_puppeteer) {
-    const mod = await import('puppeteer');
-    _puppeteer = mod.default || mod;
-  }
-  return _puppeteer;
-}
+const sharp = require('sharp');
 
 const PRINTS_DIR = path.join(__dirname, '..', 'uploads', 'business-card-prints');
 if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
 
-// Chrome needs a writable profile + temp dir. On restricted hosting (e.g. Plesk)
-// the default /tmp isn't writable by the app user (Chrome fails with
-// "ftruncate() failed: Permission denied"), and a pre-existing dir may be owned
-// by root (EACCES on mkdir). So pick — and verify — a writable base dir at
-// runtime, trying the known-writable render output dir first, then HOME, /tmp.
-let _chromeBase = null;
-function chromeBaseDir() {
-  if (_chromeBase) return _chromeBase;
-  const candidates = [
-    path.join(PRINTS_DIR, '.chrome'),           // proven writable (renders land here)
-    path.join(os.homedir() || '', '.rhp-chrome'),
-    path.join(os.tmpdir(), 'rhp-chrome')
-  ];
-  for (const base of candidates) {
-    try {
-      fs.mkdirSync(base, { recursive: true });
-      fs.accessSync(base, fs.constants.W_OK);
-      _chromeBase = base;
-      return base;
-    } catch (_) { /* try next */ }
-  }
-  // Last resort: a unique tmp dir.
-  _chromeBase = path.join(os.tmpdir(), 'rhp-chrome-' + process.pid);
-  fs.mkdirSync(_chromeBase, { recursive: true });
-  return _chromeBase;
-}
-
-// A profile dir is unique per worker process (pm2 may run several), so multiple
-// workers don't fight over one profile ("browser is already running"). Stale
-// singleton locks from a crashed launch are cleared before reuse.
-function chromeProfileDir() {
-  const dir = path.join(chromeBaseDir(), 'p-' + process.pid);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  for (const lock of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
-    try { fs.rmSync(path.join(dir, lock), { force: true }); } catch (_) {}
-  }
-  return dir;
-}
-
-// Reuse one Chromium across renders.
-let _browser = null;
-function browserAlive(b) {
-  if (!b) return false;
-  if (typeof b.connected === 'boolean') return b.connected;       // puppeteer >= 22
-  if (typeof b.isConnected === 'function') return b.isConnected(); // older puppeteer
-  return true;
-}
-
-async function getBrowser() {
-  if (browserAlive(_browser)) return _browser;
-  const puppeteer = await getPuppeteer();
-  // Extra flags beyond no-sandbox are needed on restricted/shared hosting
-  // (e.g. Plesk), where Chrome otherwise crashes on launch with
-  // "Connection closed." --single-process + --no-zygote avoid the process
-  // forking that those environments block.
-  const profileDir = chromeProfileDir();
-  _browser = await puppeteer.launch({
-    headless: 'new',
-    // Use a writable, per-process profile dir + temp so Chrome can launch as the
-    // restricted app user (avoids "ftruncate() failed: Permission denied") and
-    // multiple workers don't collide on one profile.
-    userDataDir: profileDir,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-zygote',
-      '--single-process',
-      '--no-first-run',
-      '--disable-extensions',
-      '--disable-crash-reporter',
-      '--crash-dumps-dir=' + profileDir,
-      '--user-data-dir=' + profileDir
-    ],
-    // Force Chrome's temp files into the writable dir too (default /tmp is
-    // blocked for the Plesk user).
-    env: { ...process.env, TMPDIR: profileDir, TMP: profileDir, TEMP: profileDir }
-  });
-  return _browser;
-}
-async function closeBrowser() {
-  if (_browser) { try { await _browser.close(); } catch (_) {} _browser = null; }
-}
-
-// Map a "/uploads/..." web path (or absolute disk path) to a base64 data URI.
-function fileToDataUri(webOrDiskPath) {
-  if (!webOrDiskPath) return '';
+// Resolve a "/uploads/..." web path (or absolute disk path) to an absolute disk
+// path that exists, or null.
+function resolveDisk(webOrDiskPath) {
+  if (!webOrDiskPath) return null;
   let abs = webOrDiskPath;
   const idx = String(webOrDiskPath).indexOf('/uploads/');
-  if (idx !== -1) abs = path.join(__dirname, '..', webOrDiskPath.slice(idx + 1)); // -> backend/uploads/...
-  if (!fs.existsSync(abs)) return '';
-  const ext = path.extname(abs).toLowerCase().replace('.', '');
-  const mime = ext === 'svg' ? 'image/svg+xml'
-    : ext === 'ttf' ? 'font/ttf'
-    : ext === 'otf' ? 'font/otf'
-    : (ext === 'jpg' || ext === 'jpeg') ? 'image/jpeg'
-    : `image/${ext}`;
-  return `data:${mime};base64,${fs.readFileSync(abs).toString('base64')}`;
+  if (idx !== -1) abs = path.join(__dirname, '..', webOrDiskPath.slice(idx + 1));
+  return fs.existsSync(abs) ? abs : null;
 }
 
-function esc(s = '') {
+function escXml(s = '') {
   return String(s).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
 }
 
-function buildHtml(printFile, side, fieldValues, photoWebPath) {
-  const { widthPx, heightPx } = printFile;
+function clampBox(b, W, H) {
+  const w = Math.max(1, Math.min(Math.round(b.w || W), W));
+  const h = Math.max(1, Math.min(Math.round(b.h || H), H));
+  const x = Math.max(0, Math.min(Math.round(b.x || 0), W - w));
+  const y = Math.max(0, Math.min(Math.round(b.y || 0), H - h));
+  return { x, y, w, h };
+}
 
-  const fontFaces = (side.fonts || []).map(f => `
-    @font-face {
-      font-family: '${f.family}';
-      font-weight: ${f.weight || 400};
-      font-style: ${f.style || 'normal'};
-      src: url('${fileToDataUri(f.file)}');
-    }`).join('\n');
-
-  const bgUri = fileToDataUri(side.backgroundImage);
-  // Background can be positioned/resized. Default = full bleed (cover the whole
-  // print area), which matches templates that don't define a bgRect.
-  const bgRect = side.bgRect || { x: 0, y: 0, w: widthPx, h: heightPx };
-  const bgFit = side.bgFit || 'fill';
-  const bgHtml = bgUri
-    ? `<img src="${bgUri}" style="position:absolute;left:${bgRect.x}px;top:${bgRect.y}px;
-        width:${bgRect.w}px;height:${bgRect.h}px;object-fit:${bgFit};display:block;"/>`
-    : '';
-
-  let photoHtml = '';
-  if (side.photo && photoWebPath) {
-    const p = side.photo;
-    const photoUri = fileToDataUri(photoWebPath);
-    if (photoUri) {
-      const radius = p.shape === 'circle' ? '50%' : `${p.borderRadius || 0}px`;
-      photoHtml = `<div style="position:absolute;left:${p.x}px;top:${p.y}px;
-        width:${p.w}px;height:${p.h}px;border-radius:${radius};overflow:hidden;">
-        <img src="${photoUri}" style="width:100%;height:100%;object-fit:${p.fit || 'cover'};display:block;"/>
-      </div>`;
-    }
-  }
-
-  const fieldsHtml = (side.fields || []).map(f => {
-    const val = fieldValues?.[f.key];
-    if (val === undefined || val === null || val === '') return '';
-    const transform = f.transform ? `text-transform:${f.transform};` : '';
-    const ls = f.letterSpacing ? `letter-spacing:${f.letterSpacing}px;` : '';
-    return `<div style="position:absolute;left:${f.x}px;top:${f.y}px;
-      width:${f.w ? f.w + 'px' : 'auto'};text-align:${f.align || 'left'};
-      font-family:'${f.family}', Arial, sans-serif;font-weight:${f.weight || 400};
-      font-style:${f.style || 'normal'};font-size:${f.size}px;color:${f.color || '#000'};
-      line-height:${f.lineHeight || 1.15};${transform}${ls}white-space:pre-wrap;">${esc(val)}</div>`;
-  }).join('\n');
-
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    ${fontFaces}
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html,body { width:${widthPx}px; height:${heightPx}px; }
-    #card { position:relative; width:${widthPx}px; height:${heightPx}px; overflow:hidden;
-            background-color:#ffffff; }
-  </style></head><body>
-    <div id="card">${bgHtml}${photoHtml}${fieldsHtml}</div>
-  </body></html>`;
+/** Build the SVG text overlay for one side (one <text> per filled field). */
+function buildTextSvg(W, H, side, fieldValues) {
+  const els = (side.fields || []).map(f => {
+    let val = fieldValues?.[f.key];
+    if (val === undefined || val === null || String(val) === '') return '';
+    if (f.transform === 'uppercase') val = String(val).toUpperCase();
+    else if (f.transform === 'lowercase') val = String(val).toLowerCase();
+    const size = f.size || 24;
+    const align = f.align || 'left';
+    const anchor = align === 'center' ? 'middle' : (align === 'right' ? 'end' : 'start');
+    const boxW = f.w || (W - (f.x || 0));
+    let x = f.x || 0;
+    if (anchor === 'middle') x = (f.x || 0) + boxW / 2;
+    else if (anchor === 'end') x = (f.x || 0) + boxW;
+    // SVG <text> y is the baseline; HTML divs are top-anchored. Offset by the
+    // approximate ascent so positions match the designer preview.
+    const y = (f.y || 0) + size * 0.88;
+    const ls = f.letterSpacing ? ` letter-spacing="${f.letterSpacing}"` : '';
+    const style = f.style === 'italic' ? ' font-style="italic"' : '';
+    return `<text x="${x}" y="${y}" font-family="${escXml(f.family || 'Arial')}, Arial, Helvetica, sans-serif" ` +
+      `font-size="${size}" font-weight="${f.weight || 400}" fill="${f.color || '#000000'}" ` +
+      `text-anchor="${anchor}"${ls}${style}>${escXml(val)}</text>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${els}</svg>`;
 }
 
 /**
@@ -203,26 +76,52 @@ async function renderSide(printFile, side, fieldValues, photoWebPath, filenameHi
   if (!printFile?.widthPx || !printFile?.heightPx) {
     throw new Error('printFile must define widthPx and heightPx');
   }
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setViewport({
-      width: printFile.widthPx, height: printFile.heightPx, deviceScaleFactor: 1
-    });
-    await page.setContent(buildHtml(printFile, side, fieldValues, photoWebPath),
-      { waitUntil: 'networkidle0' });
-    try { await page.evaluateHandle('document.fonts.ready'); } catch (_) {}
-    const el = await page.$('#card');
-    const buffer = await el.screenshot({ type: 'png' });
+  const W = printFile.widthPx, H = printFile.heightPx;
+  const composites = [];
 
-    const safe = String(filenameHint).replace(/[^a-z0-9_-]/gi, '');
-    const filename = `${safe}-${side.placement}.png`;
-    const diskPath = path.join(PRINTS_DIR, filename);
-    fs.writeFileSync(diskPath, buffer);
-    return { filename, diskPath };
-  } finally {
-    await page.close();
+  // 1. Background image (positionable/resizable; defaults to full bleed)
+  const bgPath = resolveDisk(side.backgroundImage);
+  if (bgPath) {
+    const r = clampBox(side.bgRect || { x: 0, y: 0, w: W, h: H }, W, H);
+    const fit = side.bgFit === 'contain' ? 'contain' : (side.bgFit === 'cover' ? 'cover' : 'fill');
+    const bgBuf = await sharp(bgPath)
+      .resize(r.w, r.h, { fit, background: { r: 255, g: 255, b: 255, alpha: 0 } })
+      .toBuffer();
+    composites.push({ input: bgBuf, left: r.x, top: r.y });
   }
+
+  // 2. Photo (optional), with circle / rounded-rect mask
+  if (side.photo && photoWebPath) {
+    const pp = resolveDisk(photoWebPath);
+    if (pp) {
+      const p = clampBox(side.photo, W, H);
+      let img = sharp(pp).resize(p.w, p.h, { fit: side.photo.fit === 'contain' ? 'contain' : 'cover' });
+      const shape = side.photo.shape;
+      if (shape === 'circle') {
+        const mask = Buffer.from(`<svg width="${p.w}" height="${p.h}"><rect width="${p.w}" height="${p.h}" rx="${Math.min(p.w, p.h) / 2}" ry="${Math.min(p.w, p.h) / 2}" fill="#fff"/></svg>`);
+        img = img.composite([{ input: mask, blend: 'dest-in' }]);
+      } else if (side.photo.borderRadius) {
+        const rad = Math.round(side.photo.borderRadius);
+        const mask = Buffer.from(`<svg width="${p.w}" height="${p.h}"><rect width="${p.w}" height="${p.h}" rx="${rad}" ry="${rad}" fill="#fff"/></svg>`);
+        img = img.composite([{ input: mask, blend: 'dest-in' }]);
+      }
+      composites.push({ input: await img.png().toBuffer(), left: p.x, top: p.y });
+    }
+  }
+
+  // 3. Text fields (single SVG overlay)
+  const svg = buildTextSvg(W, H, side, fieldValues);
+  composites.push({ input: Buffer.from(svg), left: 0, top: 0 });
+
+  const buffer = await sharp({
+    create: { width: W, height: H, channels: 4, background: '#ffffff' }
+  }).composite(composites).png().toBuffer();
+
+  const safe = String(filenameHint).replace(/[^a-z0-9_-]/gi, '');
+  const filename = `${safe}-${side.placement}.png`;
+  const diskPath = path.join(PRINTS_DIR, filename);
+  fs.writeFileSync(diskPath, buffer);
+  return { filename, diskPath };
 }
 
 /**
@@ -234,7 +133,7 @@ async function renderCard(template, fieldValues, photoWebPath, filenameHint = 'c
   const sides = template.sides && template.sides.length
     ? template.sides
     : [{ placement: 'default', fields: template.fields, photo: template.photo,
-         fonts: template.fonts, backgroundImage: template.backgroundImage }];
+         backgroundImage: template.backgroundImage }];
 
   const out = [];
   for (const side of sides) {
@@ -245,4 +144,8 @@ async function renderCard(template, fieldValues, photoWebPath, filenameHint = 'c
   return out;
 }
 
-module.exports = { renderCard, renderSide, getBrowser, closeBrowser, PRINTS_DIR };
+// Kept for backward compatibility (callers may invoke on shutdown). No browser
+// is used anymore, so this is a no-op.
+async function closeBrowser() {}
+
+module.exports = { renderCard, renderSide, closeBrowser, PRINTS_DIR };
