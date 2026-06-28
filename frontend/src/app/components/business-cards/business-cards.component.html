@@ -61,9 +61,42 @@
       <div class="row g-4">
         <div *ngFor="let card of cards" class="col-12 col-sm-6 col-md-4 col-lg-3">
           <div class="card h-100 shadow-sm border-0 product-card" (click)="selectCard(card)" style="cursor:pointer;">
-            <div class="card-img-wrapper bg-light d-flex align-items-center justify-content-center" style="height: 200px; overflow: hidden;">
-              <img *ngIf="card.thumbnail" [src]="card.thumbnail" class="card-img-top" style="object-fit: cover; width:100%; height:100%;" [alt]="card.name">
-              <i *ngIf="!card.thumbnail" class="bi bi-box-seam display-3 text-muted opacity-50"></i>
+            <div class="card-img-wrapper card-slider bg-light d-flex align-items-center justify-content-center">
+
+              <!-- Designed card: Front / Back slider (mirrors the print render) -->
+              <ng-container *ngIf="hasCardSlides(card); else singleImg">
+                <div *ngFor="let s of card.sides; let i = index"
+                     class="card-slide" [class.active]="(card.slide || 0) === i">
+                  <app-card-canvas
+                    [side]="s" [printFile]="card.printFile"
+                    [values]="{}" [displayWidth]="tileCardWidth(card)" [editable]="false">
+                  </app-card-canvas>
+                  <span class="slide-label">{{ s.label || s.placement }}</span>
+                </div>
+
+                <!-- Prev / Next arrows (only when there's more than one side) -->
+                <button *ngIf="card.sides!.length > 1" type="button"
+                        class="slider-nav slider-prev" (click)="prevSlide(card, $event)" aria-label="Previous side">
+                  <i class="bi bi-chevron-left"></i>
+                </button>
+                <button *ngIf="card.sides!.length > 1" type="button"
+                        class="slider-nav slider-next" (click)="nextSlide(card, $event)" aria-label="Next side">
+                  <i class="bi bi-chevron-right"></i>
+                </button>
+
+                <!-- Dots -->
+                <div *ngIf="card.sides!.length > 1" class="slider-dots">
+                  <span *ngFor="let s of card.sides; let i = index"
+                        class="slider-dot" [class.active]="(card.slide || 0) === i"
+                        (click)="goSlide(card, i, $event)"></span>
+                </div>
+              </ng-container>
+
+              <!-- Plain product (no template): single image / placeholder -->
+              <ng-template #singleImg>
+                <img *ngIf="card.thumbnail" [src]="card.thumbnail" class="card-img-top" style="object-fit: cover; width:100%; height:100%;" [alt]="card.name">
+                <i *ngIf="!card.thumbnail" class="bi bi-box-seam display-3 text-muted opacity-50"></i>
+              </ng-template>
             </div>
             <div class="card-body">
               <h6 class="card-title fw-semibold mb-1">{{ card.name }}</h6>

@@ -11,6 +11,9 @@ interface StoreCard {
   thumbnail: string;
   syncProductId: number;
   variants: number;
+  sides?: any[];        // template sides (Front/Back) — drives the catalog image slider
+  printFile?: any;      // print dimensions used to size the slider canvas
+  slide: number;        // active slide index for this tile
 }
 declare var Stripe: any;
 
@@ -123,16 +126,64 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
         name: t.name,
         thumbnail: t.previewImage || prod?.thumbnail || '',
         syncProductId: t.syncProductId,
-        variants: prod?.variants || (t.variants?.length || 0)
+        variants: prod?.variants || (t.variants?.length || 0),
+        // Render the actual designed sides (Front/Back) in the tile slider so
+        // the card art is shown reliably instead of a single (often stale) image.
+        sides: (t.sides || []),
+        printFile: t.printFile,
+        slide: 0
       });
       usedProducts.add(t.syncProductId);
     }
     for (const p of this.products) {
       if (!usedProducts.has(p.id)) {
-        cards.push({ templateId: null, name: p.name, thumbnail: p.thumbnail, syncProductId: p.id, variants: p.variants });
+        cards.push({ templateId: null, name: p.name, thumbnail: p.thumbnail, syncProductId: p.id, variants: p.variants, slide: 0 });
       }
     }
     this.cards = cards;
+  }
+
+  // ── Catalog tile image slider (Front / Back) ──
+
+  /** Number of slides for a tile: one per designed side, or 1 for a plain image. */
+  slideCount(card: StoreCard): number {
+    return card.sides && card.sides.length ? card.sides.length : 1;
+  }
+
+  nextSlide(card: StoreCard, ev: Event): void {
+    ev.stopPropagation();           // don't trigger the tile's selectCard()
+    const n = this.slideCount(card);
+    card.slide = ((card.slide || 0) + 1) % n;
+  }
+
+  prevSlide(card: StoreCard, ev: Event): void {
+    ev.stopPropagation();
+    const n = this.slideCount(card);
+    card.slide = ((card.slide || 0) - 1 + n) % n;
+  }
+
+  goSlide(card: StoreCard, i: number, ev: Event): void {
+    ev.stopPropagation();
+    card.slide = i;
+  }
+
+  /** Width (px) for the tile's card-canvas so its height fits the tile frame. */
+  tileCardWidth(card: StoreCard): number {
+    const pf = card.printFile || { widthPx: 750, heightPx: 1200 };
+    const maxH = 188, maxW = 240;
+    const ratio = (pf.widthPx && pf.heightPx) ? pf.widthPx / pf.heightPx : 0.625;
+    return Math.round(Math.min(maxH * ratio, maxW));
+  }
+
+  /** True when this tile should render the designed Front/Back slider. */
+  hasCardSlides(card: StoreCard): boolean {
+    return !!(card.sides && card.sides.length);
+  }
+
+  /** True when this tile's active side actually has artwork to display. */
+  sideHasArt(card: StoreCard): boolean {
+    const s = card.sides?.[card.slide || 0];
+    return !!(s && (s.backgroundImage || (s.fields && s.fields.length) || s.photo));
   }
 
   /** True when the selected product has a personalization template. */
