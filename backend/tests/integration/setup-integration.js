@@ -63,9 +63,19 @@ jest.mock('../../models/User', () => require('../helpers/mock-model')('User'));
 
 // Mock utility modules
 jest.mock('../../utils/neuzmail', () => ({
-  sendTransactionalEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendWelcomeEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendWelcomeSetPasswordEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendPasswordResetEmail: jest.fn().mockResolvedValue({ success: true }),
   sendApplicationConfirmationEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendPaymentLinkEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendAccountActivatedEmail: jest.fn().mockResolvedValue({ success: true }),
+  sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
   sendEmail: jest.fn().mockResolvedValue({ success: true }),
+  verifyEmail: jest.fn().mockResolvedValue({ valid: true }),
+  getEmailSettings: jest.fn().mockResolvedValue({ fromName: 'Test', fromEmail: 'test@test.com', replyTo: '' }),
+  invalidateEmailSettingsCache: jest.fn(),
+  EMAIL_SETTING_KEYS: { fromName: 'email_from_name', fromEmail: 'email_from_email', replyTo: 'email_reply_to' },
+  TEMPLATE_IDS: {},
 }));
 jest.mock('../../utils/docusign', () => ({
   createAndSendEnvelope: jest.fn().mockResolvedValue({ envelopeId: 'mock-envelope-id' }),

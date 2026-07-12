@@ -4,14 +4,20 @@
  * Replaces nodemailer SMTP with Neuzmail Transactional API.
  * All emails are sent via pre-built templates on Neuzmail with merge tags.
  * 
- * API Docs: https://app.neuzmail.in/api/v1/transactional/send
+ * API Docs: https://neuzmail.in
+ * OpenAPI: POST /api/v1/messages — Send a transactional email
+ *          POST /api/v1/verify   — Verify an email address
  */
 
 const axios = require('axios');
 const mongoose = require('mongoose');
 const SystemConfig = require('../models/SystemConfig');
 
-const NEUZMAIL_API_URL = 'https://app.neuzmail.in/api/v1/transactional/send';
+// ── Neuzmail API Configuration ───────────────────────────────────────────────
+// All emails are sent via the new Neuzmail API at https://neuzmail.in/api/v1/messages.
+const NEUZMAIL_API_BASE = process.env.NEUZMAIL_API_URL || 'https://neuzmail.in';
+const NEUZMAIL_SEND_ENDPOINT = `${NEUZMAIL_API_BASE}/api/v1/messages`;
+const NEUZMAIL_VERIFY_ENDPOINT = `${NEUZMAIL_API_BASE}/api/v1/verify`;
 const NEUZMAIL_API_TOKEN = process.env.NEUZMAIL_API_TOKEN;
 
 // ── Email sender settings (admin-configurable via SystemConfig) ─────────────────
@@ -112,72 +118,81 @@ function withEmailFallbackContent(message, actionUrl, imageUrl) {
 }
 
 /**
- * Template UIDs - Update these after creating templates in Neuzmail dashboard
- * The user will create each template in Neuzmail and paste the UID here.
+ * Template IDs — These map to saved template IDs in Neuzmail.
+ * Set via environment variables (or configure in SystemConfig).
+ * The default values assume templates have been created in the Neuzmail dashboard
+ * and their IDs are stored in the .env file.
  */
-const TEMPLATE_UIDS = {
-  WELCOME_WITH_PASSWORD:    process.env.NEUZMAIL_TPL_WELCOME_PASSWORD      || '', // 01
-  WELCOME_SET_PASSWORD:     process.env.NEUZMAIL_TPL_WELCOME_SET_PASSWORD  || '', // 02
-  PASSWORD_RESET:           process.env.NEUZMAIL_TPL_PASSWORD_RESET        || '', // 03
-  APA_APPLICATION_CONFIRM:  process.env.NEUZMAIL_TPL_APA_CONFIRM           || '', // 04
-  PAYMENT_SETUP_LINK:       process.env.NEUZMAIL_TPL_PAYMENT_LINK          || '', // 05
-  ACCOUNT_ACTIVATED:        process.env.NEUZMAIL_TPL_ACCOUNT_ACTIVATED     || '', // 06
-  SYSTEM_NOTIFICATION:      process.env.NEUZMAIL_TPL_NOTIFICATION          || '', // 07
+const TEMPLATE_IDS = {
+  WELCOME_WITH_PASSWORD:    process.env.NEUZMAIL_TPL_WELCOME_PASSWORD      || '',
+  WELCOME_SET_PASSWORD:     process.env.NEUZMAIL_TPL_WELCOME_SET_PASSWORD  || '',
+  PASSWORD_RESET:           process.env.NEUZMAIL_TPL_PASSWORD_RESET        || '',
+  APA_APPLICATION_CONFIRM:  process.env.NEUZMAIL_TPL_APA_CONFIRM           || '',
+  PAYMENT_SETUP_LINK:       process.env.NEUZMAIL_TPL_PAYMENT_LINK          || '',
+  ACCOUNT_ACTIVATED:        process.env.NEUZMAIL_TPL_ACCOUNT_ACTIVATED     || '',
+  SYSTEM_NOTIFICATION:      process.env.NEUZMAIL_TPL_NOTIFICATION          || '',
 };
 
 /**
  * Core: Send a transactional email via Neuzmail API
+ * Uses the new /api/v1/messages endpoint with Bearer token auth.
  */
-async function sendViaNeuzmail({ templateUid, toEmail, subject, mergeFields = {}, fromEmail, fromName, replyTo }) {
+async function sendViaNeuzmail({ templateId, toEmail, subject, mergeFields = {}, fromEmail, fromName, replyTo }) {
   if (!NEUZMAIL_API_TOKEN) {
     throw new Error('NEUZMAIL_API_TOKEN is not configured');
   }
-  if (!templateUid) {
-    throw new Error('Template UID is not configured for this email type');
+  if (!templateId) {
+    throw new Error('Template ID is not configured for this email type');
   }
 
   const settings = await getEmailSettings();
 
   const payload = {
-    template_uid: templateUid,
-    to_email: toEmail,
+    to: toEmail,
     subject,
-    merge_fields: mergeFields,
-    from_email: fromEmail || settings.fromEmail,
-    from_name: fromName || settings.fromName,
+    templateId: templateId,
+    data: mergeFields,
   };
 
-  // Only include reply_to when configured, so we never send an empty/invalid value.
+  // Add sender info if provided or configured
+  const resolvedFromEmail = fromEmail || settings.fromEmail;
+  const resolvedFromName = fromName || settings.fromName;
+  if (resolvedFromEmail && resolvedFromName) {
+    payload.from = `${resolvedFromName} <${resolvedFromEmail}>`;
+  }
+
+  // Only include reply_to when configured
   const resolvedReplyTo = replyTo || settings.replyTo;
   if (resolvedReplyTo) {
-    payload.reply_to = resolvedReplyTo;
+    payload.replyTo = resolvedReplyTo;
   }
 
   try {
-    const response = await axios.post(NEUZMAIL_API_URL, payload, {
+    const response = await axios.post(NEUZMAIL_SEND_ENDPOINT, payload, {
       headers: {
-        'X-Api-Token': NEUZMAIL_API_TOKEN,
+        'Authorization': `Bearer ${NEUZMAIL_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
       timeout: 15000,
     });
 
-    if (response.data.status === 'success') {
-      console.log(`[Neuzmail] Email sent: ${response.data.data.message_id} → ${toEmail}`);
-      return { success: true, messageId: response.data.data.message_id };
+    if (response.status === 200 && response.data?.status === 'sent') {
+      console.log(`[Neuzmail] Email sent: ${response.data.id} → ${toEmail}`);
+      return { success: true, messageId: response.data.id || response.data.messageId };
+    } else if (response.status === 202 && response.data?.status === 'suppressed') {
+      console.log(`[Neuzmail] Email suppressed (recipient on suppression list): ${toEmail}`);
+      return { success: true, status: 'suppressed', messageId: response.data.id };
     } else {
-      console.error(`[Neuzmail] API error (from=${payload.from_email}, to=${toEmail}): ${response.data.message}`);
-      throw new Error(response.data.message || 'Neuzmail email send failed');
+      console.error(`[Neuzmail] API error (to=${toEmail}): unexpected response`, response.data);
+      throw new Error(response.data?.error || 'Neuzmail email send failed');
     }
   } catch (error) {
-    // Preserve the underlying reason so callers/UI can show something actionable
-    // (e.g. "no valid recipients", "sender not authorized") instead of a generic message.
     let reason = error.message;
     if (error.response) {
-      reason = error.response.data?.message || reason;
-      console.error(`[Neuzmail] HTTP ${error.response.status} (from=${payload.from_email}, to=${toEmail}):`, error.response.data);
+      reason = error.response.data?.error || `HTTP ${error.response.status}: ${error.response.statusText}`;
+      console.error(`[Neuzmail] HTTP ${error.response.status} (to=${toEmail}):`, error.response.data);
     } else {
-      console.error(`[Neuzmail] Request error (from=${payload.from_email}, to=${toEmail}):`, error.message);
+      console.error(`[Neuzmail] Request error (to=${toEmail}):`, error.message);
     }
     throw new Error(`Email could not be sent via Neuzmail: ${reason}`);
   }
@@ -205,13 +220,13 @@ async function commonFields() {
 exports.sendWelcomeEmail = async (user, password, referredByAgent = null) => {
   const common = await commonFields();
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.WELCOME_WITH_PASSWORD,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.WELCOME_WITH_PASSWORD,
     toEmail: user.email,
     subject: `Welcome to ${common.APP_NAME} - Your Account Details`,
     mergeFields: {
       ...common,
-      APP_LOGO_URL: '', // Will be populated from SystemConfig if needed
+      APP_LOGO_URL: '',
       USER_NAME: user.name,
       USER_EMAIL: user.email,
       TEMP_PASSWORD: password,
@@ -229,8 +244,8 @@ exports.sendWelcomeSetPasswordEmail = async (user, setPasswordToken, referredByA
   const common = await commonFields();
   const setPasswordUrl = `${common.APP_URL}/reset-password?token=${setPasswordToken}`;
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.WELCOME_SET_PASSWORD,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.WELCOME_SET_PASSWORD,
     toEmail: user.email,
     subject: `Welcome to ${common.APP_NAME} - Set Your Password`,
     mergeFields: {
@@ -252,8 +267,8 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
   const common = await commonFields();
   const resetUrl = `${common.APP_URL}/reset-password?token=${resetToken}`;
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.PASSWORD_RESET,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.PASSWORD_RESET,
     toEmail: user.email,
     subject: `Password Reset Request - ${common.APP_NAME}`,
     mergeFields: {
@@ -273,8 +288,8 @@ exports.sendApplicationConfirmationEmail = async (application) => {
   const { legalFirstName, legalLastName, email } = application.personalInfo;
   const common = await commonFields();
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.APA_APPLICATION_CONFIRM,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.APA_APPLICATION_CONFIRM,
     toEmail: email,
     subject: 'Application Submitted - Review & Send Your Agreement',
     mergeFields: {
@@ -295,8 +310,8 @@ exports.sendPaymentLinkEmail = async (application) => {
   const common = await commonFields();
   const paymentUrl = `${common.APP_URL}/apa-payment?applicationId=${application._id}`;
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.PAYMENT_SETUP_LINK,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.PAYMENT_SETUP_LINK,
     toEmail: email,
     subject: `${common.APP_NAME} - Complete Your Payment Setup`,
     mergeFields: {
@@ -314,8 +329,8 @@ exports.sendPaymentLinkEmail = async (application) => {
 exports.sendAccountActivatedEmail = async (user, password) => {
   const common = await commonFields();
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.ACCOUNT_ACTIVATED,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.ACCOUNT_ACTIVATED,
     toEmail: user.email,
     subject: `Welcome to ${common.APP_NAME} - Your Account is Ready!`,
     mergeFields: {
@@ -345,8 +360,8 @@ exports.sendNotificationEmail = async ({
   const resolvedImageUrl = imageUrl ? toAbsoluteUrl(imageUrl, common.APP_URL) : '';
   const notificationMessage = withEmailFallbackContent(message, actionUrl, resolvedImageUrl);
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.SYSTEM_NOTIFICATION,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.SYSTEM_NOTIFICATION,
     toEmail,
     subject: title,
     mergeFields: {
@@ -369,8 +384,8 @@ exports.sendNotificationEmail = async ({
 exports.sendEmail = async (options) => {
   const common = await commonFields();
 
-  await sendViaNeuzmail({
-    templateUid: TEMPLATE_UIDS.SYSTEM_NOTIFICATION,
+  return sendViaNeuzmail({
+    templateId: TEMPLATE_IDS.SYSTEM_NOTIFICATION,
     toEmail: options.email,
     subject: options.subject,
     mergeFields: {
@@ -383,5 +398,35 @@ exports.sendEmail = async (options) => {
   });
 };
 
-// Export template UIDs for reference
-exports.TEMPLATE_UIDS = TEMPLATE_UIDS;
+/**
+ * Verify an email address using Neuzmail's /api/v1/verify endpoint
+ */
+exports.verifyEmail = async (email) => {
+  if (!NEUZMAIL_API_TOKEN) {
+    throw new Error('NEUZMAIL_API_TOKEN is not configured');
+  }
+
+  try {
+    const response = await axios.post(NEUZMAIL_VERIFY_ENDPOINT, { email }, {
+      headers: {
+        'Authorization': `Bearer ${NEUZMAIL_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+
+    return response.data;
+  } catch (error) {
+    let reason = error.message;
+    if (error.response) {
+      reason = error.response.data?.error || `HTTP ${error.response.status}`;
+      console.error(`[Neuzmail] Verify HTTP ${error.response.status}:`, error.response.data);
+    } else {
+      console.error('[Neuzmail] Verify request error:', error.message);
+    }
+    throw new Error(`Email verification failed: ${reason}`);
+  }
+};
+
+// Export template IDs for reference
+exports.TEMPLATE_IDS = TEMPLATE_IDS;

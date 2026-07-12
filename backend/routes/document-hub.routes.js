@@ -664,7 +664,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
         const dueLine = dueDate ? `\nDue date: ${new Date(dueDate).toLocaleDateString()}` : '';
         sendNotificationEmail({
           toEmail: agent.email,
-          title: 'Document Requested',
+          title: `Document Requested - ${title}`,
           message: `Hello ${agent.name},\n\nA document has been requested from you: "${title}".${dueLine}\n\nUpload it directly from the RHP Vault page.\n\n${description || ''}`.trim(),
           link: '/document-hub?section=requests',
           actionLabel: 'Upload Document'

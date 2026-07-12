@@ -11,11 +11,13 @@ describe('Utils: neuzmail.js', () => {
     jest.resetModules();
     mockAxios = {
       post: jest.fn().mockResolvedValue({
-        data: { status: 'success', data: { message_id: 'nz-msg-123' } }
+        status: 200,
+        data: { id: 'msg_123', status: 'sent', messageId: '<abc@mail>' }
       })
     };
     jest.doMock('axios', () => mockAxios);
     process.env.NEUZMAIL_API_TOKEN = 'test-token';
+    process.env.NEUZMAIL_API_URL = 'https://neuzmail.in';
     process.env.NEUZMAIL_TPL_WELCOME_PASSWORD = 'tpl-welcome-pwd';
     process.env.NEUZMAIL_TPL_WELCOME_SET_PASSWORD = 'tpl-welcome-setpwd';
     process.env.NEUZMAIL_TPL_PASSWORD_RESET = 'tpl-reset';
@@ -34,16 +36,21 @@ describe('Utils: neuzmail.js', () => {
         { name: 'Upline' }
       );
       expect(mockAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('neuzmail'),
+        'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          template_uid: 'tpl-welcome-pwd',
-          to_email: 'john@test.com',
-          merge_fields: expect.objectContaining({
+          templateId: 'tpl-welcome-pwd',
+          to: 'john@test.com',
+          data: expect.objectContaining({
             USER_NAME: 'John',
             TEMP_PASSWORD: 'TempPass123'
           })
         }),
-        expect.any(Object)
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test-token',
+            'Content-Type': 'application/json'
+          })
+        })
       );
     });
 
@@ -63,11 +70,11 @@ describe('Utils: neuzmail.js', () => {
         'reset-token-123'
       );
       expect(mockAxios.post).toHaveBeenCalledWith(
-        expect.any(String),
+        'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          template_uid: 'tpl-welcome-setpwd',
-          to_email: 'bob@test.com',
-          merge_fields: expect.objectContaining({
+          templateId: 'tpl-welcome-setpwd',
+          to: 'bob@test.com',
+          data: expect.objectContaining({
             SET_PASSWORD_URL: expect.stringContaining('reset-token-123')
           })
         }),
@@ -83,11 +90,11 @@ describe('Utils: neuzmail.js', () => {
         'reset-token-456'
       );
       expect(mockAxios.post).toHaveBeenCalledWith(
-        expect.any(String),
+        'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          template_uid: 'tpl-reset',
-          to_email: 'alice@test.com',
-          merge_fields: expect.objectContaining({
+          templateId: 'tpl-reset',
+          to: 'alice@test.com',
+          data: expect.objectContaining({
             RESET_URL: expect.stringContaining('reset-token-456')
           })
         }),
@@ -108,13 +115,53 @@ describe('Utils: neuzmail.js', () => {
       };
       await neuzmail.sendApplicationConfirmationEmail(application);
       expect(mockAxios.post).toHaveBeenCalledWith(
-        expect.any(String),
+        'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          template_uid: 'tpl-apa',
-          to_email: 'john.doe@test.com'
+          templateId: 'tpl-apa',
+          to: 'john.doe@test.com'
         }),
         expect.any(Object)
       );
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('should verify an email address', async () => {
+      mockAxios.post.mockResolvedValue({
+        status: 200,
+        data: {
+          valid: true,
+          email: 'test@example.com',
+          domain: 'example.com',
+          score: 4,
+          maxScore: 4,
+          isDisposable: false,
+          hasMx: true,
+          hasARecord: true,
+          reason: 'Deliverable'
+        }
+      });
+
+      const result = await neuzmail.verifyEmail('test@example.com');
+      expect(mockAxios.post).toHaveBeenCalledWith(
+        'https://neuzmail.in/api/v1/verify',
+        { email: 'test@example.com' },
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer test-token'
+          })
+        })
+      );
+      expect(result.valid).toBe(true);
+      expect(result.reason).toBe('Deliverable');
+    });
+
+    it('should throw when API token is missing for verify', async () => {
+      delete process.env.NEUZMAIL_API_TOKEN;
+      jest.resetModules();
+      jest.doMock('axios', () => mockAxios);
+      const nm = require('../../utils/neuzmail');
+      await expect(nm.verifyEmail('test@example.com')).rejects.toThrow('NEUZMAIL_API_TOKEN is not configured');
     });
   });
 
@@ -132,6 +179,7 @@ describe('Utils: neuzmail.js', () => {
 
     it('should throw when API returns error status', async () => {
       mockAxios.post.mockResolvedValue({
+        status: 200,
         data: { status: 'error', message: 'Invalid template' }
       });
       await expect(neuzmail.sendPasswordResetEmail(
@@ -146,6 +194,18 @@ describe('Utils: neuzmail.js', () => {
         { name: 'X', email: 'x@test.com' },
         'token'
       )).rejects.toThrow('Email could not be sent via Neuzmail');
+    });
+
+    it('should handle 202 suppressed response', async () => {
+      mockAxios.post.mockResolvedValue({
+        status: 202,
+        data: { id: 'msg_456', status: 'suppressed' }
+      });
+      const result = await neuzmail.sendWelcomeEmail(
+        { name: 'X', email: 'suppressed@test.com', referralCode: '' },
+        'pass'
+      );
+      expect(result.status).toBe('suppressed');
     });
   });
 });
