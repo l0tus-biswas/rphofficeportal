@@ -103,13 +103,13 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://js.stripe.com", "https://translate.google.com", "https://www.gstatic.com"],
-      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://translate.google.com", "https://translate.googleapis.com", "https://www.gstatic.com"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://translate.google.com", "https://translate.googleapis.com", "https://translate-pa.googleapis.com", "https://www.gstatic.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://translate.googleapis.com", "https://www.gstatic.com"],
       styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://translate.googleapis.com", "https://www.gstatic.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https://translate.google.com", "https://files.cdn.printful.com", "https://*.printful.com"],
-      connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:", "https://api.stripe.com", "https://js.stripe.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://translate.google.com", "https://fonts.gstatic.com", "https://www.gstatic.com", "https://files.cdn.printful.com", "https://*.printful.com"],
+      connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:", "https://api.stripe.com", "https://js.stripe.com", "https://translate.googleapis.com"],
       frameSrc: ["'self'", "https://js.stripe.com", "https://hooks.stripe.com", "https://www.youtube.com", "https://www.youtube-nocookie.com", "https://player.vimeo.com", "https://www.loom.com"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"]
