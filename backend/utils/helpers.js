@@ -31,7 +31,9 @@ exports.sendResponse = (res, statusCode, data) => {
 // Error handler with smart status code detection
 exports.errorResponse = (res, error, statusCode) => {
   console.error('Error:', error);
-  
+
+  const explicitStatusCode = !!statusCode;
+
   // Auto-detect appropriate status code from error type if not explicitly provided
   if (!statusCode) {
     if (error.name === 'ValidationError') {
@@ -61,6 +63,11 @@ exports.errorResponse = (res, error, statusCode) => {
     message = 'Validation failed';
   } else if (error.name === 'CastError') {
     message = 'Invalid ID format';
+  } else if (explicitStatusCode && statusCode >= 400 && statusCode < 500 && error.message) {
+    // A route explicitly chose a client-error status and crafted this message
+    // for the caller (e.g. "An account already exists with this email") — it's
+    // safe to show as-is, unlike unclassified 500s which may leak internals.
+    message = error.message;
   } else {
     message = 'An error occurred';
   }
