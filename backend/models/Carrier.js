@@ -39,6 +39,16 @@ const carrierSchema = new mongoose.Schema({
     type: String  // relative file path, e.g. 'uploads/carrier-guides/gtl-guide.pdf'
   },
 
+  // General named PDF documents (guides, forms, resources) available to any carrier
+  documents: [{
+    name: { type: String, required: true, trim: true },
+    filePath: { type: String, required: true },
+    originalFileName: String,
+    fileSize: Number,
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
+
   // Optional additional info
   contactInfo: {
     phone: String,

@@ -168,8 +168,45 @@
             <label class="form-label">Supplemental Level Guide PDF</label>
             <input type="file" class="form-control" (change)="onFileChange($event)" accept=".pdf" name="levelGuideFile">
             <small class="text-muted" *ngIf="currentCarrier.supplementalLevelGuide">
-              Current file: <a [href]="getGuideUrl(currentCarrier.supplementalLevelGuide)" target="_blank">View</a>
+              Current file: <a href="javascript:void(0)" (click)="viewLevelGuide()">View</a>
             </small>
+          </div>
+
+          <!-- Documents (guides, forms, resources) -->
+          <div class="mb-3">
+            <label class="form-label">Documents <small class="text-muted">(PDF guides, forms, resources)</small></label>
+
+            <div *ngIf="!currentCarrier._id" class="alert alert-secondary py-2 small mb-2">
+              Save the carrier first, then edit it to attach documents.
+            </div>
+
+            <div *ngIf="currentCarrier._id">
+              <div class="alert alert-danger py-2 small" *ngIf="documentError">{{ documentError }}</div>
+
+              <ul class="list-group mb-2" *ngIf="currentCarrier.documents && currentCarrier.documents.length > 0">
+                <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let doc of currentCarrier.documents">
+                  <span>
+                    <i class="bi bi-file-earmark-pdf text-danger me-2"></i>{{ doc.name }}
+                  </span>
+                  <span class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" (click)="viewDocument(doc)" title="View"><i class="bi bi-eye"></i></button>
+                    <button type="button" class="btn btn-outline-danger" (click)="deleteDocument(doc)" title="Delete"><i class="bi bi-trash"></i></button>
+                  </span>
+                </li>
+              </ul>
+              <p class="text-muted small" *ngIf="!currentCarrier.documents || currentCarrier.documents.length === 0">
+                No documents uploaded yet.
+              </p>
+
+              <div class="d-flex gap-2 align-items-start flex-wrap">
+                <input type="text" class="form-control form-control-sm" style="max-width: 220px" placeholder="Document name" [(ngModel)]="newDocumentName" name="newDocumentName">
+                <input type="file" class="form-control form-control-sm" style="max-width: 220px" accept=".pdf" (change)="onNewDocumentFileChange($event)" name="newDocumentFile">
+                <button type="button" class="btn btn-sm btn-outline-primary" (click)="addDocument()" [disabled]="savingDocument">
+                  <span *ngIf="savingDocument" class="spinner-border spinner-border-sm me-1"></span>
+                  <i *ngIf="!savingDocument" class="bi bi-plus-circle me-1"></i>Add
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Notes -->

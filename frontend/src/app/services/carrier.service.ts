@@ -3,6 +3,16 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
+export interface CarrierDocument {
+  _id?: string;
+  name: string;
+  filePath: string;
+  originalFileName?: string;
+  fileSize?: number;
+  uploadedBy?: any;
+  uploadedAt?: Date;
+}
+
 export interface Carrier {
   _id?: string;
   name: string;
@@ -12,6 +22,7 @@ export interface Carrier {
   contractingInstructions?: string;
   whatToExpect?: string;
   supplementalLevelGuide?: string;
+  documents?: CarrierDocument[];
   contactInfo?: {
     phone?: string;
     email?: string;
@@ -76,6 +87,29 @@ export class CarrierService {
   // Delete carrier (soft delete - mark inactive) (admin only)
   deleteCarrier(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${id}`);
+  }
+
+  // Upload a named PDF document for a carrier (admin only)
+  uploadCarrierDocument(carrierId: string, name: string, file: File): Observable<Carrier> {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('file', file);
+    return this.http.post<Carrier>(`${this.apiUrl}/${carrierId}/documents`, formData);
+  }
+
+  // Delete a carrier document (admin only)
+  deleteCarrierDocument(carrierId: string, docId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${carrierId}/documents/${docId}`);
+  }
+
+  // Download/view a carrier document (any authenticated user)
+  downloadCarrierDocument(carrierId: string, docId: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/${carrierId}/documents/${docId}/download`, { responseType: 'blob' });
+  }
+
+  // Download/view the legacy supplemental level guide PDF (any authenticated user)
+  downloadLevelGuide(carrierId: string): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/${carrierId}/level-guide/download`, { responseType: 'blob' });
   }
 
   // -----------------------------------------------------------------------

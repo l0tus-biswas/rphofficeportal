@@ -174,6 +174,7 @@ export class NotificationsComponent implements OnInit {
       'payment_failed':         'bi-x-circle-fill',
       'subscription_updated':   'bi-arrow-repeat',
       'subscription_canceled':  'bi-slash-circle-fill',
+      'agent_subscription_canceled': 'bi-slash-circle-fill',
       // APA
       'apa_submitted':          'bi-file-earmark-arrow-up-fill',
       'apa_approved':           'bi-patch-check-fill',
@@ -228,6 +229,7 @@ export class NotificationsComponent implements OnInit {
       'payment_failed':         'danger',
       'subscription_updated':   'info',
       'subscription_canceled':  'danger',
+      'agent_subscription_canceled': 'danger',
       'apa_submitted':          'info',
       'apa_approved':           'success',
       'apa_rejected':           'danger',

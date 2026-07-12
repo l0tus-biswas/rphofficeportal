@@ -136,9 +136,21 @@
 
         <!-- Supplemental level guide -->
         <div class="mb-3" *ngIf="carrier.supplementalLevelGuide">
-          <a [href]="getGuideUrl(carrier.supplementalLevelGuide)" target="_blank" class="btn btn-outline-secondary btn-sm">
+          <a href="javascript:void(0)" (click)="viewLevelGuide(carrier)" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-file-earmark-pdf me-1"></i>Download Level Guide
           </a>
+        </div>
+
+        <!-- Documents (guides, forms, resources) -->
+        <div class="mb-3" *ngIf="carrier.documents && carrier.documents.length > 0">
+          <h6 class="fw-semibold text-muted"><i class="bi bi-folder2-open me-1"></i>Documents</h6>
+          <ul class="list-unstyled mb-0">
+            <li *ngFor="let doc of carrier.documents" class="mb-1">
+              <a href="javascript:void(0)" (click)="viewDocument(carrier, doc)">
+                <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ doc.name }}
+              </a>
+            </li>
+          </ul>
         </div>
 
         <!-- Contact Info -->
@@ -173,6 +185,7 @@
         <!-- Empty state -->
         <div *ngIf="!carrier.contractingInstructions && !carrier.whatToExpect && !carrier.notes
               && !carrier.contractingLink && !carrier.supplementalLevelGuide
+              && (!carrier.documents || carrier.documents.length === 0)
               && !carrier.contactInfo?.phone && !carrier.contactInfo?.email && !carrier.contactInfo?.website"
           class="text-center text-muted py-3">
           <i class="bi bi-info-circle display-6 d-block mb-2"></i>

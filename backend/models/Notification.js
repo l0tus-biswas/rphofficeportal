@@ -23,6 +23,7 @@ const notificationSchema = new mongoose.Schema({
       'payment_failed',
       'subscription_updated',
       'subscription_canceled',
+      'agent_subscription_canceled',
       // APA
       'apa_submitted',
       'apa_approved',

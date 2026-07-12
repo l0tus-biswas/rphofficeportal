@@ -175,8 +175,15 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
     console.log('Application saved. DocuSign launch is pending user confirmation.');
     console.log('Applicant email on file:', application.personalInfo.email);
 
-    await sendApplicationConfirmationEmail(application);
-    console.log('Confirmation email sent to:', application.personalInfo.email);
+    // Non-blocking: the application is already saved, so a transactional email
+    // failure (e.g. provider misconfiguration) must not surface as a submission
+    // error to an applicant whose application was actually created successfully.
+    try {
+      await sendApplicationConfirmationEmail(application);
+      console.log('Confirmation email sent to:', application.personalInfo.email);
+    } catch (emailError) {
+      console.error('Failed to send application confirmation email:', emailError.message);
+    }
 
     sendResponse(res, 201, {
       message: 'Application submitted successfully. Review the next screen to confirm the email and send your DocuSign packet.',
@@ -316,10 +323,17 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
         console.warn('⚠️ No userId/user on APAApplication at signing time — will create OnboardingDocument after payment for', application._id);
       }
 
-      // Send payment link email
+      // Send payment link email — non-blocking. This must not throw here:
+      // doing so would skip application.save() below and leave the application
+      // stuck on 'pending_signature' even though DocuSign fully completed,
+      // blocking the applicant from ever reaching the payment step.
       console.log('📧 Sending payment email to:', application.personalInfo.email);
-      await sendPaymentLinkEmail(application);
-      console.log('✅ Payment email sent successfully');
+      try {
+        await sendPaymentLinkEmail(application);
+        console.log('✅ Payment email sent successfully');
+      } catch (emailError) {
+        console.error('❌ Failed to send payment link email:', emailError.message);
+      }
     } else if (status === 'declined' || status === 'voided') {
       // Handle declined/voided envelopes
       console.log(`⚠️ Document ${status}`);
@@ -726,11 +740,18 @@ const verifyPaymentHandler = async (req, res) => {
       // Non-blocking — don't fail account creation
     }
 
-    // Send welcome email with set-password link
-    if (setPasswordToken) {
-      await sendWelcomeSetPasswordEmail(user, setPasswordToken, referringAgent);
-    } else {
-      await sendAccountActivatedEmail(user, password);
+    // Send welcome email with set-password link — non-blocking. The account,
+    // payment, subscription, and onboarding records are already fully created
+    // and saved above, so an email failure here must not surface as a
+    // "submission failed" error to an applicant whose account was actually created.
+    try {
+      if (setPasswordToken) {
+        await sendWelcomeSetPasswordEmail(user, setPasswordToken, referringAgent);
+      } else {
+        await sendAccountActivatedEmail(user, password);
+      }
+    } catch (emailError) {
+      console.error('Failed to send welcome/activation email:', emailError.message);
     }
 
     // Notify all admins about the new agent registration (16.1)
@@ -999,8 +1020,14 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
     application.docusign.sentAt = new Date();
     await application.save();
 
-    // Send confirmation email - DocuSign will send signing email
-    await sendApplicationConfirmationEmail(application);
+    // Send confirmation email - DocuSign will send signing email.
+    // Non-blocking: the envelope was already sent and saved above, so an email
+    // failure here must not surface as a "resend failed" error.
+    try {
+      await sendApplicationConfirmationEmail(application);
+    } catch (emailError) {
+      console.error('Failed to send resend-DocuSign confirmation email:', emailError.message);
+    }
 
     console.log('✅ DocuSign resent successfully');
 
@@ -1071,8 +1098,12 @@ router.post('/apa-application/:id/complete-signature', async (req, res) => {
     application.status = 'pending_payment';
     await application.save();
 
-    // Send payment link email
-    await sendPaymentLinkEmail(application);
+    // Send payment link email — non-blocking, status is already saved above.
+    try {
+      await sendPaymentLinkEmail(application);
+    } catch (emailError) {
+      console.error('Failed to send payment link email:', emailError.message);
+    }
 
     sendResponse(res, 200, {
       success: true,
@@ -1231,8 +1262,13 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
       );
     }
 
-    // Send welcome email with credentials
-    await sendAccountActivatedEmail(newUser, password);
+    // Send welcome email with credentials — non-blocking, account is already
+    // fully created and saved above.
+    try {
+      await sendAccountActivatedEmail(newUser, password);
+    } catch (emailError) {
+      console.error('Failed to send account activation email:', emailError.message);
+    }
 
     sendResponse(res, 200, {
       success: true,

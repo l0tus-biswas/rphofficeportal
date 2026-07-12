@@ -40,6 +40,7 @@ export interface ChecklistItem {
 }
 
 export interface ScheduleHistoryEntry {
+  _id?: string;
   date?: Date;
   outcome?: string;
   notes?: string;
@@ -107,6 +108,16 @@ export class LicensingService {
       checklistItem,
       data
     });
+  }
+
+  // Edit a single attempt/reschedule entry
+  updateScheduleHistory(agentId: string, checklistItem: string, historyId: string, data: { date?: string; outcome?: string; notes?: string }): Observable<LicensingProgress> {
+    return this.http.put<LicensingProgress>(`${this.apiUrl}/${agentId}/checklist/${checklistItem}/history/${historyId}`, data);
+  }
+
+  // Delete a single attempt/reschedule entry
+  deleteScheduleHistory(agentId: string, checklistItem: string, historyId: string): Observable<LicensingProgress> {
+    return this.http.delete<LicensingProgress>(`${this.apiUrl}/${agentId}/checklist/${checklistItem}/history/${historyId}`);
   }
 
   // Upload document for checklist item

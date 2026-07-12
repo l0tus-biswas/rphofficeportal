@@ -379,7 +379,8 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
       };
       if (!Array.isArray(item.scheduleHistory)) item.scheduleHistory = [];
       item.scheduleHistory.push(entry);
-      item.attempts = (item.attempts || 0) + 1;
+      // Derived from the history array so it can never drift out of sync
+      item.attempts = item.scheduleHistory.length;
       item.scheduled = true;
       if (checklistItem === 'stateExam') item.scheduledDate = entry.date;
       if (checklistItem === 'fingerprinting') item.appointmentDate = entry.date;
@@ -392,7 +393,19 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
 
     // Update specific checklist item
     if (checklistItem && licensingProgress.checklist[checklistItem]) {
+      // attempts is derived from scheduleHistory.length — never let a client
+      // value override it, so the counter can't drift out of sync with the
+      // recorded history.
+      if ((checklistItem === 'stateExam' || checklistItem === 'fingerprinting') && data && 'attempts' in data) {
+        delete data.attempts;
+      }
+
       Object.assign(licensingProgress.checklist[checklistItem], data);
+
+      if (checklistItem === 'stateExam' || checklistItem === 'fingerprinting') {
+        licensingProgress.checklist[checklistItem].attempts =
+          (licensingProgress.checklist[checklistItem].scheduleHistory || []).length;
+      }
 
       // If marking as completed/scheduled/approved, set date
       if (checklistItem === 'preLicenseCourse' && data.completed) {
@@ -494,6 +507,91 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error updating checklist:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
+// @desc    Edit a single attempt/reschedule entry (state exam or fingerprinting)
+// @access  Admin only
+router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { checklistItem, historyId } = req.params;
+    if (!['stateExam', 'fingerprinting'].includes(checklistItem)) {
+      return res.status(400).json({ message: 'Invalid checklist item' });
+    }
+
+    const agent = await User.findById(req.params.agentId);
+    if (!agent || agent.role !== 'agent') {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+
+    const licensingProgress = await LicensingProgress.findOne({ agent: req.params.agentId });
+    if (!licensingProgress) return res.status(404).json({ message: 'Licensing progress not found' });
+
+    const item = licensingProgress.checklist[checklistItem];
+    const entry = item.scheduleHistory.id(historyId);
+    if (!entry) return res.status(404).json({ message: 'Attempt not found' });
+
+    const { date, outcome, notes } = req.body;
+    if (date !== undefined) entry.date = date;
+    if (outcome !== undefined) entry.outcome = outcome;
+    if (notes !== undefined) entry.notes = notes;
+
+    // Keep the "current" scheduled/appointment date in sync with the most
+    // recent entry so the checklist summary doesn't show a stale date.
+    const latest = item.scheduleHistory[item.scheduleHistory.length - 1];
+    if (checklistItem === 'stateExam') item.scheduledDate = latest.date;
+    if (checklistItem === 'fingerprinting') item.appointmentDate = latest.date;
+
+    licensingProgress.lastUpdatedBy = req.user._id;
+    await licensingProgress.save();
+    await licensingProgress.populate('agent', 'name email phone');
+    res.json(licensingProgress);
+  } catch (error) {
+    console.error('Error updating attempt history entry:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
+// @desc    Delete a single attempt/reschedule entry; keeps `attempts` in sync
+//          with the remaining history so the two values never disagree.
+// @access  Admin only
+router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { checklistItem, historyId } = req.params;
+    if (!['stateExam', 'fingerprinting'].includes(checklistItem)) {
+      return res.status(400).json({ message: 'Invalid checklist item' });
+    }
+
+    const agent = await User.findById(req.params.agentId);
+    if (!agent || agent.role !== 'agent') {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+
+    const licensingProgress = await LicensingProgress.findOne({ agent: req.params.agentId });
+    if (!licensingProgress) return res.status(404).json({ message: 'Licensing progress not found' });
+
+    const item = licensingProgress.checklist[checklistItem];
+    const entry = item.scheduleHistory.id(historyId);
+    if (!entry) return res.status(404).json({ message: 'Attempt not found' });
+
+    item.scheduleHistory.pull(historyId);
+    item.attempts = item.scheduleHistory.length;
+
+    // Reflect the new latest entry (if any) as the current date; clear if none left.
+    const latest = item.scheduleHistory[item.scheduleHistory.length - 1];
+    if (checklistItem === 'stateExam') item.scheduledDate = latest ? latest.date : null;
+    if (checklistItem === 'fingerprinting') item.appointmentDate = latest ? latest.date : null;
+    if (item.scheduleHistory.length === 0) item.scheduled = false;
+
+    licensingProgress.lastUpdatedBy = req.user._id;
+    await licensingProgress.save();
+    await licensingProgress.populate('agent', 'name email phone');
+    res.json(licensingProgress);
+  } catch (error) {
+    console.error('Error deleting attempt history entry:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

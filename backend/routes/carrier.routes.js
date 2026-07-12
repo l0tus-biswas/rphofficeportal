@@ -31,6 +31,28 @@ const guideUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }
 });
 
+// ---------------------------------------------------------------------------
+// Multer — general carrier document uploads (guides, forms, resources)
+// ---------------------------------------------------------------------------
+const documentsDir = path.join(__dirname, '../uploads/carrier-documents');
+if (!fs.existsSync(documentsDir)) fs.mkdirSync(documentsDir, { recursive: true });
+
+const documentStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, documentsDir),
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}-${safe}`);
+  }
+});
+const documentUpload = multer({
+  storage: documentStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are allowed'), false);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
+
 // @route   GET /api/carriers/my-statuses
 // @desc    Agent: get all their carrier status records
 // @access  Private (agent, admin)
@@ -274,6 +296,118 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
     res.json(carrier);
   } catch (error) {
     console.error('Error updating carrier:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/carriers/:id/documents
+// @desc    Upload a named PDF document for a carrier (guide, form, resource)
+// @access  Admin only
+router.post('/:id/documents', authenticate, authorize('admin'), documentUpload.single('file'), async (req, res) => {
+  try {
+    const carrier = await Carrier.findById(req.params.id);
+    if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
+    if (!req.file) return res.status(400).json({ message: 'A PDF file is required' });
+
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ message: 'Document name is required' });
+
+    carrier.documents.push({
+      name,
+      filePath: `uploads/carrier-documents/${req.file.filename}`,
+      originalFileName: req.file.originalname,
+      fileSize: req.file.size,
+      uploadedBy: req.user._id,
+      uploadedAt: new Date()
+    });
+    carrier.lastModifiedBy = req.user._id;
+    await carrier.save();
+
+    res.status(201).json(carrier);
+  } catch (error) {
+    console.error('Error uploading carrier document:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/carriers/:id/documents/:docId
+// @desc    Delete a carrier document
+// @access  Admin only
+router.delete('/:id/documents/:docId', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const carrier = await Carrier.findById(req.params.id);
+    if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
+
+    const doc = carrier.documents.id(req.params.docId);
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    const fullPath = path.join(__dirname, '..', doc.filePath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlink(fullPath, () => {});
+    }
+
+    carrier.documents.pull(req.params.docId);
+    carrier.lastModifiedBy = req.user._id;
+    await carrier.save();
+
+    res.json({ message: 'Document deleted', carrier });
+  } catch (error) {
+    console.error('Error deleting carrier document:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/carriers/:id/documents/:docId/download
+// @desc    Download/view a carrier document
+// @access  Private (any authenticated user)
+router.get('/:id/documents/:docId/download', authenticate, async (req, res) => {
+  try {
+    const carrier = await Carrier.findById(req.params.id);
+    if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
+
+    const doc = carrier.documents.id(req.params.docId);
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    const fullPath = path.join(__dirname, '..', doc.filePath);
+    const backendRoot = path.resolve(__dirname, '..');
+    if (!path.resolve(fullPath).startsWith(backendRoot + path.sep)) {
+      return res.status(403).json({ message: 'Access denied: invalid file path' });
+    }
+    if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
+
+    const fileName = doc.originalFileName || `${doc.name}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    fs.createReadStream(fullPath).pipe(res);
+  } catch (error) {
+    console.error('Error downloading carrier document:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/carriers/:id/level-guide/download
+// @desc    Download the legacy supplemental level guide PDF (authenticated)
+// @access  Private (any authenticated user)
+router.get('/:id/level-guide/download', authenticate, async (req, res) => {
+  try {
+    const carrier = await Carrier.findById(req.params.id);
+    if (!carrier || !carrier.supplementalLevelGuide) {
+      return res.status(404).json({ message: 'Level guide not found' });
+    }
+
+    const fullPath = path.join(__dirname, '..', carrier.supplementalLevelGuide);
+    const backendRoot = path.resolve(__dirname, '..');
+    if (!path.resolve(fullPath).startsWith(backendRoot + path.sep)) {
+      return res.status(403).json({ message: 'Access denied: invalid file path' });
+    }
+    if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
+
+    const safeName = carrier.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}-level-guide.pdf"`);
+    fs.createReadStream(fullPath).pipe(res);
+  } catch (error) {
+    console.error('Error downloading level guide:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

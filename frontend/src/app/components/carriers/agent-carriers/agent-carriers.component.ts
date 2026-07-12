@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { CarrierService, Carrier, AgentCarrierStatus } from '../../../services/carrier.service';
-import { environment } from '../../../../environments/environment';
+import { Observable } from 'rxjs';
+import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-agent-carriers',
@@ -135,8 +135,29 @@ export class AgentCarriersComponent implements OnInit {
     });
   }
 
-  getGuideUrl(path: string): string {
-    return `${environment.apiUrl.replace('/api', '')}/${path}`;
+  viewLevelGuide(carrier: Carrier): void {
+    if (!carrier._id) return;
+    this.openPdfBlob(this.carrierService.downloadLevelGuide(carrier._id));
+  }
+
+  viewDocument(carrier: Carrier, doc: CarrierDocument): void {
+    if (!carrier._id || !doc._id) return;
+    this.openPdfBlob(this.carrierService.downloadCarrierDocument(carrier._id, doc._id));
+  }
+
+  private openPdfBlob(source: Observable<Blob>): void {
+    const win = window.open('', '_blank');
+    source.subscribe({
+      next: (blob) => {
+        const typed = new Blob([blob], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(typed);
+        if (win && !win.closed) {
+          win.location.href = url;
+        }
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
+    });
   }
 
   get currentCarriers(): Carrier[] {

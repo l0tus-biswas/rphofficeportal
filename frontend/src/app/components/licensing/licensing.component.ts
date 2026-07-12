@@ -30,6 +30,10 @@ export class LicensingComponent implements OnInit {
   showReschedule: { [key: string]: boolean } = {};
   savingReschedule: { [key: string]: boolean } = {};
 
+  // Attempt/reschedule history edit state (keyed by "<item>:<historyEntryId>")
+  editHistoryForm: { [key: string]: { date: string; outcome: string; notes: string } } = {};
+  savingHistoryEdit: { [key: string]: boolean } = {};
+
   constructor(
     private licensingService: LicensingService,
     private authService: AuthService,
@@ -187,9 +191,35 @@ export class LicensingComponent implements OnInit {
     });
   }
 
+  // Every date on this page (admin and agent views alike) renders through this
+  // one method so the format can never drift between the two — e.g. "12th July, 2026".
   formatDate(date: any): string {
     if (!date) return 'Not set';
-    return new Date(date).toLocaleDateString('en-US', { timeZone: getAppTimezone() });
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'Not set';
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: getAppTimezone(),
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).formatToParts(d);
+
+    const day = parts.find(p => p.type === 'day')?.value || '';
+    const month = parts.find(p => p.type === 'month')?.value || '';
+    const year = parts.find(p => p.type === 'year')?.value || '';
+
+    return `${day}${this.ordinalSuffix(Number(day))} ${month}, ${year}`;
+  }
+
+  private ordinalSuffix(day: number): string {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
   }
 
   // Convert a stored date into the YYYY-MM-DD value an <input type="date"> needs
@@ -241,6 +271,75 @@ export class LicensingComponent implements OnInit {
         console.error('Error adding reschedule:', error);
         alert('Failed to record attempt');
         this.savingReschedule[item] = false;
+      }
+    });
+  }
+
+  historyKey(item: string, historyId: string | undefined): string {
+    return `${item}:${historyId}`;
+  }
+
+  isEditingHistory(item: string, historyId: string | undefined): boolean {
+    return !!this.editHistoryForm[this.historyKey(item, historyId)];
+  }
+
+  startEditHistory(item: string, entry: any): void {
+    if (!this.isAdmin) return;
+    this.editHistoryForm[this.historyKey(item, entry._id)] = {
+      date: this.toDateInput(entry.date),
+      outcome: entry.outcome,
+      notes: entry.notes || ''
+    };
+  }
+
+  cancelEditHistory(item: string, entry: any): void {
+    delete this.editHistoryForm[this.historyKey(item, entry._id)];
+  }
+
+  saveEditHistory(item: string, entry: any): void {
+    if (!this.selectedAgent || !this.isAdmin) return;
+    const key = this.historyKey(item, entry._id);
+    const form = this.editHistoryForm[key];
+    if (!form || !form.date) {
+      alert('Please choose a date for this attempt.');
+      return;
+    }
+
+    this.savingHistoryEdit[key] = true;
+    this.licensingService.updateScheduleHistory(this.selectedAgent.agent._id, item, entry._id, {
+      date: form.date,
+      outcome: form.outcome,
+      notes: form.notes
+    }).subscribe({
+      next: (updated) => {
+        this.selectedAgent = updated;
+        const index = this.licensingProgress.findIndex(p => p.agent._id === updated.agent._id);
+        if (index !== -1) this.licensingProgress[index] = updated;
+        this.savingHistoryEdit[key] = false;
+        delete this.editHistoryForm[key];
+      },
+      error: (error) => {
+        console.error('Error updating attempt:', error);
+        alert('Failed to update attempt');
+        this.savingHistoryEdit[key] = false;
+      }
+    });
+  }
+
+  deleteHistoryEntry(item: string, entry: any): void {
+    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!confirm('Delete this attempt/reschedule entry? This cannot be undone.')) return;
+
+    this.licensingService.deleteScheduleHistory(this.selectedAgent.agent._id, item, entry._id).subscribe({
+      next: (updated) => {
+        this.selectedAgent = updated;
+        const index = this.licensingProgress.findIndex(p => p.agent._id === updated.agent._id);
+        if (index !== -1) this.licensingProgress[index] = updated;
+        delete this.editHistoryForm[this.historyKey(item, entry._id)];
+      },
+      error: (error) => {
+        console.error('Error deleting attempt:', error);
+        alert('Failed to delete attempt');
       }
     });
   }

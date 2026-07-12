@@ -655,9 +655,11 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
       }, false).catch(() => {});
     }
 
-    // Send email to each requested agent
-    const populatedAgents = request.requestedFrom || [];
-    for (const agent of populatedAgents) {
+    // Send email to each requested agent. Use `validAgents` (fetched directly
+    // above with name/email) rather than `request.requestedFrom` post-populate —
+    // relying on the populated subdocument left every agent's email undefined,
+    // so this loop never actually sent anything even though it ran cleanly.
+    for (const agent of validAgents) {
       if (agent && agent.email) {
         const dueLine = dueDate ? `\nDue date: ${new Date(dueDate).toLocaleDateString()}` : '';
         sendNotificationEmail({

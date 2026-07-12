@@ -18,22 +18,18 @@
             <h5 class="mb-3">Current Language</h5>
             <div class="alert alert-success">
               <i class="bi bi-check-circle me-2"></i>
-              <strong>{{ getCurrentLanguageName() }}</strong>
+              <strong>{{ translationService.getCurrentLanguageName() }}</strong>
               <small class="d-block mt-1 text-muted">
-                Language Code: <code>{{ currentLanguage }}</code>
+                Language Code: <code>{{ translationService.currentLanguage }}</code>
               </small>
-            </div>
-            <div class="alert alert-info" *ngIf="currentLanguage !== 'en'">
-              <i class="bi bi-info-circle me-2"></i>
-              Click on a language card below to switch languages. The page will reload to apply the translation.
             </div>
           </div>
 
           <h5 class="mb-3">Available Languages</h5>
           <div class="row g-3">
-            <div class="col-md-6" *ngFor="let language of languages">
-              <div class="card language-card" 
-                   [class.active]="currentLanguage === language.code"
+            <div class="col-md-6" *ngFor="let language of translationService.languages">
+              <div class="card language-card"
+                   [class.active]="translationService.isLanguageActive(language.code)"
                    (click)="changeLanguage(language.code)"
                    style="cursor: pointer;">
                 <div class="card-body d-flex justify-content-between align-items-center">
@@ -41,7 +37,7 @@
                     <i class="bi bi-globe2 me-2"></i>
                     <strong>{{ language.name }}</strong>
                   </div>
-                  <div *ngIf="currentLanguage === language.code">
+                  <div *ngIf="translationService.isLanguageActive(language.code)">
                     <i class="bi bi-check-circle-fill text-success"></i>
                   </div>
                 </div>

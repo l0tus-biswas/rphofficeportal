@@ -3,10 +3,9 @@ import { FormBuilder, FormGroup, Validators, AbstractControl, ValidationErrors }
 import { ActivatedRoute, Router } from '@angular/router';
 import { PublicService } from '../../services/public.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
+import { TranslationService } from '../../services/translation.service';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-
-declare const google: any;
 
 interface RecruiterSearchResult {
   id: string;
@@ -53,14 +52,6 @@ export class ApplyComponent implements OnInit, OnDestroy {
   
   // For file uploads in section 3
   complianceFiles: Map<string, File> = new Map();
-
-  // Language toggle
-  languages = [
-    { code: 'en', label: 'English' },
-    { code: 'es', label: 'Español' }
-  ];
-  currentLanguage = 'en';
-  private translationInitAttempts = 0;
   
   // US States - Full names with abbreviations for better UX and to avoid translation issues
   states = [
@@ -131,12 +122,12 @@ export class ApplyComponent implements OnInit, OnDestroy {
     private publicService: PublicService,
     private route: ActivatedRoute,
     private router: Router,
-    private brandingService: BrandingService
+    private brandingService: BrandingService,
+    public translationService: TranslationService
   ) {}
 
   ngOnInit(): void {
-    this.currentLanguage = localStorage.getItem('selectedLanguage') || 'en';
-    this.initTranslationSupport();
+    this.translationService.init();
 
     // Load branding
     this.branding = this.brandingService.getCurrentBranding();
@@ -846,77 +837,10 @@ export class ApplyComponent implements OnInit, OnDestroy {
   }
 
   changeLanguage(lang: string): void {
-    if (this.currentLanguage === lang) {
-      return;
-    }
-
-    this.currentLanguage = lang;
-    if (lang === 'en') {
-      localStorage.removeItem('selectedLanguage');
-    } else {
-      localStorage.setItem('selectedLanguage', lang);
-    }
-
-    this.triggerLanguageChange(lang);
+    this.translationService.changeLanguage(lang);
   }
 
   isLanguageActive(lang: string): boolean {
-    return this.currentLanguage === lang;
-  }
-
-  private initTranslationSupport(): void {
-    const win = window as any;
-    if (win?._rhpGoogleTranslateInitialized) {
-      this.triggerLanguageChange(this.currentLanguage, true);
-      return;
-    }
-
-    const initialize = () => {
-      // Check if both google and TranslateElement are available
-      if (typeof google !== 'undefined' && 
-          google.translate && 
-          typeof google.translate.TranslateElement === 'function') {
-        try {
-          let container = document.getElementById('google_translate_element_hidden');
-          if (!container) {
-            container = document.createElement('div');
-            container.id = 'google_translate_element_hidden';
-            container.style.display = 'none';
-            document.body.appendChild(container);
-          }
-
-          new google.translate.TranslateElement(
-            {
-              pageLanguage: 'en',
-              includedLanguages: this.languages.map(l => l.code).join(','),
-              autoDisplay: false
-            },
-            'google_translate_element_hidden'
-          );
-
-          win._rhpGoogleTranslateInitialized = true;
-          this.triggerLanguageChange(this.currentLanguage, true);
-        } catch (error) {
-          console.error('Google Translate initialization failed:', error);
-        }
-      } else if (this.translationInitAttempts < 20) {
-        this.translationInitAttempts += 1;
-        console.log(`Google Translate not ready, attempt ${this.translationInitAttempts}/20`);
-        setTimeout(initialize, 300);
-      }
-    };
-
-    initialize();
-  }
-
-  private triggerLanguageChange(lang: string, silent = false, attempt = 0): void {
-    const selectElement = document.querySelector('.goog-te-combo') as HTMLSelectElement | null;
-
-    if (selectElement) {
-      selectElement.value = lang;
-      selectElement.dispatchEvent(new Event('change'));
-    } else if (attempt < 20) {
-      setTimeout(() => this.triggerLanguageChange(lang, silent, attempt + 1), 250);
-    }
+    return this.translationService.isLanguageActive(lang);
   }
 }

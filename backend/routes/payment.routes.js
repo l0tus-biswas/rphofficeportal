@@ -293,6 +293,25 @@ router.post('/cancel-subscription', protect, async (req, res) => {
       link: '/transactions'
     }, false).catch(() => {});
 
+    // Notify admins immediately so they can remove/deactivate the agent in
+    // QuickBooks (or elsewhere) before the next billing cycle to avoid
+    // unnecessary ongoing charges tied to this agent.
+    try {
+      const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
+      for (const admin of admins) {
+        Notification.createNotification({
+          userId: admin._id,
+          type: 'agent_subscription_canceled',
+          title: 'Agent Canceled Subscription',
+          message: `${user.name} (${user.email}) has canceled their subscription. They'll keep access until ${periodEnd ? periodEnd.toLocaleDateString('en-US') : 'the end of the current billing period'}. Remember to remove/deactivate them in QuickBooks to avoid unnecessary charges.`,
+          link: '/admin/users',
+          data: { agentId: user._id }
+        }, true).catch(() => {});
+      }
+    } catch (notifErr) {
+      console.error('Failed to notify admins of agent subscription cancellation:', notifErr);
+    }
+
     sendResponse(res, 200, {
       message: 'Your subscription has been canceled. You will not be billed for the next cycle and will keep access until the end of the current billing period.',
       cancelAtPeriodEnd: true,

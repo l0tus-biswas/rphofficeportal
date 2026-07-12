@@ -206,13 +206,11 @@
                     <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
                   </div>
                   <div class="col-md-6">
-                    <label class="small fw-semibold">Attempts:</label>
-                    <input type="number"
-                           class="form-control form-control-sm"
-                           [value]="selectedAgent.checklist.stateExam.attempts"
-                           [disabled]="!isAdmin"
-                           (change)="updateChecklistItem('stateExam', 'attempts', ($any($event.target)).value)"
-                           min="0">
+                    <label class="small fw-semibold">Total Attempts:</label>
+                    <div class="small">
+                      {{ selectedAgent.checklist.stateExam.scheduleHistory?.length || 0 }}
+                      <span class="text-muted">(automatically counted from Attempts / Reschedules below)</span>
+                    </div>
                   </div>
                 </div>
 
@@ -222,10 +220,41 @@
                   <ul class="list-group list-group-flush small">
                     <li *ngFor="let h of selectedAgent.checklist.stateExam.scheduleHistory; let i = index"
                         class="list-group-item px-2 py-1">
-                      <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
-                      <strong>{{ formatDate(h.date) }}</strong>
-                      <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
-                      <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                      <ng-container *ngIf="!isEditingHistory('stateExam', h._id)">
+                        <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
+                        <strong>{{ formatDate(h.date) }}</strong>
+                        <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
+                        <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                        <span *ngIf="isAdmin" class="float-end btn-group btn-group-sm">
+                          <button type="button" class="btn btn-outline-secondary" (click)="startEditHistory('stateExam', h)" title="Edit"><i class="bi bi-pencil"></i></button>
+                          <button type="button" class="btn btn-outline-danger" (click)="deleteHistoryEntry('stateExam', h)" title="Delete"><i class="bi bi-trash"></i></button>
+                        </span>
+                      </ng-container>
+                      <div *ngIf="isEditingHistory('stateExam', h._id)" class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                          <label class="small">Date</label>
+                          <input type="date" class="form-control form-control-sm" [(ngModel)]="editHistoryForm[historyKey('stateExam', h._id)].date">
+                        </div>
+                        <div class="col-md-3">
+                          <label class="small">Outcome</label>
+                          <select class="form-select form-select-sm" [(ngModel)]="editHistoryForm[historyKey('stateExam', h._id)].outcome">
+                            <option>Scheduled</option>
+                            <option>Passed</option>
+                            <option>Failed</option>
+                            <option>No-show</option>
+                            <option>Rescheduled</option>
+                            <option>Cancelled</option>
+                          </select>
+                        </div>
+                        <div class="col-md-3">
+                          <label class="small">Notes</label>
+                          <input type="text" class="form-control form-control-sm" [(ngModel)]="editHistoryForm[historyKey('stateExam', h._id)].notes">
+                        </div>
+                        <div class="col-md-2 d-flex gap-1">
+                          <button type="button" class="btn btn-sm btn-primary" (click)="saveEditHistory('stateExam', h)" [disabled]="savingHistoryEdit[historyKey('stateExam', h._id)]">Save</button>
+                          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelEditHistory('stateExam', h)">Cancel</button>
+                        </div>
+                      </div>
                     </li>
                   </ul>
                 </div>
@@ -311,13 +340,11 @@
                     <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}</div>
                   </div>
                   <div class="col-md-6">
-                    <label class="small fw-semibold">Attempts:</label>
-                    <input type="number"
-                           class="form-control form-control-sm"
-                           [value]="selectedAgent.checklist.fingerprinting.attempts || 0"
-                           [disabled]="!isAdmin"
-                           (change)="updateChecklistItem('fingerprinting', 'attempts', ($any($event.target)).value)"
-                           min="0">
+                    <label class="small fw-semibold">Total Attempts:</label>
+                    <div class="small">
+                      {{ selectedAgent.checklist.fingerprinting.scheduleHistory?.length || 0 }}
+                      <span class="text-muted">(automatically counted from Attempts / Reschedules below)</span>
+                    </div>
                   </div>
                 </div>
 
@@ -327,10 +354,40 @@
                   <ul class="list-group list-group-flush small">
                     <li *ngFor="let h of selectedAgent.checklist.fingerprinting.scheduleHistory; let i = index"
                         class="list-group-item px-2 py-1">
-                      <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
-                      <strong>{{ formatDate(h.date) }}</strong>
-                      <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
-                      <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                      <ng-container *ngIf="!isEditingHistory('fingerprinting', h._id)">
+                        <span class="badge bg-light text-dark me-1">#{{ i + 1 }}</span>
+                        <strong>{{ formatDate(h.date) }}</strong>
+                        <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
+                        <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
+                        <span *ngIf="isAdmin" class="float-end btn-group btn-group-sm">
+                          <button type="button" class="btn btn-outline-secondary" (click)="startEditHistory('fingerprinting', h)" title="Edit"><i class="bi bi-pencil"></i></button>
+                          <button type="button" class="btn btn-outline-danger" (click)="deleteHistoryEntry('fingerprinting', h)" title="Delete"><i class="bi bi-trash"></i></button>
+                        </span>
+                      </ng-container>
+                      <div *ngIf="isEditingHistory('fingerprinting', h._id)" class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                          <label class="small">Date</label>
+                          <input type="date" class="form-control form-control-sm" [(ngModel)]="editHistoryForm[historyKey('fingerprinting', h._id)].date">
+                        </div>
+                        <div class="col-md-3">
+                          <label class="small">Outcome</label>
+                          <select class="form-select form-select-sm" [(ngModel)]="editHistoryForm[historyKey('fingerprinting', h._id)].outcome">
+                            <option>Scheduled</option>
+                            <option>Completed</option>
+                            <option>No-show</option>
+                            <option>Rescheduled</option>
+                            <option>Cancelled</option>
+                          </select>
+                        </div>
+                        <div class="col-md-3">
+                          <label class="small">Notes</label>
+                          <input type="text" class="form-control form-control-sm" [(ngModel)]="editHistoryForm[historyKey('fingerprinting', h._id)].notes">
+                        </div>
+                        <div class="col-md-2 d-flex gap-1">
+                          <button type="button" class="btn btn-sm btn-primary" (click)="saveEditHistory('fingerprinting', h)" [disabled]="savingHistoryEdit[historyKey('fingerprinting', h._id)]">Save</button>
+                          <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelEditHistory('fingerprinting', h)">Cancel</button>
+                        </div>
+                      </div>
                     </li>
                   </ul>
                 </div>

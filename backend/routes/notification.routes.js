@@ -13,7 +13,7 @@ router.use(protect);
 const NOTIFICATION_CATEGORIES = {
   'Activity': ['login', 'profile_updated', 'password_changed', 'password_reset'],
   'Recruitment': ['recruit_added', 'downline_recruit', 'new_agent_registered'],
-  'Payments': ['payment_completed', 'payment_failed', 'subscription_updated', 'subscription_canceled'],
+  'Payments': ['payment_completed', 'payment_failed', 'subscription_updated', 'subscription_canceled', 'agent_subscription_canceled'],
   'Applications': ['apa_submitted', 'apa_approved', 'apa_rejected'],
   'Onboarding': ['onboarding_submitted', 'onboarding_step_updated', 'onboarding_approved', 'onboarding_rejected'],
   'Licensing': ['license_submitted', 'license_approved'],

@@ -7,6 +7,7 @@ import { BroadcastPopupService } from './services/broadcast-popup.service';
 import { SocketService } from './services/socket.service';
 import { TimezoneService } from './services/timezone.service';
 import { AuthService } from './services/auth.service';
+import { TranslationService } from './services/translation.service';
 import { filter } from 'rxjs/operators';
 import { Observable, Subscription } from 'rxjs';
 import { User } from './models/user.model';
@@ -36,7 +37,8 @@ export class AppComponent implements OnInit, OnDestroy {
     private broadcastPopupService: BroadcastPopupService,
     private socketService: SocketService,
     private timezoneService: TimezoneService,
-    private authService: AuthService
+    private authService: AuthService,
+    private translationService: TranslationService
   ) {
     this.isImpersonating$ = this.authService.isImpersonating$;
     this.currentUser$ = this.authService.currentUser$;
@@ -56,6 +58,9 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Initialize once at the app root so translation persists across every route
+    this.translationService.init();
+
     // Subscribe to branding changes and update title and favicon dynamically
     this.brandingService.branding$.subscribe(branding => {
       this.currentBrandingName = branding.appName;

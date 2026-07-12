@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
-import { CarrierService, Carrier } from '../../../services/carrier.service';
+import { Observable } from 'rxjs';
+import { CarrierService, Carrier, CarrierDocument } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-carriers',
@@ -21,6 +22,12 @@ export class CarriersComponent implements OnInit {
   editMode = false;
   currentCarrier: Partial<Carrier> = {};
   levelGuideFile: File | null = null;
+
+  // Document library (add-document mini form)
+  newDocumentName = '';
+  newDocumentFile: File | null = null;
+  documentError = '';
+  savingDocument = false;
 
   readonly CATEGORIES = [
     'Life Insurance',
@@ -92,6 +99,7 @@ export class CarriersComponent implements OnInit {
       name: '', category: [], isActive: true, notes: ''
     };
     this.levelGuideFile = null;
+    this.resetDocumentForm();
   }
 
   editCarrier(carrier: Carrier): void {
@@ -100,9 +108,11 @@ export class CarriersComponent implements OnInit {
     this.error = '';
     this.currentCarrier = {
       ...carrier,
-      category: carrier.category ? [...carrier.category] : []
+      category: carrier.category ? [...carrier.category] : [],
+      documents: carrier.documents ? [...carrier.documents] : []
     };
     this.levelGuideFile = null;
+    this.resetDocumentForm();
   }
 
   cancelForm(): void {
@@ -111,6 +121,14 @@ export class CarriersComponent implements OnInit {
     this.error = '';
     this.currentCarrier = {};
     this.levelGuideFile = null;
+    this.resetDocumentForm();
+  }
+
+  private resetDocumentForm(): void {
+    this.newDocumentName = '';
+    this.newDocumentFile = null;
+    this.documentError = '';
+    this.savingDocument = false;
   }
 
   toggleCategory(cat: string): void {
@@ -130,6 +148,73 @@ export class CarriersComponent implements OnInit {
   onFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.levelGuideFile = input.files && input.files.length > 0 ? input.files[0] : null;
+  }
+
+  onNewDocumentFileChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.newDocumentFile = input.files && input.files.length > 0 ? input.files[0] : null;
+  }
+
+  addDocument(): void {
+    this.documentError = '';
+    if (!this.currentCarrier._id) { this.documentError = 'Save the carrier before attaching documents'; return; }
+    if (!this.newDocumentName.trim()) { this.documentError = 'Document name is required'; return; }
+    if (!this.newDocumentFile) { this.documentError = 'Please choose a PDF file'; return; }
+
+    this.savingDocument = true;
+    this.carrierService.uploadCarrierDocument(this.currentCarrier._id, this.newDocumentName.trim(), this.newDocumentFile).subscribe({
+      next: (carrier) => {
+        this.currentCarrier.documents = carrier.documents;
+        this.newDocumentName = '';
+        this.newDocumentFile = null;
+        this.savingDocument = false;
+        this.loadCarriers();
+      },
+      error: (error) => {
+        this.savingDocument = false;
+        this.documentError = error.error?.message || 'Failed to upload document';
+      }
+    });
+  }
+
+  deleteDocument(doc: CarrierDocument): void {
+    if (!this.currentCarrier._id || !doc._id) return;
+    if (!confirm(`Delete "${doc.name}"? This cannot be undone.`)) return;
+
+    this.carrierService.deleteCarrierDocument(this.currentCarrier._id, doc._id).subscribe({
+      next: () => {
+        this.currentCarrier.documents = (this.currentCarrier.documents || []).filter(d => d._id !== doc._id);
+        this.loadCarriers();
+      },
+      error: (error) => {
+        this.documentError = error.error?.message || 'Failed to delete document';
+      }
+    });
+  }
+
+  viewDocument(doc: CarrierDocument): void {
+    if (!this.currentCarrier._id || !doc._id) return;
+    this.openPdfBlob(this.carrierService.downloadCarrierDocument(this.currentCarrier._id, doc._id));
+  }
+
+  viewLevelGuide(): void {
+    if (!this.currentCarrier._id) return;
+    this.openPdfBlob(this.carrierService.downloadLevelGuide(this.currentCarrier._id));
+  }
+
+  private openPdfBlob(source: Observable<Blob>): void {
+    const win = window.open('', '_blank');
+    source.subscribe({
+      next: (blob) => {
+        const typed = new Blob([blob], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(typed);
+        if (win && !win.closed) {
+          win.location.href = url;
+        }
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
+    });
   }
 
   saveCarrier(): void {
@@ -181,7 +266,4 @@ export class CarriersComponent implements OnInit {
     });
   }
 
-  getGuideUrl(path: string): string {
-    return `${window.location.origin.replace('4200', '3000')}/${path}`;
-  }
 }
