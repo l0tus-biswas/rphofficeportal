@@ -334,9 +334,9 @@
             <tr *ngIf="application.docusign.documentUrl">
               <th>Signed Agreement:</th>
               <td>
-                <a [href]="application.docusign.documentUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                <button type="button" (click)="viewSignedDocument()" class="btn btn-sm btn-outline-primary">
                   <i class="bi bi-file-earmark-pdf me-1"></i>View Signed PDF
-                </a>
+                </button>
               </td>
             </tr>
           </table>

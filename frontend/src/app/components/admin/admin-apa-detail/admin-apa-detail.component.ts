@@ -66,6 +66,25 @@ export class AdminApaDetailComponent implements OnInit {
     });
   }
 
+  viewSignedDocument(): void {
+    const documentUrl = this.application?.docusign?.documentUrl;
+    if (!documentUrl) return;
+
+    const win = window.open('', '_blank');
+    this.apaService.downloadSignedDocument(documentUrl).subscribe({
+      next: (blob) => {
+        const typed = new Blob([blob], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(typed);
+        if (win && !win.closed) win.location.href = url;
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => {
+        if (win && !win.closed) win.close();
+        this.error = 'Failed to open signed document';
+      }
+    });
+  }
+
   openRejectModal(): void {
     this.showRejectModal = true;
     this.rejectionReason = '';

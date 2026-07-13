@@ -1,7 +1,6 @@
 import { getAppTimezone } from '../../../../services/timezone.service';
 import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { environment } from '../../../../../environments/environment';
 import { OnboardingHubService, AdminOnboardingAgentDetail, OnboardingDocument } from '../../../../services/onboarding-hub.service';
 
 @Component({
@@ -96,9 +95,13 @@ export class AdminOnboardingDetailComponent implements OnInit {
     return !!(doc?.filePath || doc?.externalLink);
   }
 
-  getFileUrl(filePath: string): string {
-    const base = environment.apiUrl.replace('/api', '');
-    return `${base}/${filePath}`;
+  private guessMimeType(fileName: string): string {
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+    const types: Record<string, string> = {
+      pdf: 'application/pdf',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp'
+    };
+    return types[ext] || 'application/octet-stream';
   }
 
   viewDocument(doc: OnboardingDocument | null): void {
@@ -109,29 +112,56 @@ export class AdminOnboardingDetailComponent implements OnInit {
       return;
     }
 
-    if (!doc.filePath) return;
+    if (!doc.filePath || !doc._id) return;
 
     this.currentPdfName = doc.originalFileName || 'Document';
     this.showPdfModal = true;
-    this.pdfLoading = false;
+    this.pdfLoading = true;
 
     if (this.pdfUrl) {
       URL.revokeObjectURL(this.pdfUrl);
       this.pdfUrl = null;
     }
 
-    this.pdfUrl = this.getFileUrl(doc.filePath);
+    // The file lives under the protected /uploads path (or behind the
+    // authenticated download route) — a raw <iframe src>/<a href> can't send
+    // the Authorization header, so fetch it via HttpClient and view as a blob.
+    this.onboardingHubService.downloadDocumentBlob(this.userId, doc._id).subscribe({
+      next: (blob) => {
+        this.pdfUrl = URL.createObjectURL(new Blob([blob], { type: this.guessMimeType(this.currentPdfName) }));
+        this.pdfLoading = false;
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to load document';
+        this.pdfLoading = false;
+        this.showPdfModal = false;
+      }
+    });
   }
 
   downloadDocument(doc: OnboardingDocument | null): void {
     if (!doc) return;
-    if (doc.filePath) {
-      window.open(this.getFileUrl(doc.filePath), '_blank');
-      return;
-    }
+
     if (doc.externalLink) {
       window.open(doc.externalLink, '_blank');
+      return;
     }
+
+    if (!doc.filePath || !doc._id) return;
+
+    this.onboardingHubService.downloadDocumentBlob(this.userId, doc._id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(new Blob([blob], { type: this.guessMimeType(doc.originalFileName || '') }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.originalFileName || 'document';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Failed to download document';
+      }
+    });
   }
   
   closePdfModal(): void {

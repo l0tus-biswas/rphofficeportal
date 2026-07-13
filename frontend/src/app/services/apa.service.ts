@@ -72,4 +72,12 @@ export class ApaService {
   revertTemplate(): Observable<any> {
     return this.http.put(`${this.apiUrl}/apa-applications/settings/template/revert`, {});
   }
+
+  // Signed APA PDFs live under the protected /uploads path, which requires an
+  // Authorization header — a plain <a href>/<object data> navigation can't send
+  // one, so it must be fetched through HttpClient (the auth interceptor attaches
+  // the header automatically) and opened as a blob instead.
+  downloadSignedDocument(documentUrl: string): Observable<Blob> {
+    return this.http.get(documentUrl, { responseType: 'blob' });
+  }
 }

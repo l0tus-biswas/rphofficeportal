@@ -88,6 +88,13 @@ export class OnboardingHubService {
     return `${this.apiUrl}/documents/${agentId}/${docId}/download`;
   }
 
+  // The download route requires an Authorization header (checked by the
+  // `authenticate` middleware), so it must be fetched through HttpClient
+  // (whose interceptor attaches the header) rather than a plain <a href>.
+  downloadDocumentBlob(agentId: string, docId: string): Observable<Blob> {
+    return this.http.get(this.getDownloadUrl(agentId, docId), { responseType: 'blob' });
+  }
+
   // Admin doc type management
   createDocType(data: Partial<OnboardingDocType>): Observable<OnboardingDocType> {
     return this.http.post<OnboardingDocType>(`${this.apiUrl}/admin/doc-types`, data);
