@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon } from '../../../services/carrier.service';
+
+const MAX_DOCUMENT_SIZE_BYTES = 3 * 1024 * 1024;
 
 @Component({
   selector: 'app-carriers',
@@ -159,7 +161,8 @@ export class CarriersComponent implements OnInit {
     this.documentError = '';
     if (!this.currentCarrier._id) { this.documentError = 'Save the carrier before attaching documents'; return; }
     if (!this.newDocumentName.trim()) { this.documentError = 'Document name is required'; return; }
-    if (!this.newDocumentFile) { this.documentError = 'Please choose a PDF file'; return; }
+    if (!this.newDocumentFile) { this.documentError = 'Please choose a file'; return; }
+    if (this.newDocumentFile.size > MAX_DOCUMENT_SIZE_BYTES) { this.documentError = 'File is too large. Maximum size is 3MB.'; return; }
 
     this.savingDocument = true;
     this.carrierService.uploadCarrierDocument(this.currentCarrier._id, this.newDocumentName.trim(), this.newDocumentFile).subscribe({
@@ -194,7 +197,12 @@ export class CarriersComponent implements OnInit {
 
   viewDocument(doc: CarrierDocument): void {
     if (!this.currentCarrier._id || !doc._id) return;
-    this.openPdfBlob(this.carrierService.downloadCarrierDocument(this.currentCarrier._id, doc._id));
+    const fileName = doc.originalFileName || doc.name;
+    this.openOrDownloadBlob(this.carrierService.downloadCarrierDocument(this.currentCarrier._id, doc._id), fileName);
+  }
+
+  getDocumentIconClass(doc: CarrierDocument): string {
+    return getDocumentIcon(doc.originalFileName || doc.name);
   }
 
   viewLevelGuide(): void {
@@ -215,6 +223,38 @@ export class CarriersComponent implements OnInit {
       },
       error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
     });
+  }
+
+  // Documents can be PDF, Word, or images. PDFs/images can be previewed
+  // inline in a new tab; Word docs can't be rendered by the browser so
+  // those are downloaded instead.
+  private openOrDownloadBlob(source: Observable<Blob>, fileName: string): void {
+    const type = getDocumentMimeType(fileName);
+    if (isDocumentPreviewable(fileName)) {
+      const win = window.open('', '_blank');
+      source.subscribe({
+        next: (blob) => {
+          const typed = new Blob([blob], { type });
+          const url = window.URL.createObjectURL(typed);
+          if (win && !win.closed) win.location.href = url;
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        },
+        error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
+      });
+    } else {
+      source.subscribe({
+        next: (blob) => {
+          const typed = new Blob([blob], { type });
+          const url = window.URL.createObjectURL(typed);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        },
+        error: () => { this.error = 'Failed to download document'; }
+      });
+    }
   }
 
   saveCarrier(): void {

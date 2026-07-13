@@ -298,18 +298,21 @@ router.post('/users', validateRequest(schemas.createUser), logAction('CREATE_USE
 // @access  Private (Admin only)
 router.put('/users/:userId', validateRequest(schemas.updateUser), logAction('UPDATE_USER'), async (req, res) => {
   try {
-    const { name, phone, role, isActive } = req.body;
-    
+    const { name, phone, role, isActive, address, city, state } = req.body;
+
     const user = await User.findById(req.params.userId);
-    
+
     if (!user) {
       return sendResponse(res, 404, { message: 'User not found' });
     }
-    
+
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (role) user.role = role;
     if (isActive !== undefined) user.isActive = isActive;
+    if (address !== undefined) user.address = address;
+    if (city !== undefined) user.city = city;
+    if (state !== undefined) user.state = state;
     
     user.updatedBy = req.user._id;
     await user.save();

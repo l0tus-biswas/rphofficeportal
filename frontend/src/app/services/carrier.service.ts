@@ -35,6 +35,41 @@ export interface Carrier {
   updatedAt?: Date;
 }
 
+const DOCUMENT_MIME_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+};
+
+const PREVIEWABLE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+function getDocumentExtension(fileName: string): string {
+  return (fileName.split('.').pop() || '').toLowerCase();
+}
+
+// Browsers can render PDFs and images inline; Word docs can't be previewed
+// and should just be downloaded instead.
+export function isDocumentPreviewable(fileName: string): boolean {
+  return PREVIEWABLE_EXTENSIONS.includes(getDocumentExtension(fileName));
+}
+
+export function getDocumentMimeType(fileName: string): string {
+  return DOCUMENT_MIME_TYPES[getDocumentExtension(fileName)] || 'application/octet-stream';
+}
+
+export function getDocumentIcon(fileName: string): string {
+  const ext = getDocumentExtension(fileName);
+  if (ext === 'pdf') return 'bi-file-earmark-pdf text-danger';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'bi-file-earmark-image text-primary';
+  if (['doc', 'docx'].includes(ext)) return 'bi-file-earmark-word text-primary';
+  return 'bi-file-earmark text-muted';
+}
+
 export interface AgentCarrierStatus {
   _id?: string;
   agent?: any;
@@ -89,7 +124,7 @@ export class CarrierService {
     return this.http.delete(`${this.apiUrl}/${id}`);
   }
 
-  // Upload a named PDF document for a carrier (admin only)
+  // Upload a named document (PDF, Word, or image) for a carrier (admin only)
   uploadCarrierDocument(carrierId: string, name: string, file: File): Observable<Carrier> {
     const formData = new FormData();
     formData.append('name', name);

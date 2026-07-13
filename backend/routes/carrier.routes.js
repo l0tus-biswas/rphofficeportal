@@ -44,14 +44,39 @@ const documentStorage = multer.diskStorage({
     cb(null, `${Date.now()}-${safe}`);
   }
 });
+// Documents accept PDF, Word docs, and common image formats.
+const ALLOWED_DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp'
+];
 const documentUpload = multer({
   storage: documentStorage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') cb(null, true);
-    else cb(new Error('Only PDF files are allowed'), false);
+    if (ALLOWED_DOCUMENT_MIME_TYPES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PDF, Word, or image (JPG, PNG, GIF, WEBP) files are allowed'), false);
   },
-  limits: { fileSize: 10 * 1024 * 1024 }
+  limits: { fileSize: 3 * 1024 * 1024 }
 });
+
+// Multer errors (bad mimetype, oversized file, disk write failure) are
+// surfaced via next(err) and would otherwise skip straight past each route's
+// own try/catch to the app's generic error handler, which masks everything
+// as "Internal Server Error" in production. Run upload middleware manually so
+// these come back as clear, specific 400s instead.
+const runUpload = (uploadMiddleware, maxSizeLabel = '10MB') => (req, res, next) => {
+  uploadMiddleware(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ message: `File is too large. Maximum size is ${maxSizeLabel}.` });
+    }
+    return res.status(400).json({ message: err.message || 'File upload failed' });
+  });
+};
 
 // @route   GET /api/carriers/my-statuses
 // @desc    Agent: get all their carrier status records
@@ -174,7 +199,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // @route   POST /api/carriers
 // @desc    Create new carrier
 // @access  Admin only
-router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuideFile'), async (req, res) => {
+router.post('/', authenticate, authorize('admin'), runUpload(guideUpload.single('levelGuideFile')), async (req, res) => {
   try {
     const {
       name, category, isActive,
@@ -236,7 +261,7 @@ router.post('/', authenticate, authorize('admin'), guideUpload.single('levelGuid
 // @route   PUT /api/carriers/:id
 // @desc    Update carrier
 // @access  Admin only
-router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGuideFile'), async (req, res) => {
+router.put('/:id', authenticate, authorize('admin'), runUpload(guideUpload.single('levelGuideFile')), async (req, res) => {
   try {
     const carrier = await Carrier.findById(req.params.id);
     if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
@@ -303,11 +328,15 @@ router.put('/:id', authenticate, authorize('admin'), guideUpload.single('levelGu
 // @route   POST /api/carriers/:id/documents
 // @desc    Upload a named PDF document for a carrier (guide, form, resource)
 // @access  Admin only
-router.post('/:id/documents', authenticate, authorize('admin'), documentUpload.single('file'), async (req, res) => {
+router.post('/:id/documents', authenticate, authorize('admin'), runUpload(documentUpload.single('file'), '3MB'), async (req, res) => {
   try {
     const carrier = await Carrier.findById(req.params.id);
     if (!carrier) return res.status(404).json({ message: 'Carrier not found' });
     if (!req.file) return res.status(400).json({ message: 'A PDF file is required' });
+    if (!req.file.size) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ message: 'Uploaded file is empty' });
+    }
 
     const name = (req.body.name || '').trim();
     if (!name) return res.status(400).json({ message: 'Document name is required' });
@@ -375,9 +404,24 @@ router.get('/:id/documents/:docId/download', authenticate, async (req, res) => {
     }
     if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
 
-    const fileName = doc.originalFileName || `${doc.name}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    const fileName = doc.originalFileName || doc.name;
+    const ext = path.extname(fileName).toLowerCase();
+    const contentTypeByExt = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    };
+    const contentType = contentTypeByExt[ext] || 'application/octet-stream';
+    // Browsers can render PDFs/images inline; Word docs can't be previewed, so
+    // serve those as an attachment (triggers a normal download) instead.
+    const disposition = (ext === '.doc' || ext === '.docx') ? 'attachment' : 'inline';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading carrier document:', error);

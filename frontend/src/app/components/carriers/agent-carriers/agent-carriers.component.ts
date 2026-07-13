@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-agent-carriers',
@@ -142,7 +142,12 @@ export class AgentCarriersComponent implements OnInit {
 
   viewDocument(carrier: Carrier, doc: CarrierDocument): void {
     if (!carrier._id || !doc._id) return;
-    this.openPdfBlob(this.carrierService.downloadCarrierDocument(carrier._id, doc._id));
+    const fileName = doc.originalFileName || doc.name;
+    this.openOrDownloadBlob(this.carrierService.downloadCarrierDocument(carrier._id, doc._id), fileName);
+  }
+
+  getDocumentIconClass(doc: CarrierDocument): string {
+    return getDocumentIcon(doc.originalFileName || doc.name);
   }
 
   private openPdfBlob(source: Observable<Blob>): void {
@@ -158,6 +163,38 @@ export class AgentCarriersComponent implements OnInit {
       },
       error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
     });
+  }
+
+  // Documents can be PDF, Word, or images. PDFs/images can be previewed
+  // inline in a new tab; Word docs can't be rendered by the browser so
+  // those are downloaded instead.
+  private openOrDownloadBlob(source: Observable<Blob>, fileName: string): void {
+    const type = getDocumentMimeType(fileName);
+    if (isDocumentPreviewable(fileName)) {
+      const win = window.open('', '_blank');
+      source.subscribe({
+        next: (blob) => {
+          const typed = new Blob([blob], { type });
+          const url = window.URL.createObjectURL(typed);
+          if (win && !win.closed) win.location.href = url;
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        },
+        error: () => { if (win && !win.closed) win.close(); this.error = 'Failed to open document'; }
+      });
+    } else {
+      source.subscribe({
+        next: (blob) => {
+          const typed = new Blob([blob], { type });
+          const url = window.URL.createObjectURL(typed);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+        },
+        error: () => { this.error = 'Failed to download document'; }
+      });
+    }
   }
 
   get currentCarriers(): Carrier[] {

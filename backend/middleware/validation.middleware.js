@@ -75,7 +75,10 @@ exports.schemas = {
     name: Joi.string().trim().min(2).max(100).optional(),
     phone: Joi.string().trim().min(10).max(15).optional(),
     role: Joi.string().valid('admin', 'agent').optional(),
-    isActive: Joi.boolean().optional()
+    isActive: Joi.boolean().optional(),
+    address: Joi.string().trim().max(200).optional().allow('', null),
+    city: Joi.string().trim().max(50).optional().allow('', null),
+    state: Joi.string().trim().max(50).optional().allow('', null)
   }),
   
   trainingMaterial: Joi.object({

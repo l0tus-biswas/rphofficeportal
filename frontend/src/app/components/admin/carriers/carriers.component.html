@@ -174,7 +174,7 @@
 
           <!-- Documents (guides, forms, resources) -->
           <div class="mb-3">
-            <label class="form-label">Documents <small class="text-muted">(PDF guides, forms, resources)</small></label>
+            <label class="form-label">Documents <small class="text-muted">(PDF, Word, or image — guides, forms, resources — max 3MB)</small></label>
 
             <div *ngIf="!currentCarrier._id" class="alert alert-secondary py-2 small mb-2">
               Save the carrier first, then edit it to attach documents.
@@ -186,7 +186,7 @@
               <ul class="list-group mb-2" *ngIf="currentCarrier.documents && currentCarrier.documents.length > 0">
                 <li class="list-group-item d-flex justify-content-between align-items-center" *ngFor="let doc of currentCarrier.documents">
                   <span>
-                    <i class="bi bi-file-earmark-pdf text-danger me-2"></i>{{ doc.name }}
+                    <i class="bi {{ getDocumentIconClass(doc) }} me-2"></i>{{ doc.name }}
                   </span>
                   <span class="btn-group btn-group-sm">
                     <button type="button" class="btn btn-outline-secondary" (click)="viewDocument(doc)" title="View"><i class="bi bi-eye"></i></button>
@@ -200,7 +200,7 @@
 
               <div class="d-flex gap-2 align-items-start flex-wrap">
                 <input type="text" class="form-control form-control-sm" style="max-width: 220px" placeholder="Document name" [(ngModel)]="newDocumentName" name="newDocumentName">
-                <input type="file" class="form-control form-control-sm" style="max-width: 220px" accept=".pdf" (change)="onNewDocumentFileChange($event)" name="newDocumentFile">
+                <input type="file" class="form-control form-control-sm" style="max-width: 220px" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp" (change)="onNewDocumentFileChange($event)" name="newDocumentFile">
                 <button type="button" class="btn btn-sm btn-outline-primary" (click)="addDocument()" [disabled]="savingDocument">
                   <span *ngIf="savingDocument" class="spinner-border spinner-border-sm me-1"></span>
                   <i *ngIf="!savingDocument" class="bi bi-plus-circle me-1"></i>Add

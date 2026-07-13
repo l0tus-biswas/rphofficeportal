@@ -147,7 +147,7 @@
           <ul class="list-unstyled mb-0">
             <li *ngFor="let doc of carrier.documents" class="mb-1">
               <a href="javascript:void(0)" (click)="viewDocument(carrier, doc)">
-                <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ doc.name }}
+                <i class="bi {{ getDocumentIconClass(doc) }} me-1"></i>{{ doc.name }}
               </a>
             </li>
           </ul>

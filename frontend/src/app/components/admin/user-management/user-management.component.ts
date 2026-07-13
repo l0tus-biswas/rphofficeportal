@@ -121,7 +121,19 @@ export class UserManagementComponent implements OnInit {
     const billingChanged = this.editForm.billingExempt !== this.selectedUser.billingExempt;
     
     const saveMain = () => {
-      this.adminService.updateUser(this.selectedUser._id, this.editForm).subscribe({
+      // Backend only accepts these fields on the general update endpoint —
+      // editForm is a full spread of the user record (see openEditModal),
+      // so send a whitelisted payload rather than the whole object.
+      const payload = {
+        name: this.editForm.name,
+        phone: this.editForm.phone,
+        role: this.editForm.role,
+        isActive: this.editForm.isActive,
+        address: this.editForm.address,
+        city: this.editForm.city,
+        state: this.editForm.state
+      };
+      this.adminService.updateUser(this.selectedUser._id, payload).subscribe({
         next: (response) => {
           this.success = 'User updated successfully!';
           this.loadUsers();
