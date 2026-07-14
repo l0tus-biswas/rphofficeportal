@@ -66,11 +66,11 @@ export class SystemMonitoringComponent implements OnInit, OnDestroy {
     {
       title: 'Uptime Monitor',
       description: 'Uptime Kuma dashboard — track uptime history, latency, and incident timeline.',
-      url: ':3001',
+      url: '/uptime/',
       icon: 'bi-graph-up-arrow',
       color: 'warning',
       badge: 'Uptime Kuma',
-      external: true
+      external: false
     }
   ];
 
