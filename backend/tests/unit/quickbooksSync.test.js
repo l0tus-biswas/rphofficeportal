@@ -130,6 +130,25 @@ describe('Utils: quickbooksSync.js', () => {
     expect(mockUser.findByIdAndUpdate).not.toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({ qboVendorId: expect.any(String) }));
   });
 
+  it('enriches a "name already exists" conflict with actionable guidance instead of QBO\'s raw message', async () => {
+    mockQbo.createVendor.mockRejectedValueOnce(new Error('QuickBooks API error: The name supplied already exists. : Id=400000021'));
+
+    await expect(quickbooksSync.syncAgentToQBO(AGENT_ID, 'admin-1')).rejects.toThrow(/Rename or remove it in QuickBooks Online, then click Retry/);
+
+    expect(mockUser.findByIdAndUpdate).toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({
+      qboSyncError: expect.stringContaining('Jane Doe') // the computed DisplayName should be named in the guidance
+    }));
+  });
+
+  it('leaves unrelated error messages unchanged (no guidance appended)', async () => {
+    mockQbo.createVendor.mockRejectedValueOnce(new Error('QuickBooks API error: Unauthorized'));
+
+    await expect(quickbooksSync.syncAgentToQBO(AGENT_ID, 'admin-1')).rejects.toThrow('QuickBooks API error: Unauthorized');
+    expect(mockUser.findByIdAndUpdate).toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({
+      qboSyncError: 'QuickBooks API error: Unauthorized'
+    }));
+  });
+
   describe('buildVendorData', () => {
     it('prefers legal name from the APA application over the account display name', () => {
       const apa = { personalInfo: { legalFirstName: 'Janet', legalMiddleName: 'Q', legalLastName: 'Doeherty', mobilePhone: '555-9999' } };

@@ -161,10 +161,21 @@ async function syncAgentToQBO(agentId, actorId = null, opts = {}) {
       nextStep: INVITE_INSTRUCTIONS
     };
   } catch (err) {
+    // QBO enforces DisplayName uniqueness across Customer/Employee/Vendor as
+    // one combined pool. This specific error means a record with this exact
+    // name already exists in QuickBooks — almost always a leftover Employee
+    // record from testing done before this integration switched from
+    // Employees to 1099 Contractors (Vendors). No retry can create a Vendor
+    // under a name QuickBooks already considers taken; the conflicting
+    // record must be renamed or removed directly in QuickBooks first.
+    const message = /name supplied already exists/i.test(err.message)
+      ? `${err.message} — a QuickBooks record named "${displayName}" already exists (likely an old Employee record from before this integration used Contractors). Rename or remove it in QuickBooks Online, then click Retry.`
+      : err.message;
+
     // Persist so the failure is visible in the UI at any time (sync-status),
     // not just in the one-off response of whatever action triggered it.
-    await User.findByIdAndUpdate(agentId, { qboSyncError: err.message, qboSyncErrorAt: new Date() }).catch(() => {});
-    throw err;
+    await User.findByIdAndUpdate(agentId, { qboSyncError: message, qboSyncErrorAt: new Date() }).catch(() => {});
+    throw new Error(message);
   }
 }
 
