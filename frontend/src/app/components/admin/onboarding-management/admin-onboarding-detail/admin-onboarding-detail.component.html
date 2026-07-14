@@ -213,25 +213,6 @@
 </div>
 <div class="modal-backdrop fade" [class.show]="showActionModal" *ngIf="showActionModal"></div>
 
-<div class="modal fade" [class.show]="showPdfModal" [style.display]="showPdfModal ? 'block' : 'none'" tabindex="-1">
-  <div class="modal-dialog modal-xl modal-dialog-centered">
-    <div class="modal-content" style="height: 90vh;">
-      <div class="modal-header">
-        <h5 class="modal-title">
-          <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
-          {{ currentPdfName }}
-        </h5>
-        <button type="button" class="btn-close" (click)="closePdfModal()"></button>
-      </div>
-      <div class="modal-body p-0 d-flex align-items-center justify-content-center" style="overflow: hidden;">
-        <div *ngIf="pdfLoading" class="spinner-border text-primary" role="status"></div>
-        <iframe *ngIf="pdfUrl && !pdfLoading" [src]="pdfUrl | safe: 'resourceUrl'" width="100%" height="100%" frameborder="0" style="border: none;"></iframe>
-      </div>
-    </div>
-  </div>
-</div>
-<div class="modal-backdrop fade" [class.show]="showPdfModal" *ngIf="showPdfModal"></div>
-
 <!-- Hidden file input for admin upload -->
 <input type="file" #adminFileInput
        (change)="onAdminFileSelected($event)"

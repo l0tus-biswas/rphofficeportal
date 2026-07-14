@@ -24,12 +24,6 @@ export class AdminOnboardingDetailComponent implements OnInit {
   actionComment = '';
   actionLoading = false;
   
-  // PDF viewer state
-  showPdfModal = false;
-  pdfUrl: string | null = null;
-  pdfLoading = false;
-  currentPdfName = '';
-
   // Bank info state
   bankInfoDocId = '';
   bankInfo: { routingNumber: string; accountNumber: string; accountType: string } | null = null;
@@ -104,6 +98,10 @@ export class AdminOnboardingDetailComponent implements OnInit {
     return types[ext] || 'application/octet-stream';
   }
 
+  // Opens the document in a new tab rather than an <iframe> — framing a
+  // blob: URL requires 'blob:' in the CSP frame-src directive, which is one
+  // more thing to keep in sync across environments; a new-tab navigation
+  // isn't subject to frame-src at all, so it works everywhere without that.
   viewDocument(doc: OnboardingDocument | null): void {
     if (!doc) return;
 
@@ -115,27 +113,24 @@ export class AdminOnboardingDetailComponent implements OnInit {
       return;
     }
 
-    this.currentPdfName = doc.originalFileName || 'Document';
-    this.showPdfModal = true;
-    this.pdfLoading = true;
-
-    if (this.pdfUrl) {
-      URL.revokeObjectURL(this.pdfUrl);
-      this.pdfUrl = null;
-    }
+    // Open the tab synchronously (inside the click handler) so popup
+    // blockers don't treat it as an unrequested popup once the async blob
+    // fetch below resolves.
+    const win = window.open('', '_blank');
 
     // The file lives under the protected /uploads path (or behind the
-    // authenticated download route) — a raw <iframe src>/<a href> can't send
-    // the Authorization header, so fetch it via HttpClient and view as a blob.
+    // authenticated download route) — a raw <a href> can't send the
+    // Authorization header, so fetch it via HttpClient and open as a blob.
     this.onboardingHubService.downloadDocumentBlob(this.userId, doc._id).subscribe({
       next: (blob) => {
-        this.pdfUrl = URL.createObjectURL(new Blob([blob], { type: this.guessMimeType(this.currentPdfName) }));
-        this.pdfLoading = false;
+        const typed = new Blob([blob], { type: this.guessMimeType(doc.originalFileName || '') });
+        const url = URL.createObjectURL(typed);
+        if (win && !win.closed) win.location.href = url;
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
       },
       error: (err) => {
+        if (win && !win.closed) win.close();
         this.error = err.error?.message || 'Failed to load document';
-        this.pdfLoading = false;
-        this.showPdfModal = false;
       }
     });
   }
@@ -161,16 +156,6 @@ export class AdminOnboardingDetailComponent implements OnInit {
         this.error = err.error?.message || 'Failed to download document';
       }
     });
-  }
-  
-  closePdfModal(): void {
-    this.showPdfModal = false;
-    if (this.pdfUrl) {
-      URL.revokeObjectURL(this.pdfUrl);
-      this.pdfUrl = null;
-    }
-    this.currentPdfName = '';
-    this.pdfLoading = false;
   }
 
   openActionModal(documentId: string, label: string, currentStatus: string, currentComment = ''): void {
