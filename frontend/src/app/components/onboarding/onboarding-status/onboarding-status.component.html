@@ -59,19 +59,12 @@
               <i class="bi bi-download me-1"></i>Download PDF
             </button>
           </div>
-          <div class="card-body p-0">
-            <object *ngIf="documentBlobUrl" [data]="documentBlobUrl | safe:'resourceUrl'"
-                    type="application/pdf"
-                    class="w-100"
-                    style="height: 600px;">
-              <div class="text-center py-5">
-                <i class="bi bi-file-earmark-pdf text-success" style="font-size: 4rem;"></i>
-                <p class="mt-3 mb-2">Your signed APA Agreement is ready.</p>
-                <button type="button" class="btn btn-primary" (click)="viewSignedDocument()">
-                  <i class="bi bi-box-arrow-up-right me-1"></i>View PDF
-                </button>
-              </div>
-            </object>
+          <div class="card-body text-center py-5">
+            <i class="bi bi-file-earmark-pdf text-success" style="font-size: 4rem;"></i>
+            <p class="mt-3 mb-2">Your signed APA Agreement is ready.</p>
+            <button type="button" class="btn btn-primary" [disabled]="!documentBlobUrl" (click)="viewSignedDocument()">
+              <i class="bi bi-box-arrow-up-right me-1"></i>View PDF
+            </button>
           </div>
         </div>
 
