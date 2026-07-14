@@ -130,4 +130,12 @@ export class TrainingService {
   removePdf(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/training/materials/${id}/pdf`, this.getHeaders());
   }
+
+  // training-pdfs live under the protected /uploads path, which requires an
+  // Authorization header — a plain <a href> can't send one, so PDFs must be
+  // fetched via HttpClient (the auth interceptor attaches the header) and
+  // opened as a blob instead.
+  downloadFileBlob(fileUrl: string): Observable<Blob> {
+    return this.http.get(fileUrl, { ...this.getHeaders(), responseType: 'blob' });
+  }
 }

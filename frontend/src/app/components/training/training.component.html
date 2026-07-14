@@ -173,13 +173,11 @@
               </a>
 
               <!-- PDF Attachment Download -->
-              <a *ngIf="material.pdfAttachment?.filePath" 
-                 [href]="getFileUrl(material.pdfAttachment.filePath)" 
-                 target="_blank" 
-                 rel="noopener"
+              <button *ngIf="material.pdfAttachment?.filePath"
+                 type="button" (click)="viewPdfAttachment(material)"
                  class="btn btn-outline-danger w-100 mt-2">
                 <i class="bi bi-file-earmark-pdf me-2"></i>Download PDF
-              </a>
+              </button>
 
               <!-- Uploaded By -->
               <div class="mt-3 text-center" *ngIf="material.uploadedBy">

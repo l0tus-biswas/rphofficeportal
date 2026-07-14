@@ -165,94 +165,100 @@ async function qboRequest(method, endpoint, data = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Employee operations
+// Vendor (1099 contractor) operations
+//
+// Agents are independent 1099 contractors, not W-2 employees, so they are
+// created in QBO as Vendor records with Vendor1099=true — NOT as Employee
+// records. This is what makes them show up under QuickBooks' Contractors
+// list, where an admin can send the built-in "invite to complete W-9" email:
+// QuickBooks (not RHP) then collects the contractor's SSN/tax info and
+// direct-deposit bank details directly from the contractor via Intuit's own
+// hosted form. That invite-send action is a QuickBooks Online UI step (no
+// documented REST API endpoint for it as of this writing) — this integration
+// only creates/links the Vendor record; sending the invite itself is a
+// manual one-click step for the admin inside QuickBooks.
 // ---------------------------------------------------------------------------
 
 /**
- * Create an employee in QuickBooks Online
- * @param {Object} employeeData - { givenName, middleName, familyName, email, ssn, phone, address, birthDate, gender }
+ * Create a 1099 contractor (Vendor) in QuickBooks Online.
+ * Deliberately does NOT send SSN/tax ID — the contractor supplies that
+ * themselves via QuickBooks' own W-9 invite flow, not through this app.
+ * @param {Object} vendorData - { givenName, middleName, familyName, email, phone, address }
  */
-async function createEmployee(employeeData) {
+async function createVendor(vendorData) {
+  const displayName = [vendorData.givenName, vendorData.middleName, vendorData.familyName]
+    .filter(Boolean).join(' ');
+
   const payload = {
-    GivenName: employeeData.givenName,
-    MiddleName: employeeData.middleName || undefined,
-    FamilyName: employeeData.familyName,
-    DisplayName: [employeeData.givenName, employeeData.middleName, employeeData.familyName]
-      .filter(Boolean).join(' '),
-    PrintOnCheckName: `${employeeData.familyName}, ${employeeData.givenName}`,
-    PrimaryEmailAddr: employeeData.email ? { Address: employeeData.email } : undefined,
-    PrimaryPhone: employeeData.phone ? { FreeFormNumber: employeeData.phone } : undefined,
-    SSN: employeeData.ssn || undefined,
-    BirthDate: employeeData.birthDate
-      ? new Date(employeeData.birthDate).toISOString().split('T')[0]
-      : undefined,
-    Gender: employeeData.gender === 'M' ? 'Male' : employeeData.gender === 'F' ? 'Female' : undefined,
-    PrimaryAddr: employeeData.address ? {
-      Line1: employeeData.address.line1,
-      City: employeeData.address.city,
-      CountrySubDivisionCode: employeeData.address.state,
-      PostalCode: employeeData.address.zip
+    GivenName: vendorData.givenName,
+    MiddleName: vendorData.middleName || undefined,
+    FamilyName: vendorData.familyName,
+    DisplayName: displayName,
+    PrintOnCheckName: `${vendorData.familyName}, ${vendorData.givenName}`,
+    PrimaryEmailAddr: vendorData.email ? { Address: vendorData.email } : undefined,
+    PrimaryPhone: vendorData.phone ? { FreeFormNumber: vendorData.phone } : undefined,
+    Vendor1099: true,
+    BillAddr: vendorData.address ? {
+      Line1: vendorData.address.line1,
+      City: vendorData.address.city,
+      CountrySubDivisionCode: vendorData.address.state,
+      PostalCode: vendorData.address.zip
     } : undefined
   };
 
   // Remove undefined fields
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  const result = await qboRequest('POST', '/employee', payload);
-  return result.Employee;
+  const result = await qboRequest('POST', '/vendor', payload);
+  return result.Vendor;
 }
 
 /**
- * Update an existing employee in QuickBooks Online
+ * Update an existing 1099 contractor (Vendor) in QuickBooks Online.
  * QBO requires SyncToken for optimistic locking.
  */
-async function updateEmployee(employeeId, employeeData) {
-  // Fetch current employee to get SyncToken
-  const current = await qboRequest('GET', `/employee/${employeeId}`);
-  const existing = current.Employee;
+async function updateVendor(vendorId, vendorData) {
+  // Fetch current vendor to get SyncToken
+  const current = await qboRequest('GET', `/vendor/${vendorId}`);
+  const existing = current.Vendor;
 
   const payload = {
-    Id: employeeId,
+    Id: vendorId,
     SyncToken: existing.SyncToken,
-    GivenName: employeeData.givenName || existing.GivenName,
-    MiddleName: employeeData.middleName || existing.MiddleName,
-    FamilyName: employeeData.familyName || existing.FamilyName,
-    DisplayName: [employeeData.givenName, employeeData.middleName, employeeData.familyName]
+    GivenName: vendorData.givenName || existing.GivenName,
+    MiddleName: vendorData.middleName || existing.MiddleName,
+    FamilyName: vendorData.familyName || existing.FamilyName,
+    DisplayName: [vendorData.givenName, vendorData.middleName, vendorData.familyName]
       .filter(Boolean).join(' ') || existing.DisplayName,
-    PrintOnCheckName: employeeData.familyName
-      ? `${employeeData.familyName}, ${employeeData.givenName}`
+    PrintOnCheckName: vendorData.familyName
+      ? `${vendorData.familyName}, ${vendorData.givenName}`
       : existing.PrintOnCheckName,
-    PrimaryEmailAddr: employeeData.email ? { Address: employeeData.email } : existing.PrimaryEmailAddr,
-    PrimaryPhone: employeeData.phone ? { FreeFormNumber: employeeData.phone } : existing.PrimaryPhone,
-    SSN: employeeData.ssn || existing.SSN || undefined,
-    BirthDate: employeeData.birthDate
-      ? new Date(employeeData.birthDate).toISOString().split('T')[0]
-      : existing.BirthDate,
-    Gender: employeeData.gender === 'M' ? 'Male' : employeeData.gender === 'F' ? 'Female'
-      : existing.Gender,
-    PrimaryAddr: employeeData.address ? {
-      Line1: employeeData.address.line1,
-      City: employeeData.address.city,
-      CountrySubDivisionCode: employeeData.address.state,
-      PostalCode: employeeData.address.zip
-    } : existing.PrimaryAddr
+    PrimaryEmailAddr: vendorData.email ? { Address: vendorData.email } : existing.PrimaryEmailAddr,
+    PrimaryPhone: vendorData.phone ? { FreeFormNumber: vendorData.phone } : existing.PrimaryPhone,
+    Vendor1099: true,
+    BillAddr: vendorData.address ? {
+      Line1: vendorData.address.line1,
+      City: vendorData.address.city,
+      CountrySubDivisionCode: vendorData.address.state,
+      PostalCode: vendorData.address.zip
+    } : existing.BillAddr
   };
 
   Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-  const result = await qboRequest('POST', '/employee', payload);
-  return result.Employee;
+  const result = await qboRequest('POST', '/vendor', payload);
+  return result.Vendor;
 }
 
 /**
- * Query employees by email
+ * Query vendors by email
  */
-async function findEmployeeByEmail(email) {
+async function findVendorByEmail(email) {
   const safeEmail = email.replace(/'/g, "\\'");
-  const query = encodeURIComponent(`SELECT * FROM Employee WHERE PrimaryEmailAddr = '${safeEmail}'`);
+  const query = encodeURIComponent(`SELECT * FROM Vendor WHERE PrimaryEmailAddr = '${safeEmail}'`);
   const result = await qboRequest('GET', `/query?query=${query}`);
-  const employees = result.QueryResponse?.Employee || [];
-  return employees.length > 0 ? employees[0] : null;
+  const vendors = result.QueryResponse?.Vendor || [];
+  return vendors.length > 0 ? vendors[0] : null;
 }
 
 /**
@@ -294,9 +300,9 @@ module.exports = {
   clearTokens,
   getValidToken,
   qboRequest,
-  createEmployee,
-  updateEmployee,
-  findEmployeeByEmail,
+  createVendor,
+  updateVendor,
+  findVendorByEmail,
   getCompanyInfo,
   getConnectionStatus
 };

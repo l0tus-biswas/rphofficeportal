@@ -3,7 +3,6 @@ import { Component, OnInit } from '@angular/core';
 import { AuthService } from '../../../services/auth.service';
 import { OnboardingHubService, OnboardingDocType, OnboardingDocument } from '../../../services/onboarding-hub.service';
 import { DocumentHubService, DocRequest } from '../../../services/document-hub.service';
-import { environment } from '../../../../environments/environment';
 
 interface DocCard {
   docType: OnboardingDocType;
@@ -203,8 +202,49 @@ export class OnboardingHubComponent implements OnInit {
     window.open(url, '_blank');
   }
 
-  getFileUrl(filePath: string): string {
-    return `${environment.apiUrl.replace('/api', '')}/${filePath}`;
+  private guessMimeType(fileName: string): string {
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+    const types: Record<string, string> = {
+      pdf: 'application/pdf',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp'
+    };
+    return types[ext] || 'application/octet-stream';
+  }
+
+  // Files live under the protected /uploads path, which requires an
+  // Authorization header — a plain <a href> can't send one, so fetch via
+  // HttpClient (the auth interceptor attaches the header) and open as a blob.
+  viewDocument(doc: OnboardingDocument | null | undefined): void {
+    if (!doc?._id || !doc.filePath || !this.currentUser?._id) return;
+    const win = window.open('', '_blank');
+    this.onboardingHubService.downloadDocumentBlob(this.currentUser._id, doc._id).subscribe({
+      next: (blob) => {
+        const typed = new Blob([blob], { type: this.guessMimeType(doc.originalFileName || doc.filePath!) });
+        const url = window.URL.createObjectURL(typed);
+        if (win && !win.closed) win.location.href = url;
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => {
+        if (win && !win.closed) win.close();
+        this.error = 'Failed to open document';
+      }
+    });
+  }
+
+  downloadDocument(doc: OnboardingDocument | null | undefined): void {
+    if (!doc?._id || !doc.filePath || !this.currentUser?._id) return;
+    this.onboardingHubService.downloadDocumentBlob(this.currentUser._id, doc._id).subscribe({
+      next: (blob) => {
+        const typed = new Blob([blob], { type: this.guessMimeType(doc.originalFileName || doc.filePath!) });
+        const url = window.URL.createObjectURL(typed);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.originalFileName || 'document';
+        a.click();
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => { this.error = 'Failed to download document'; }
+    });
   }
 
   formatReviewDate(date: any): string {

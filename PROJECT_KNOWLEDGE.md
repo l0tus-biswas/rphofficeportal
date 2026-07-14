@@ -196,7 +196,7 @@ All integration clients live in `backend/utils/`; secrets in `backend/.env`
 |---|---|---|
 | **Stripe** | `utils/stripe.js` | One-time fees + monthly subscriptions, customers, payment intents, webhooks. Used by `payment.routes`, APA payment, business-card orders. Guarded init (disables gracefully if key absent). |
 | **DocuSign** | `utils/docusign.js` | E-signature of the **APA Agreement** via JWT-grant auth (`config/docusign_private.key`). Sends envelopes from a template (`DOCUSIGN_TEMPLATE_ID`) and processes signing webhooks (HMAC secret). Drives the APA onboarding flow. |
-| **QuickBooks Online** | `utils/quickbooks.js` + `quickbooks.routes` | OAuth2 (intuit-oauth) employee sync. Tokens persisted in `SystemConfig` across restarts. Syncs approved agents (`qboEmployeeId`/`qboSyncedAt`). |
+| **QuickBooks Online** | `utils/quickbooks.js` + `quickbooks.routes` | OAuth2 (intuit-oauth) 1099 contractor (Vendor) sync — agents are independent contractors, not W-2 employees. Tokens persisted in `SystemConfig` across restarts. Syncs licensed agents only (`qboVendorId`/`qboSyncedAt`); no SSN/banking info is sent — the contractor supplies that themselves via QuickBooks' own W-9 invite flow. |
 | **Neuzmail** | `utils/neuzmail.js` | Primary transactional email (template-based REST API): welcome/set-password, password reset, APA confirmation, payment link, account activated, generic notification. Rate-limited (5 req/60s) — broadcasts batch 4 emails then pause 61s. |
 | **Nodemailer (SMTP)** | `utils/email.js` | Legacy SMTP email path, kept for fallback/reference. |
 | **ExamFX** | `utils/examfx.service.js` + `examfx.routes` | Licensing-exam progress tracking. Supports REST API, webhook receiver, and CSV-upload / manual sync (ExamFX lacks a public API). |
@@ -278,7 +278,7 @@ uploads require a valid JWT** (verified inline in `server.js` before `express.st
 | **Broadcasts & Notifications** | `broadcast.routes`, `notification.routes` | `broadcasts/`, `user/notifications`, `admin/broadcast-management` | Admin announcements (role-targeted, batched email) + per-user real-time notifications over Socket.IO with `NotificationPreference`. |
 | **Training** | `training.routes` | `training/`, `admin/training-management` | Categorized training materials/folders (`TrainingCategory`/`TrainingFolder`/`TrainingMaterial`). |
 | **Admin & System Config** | `admin.routes`, `config.routes`, `admin-products.routes` | `admin/system-config`, `admin/branding`, `admin/welcome-message`, `admin/monitoring`, `admin/products` | User management, branding, welcome message, product catalog (`ProductType`), system monitoring dashboard, maintenance mode toggle. |
-| **QuickBooks** | `quickbooks.routes` | (admin config) | OAuth2 connect + employee/agent sync to QBO. |
+| **QuickBooks** | `quickbooks.routes` | (admin config) | OAuth2 connect + 1099 contractor (Vendor) sync to QBO, gated on licensing. |
 
 ---
 

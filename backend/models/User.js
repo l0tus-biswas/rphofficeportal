@@ -197,8 +197,9 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  // QuickBooks Online integration
-  qboEmployeeId: {
+  // QuickBooks Online integration — agents are synced as 1099 contractors
+  // (Vendor records), not W-2 employees.
+  qboVendorId: {
     type: String,
     default: null
   },

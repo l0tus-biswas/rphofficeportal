@@ -487,14 +487,15 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
     await licensingProgress.populate('agent', 'name email phone');
 
     // Agent just became licensed → this is when W-9 / direct-deposit collection
-    // and payroll setup become relevant, so sync them to QuickBooks now (and
-    // never before). Best-effort and non-blocking: if QuickBooks isn't connected
-    // the sync is skipped, and any failure must not fail the licensing update.
+    // becomes relevant, so sync them to QuickBooks now (and never before) as a
+    // 1099 contractor (Vendor). Best-effort and non-blocking: if QuickBooks
+    // isn't connected the sync is skipped, and any failure must not fail the
+    // licensing update.
     if (!wasLicensed && licensingProgress.isLicensed) {
       syncAgentToQBO(req.params.agentId, req.user._id)
         .then(result => {
           if (result.status === 'created') {
-            console.log(`[QBO] Auto-synced newly licensed agent ${req.params.agentId} (employee ${result.qboEmployeeId})`);
+            console.log(`[QBO] Auto-synced newly licensed agent ${req.params.agentId} (contractor ${result.qboVendorId})`);
           } else if (result.status === 'already_exists') {
             console.log(`[QBO] Newly licensed agent ${req.params.agentId} already existed in QuickBooks (linked)`);
           } else {

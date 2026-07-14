@@ -1,9 +1,20 @@
 /**
  * QuickBooks agent-sync service.
  *
- * Single place that turns an agent into a QuickBooks Online employee. Agents are
- * only synced AFTER they become licensed (that is when W-9 collection and direct
- * deposit setup become relevant), so this is gated on licensing by default.
+ * Single place that turns an agent into a QuickBooks Online 1099 contractor
+ * (a Vendor record with Vendor1099=true — agents are independent contractors,
+ * not W-2 employees). Agents are only synced AFTER they become licensed (that
+ * is when W-9 collection and direct deposit setup become relevant), so this
+ * is gated on licensing by default.
+ *
+ * This deliberately does NOT send SSN or bank details to QuickBooks. Once the
+ * Vendor record exists, an admin sends QuickBooks' own "invite contractor to
+ * complete their W-9" email from inside QuickBooks Online — the contractor
+ * then submits their own tax info and direct-deposit details directly to
+ * QuickBooks via Intuit's hosted form, so RHP never has to collect, transmit,
+ * or store that data itself. (There is no documented REST API endpoint to
+ * trigger that invite email, so sending it remains a manual step for the
+ * admin inside QuickBooks — this service only creates/links the contractor.)
  *
  * Used by:
  *  - the licensing flow (auto-sync the moment an agent becomes licensed)
@@ -11,11 +22,8 @@
  */
 const User = require('../models/User');
 const APAApplication = require('../models/APAApplication');
-const OnboardingDocType = require('../models/OnboardingDocType');
-const OnboardingDocument = require('../models/OnboardingDocument');
 const AuditLog = require('../models/AuditLog');
 const qbo = require('./quickbooks');
-const { decrypt } = require('./encryption');
 const { isAgentLicensedById } = require('./licensing');
 
 async function writeAudit(performedBy, targetUser, action, details) {
@@ -25,9 +33,11 @@ async function writeAudit(performedBy, targetUser, action, details) {
 }
 
 /**
- * Build the QBO employee payload from agent + APA (W-9) data.
+ * Build the QBO Vendor (contractor) payload from agent + APA data.
+ * Name/email/phone/address only — no SSN, no banking info. The contractor
+ * supplies those themselves via QuickBooks' own W-9 invite flow.
  */
-function buildEmployeeData(agent, apa) {
+function buildVendorData(agent, apa) {
   let givenName = '';
   let middleName = '';
   let familyName = '';
@@ -43,22 +53,19 @@ function buildEmployeeData(agent, apa) {
     familyName = nameParts.slice(1).join(' ') || 'Agent';
   }
 
-  const employeeData = {
+  const vendorData = {
     givenName,
     middleName: middleName || undefined,
     familyName,
     email: agent.email,
-    phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined,
-    ssn: apa?.personalInfo?.ssn || undefined,
-    birthDate: apa?.personalInfo?.dateOfBirth || undefined,
-    gender: apa?.personalInfo?.gender || undefined
+    phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined
   };
 
   const addr = apa?.personalInfo?.homeAddress;
   if (addr) {
-    employeeData.address = { line1: addr.street, city: addr.city, state: addr.state, zip: addr.zipCode };
+    vendorData.address = { line1: addr.street, city: addr.city, state: addr.state, zip: addr.zipCode };
   } else if (agent.address) {
-    employeeData.address = {
+    vendorData.address = {
       line1: agent.address.street || agent.address.line1,
       city: agent.address.city,
       state: agent.address.state,
@@ -66,40 +73,15 @@ function buildEmployeeData(agent, apa) {
     };
   }
 
-  return employeeData;
+  return vendorData;
 }
 
-/**
- * Fetch decrypted direct-deposit bank info for an agent, if collected.
- * (QBO Accounting API can't store these — used only for reporting which data
- * was available; full direct deposit requires a QBO Payroll subscription.)
- */
-async function getBankInfo(agentId) {
-  const ddDocType = await OnboardingDocType.findOne({ hasDirectDepositFields: true, isActive: true })
-    .select('_id').lean();
-  if (!ddDocType) return null;
-
-  const ddDoc = await OnboardingDocument.findOne({
-    agent: agentId,
-    docType: ddDocType._id,
-    deletedAt: null,
-    bankRoutingNumber: { $ne: null }
-  }).select('bankRoutingNumber bankAccountNumber bankAccountType').lean();
-  if (!ddDoc) return null;
-
-  try {
-    return {
-      routingNumber: decrypt(ddDoc.bankRoutingNumber),
-      accountNumber: decrypt(ddDoc.bankAccountNumber),
-      accountType: ddDoc.bankAccountType
-    };
-  } catch (_) {
-    return null;
-  }
-}
+const INVITE_INSTRUCTIONS = 'Open this contractor in QuickBooks Online (Expenses > Vendors, or Payroll > Contractors) '
+  + 'and send them the "Invite to complete W-9" email so they can submit their own tax info and direct deposit '
+  + 'details directly to QuickBooks.';
 
 /**
- * Sync a single agent to QuickBooks as an employee.
+ * Sync a single agent to QuickBooks as a 1099 contractor (Vendor).
  *
  * @param {string} agentId
  * @param {string|null} actorId   admin who triggered it (null for system/auto)
@@ -136,38 +118,40 @@ async function syncAgentToQBO(agentId, actorId = null, opts = {}) {
   }
 
   // Already present in QBO? Link instead of duplicating.
-  const existing = await qbo.findEmployeeByEmail(agent.email);
+  const existing = await qbo.findVendorByEmail(agent.email);
   if (existing) {
-    await User.findByIdAndUpdate(agentId, { qboEmployeeId: existing.Id, qboSyncedAt: new Date() });
-    await writeAudit(actorId, agentId, 'QBO_EMPLOYEE_SYNCED', {
-      qboEmployeeId: existing.Id, linkedExisting: true
+    await User.findByIdAndUpdate(agentId, { qboVendorId: existing.Id, qboSyncedAt: new Date() });
+    await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
+      qboVendorId: existing.Id, linkedExisting: true
     });
-    return { status: 'already_exists', qboEmployeeId: existing.Id, displayName: existing.DisplayName };
+    return {
+      status: 'already_exists',
+      qboVendorId: existing.Id,
+      displayName: existing.DisplayName,
+      nextStep: INVITE_INSTRUCTIONS
+    };
   }
 
   const apa = await APAApplication.findOne({ userId: agentId }).select('personalInfo').lean();
-  const employeeData = buildEmployeeData(agent, apa);
-  const bankInfo = await getBankInfo(agentId);
+  const vendorData = buildVendorData(agent, apa);
 
-  const qboEmployee = await qbo.createEmployee(employeeData);
+  const qboVendor = await qbo.createVendor(vendorData);
 
-  await User.findByIdAndUpdate(agentId, { qboEmployeeId: qboEmployee.Id, qboSyncedAt: new Date() });
+  await User.findByIdAndUpdate(agentId, { qboVendorId: qboVendor.Id, qboSyncedAt: new Date() });
 
-  const dataIncluded = { ssn: !!employeeData.ssn, address: !!employeeData.address, bankInfo: !!bankInfo };
-  await writeAudit(actorId, agentId, 'QBO_EMPLOYEE_SYNCED', {
-    qboEmployeeId: qboEmployee.Id, displayName: qboEmployee.DisplayName, ...dataIncluded
+  const dataIncluded = { email: !!vendorData.email, phone: !!vendorData.phone, address: !!vendorData.address };
+  await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
+    qboVendorId: qboVendor.Id, displayName: qboVendor.DisplayName, ...dataIncluded
   });
 
   return {
     status: 'created',
-    qboEmployeeId: qboEmployee.Id,
-    displayName: qboEmployee.DisplayName,
-    email: qboEmployee.PrimaryEmailAddr?.Address,
+    qboVendorId: qboVendor.Id,
+    displayName: qboVendor.DisplayName,
+    email: qboVendor.PrimaryEmailAddr?.Address,
     dataIncluded,
-    bankInfoNote: bankInfo
-      ? 'Bank info retrieved but QBO Accounting API does not support direct deposit fields. Requires QBO Payroll subscription.'
-      : 'No bank info on file'
+    nextStep: INVITE_INSTRUCTIONS
   };
 }
 
-module.exports = { syncAgentToQBO, buildEmployeeData };
+module.exports = { syncAgentToQBO, buildVendorData };

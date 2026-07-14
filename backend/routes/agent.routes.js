@@ -389,7 +389,7 @@ router.get('/dashboard/checklist', async (req, res) => {
     const checklist = [
       {
         label: 'Complete W-9 / Direct Deposit via QuickBooks',
-        completed: !!req.user.qboEmployeeId,
+        completed: !!req.user.qboVendorId,
         link: quickbooksUrl
       },
       {

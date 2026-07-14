@@ -213,6 +213,25 @@ export class TrainingComponent implements OnInit {
     return `${environment.baseUrl}${path}`;
   }
 
+  // training-pdfs are protected (unlike thumbnails) — a raw <a href> can't
+  // send the Authorization header, so fetch via HttpClient and open as a blob.
+  viewPdfAttachment(material: any): void {
+    const filePath = material?.pdfAttachment?.filePath;
+    if (!filePath) return;
+    const win = window.open('', '_blank');
+    this.trainingService.downloadFileBlob(this.getFileUrl(filePath)).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        if (win && !win.closed) win.location.href = url;
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      },
+      error: () => {
+        if (win && !win.closed) win.close();
+        this.error = 'Failed to open PDF attachment';
+      }
+    });
+  }
+
   /** Returns the best thumbnail URL for a material: uploaded thumbnail > YouTube auto-thumbnail > null */
   getMaterialThumbnail(material: any): string | null {
     // If a manually uploaded thumbnail exists, use it

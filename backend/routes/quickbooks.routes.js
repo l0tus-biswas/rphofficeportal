@@ -1,7 +1,7 @@
 /**
  * QuickBooks Online Integration Routes
- * 
- * Admin-only OAuth flow + employee sync.
+ *
+ * Admin-only OAuth flow + 1099 contractor (Vendor) sync.
  * Agents never interact with QBO directly.
  */
 
@@ -169,12 +169,14 @@ router.post('/disconnect', authenticate, authorize('admin'), async (req, res) =>
 });
 
 // ---------------------------------------------------------------------------
-// @route   POST /api/quickbooks/sync-employee/:agentId
-// @desc    Create employee in QBO from agent data (W-9 / Direct Deposit info).
-//          Only permitted once the agent is licensed.
+// @route   POST /api/quickbooks/sync-contractor/:agentId
+// @desc    Create a 1099 contractor (Vendor) in QBO from agent data.
+//          Only permitted once the agent is licensed. Does not send SSN or
+//          banking info — QuickBooks collects that directly from the
+//          contractor via its own W-9 invite flow.
 // @access  Admin only
 // ---------------------------------------------------------------------------
-router.post('/sync-employee/:agentId', authenticate, authorize('admin'), async (req, res) => {
+router.post('/sync-contractor/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
     const result = await syncAgentToQBO(req.params.agentId, req.user._id);
 
@@ -187,46 +189,44 @@ router.post('/sync-employee/:agentId', authenticate, authorize('admin'), async (
         return res.status(400).json({ message: result.message });
       case 'already_exists':
         return res.status(409).json({
-          message: 'Employee already exists in QuickBooks',
-          qboEmployeeId: result.qboEmployeeId,
-          displayName: result.displayName
+          message: 'Contractor already exists in QuickBooks',
+          qboVendorId: result.qboVendorId,
+          displayName: result.displayName,
+          nextStep: result.nextStep
         });
       case 'created':
         return res.json({
-          message: 'Employee created in QuickBooks',
-          employee: {
-            id: result.qboEmployeeId,
+          message: 'Contractor created in QuickBooks',
+          contractor: {
+            id: result.qboVendorId,
             displayName: result.displayName,
             email: result.email
           },
-          dataIncluded: {
-            ssn: result.dataIncluded.ssn,
-            address: result.dataIncluded.address,
-            bankInfo: result.dataIncluded.bankInfo,
-            bankInfoNote: result.bankInfoNote
-          }
+          dataIncluded: result.dataIncluded,
+          nextStep: result.nextStep
         });
       default:
         return res.status(500).json({ message: 'Unexpected sync result' });
     }
   } catch (error) {
-    console.error('[QBO] Sync employee error:', error.message);
+    console.error('[QBO] Sync contractor error:', error.message);
     res.status(500).json({ message: error.message });
   }
 });
 
 // ---------------------------------------------------------------------------
-// @route   POST /api/quickbooks/resync-employee/:agentId
-// @desc    Re-sync (update) an already-synced employee in QBO with latest data
+// @route   POST /api/quickbooks/resync-contractor/:agentId
+// @desc    Re-sync (update) an already-synced contractor in QBO with latest
+//          name/email/phone/address. Never sends SSN or banking info.
 // @access  Admin only
 // ---------------------------------------------------------------------------
-router.post('/resync-employee/:agentId', authenticate, authorize('admin'), async (req, res) => {
+router.post('/resync-contractor/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
     const agent = await User.findById(req.params.agentId).lean();
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
-    if (!agent.qboEmployeeId) return res.status(400).json({ message: 'Agent has not been synced to QuickBooks yet' });
+    if (!agent.qboVendorId) return res.status(400).json({ message: 'Agent has not been synced to QuickBooks yet' });
 
-    // Fetch APA Application for W-9 data
+    // Fetch APA Application for name/contact data
     const apa = await APAApplication.findOne({ userId: req.params.agentId })
       .select('personalInfo').lean();
 
@@ -241,58 +241,55 @@ router.post('/resync-employee/:agentId', authenticate, authorize('admin'), async
       familyName = nameParts.slice(1).join(' ') || 'Agent';
     }
 
-    const employeeData = {
+    const vendorData = {
       givenName,
       middleName: middleName || undefined,
       familyName,
       email: agent.email,
-      phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined,
-      ssn: apa?.personalInfo?.ssn || undefined,
-      birthDate: apa?.personalInfo?.dateOfBirth || undefined,
-      gender: apa?.personalInfo?.gender || undefined
+      phone: apa?.personalInfo?.mobilePhone || agent.phone || undefined
     };
 
     const addr = apa?.personalInfo?.homeAddress;
     if (addr) {
-      employeeData.address = { line1: addr.street, city: addr.city, state: addr.state, zip: addr.zipCode };
+      vendorData.address = { line1: addr.street, city: addr.city, state: addr.state, zip: addr.zipCode };
     } else if (agent.address) {
-      employeeData.address = {
+      vendorData.address = {
         line1: agent.address.street || agent.address.line1,
         city: agent.address.city, state: agent.address.state,
         zip: agent.address.zip || agent.address.zipCode
       };
     }
 
-    const qboEmployee = await qbo.updateEmployee(agent.qboEmployeeId, employeeData);
+    const qboVendor = await qbo.updateVendor(agent.qboVendorId, vendorData);
 
     await User.findByIdAndUpdate(req.params.agentId, { qboSyncedAt: new Date() });
 
-    await auditLog(req.user._id, req.params.agentId, 'QBO_EMPLOYEE_RESYNCED', {
-      qboEmployeeId: qboEmployee.Id,
-      displayName: qboEmployee.DisplayName
+    await auditLog(req.user._id, req.params.agentId, 'QBO_CONTRACTOR_RESYNCED', {
+      qboVendorId: qboVendor.Id,
+      displayName: qboVendor.DisplayName
     });
 
     res.json({
-      message: 'Employee updated in QuickBooks',
-      employee: {
-        id: qboEmployee.Id,
-        displayName: qboEmployee.DisplayName,
-        email: qboEmployee.PrimaryEmailAddr?.Address
+      message: 'Contractor updated in QuickBooks',
+      contractor: {
+        id: qboVendor.Id,
+        displayName: qboVendor.DisplayName,
+        email: qboVendor.PrimaryEmailAddr?.Address
       }
     });
   } catch (error) {
-    console.error('[QBO] Resync employee error:', error.message);
+    console.error('[QBO] Resync contractor error:', error.message);
     res.status(500).json({ message: error.message });
   }
 });
 
 // ---------------------------------------------------------------------------
-// @route   POST /api/quickbooks/sync-all-employees
-// @desc    Bulk sync all LICENSED, not-yet-synced agents to QBO.
+// @route   POST /api/quickbooks/sync-all-contractors
+// @desc    Bulk sync all LICENSED, not-yet-synced agents to QBO as contractors.
 //          Unlicensed agents are intentionally skipped.
 // @access  Admin only
 // ---------------------------------------------------------------------------
-router.post('/sync-all-employees', authenticate, authorize('admin'), async (req, res) => {
+router.post('/sync-all-contractors', authenticate, authorize('admin'), async (req, res) => {
   try {
     const conn = await qbo.getConnectionStatus();
     if (!conn.connected) {
@@ -303,7 +300,7 @@ router.post('/sync-all-employees', authenticate, authorize('admin'), async (req,
     const candidates = await User.find({
       role: 'agent',
       isActive: true,
-      qboEmployeeId: { $exists: false }
+      qboVendorId: { $exists: false }
     }).select('_id name email metadata').lean();
 
     if (candidates.length === 0) {
@@ -341,7 +338,7 @@ router.post('/sync-all-employees', authenticate, authorize('admin'), async (req,
         // Already pre-filtered as licensed, so skip the per-agent re-check
         const r = await syncAgentToQBO(agent._id, req.user._id, { requireLicensed: false });
         if (r.status === 'created' || r.status === 'already_exists') {
-          results.push({ agentId: agent._id, name: agent.name, status: r.status, qboId: r.qboEmployeeId });
+          results.push({ agentId: agent._id, name: agent.name, status: r.status, qboId: r.qboVendorId });
           synced++;
         } else {
           results.push({ agentId: agent._id, name: agent.name, status: r.status, message: r.message });
@@ -355,7 +352,7 @@ router.post('/sync-all-employees', authenticate, authorize('admin'), async (req,
     await auditLog(req.user._id, null, 'QBO_BULK_SYNC', { synced, errors, skippedUnlicensed, total: candidates.length });
 
     res.json({
-      message: `Synced ${synced} licensed employee(s). Skipped ${skippedUnlicensed} unlicensed agent(s).`,
+      message: `Synced ${synced} licensed contractor(s). Skipped ${skippedUnlicensed} unlicensed agent(s).`,
       synced, errors, skippedUnlicensed, total: candidates.length, results
     });
   } catch (error) {
@@ -372,7 +369,7 @@ router.post('/sync-all-employees', authenticate, authorize('admin'), async (req,
 router.get('/sync-status', authenticate, authorize('admin'), async (req, res) => {
   try {
     const agents = await User.find({ role: 'agent', isActive: true })
-      .select('_id name email qboEmployeeId qboSyncedAt metadata')
+      .select('_id name email qboVendorId qboSyncedAt metadata')
       .sort('name')
       .lean();
 
@@ -393,8 +390,8 @@ router.get('/sync-status', authenticate, authorize('admin'), async (req, res) =>
     for (const a of agents) {
       const id = a._id.toString();
       const licensed = isAgentLicensed(progressByAgent[id], apaByUser[id], a.metadata);
-      const view = { _id: a._id, name: a.name, email: a.email, qboEmployeeId: a.qboEmployeeId, qboSyncedAt: a.qboSyncedAt, licensed };
-      if (a.qboEmployeeId) synced.push(view);
+      const view = { _id: a._id, name: a.name, email: a.email, qboVendorId: a.qboVendorId, qboSyncedAt: a.qboSyncedAt, licensed };
+      if (a.qboVendorId) synced.push(view);
       else if (licensed) unsynced.push(view);
       else notLicensed.push(view);
     }

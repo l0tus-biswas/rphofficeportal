@@ -166,7 +166,8 @@
             <!-- Not connected -->
             <div *ngIf="!qboStatus?.connected">
               <p class="text-muted mb-3">
-                Connect to QuickBooks Online to sync employee data (W-9, Direct Deposit).
+                Connect to QuickBooks Online to sync licensed agents as 1099 contractors. QuickBooks
+                then collects each contractor's W-9 and direct deposit info directly from them.
                 You'll be redirected to Intuit to authorize.
               </p>
               <button class="btn btn-info text-white" (click)="connectQBO()" [disabled]="qboConnecting">
@@ -209,10 +210,10 @@
                   <i *ngIf="!qboSyncLoading" class="bi bi-people me-1"></i>
                   View Sync Status
                 </button>
-                <button class="btn btn-primary btn-sm" (click)="syncAllEmployees()" [disabled]="qboSyncing">
+                <button class="btn btn-primary btn-sm" (click)="syncAllContractors()" [disabled]="qboSyncing">
                   <span *ngIf="qboSyncing" class="spinner-border spinner-border-sm me-1"></span>
                   <i *ngIf="!qboSyncing" class="bi bi-arrow-repeat me-1"></i>
-                  Sync All Employees
+                  Sync All Contractors
                 </button>
                 <button class="btn btn-outline-danger btn-sm" (click)="disconnectQBO()">
                   <i class="bi bi-box-arrow-right me-1"></i>Disconnect
@@ -229,9 +230,11 @@
                 </div>
                 <p class="small text-muted mb-2">
                   <i class="bi bi-info-circle me-1"></i>
-                  Agents are only synced to QuickBooks after they become licensed (when W-9 and direct
-                  deposit collection apply). Newly licensed agents sync automatically; the list below is
-                  for licensed agents still awaiting sync.
+                  Agents are synced to QuickBooks as 1099 contractors only after they become licensed.
+                  Newly licensed agents sync automatically; the list below is for licensed agents still
+                  awaiting sync. After syncing, open the contractor in QuickBooks Online and send them
+                  the "Invite to complete W-9" email — QuickBooks collects their tax info and direct
+                  deposit details directly from them from that point on.
                 </p>
 
                 <div *ngIf="qboSyncData.unsynced?.length > 0" class="table-responsive" style="max-height: 300px; overflow-y: auto;">
@@ -249,7 +252,7 @@
                         <td class="small">{{ agent.email }}</td>
                         <td>
                           <button class="btn btn-outline-primary btn-sm py-0 px-2"
-                                  (click)="syncSingleEmployee(agent._id, agent.name)"
+                                  (click)="syncSingleContractor(agent._id, agent.name)"
                                   [disabled]="syncingAgentId === agent._id">
                             <span *ngIf="syncingAgentId === agent._id" class="spinner-border spinner-border-sm me-1"></span>
                             Sync
@@ -279,11 +282,11 @@
                         <tr *ngFor="let agent of qboSyncData.synced">
                           <td>{{ agent.name }}</td>
                           <td class="small">{{ agent.email }}</td>
-                          <td class="font-monospace small">{{ agent.qboEmployeeId }}</td>
+                          <td class="font-monospace small">{{ agent.qboVendorId }}</td>
                           <td class="small">{{ agent.qboSyncedAt | appDate:'short' }}</td>
                           <td>
                             <button class="btn btn-outline-secondary btn-sm py-0 px-2"
-                                    (click)="resyncEmployee(agent._id, agent.name)"
+                                    (click)="resyncContractor(agent._id, agent.name)"
                                     [disabled]="syncingAgentId === agent._id">
                               <span *ngIf="syncingAgentId === agent._id" class="spinner-border spinner-border-sm me-1"></span>
                               <i *ngIf="syncingAgentId !== agent._id" class="bi bi-arrow-clockwise"></i>

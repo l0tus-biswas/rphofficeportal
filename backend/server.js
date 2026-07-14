@@ -171,7 +171,9 @@ app.use('/uploads', (req, res, next) => {
   // Allow public access to branding, welcome, and broadcast images.
   // card-templates holds design backgrounds/fonts (not sensitive) so the
   // in-browser template designer/preview can load them without auth.
-  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/', '/business-card-prints/', '/card-templates/'];
+  // training-thumbnails are decorative folder/material icons (not sensitive
+  // content, unlike training-pdfs) so <img> tags can load them directly.
+  const publicPrefixes = ['/branding/', '/welcome/', '/broadcast-images/', '/business-card-prints/', '/card-templates/', '/training-thumbnails/'];
   const isPublicPath = publicPrefixes.some(prefix => req.path.startsWith(prefix));
 
   if (isPublicPath) {

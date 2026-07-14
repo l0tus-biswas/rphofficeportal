@@ -438,7 +438,7 @@ export class SystemConfigComponent implements OnInit {
   }
 
   disconnectQBO(): void {
-    if (!confirm('Disconnect from QuickBooks Online? Employee sync will stop working.')) return;
+    if (!confirm('Disconnect from QuickBooks Online? Contractor sync will stop working.')) return;
     this.http.post<any>(`${environment.apiUrl}/quickbooks/disconnect`, {}).subscribe({
       next: () => {
         this.success = 'QuickBooks disconnected';
@@ -467,11 +467,11 @@ export class SystemConfigComponent implements OnInit {
     });
   }
 
-  syncAllEmployees(): void {
-    if (!confirm('Sync all unsynced agents to QuickBooks as employees?')) return;
+  syncAllContractors(): void {
+    if (!confirm('Sync all unsynced, licensed agents to QuickBooks as 1099 contractors?')) return;
     this.qboSyncing = true;
     this.qboSyncResult = null;
-    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-all-employees`, {}).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-all-contractors`, {}).subscribe({
       next: (result) => {
         this.qboSyncResult = result;
         this.qboSyncing = false;
@@ -484,14 +484,14 @@ export class SystemConfigComponent implements OnInit {
     });
   }
 
-  syncSingleEmployee(agentId: string, agentName: string): void {
+  syncSingleContractor(agentId: string, agentName: string): void {
     this.syncingAgentId = agentId;
-    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-employee/${agentId}`, {}).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/sync-contractor/${agentId}`, {}).subscribe({
       next: (result) => {
-        this.success = `${agentName} synced to QuickBooks (ID: ${result.employee?.id})`;
+        this.success = `${agentName} synced to QuickBooks (ID: ${result.contractor?.id}). ${result.nextStep || ''}`;
         this.syncingAgentId = '';
         this.loadQBOSyncStatus();
-        setTimeout(() => this.success = '', 4000);
+        setTimeout(() => this.success = '', 8000);
       },
       error: (err) => {
         this.error = err.error?.message || `Failed to sync ${agentName}`;
@@ -500,9 +500,9 @@ export class SystemConfigComponent implements OnInit {
     });
   }
 
-  resyncEmployee(agentId: string, agentName: string): void {
+  resyncContractor(agentId: string, agentName: string): void {
     this.syncingAgentId = agentId;
-    this.http.post<any>(`${environment.apiUrl}/quickbooks/resync-employee/${agentId}`, {}).subscribe({
+    this.http.post<any>(`${environment.apiUrl}/quickbooks/resync-contractor/${agentId}`, {}).subscribe({
       next: (result) => {
         this.success = `${agentName} updated in QuickBooks`;
         this.syncingAgentId = '';
