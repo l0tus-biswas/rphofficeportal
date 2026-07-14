@@ -206,6 +206,17 @@ const userSchema = new mongoose.Schema({
   qboSyncedAt: {
     type: Date,
     default: null
+  },
+  // Persists the last sync failure so admins can see it in the UI at any
+  // time, not just in the one-off response of whatever sync action ran it.
+  // Cleared (set to null) as soon as a sync for this agent succeeds.
+  qboSyncError: {
+    type: String,
+    default: null
+  },
+  qboSyncErrorAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true

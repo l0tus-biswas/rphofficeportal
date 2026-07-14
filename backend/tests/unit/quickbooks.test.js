@@ -93,7 +93,7 @@ describe('Utils: quickbooks.js', () => {
     it('exposes Vendor operations, not Employee operations', () => {
       expect(typeof quickbooks.createVendor).toBe('function');
       expect(typeof quickbooks.updateVendor).toBe('function');
-      expect(typeof quickbooks.findVendorByEmail).toBe('function');
+      expect(typeof quickbooks.findVendorByDisplayName).toBe('function');
       expect(quickbooks.createEmployee).toBeUndefined();
       expect(quickbooks.updateEmployee).toBeUndefined();
       expect(quickbooks.findEmployeeByEmail).toBeUndefined();
@@ -201,20 +201,21 @@ describe('Utils: quickbooks.js', () => {
     });
   });
 
-  describe('findVendorByEmail', () => {
-    it('returns the first matching vendor', async () => {
+  describe('findVendorByDisplayName', () => {
+    it('returns the first matching vendor, querying by DisplayName (not PrimaryEmailAddr, which QBO rejects as non-queryable)', async () => {
       mockAxios.mockResolvedValueOnce({ data: { QueryResponse: { Vendor: [{ Id: '9', DisplayName: 'Existing Vendor' }] } } });
-      const result = await quickbooks.findVendorByEmail('existing@test.com');
+      const result = await quickbooks.findVendorByDisplayName('Existing Vendor');
       expect(result).toEqual({ Id: '9', DisplayName: 'Existing Vendor' });
 
       const call = mockAxios.mock.calls[0][0];
       expect(call.method).toBe('GET');
-      expect(decodeURIComponent(call.url)).toContain('FROM Vendor WHERE');
+      expect(decodeURIComponent(call.url)).toContain('FROM Vendor WHERE DisplayName =');
+      expect(decodeURIComponent(call.url)).not.toContain('PrimaryEmailAddr');
     });
 
     it('returns null when no vendor matches', async () => {
       mockAxios.mockResolvedValueOnce({ data: { QueryResponse: {} } });
-      const result = await quickbooks.findVendorByEmail('nobody@test.com');
+      const result = await quickbooks.findVendorByDisplayName('Nobody');
       expect(result).toBeNull();
     });
   });

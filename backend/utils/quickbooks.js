@@ -251,11 +251,15 @@ async function updateVendor(vendorId, vendorData) {
 }
 
 /**
- * Query vendors by email
+ * Query vendors by display name. PrimaryEmailAddr is NOT a queryable field on
+ * the QBO Vendor entity (confirmed via Intuit's API docs — querying it throws
+ * "QueryValidationError: property 'PrimaryEmailAddr' is not queryable").
+ * DisplayName is queryable and QBO enforces it to be globally unique across
+ * Customer/Employee/Vendor, making it a reliable dedup key instead.
  */
-async function findVendorByEmail(email) {
-  const safeEmail = email.replace(/'/g, "\\'");
-  const query = encodeURIComponent(`SELECT * FROM Vendor WHERE PrimaryEmailAddr = '${safeEmail}'`);
+async function findVendorByDisplayName(displayName) {
+  const safeName = displayName.replace(/'/g, "\\'");
+  const query = encodeURIComponent(`SELECT * FROM Vendor WHERE DisplayName = '${safeName}'`);
   const result = await qboRequest('GET', `/query?query=${query}`);
   const vendors = result.QueryResponse?.Vendor || [];
   return vendors.length > 0 ? vendors[0] : null;
@@ -302,7 +306,7 @@ module.exports = {
   qboRequest,
   createVendor,
   updateVendor,
-  findVendorByEmail,
+  findVendorByDisplayName,
   getCompanyInfo,
   getConnectionStatus
 };

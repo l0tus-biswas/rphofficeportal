@@ -46,7 +46,7 @@ describe('Utils: quickbooksSync.js', () => {
 
     mockQbo = {
       getConnectionStatus: jest.fn().mockResolvedValue({ connected: true }),
-      findVendorByEmail: jest.fn().mockResolvedValue(null),
+      findVendorByDisplayName: jest.fn().mockResolvedValue(null),
       createVendor: jest.fn().mockResolvedValue({
         Id: 'qbo-vendor-1',
         DisplayName: 'Jane Doe',
@@ -90,8 +90,8 @@ describe('Utils: quickbooksSync.js', () => {
     expect(mockQbo.createVendor).not.toHaveBeenCalled();
   });
 
-  it('links to an existing QBO vendor by email instead of creating a duplicate', async () => {
-    mockQbo.findVendorByEmail.mockResolvedValueOnce({ Id: 'existing-vendor-9', DisplayName: 'Jane Doe' });
+  it('links to an existing QBO vendor by display name instead of creating a duplicate', async () => {
+    mockQbo.findVendorByDisplayName.mockResolvedValueOnce({ Id: 'existing-vendor-9', DisplayName: 'Jane Doe' });
     const result = await quickbooksSync.syncAgentToQBO(AGENT_ID, 'admin-1');
 
     expect(result.status).toBe('already_exists');
@@ -114,8 +114,20 @@ describe('Utils: quickbooksSync.js', () => {
     expect(vendorArg.bankInfo).toBeUndefined();
     expect(vendorArg.email).toBe('jane@test.com');
 
-    expect(mockUser.findByIdAndUpdate).toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({ qboVendorId: 'qbo-vendor-1' }));
+    expect(mockUser.findByIdAndUpdate).toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({ qboVendorId: 'qbo-vendor-1', qboSyncError: null }));
     expect(mockAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({ action: 'QBO_CONTRACTOR_SYNCED' }));
+  });
+
+  it('persists the error message on the agent record when QBO rejects the create, then rethrows', async () => {
+    mockQbo.createVendor.mockRejectedValueOnce(new Error("QuickBooks API error: The name supplied already exists. : Id=400000001"));
+
+    await expect(quickbooksSync.syncAgentToQBO(AGENT_ID, 'admin-1')).rejects.toThrow('name supplied already exists');
+
+    expect(mockUser.findByIdAndUpdate).toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({
+      qboSyncError: expect.stringContaining('name supplied already exists')
+    }));
+    // Must not report success anywhere the error path could be confused with a real sync.
+    expect(mockUser.findByIdAndUpdate).not.toHaveBeenCalledWith(AGENT_ID, expect.objectContaining({ qboVendorId: expect.any(String) }));
   });
 
   describe('buildVendorData', () => {

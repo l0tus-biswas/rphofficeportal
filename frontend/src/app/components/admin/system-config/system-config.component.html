@@ -225,6 +225,7 @@
                 <div class="d-flex gap-3 mb-2 flex-wrap">
                   <span class="badge bg-success">{{ qboSyncData.syncedCount }} Synced</span>
                   <span class="badge bg-warning text-dark">{{ qboSyncData.unsyncedCount }} Licensed &amp; Not Synced</span>
+                  <span class="badge bg-danger" *ngIf="qboSyncData.failedCount > 0">{{ qboSyncData.failedCount }} Failed</span>
                   <span class="badge bg-light text-muted border">{{ qboSyncData.notLicensedCount }} Not Licensed Yet</span>
                   <span class="badge bg-secondary">{{ qboSyncData.total }} Total</span>
                 </div>
@@ -243,6 +244,7 @@
                       <tr>
                         <th>Agent</th>
                         <th>Email</th>
+                        <th>Last Error</th>
                         <th>Action</th>
                       </tr>
                     </thead>
@@ -250,12 +252,17 @@
                       <tr *ngFor="let agent of qboSyncData.unsynced">
                         <td>{{ agent.name }}</td>
                         <td class="small">{{ agent.email }}</td>
+                        <td class="small">
+                          <span *ngIf="agent.qboSyncError" class="text-danger" [title]="agent.qboSyncErrorAt | appDate:'short'">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ agent.qboSyncError }}
+                          </span>
+                        </td>
                         <td>
                           <button class="btn btn-outline-primary btn-sm py-0 px-2"
                                   (click)="syncSingleContractor(agent._id, agent.name)"
                                   [disabled]="syncingAgentId === agent._id">
                             <span *ngIf="syncingAgentId === agent._id" class="spinner-border spinner-border-sm me-1"></span>
-                            Sync
+                            {{ agent.qboSyncError ? 'Retry' : 'Sync' }}
                           </button>
                         </td>
                       </tr>

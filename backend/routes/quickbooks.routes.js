@@ -369,7 +369,7 @@ router.post('/sync-all-contractors', authenticate, authorize('admin'), async (re
 router.get('/sync-status', authenticate, authorize('admin'), async (req, res) => {
   try {
     const agents = await User.find({ role: 'agent', isActive: true })
-      .select('_id name email qboVendorId qboSyncedAt metadata')
+      .select('_id name email qboVendorId qboSyncedAt qboSyncError qboSyncErrorAt metadata')
       .sort('name')
       .lean();
 
@@ -390,17 +390,23 @@ router.get('/sync-status', authenticate, authorize('admin'), async (req, res) =>
     for (const a of agents) {
       const id = a._id.toString();
       const licensed = isAgentLicensed(progressByAgent[id], apaByUser[id], a.metadata);
-      const view = { _id: a._id, name: a.name, email: a.email, qboVendorId: a.qboVendorId, qboSyncedAt: a.qboSyncedAt, licensed };
+      const view = {
+        _id: a._id, name: a.name, email: a.email, qboVendorId: a.qboVendorId, qboSyncedAt: a.qboSyncedAt,
+        qboSyncError: a.qboSyncError || null, qboSyncErrorAt: a.qboSyncErrorAt || null, licensed
+      };
       if (a.qboVendorId) synced.push(view);
       else if (licensed) unsynced.push(view);
       else notLicensed.push(view);
     }
+
+    const failedCount = unsynced.filter(a => a.qboSyncError).length;
 
     res.json({
       total: agents.length,
       syncedCount: synced.length,
       unsyncedCount: unsynced.length,       // licensed & awaiting sync
       notLicensedCount: notLicensed.length, // not yet eligible
+      failedCount,                          // subset of unsynced with a stored error
       synced,
       unsynced,
       notLicensed

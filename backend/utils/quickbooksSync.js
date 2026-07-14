@@ -117,41 +117,55 @@ async function syncAgentToQBO(agentId, actorId = null, opts = {}) {
     return { status: 'skipped_not_connected', message: 'QuickBooks is not connected.' };
   }
 
-  // Already present in QBO? Link instead of duplicating.
-  const existing = await qbo.findVendorByEmail(agent.email);
-  if (existing) {
-    await User.findByIdAndUpdate(agentId, { qboVendorId: existing.Id, qboSyncedAt: new Date() });
-    await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
-      qboVendorId: existing.Id, linkedExisting: true
-    });
-    return {
-      status: 'already_exists',
-      qboVendorId: existing.Id,
-      displayName: existing.DisplayName,
-      nextStep: INVITE_INSTRUCTIONS
-    };
-  }
-
   const apa = await APAApplication.findOne({ userId: agentId }).select('personalInfo').lean();
   const vendorData = buildVendorData(agent, apa);
+  const displayName = [vendorData.givenName, vendorData.middleName, vendorData.familyName].filter(Boolean).join(' ');
 
-  const qboVendor = await qbo.createVendor(vendorData);
+  try {
+    // Already present in QBO? Link instead of duplicating. QBO enforces
+    // DisplayName as globally unique across Customer/Employee/Vendor, so it's
+    // a reliable dedup key (PrimaryEmailAddr isn't queryable at all).
+    const existing = await qbo.findVendorByDisplayName(displayName);
+    if (existing) {
+      await User.findByIdAndUpdate(agentId, {
+        qboVendorId: existing.Id, qboSyncedAt: new Date(), qboSyncError: null, qboSyncErrorAt: null
+      });
+      await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
+        qboVendorId: existing.Id, linkedExisting: true
+      });
+      return {
+        status: 'already_exists',
+        qboVendorId: existing.Id,
+        displayName: existing.DisplayName,
+        nextStep: INVITE_INSTRUCTIONS
+      };
+    }
 
-  await User.findByIdAndUpdate(agentId, { qboVendorId: qboVendor.Id, qboSyncedAt: new Date() });
+    const qboVendor = await qbo.createVendor(vendorData);
 
-  const dataIncluded = { email: !!vendorData.email, phone: !!vendorData.phone, address: !!vendorData.address };
-  await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
-    qboVendorId: qboVendor.Id, displayName: qboVendor.DisplayName, ...dataIncluded
-  });
+    await User.findByIdAndUpdate(agentId, {
+      qboVendorId: qboVendor.Id, qboSyncedAt: new Date(), qboSyncError: null, qboSyncErrorAt: null
+    });
 
-  return {
-    status: 'created',
-    qboVendorId: qboVendor.Id,
-    displayName: qboVendor.DisplayName,
-    email: qboVendor.PrimaryEmailAddr?.Address,
-    dataIncluded,
-    nextStep: INVITE_INSTRUCTIONS
-  };
+    const dataIncluded = { email: !!vendorData.email, phone: !!vendorData.phone, address: !!vendorData.address };
+    await writeAudit(actorId, agentId, 'QBO_CONTRACTOR_SYNCED', {
+      qboVendorId: qboVendor.Id, displayName: qboVendor.DisplayName, ...dataIncluded
+    });
+
+    return {
+      status: 'created',
+      qboVendorId: qboVendor.Id,
+      displayName: qboVendor.DisplayName,
+      email: qboVendor.PrimaryEmailAddr?.Address,
+      dataIncluded,
+      nextStep: INVITE_INSTRUCTIONS
+    };
+  } catch (err) {
+    // Persist so the failure is visible in the UI at any time (sync-status),
+    // not just in the one-off response of whatever action triggered it.
+    await User.findByIdAndUpdate(agentId, { qboSyncError: err.message, qboSyncErrorAt: new Date() }).catch(() => {});
+    throw err;
+  }
 }
 
 module.exports = { syncAgentToQBO, buildVendorData };
