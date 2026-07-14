@@ -107,12 +107,13 @@ export class AdminOnboardingDetailComponent implements OnInit {
   viewDocument(doc: OnboardingDocument | null): void {
     if (!doc) return;
 
-    if (doc.externalLink) {
-      window.open(doc.externalLink, '_blank');
+    // filePath (our own protected storage) must win over externalLink when
+    // both are set — some records store the SAME internal /uploads path in
+    // externalLink too, which would otherwise bypass authentication entirely.
+    if (!doc.filePath || !doc._id) {
+      if (doc.externalLink) window.open(doc.externalLink, '_blank');
       return;
     }
-
-    if (!doc.filePath || !doc._id) return;
 
     this.currentPdfName = doc.originalFileName || 'Document';
     this.showPdfModal = true;
@@ -142,12 +143,10 @@ export class AdminOnboardingDetailComponent implements OnInit {
   downloadDocument(doc: OnboardingDocument | null): void {
     if (!doc) return;
 
-    if (doc.externalLink) {
-      window.open(doc.externalLink, '_blank');
+    if (!doc.filePath || !doc._id) {
+      if (doc.externalLink) window.open(doc.externalLink, '_blank');
       return;
     }
-
-    if (!doc.filePath || !doc._id) return;
 
     this.onboardingHubService.downloadDocumentBlob(this.userId, doc._id).subscribe({
       next: (blob) => {

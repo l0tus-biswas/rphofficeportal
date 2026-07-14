@@ -316,7 +316,6 @@ router.post('/apa-applications/backfill-onboarding-docs', async (req, res) => {
       ]
     });
 
-    const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
     let created = 0;
     let updated = 0;
     let skipped = 0;
@@ -337,8 +336,14 @@ router.post('/apa-applications/backfill-onboarding-docs', async (req, res) => {
           deletedAt: null
         });
 
-        // If record already has an externalLink, leave it alone
-        if (existing?.externalLink) { skipped++; continue; }
+        // If an admin has attached a genuinely different external link (e.g.
+        // a Google Drive link), leave it alone. But if externalLink was
+        // previously auto-set to point at this SAME internal /uploads path
+        // (a bug fixed here — it used to bypass authentication entirely),
+        // treat it as unset so this record gets repaired below.
+        const externalLinkIsOwnUploadPath = existing?.externalLink && docRelPath
+          && existing.externalLink.endsWith(`/${docRelPath}`);
+        if (existing?.externalLink && !externalLinkIsOwnUploadPath) { skipped++; continue; }
 
         await OnboardingDocument.findOneAndUpdate(
           { agent: agentUserId, docType: apaDocType._id },
@@ -347,7 +352,11 @@ router.post('/apa-applications/backfill-onboarding-docs', async (req, res) => {
               agent: agentUserId,
               docType: apaDocType._id,
               filePath: docRelPath,
-              externalLink: docRelPath ? `${baseUrl}/${docRelPath}` : null,
+              // Do NOT set externalLink — this file lives in our own
+              // protected /uploads storage (authenticated via filePath + the
+              // onboarding-hub download route), not a genuine external
+              // resource. See comment above for why this field is cleared.
+              externalLink: null,
               originalFileName: `APA_Agreement_${app.personalInfo?.legalFirstName || ''}_${app.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
               uploadedBy: agentUserId,
               uploadedAt: app.docusign?.signedDate || app.updatedAt || new Date(),

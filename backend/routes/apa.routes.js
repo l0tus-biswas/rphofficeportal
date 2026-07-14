@@ -294,7 +294,6 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
             const docRelPath = application.docusign.documentUrl
               ? application.docusign.documentUrl.replace(/^\//, '')
               : null;
-            const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
             await OnboardingDocument.findOneAndUpdate(
               { agent: agentUserId, docType: apaDocType._id },
               {
@@ -302,7 +301,13 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
                   agent: agentUserId,
                   docType: apaDocType._id,
                   filePath: docRelPath,
-                  externalLink: docRelPath ? `${baseUrl}/${docRelPath}` : null,
+                  // Do NOT set externalLink here — this file lives in our own
+                  // protected /uploads storage (authenticated via filePath +
+                  // the onboarding-hub download route), not a genuine external
+                  // resource. Setting externalLink to the same internal path
+                  // previously caused the UI to link straight to the
+                  // protected URL with no auth, producing 401s.
+                  externalLink: null,
                   originalFileName: `APA_Agreement_${application.personalInfo?.legalFirstName || ''}_${application.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
                   uploadedBy: agentUserId,
                   uploadedAt: application.docusign.signedDate || new Date(),
@@ -716,7 +721,6 @@ const verifyPaymentHandler = async (req, res) => {
       const apaDocType = await OnboardingDocType.findOne({ name: 'APA Agreement', isActive: true });
       if (apaDocType && application.docusign?.documentUrl) {
         const docRelPath = application.docusign.documentUrl.replace(/^\//, '');
-        const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
         await OnboardingDocument.findOneAndUpdate(
           { agent: user._id, docType: apaDocType._id },
           {
@@ -724,7 +728,9 @@ const verifyPaymentHandler = async (req, res) => {
               agent: user._id,
               docType: apaDocType._id,
               filePath: docRelPath,
-              externalLink: `${baseUrl}/${docRelPath}`,
+              // Do NOT set externalLink — see comment at the other APA
+              // Agreement OnboardingDocument upsert above in this file.
+              externalLink: null,
               originalFileName: `APA_Agreement_${application.personalInfo?.legalFirstName || ''}_${application.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
               uploadedBy: user._id,
               uploadedAt: application.docusign.signedDate || application.docusign.signedAt || new Date(),
