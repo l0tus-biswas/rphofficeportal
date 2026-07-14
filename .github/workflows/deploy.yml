@@ -78,8 +78,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
+            cd ${{ secrets.APP_DIR }}
             git pull origin main
-            git fetch origin main
             npm install --production
             cd backend && npm install && cd ..
             cd frontend && npm install && npx ng build --configuration=production && cd ..
