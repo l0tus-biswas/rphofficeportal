@@ -1,8 +1,9 @@
 node_modules/
 .env
-!.env.test
 *.log
 coverage/
 .DS_Store
 uploads/
 .cache/
+logs/
+test-results/

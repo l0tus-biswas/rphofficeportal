@@ -11,7 +11,8 @@
     "test:integration": "jest --selectProjects integration --coverage --forceExit --detectOpenHandles",
     "test:coverage": "jest --coverage --coverageReporters=text --coverageReporters=lcov --forceExit --detectOpenHandles",
     "recover:users": "node scripts/reconstruct-users.js",
-    "backfill:document-request-files": "node scripts/backfill-document-request-files.js"
+    "backfill:document-request-files": "node scripts/backfill-document-request-files.js",
+    "seed": "node scripts/seedProdUsers.js"
   },
   "keywords": [
     "recruiting",

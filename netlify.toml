@@ -1,8 +1,0 @@
-[build]
-  command = "npm install && npm run build -- --configuration=production"
-  publish = "dist/rhpoffice-frontend"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
