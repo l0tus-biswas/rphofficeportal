@@ -7,3 +7,4 @@ uploads/
 .cache/
 logs/
 test-results/
+tmp/
