@@ -99,17 +99,21 @@
             </div>
 
             <p class="text-muted text-center mb-4">
-              Please check your email for the DocuSign link, or click the button below to resume signing.
+              Please check your email for the DocuSign link. If you can't find it, click below to resend it.
             </p>
 
+            <div *ngIf="resendSuccessMessage" class="alert alert-success text-center">
+              <i class="bi bi-check-circle-fill me-2"></i>{{ resendSuccessMessage }}
+            </div>
+
             <div class="text-center">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 class="btn btn-warning btn-lg"
                 (click)="resumeSigning()"
                 [disabled]="loading">
                 <span *ngIf="!loading">
-                  <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
+                  <i class="bi bi-envelope-fill me-2"></i>Resend Signing Email
                 </span>
                 <span *ngIf="loading">
                   <span class="spinner-border spinner-border-sm me-2"></span>Loading...

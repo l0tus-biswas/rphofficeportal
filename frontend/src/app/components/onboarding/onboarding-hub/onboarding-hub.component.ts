@@ -278,7 +278,7 @@ export class OnboardingHubComponent implements OnInit {
     this.documentHubService.getRequests().subscribe({
       next: (res: any) => {
         const userId = this.currentUser?._id;
-        const allRequests = (res.requests || []).filter((r: DocRequest) => r.isActive !== false);
+        const allRequests = (Array.isArray(res) ? res : []).filter((r: DocRequest) => r.isActive !== false);
         this.pendingRequests = allRequests.filter((r: DocRequest) => {
           if (userId && r.responses) {
             const myResponse = r.responses.find((resp: any) => {

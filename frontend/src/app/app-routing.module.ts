@@ -207,11 +207,6 @@ const routes: Routes = [
     canActivate: [AuthGuard]
   },
   { 
-    path: 'payment-success', 
-    component: PaymentSuccessComponent, 
-    canActivate: [AuthGuard]
-  },
-  { 
     path: 'transactions', 
     component: UserTransactionsComponent, 
     canActivate: [AuthGuard]

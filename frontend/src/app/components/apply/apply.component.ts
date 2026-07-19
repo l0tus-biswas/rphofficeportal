@@ -49,6 +49,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
   docusignUrl = '';
   isPendingSignature = false;
   existingApplicationId = '';
+  resendSuccessMessage = '';
   
   // For file uploads in section 3
   complianceFiles: Map<string, File> = new Map();
@@ -338,6 +339,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
     this.isPendingSignature = false;
     this.existingApplicationId = '';
     this.docusignUrl = '';
+    this.resendSuccessMessage = '';
   }
 
   private initRecruiterSearchStream(): void {
@@ -809,31 +811,28 @@ export class ApplyComponent implements OnInit, OnDestroy {
 
   resumeSigning(): void {
     console.log('Resuming signing for application:', this.existingApplicationId);
-    if (this.docusignUrl) {
-      // If we have the URL, redirect directly
-      window.location.href = this.docusignUrl;
-    } else if (this.existingApplicationId) {
-      // Otherwise, request a new signing URL
-      this.loading = true;
-      this.publicService.resendDocuSign(this.existingApplicationId).subscribe({
-        next: (response: any) => {
-          this.loading = false;
-          console.log('DocuSign resend response:', response);
-          if (response.signingUrl) {
-            window.location.href = response.signingUrl;
-          } else {
-            this.error = 'Unable to generate signing link. Please contact support.';
-          }
-        },
-        error: (err) => {
-          this.loading = false;
-          console.error('Error resending DocuSign:', err);
-          this.error = 'Failed to generate signing link. Please try again or contact support.';
-        }
-      });
-    } else {
+    // DocuSign signing here is email-based (no embedded signing URL is ever
+    // issued), so "resume" means resending the signing email.
+    if (!this.existingApplicationId) {
       this.error = 'Application information not available. Please contact support.';
+      return;
     }
+
+    this.loading = true;
+    this.error = '';
+    this.resendSuccessMessage = '';
+    this.publicService.resendDocuSign(this.existingApplicationId).subscribe({
+      next: (response: any) => {
+        this.loading = false;
+        console.log('DocuSign resend response:', response);
+        this.resendSuccessMessage = response.message || 'A new signing email has been sent. Please check your inbox.';
+      },
+      error: (err) => {
+        this.loading = false;
+        console.error('Error resending DocuSign:', err);
+        this.error = err.error?.message || 'Failed to resend signing email. Please try again or contact support.';
+      }
+    });
   }
 
   changeLanguage(lang: string): void {

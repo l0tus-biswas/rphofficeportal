@@ -740,7 +740,7 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
     }
 
     // Non-admin: restrict submission date (no more than 1 year in the past)
-    let resolvedSubmissionDate = submissionDate || Date.now();
+    let resolvedSubmissionDate = submissionDate ? new Date(submissionDate) : new Date();
     if (req.user.role !== 'admin' && submissionDate) {
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -983,7 +983,7 @@ router.post('/:id/upload',
       const document = {
         filename: req.file.originalname,
         url: `/uploads/production/${req.file.filename}`,
-        uploadedAt: Date.now()
+        uploadedAt: new Date()
       };
       
       submission.documents.push(document);
@@ -1015,9 +1015,9 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
     const { status, reviewNotes } = req.body;
     
     submission.status = status || submission.status;
-    submission.reviewNotes = reviewNotes;
+    if (reviewNotes !== undefined) submission.reviewNotes = reviewNotes;
     submission.reviewedBy = req.user._id;
-    submission.reviewedAt = Date.now();
+    submission.reviewedAt = new Date();
 
     // Auto-set inForceDate when marked as "In Force" and not already set
     if (status === 'In Force' && !submission.inForceDate) {

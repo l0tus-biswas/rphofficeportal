@@ -359,13 +359,17 @@ router.post('/files', authenticate, authorize('admin'), handleMulterError(upload
     const visibility = req.body.visibility || 'all';
     const description = req.body.description || '';
     const notes = req.body.notes || '';
-    // Parse restrictedTo: comma-separated IDs or JSON array
+    // Parse restrictedTo: JSON array, comma-separated string, or already an array
     let restrictedTo = [];
     if (req.body.restrictedTo) {
-      try {
-        restrictedTo = JSON.parse(req.body.restrictedTo);
-      } catch (e) {
-        restrictedTo = req.body.restrictedTo.split(',').map(id => id.trim()).filter(Boolean);
+      if (Array.isArray(req.body.restrictedTo)) {
+        restrictedTo = req.body.restrictedTo;
+      } else if (typeof req.body.restrictedTo === 'string') {
+        try {
+          restrictedTo = JSON.parse(req.body.restrictedTo);
+        } catch (e) {
+          restrictedTo = req.body.restrictedTo.split(',').map(id => id.trim()).filter(Boolean);
+        }
       }
     }
     if (!['all', 'admin', 'restricted'].includes(visibility)) {

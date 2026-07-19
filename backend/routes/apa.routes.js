@@ -464,7 +464,7 @@ router.post('/apa-application/create-checkout-session', async (req, res) => {
       customer_email: application.personalInfo.email,
       metadata: {
         applicationId: applicationId,
-        applicantName: `${application.personalInfo.firstName} ${application.personalInfo.lastName}`,
+        applicantName: `${application.personalInfo.legalFirstName || application.personalInfo.firstName} ${application.personalInfo.legalLastName || application.personalInfo.lastName}`,
         applicantEmail: application.personalInfo.email,
         referralCode: application.recruitingInfo.referralCode
       },
