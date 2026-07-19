@@ -97,15 +97,12 @@
                   
                   <div *ngIf="couponApplied" class="alert alert-info py-2 px-3 mt-2 mb-2">
                     <i class="bi bi-tag-fill me-2"></i>
-                    Coupon <strong>{{ appliedCouponCode }}</strong> will be applied at checkout
+                    Coupon <strong>{{ appliedCouponCode }}</strong> applied: -${{ couponDiscount.toFixed(2) }}
                   </div>
-                  
+
                   <div class="d-flex justify-content-between fw-bold h5">
                     <span>Total due today</span>
-                    <span class="text-primary">
-                      <span *ngIf="!couponApplied">${{ monthlyFee }}.00</span>
-                      <span *ngIf="couponApplied">Calculated at checkout</span>
-                    </span>
+                    <span class="text-primary">${{ totalAmount.toFixed(2) }}</span>
                   </div>
                   
                   <div class="text-muted small mt-2">
@@ -124,13 +121,17 @@
                     class="form-control" 
                     formControlName="couponCode"
                     placeholder="Enter code"
-                    [disabled]="couponApplied">
-                  <button 
+                    [disabled]="couponApplied || couponLoading">
+                  <button
                     *ngIf="!couponApplied"
-                    class="btn btn-outline-secondary" 
+                    class="btn btn-outline-secondary"
                     type="button"
+                    [disabled]="couponLoading"
                     (click)="applyCoupon()">
-                    Apply
+                    <span *ngIf="!couponLoading">Apply</span>
+                    <span *ngIf="couponLoading">
+                      <span class="spinner-border spinner-border-sm"></span>
+                    </span>
                   </button>
                   <button 
                     *ngIf="couponApplied"

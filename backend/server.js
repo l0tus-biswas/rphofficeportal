@@ -108,7 +108,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://translate.googleapis.com", "https://www.gstatic.com"],
       styleSrcElem: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://translate.googleapis.com", "https://www.gstatic.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https://translate.google.com", "https://fonts.gstatic.com", "https://www.gstatic.com", "https://files.cdn.printful.com", "https://*.printful.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://img.youtube.com", "https://i.ytimg.com", "https://translate.google.com", "https://translate.googleapis.com", "https://www.google.com", "https://fonts.gstatic.com", "https://www.gstatic.com", "https://files.cdn.printful.com", "https://*.printful.com"],
       connectSrc: ["'self'", process.env.APP_URL || "http://localhost:4200", "ws:", "wss:", "https://api.stripe.com", "https://js.stripe.com", "https://translate.googleapis.com", "https://translate-pa.googleapis.com"],
       // blob: is needed because document viewers (onboarding docs, carrier
       // documents, signed APA agreements) fetch protected files via an

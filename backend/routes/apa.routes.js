@@ -22,8 +22,7 @@ const {
 const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { resolveStripeReceiptUrl } = require('../utils/stripe');
+const { stripe, resolveStripeReceiptUrl } = require('../utils/stripe');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 
@@ -359,6 +358,34 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
   }
 });
 
+// @route   GET /api/public/apa-application/verify-coupon/:code
+// @desc    Verify a coupon code and return the discount it would apply
+// @access  Public
+router.get('/apa-application/verify-coupon/:code', async (req, res) => {
+  try {
+    const normalizedCode = req.params.code.toUpperCase();
+    const coupon = await Coupon.findOne({ code: normalizedCode });
+
+    if (!coupon || !coupon.isValid || (coupon.applicableRoles?.length > 0 && !coupon.applicableRoles.includes('agent'))) {
+      return sendResponse(res, 200, { valid: false, message: `Coupon "${normalizedCode}" is not valid.` });
+    }
+
+    const monthlyAmountCents = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2000;
+    const { discount, finalAmount } = coupon.calculateDiscount(monthlyAmountCents / 100);
+
+    sendResponse(res, 200, {
+      valid: true,
+      code: normalizedCode,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      discount,
+      finalAmount
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   POST /api/public/apa-application/create-checkout-session
 // @desc    Create Stripe checkout session for APA payment
 // @access  Public
@@ -455,40 +482,41 @@ router.post('/apa-application/create-checkout-session', async (req, res) => {
 
     // Apply coupon if provided
     if (couponCode) {
-      try {
-        // Validate coupon exists in Stripe
-        const stripeCoupon = await stripe.coupons.retrieve(couponCode.toUpperCase());
-        
-        if (stripeCoupon && stripeCoupon.valid) {
-          // Apply coupon to session
-          sessionParams.discounts = [{
-            coupon: couponCode.toUpperCase()
-          }];
-          
-          console.log(`✅ Coupon ${couponCode.toUpperCase()} applied to checkout session`);
-          
-          // Update database coupon record if exists
-          const coupon = await Coupon.findOne({ 
-            code: couponCode.toUpperCase(),
-            isActive: true
-          });
-          
-          if (coupon) {
-            coupon.usedCount += 1;
-            await coupon.save();
-          }
-          
-          // Store in application
-          if (!application.payment) {
-            application.payment = {};
-          }
-          application.payment.couponCode = couponCode.toUpperCase();
-          await application.save();
-        }
-      } catch (couponError) {
-        console.error('Coupon validation error:', couponError.message);
-        // Continue without coupon if invalid
+      const normalizedCode = couponCode.toUpperCase();
+      const coupon = await Coupon.findOne({ code: normalizedCode });
+
+      if (!coupon) {
+        return sendResponse(res, 400, { message: `Coupon "${normalizedCode}" was not found.` });
       }
+
+      if (!coupon.isValid) {
+        return sendResponse(res, 400, { message: `Coupon "${normalizedCode}" is expired, inactive, or has reached its usage limit.` });
+      }
+
+      if (coupon.applicableRoles?.length > 0 && !coupon.applicableRoles.includes('agent')) {
+        return sendResponse(res, 400, { message: `Coupon "${normalizedCode}" is not applicable to this purchase.` });
+      }
+
+      const { discount } = coupon.calculateDiscount(monthlyAmountCents / 100);
+
+      // Create a one-time-use Stripe coupon mirroring the DB coupon definition,
+      // since admin-created coupons are never registered as Stripe Coupon objects.
+      const stripeCoupon = coupon.discountType === 'percentage'
+        ? await stripe.coupons.create({ percent_off: coupon.discountValue, duration: 'once', name: normalizedCode })
+        : await stripe.coupons.create({ amount_off: Math.round(discount * 100), currency: 'usd', duration: 'once', name: normalizedCode });
+
+      sessionParams.discounts = [{ coupon: stripeCoupon.id }];
+
+      console.log(`✅ Coupon ${normalizedCode} applied to checkout session ($${discount.toFixed(2)} off)`);
+
+      await coupon.incrementUsage();
+
+      // Store in application
+      if (!application.payment) {
+        application.payment = {};
+      }
+      application.payment.couponCode = normalizedCode;
+      await application.save();
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

@@ -66,6 +66,10 @@ export class PublicService {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/complete-payment`, paymentData);
   }
 
+  verifyCoupon(code: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/public/apa-application/verify-coupon/${code}`);
+  }
+
   createCheckoutSession(applicationId: string, couponCode?: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/public/apa-application/create-checkout-session`, {
       applicationId,

@@ -24,6 +24,8 @@ export class ApaPaymentComponent implements OnInit {
   monthlyFee = 20;
   couponApplied = false;
   appliedCouponCode = '';
+  couponDiscount = 0;
+  couponLoading = false;
   
   applicantName = '';
   applicantEmail = '';
@@ -101,25 +103,40 @@ export class ApaPaymentComponent implements OnInit {
   applyCoupon(): void {
     const code = this.paymentForm.get('couponCode')?.value?.trim().toUpperCase();
     if (!code) return;
-    
-    // Simply mark as applied - Stripe will validate and apply discount
-    this.couponApplied = true;
-    this.appliedCouponCode = code;
-    this.paymentForm.get('couponCode')?.disable();
-    
-    // Show generic success message
+
+    this.couponLoading = true;
     this.error = '';
+
+    this.publicService.verifyCoupon(code).subscribe({
+      next: (response) => {
+        this.couponLoading = false;
+        if (!response.valid) {
+          this.error = response.message || `Coupon "${code}" is not valid.`;
+          return;
+        }
+
+        this.couponApplied = true;
+        this.appliedCouponCode = response.code;
+        this.couponDiscount = response.discount;
+        this.paymentForm.get('couponCode')?.disable();
+      },
+      error: (error) => {
+        this.couponLoading = false;
+        this.error = error.error?.message || `Failed to verify coupon "${code}".`;
+      }
+    });
   }
 
   removeCoupon(): void {
     this.couponApplied = false;
     this.appliedCouponCode = '';
+    this.couponDiscount = 0;
     this.paymentForm.get('couponCode')?.enable();
     this.paymentForm.get('couponCode')?.setValue('');
   }
 
   get totalAmount(): number {
-    return this.monthlyFee;
+    return this.couponApplied ? Math.max(this.monthlyFee - this.couponDiscount, 0) : this.monthlyFee;
   }
 
   proceedToSign(): void {
