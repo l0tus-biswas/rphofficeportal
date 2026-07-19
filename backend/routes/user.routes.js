@@ -91,8 +91,11 @@ router.get('/payments/:id/receipt', protect, async (req, res) => {
       return sendResponse(res, 404, { message: 'Payment not found' });
     }
 
-    // Owner or admin only
-    const isOwner = payment.user && payment.user.toString() === req.user._id.toString();
+    // Owner or admin only. `payment.user` may be a raw ObjectId or, if a future
+    // change adds `.populate('user')` here, a populated document — resolve
+    // its id either way instead of assuming an ObjectId shape.
+    const paymentUserId = payment.user?._id || payment.user;
+    const isOwner = paymentUserId && paymentUserId.toString() === req.user._id.toString();
     if (!isOwner && req.user.role !== 'admin') {
       return sendResponse(res, 403, { message: 'Access denied' });
     }

@@ -361,7 +361,7 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
 // @route   GET /api/public/apa-application/verify-coupon/:code
 // @desc    Verify a coupon code and return the discount it would apply
 // @access  Public
-router.get('/apa-application/verify-coupon/:code', async (req, res) => {
+router.get('/apa-application/verify-coupon/:code', applyLimiter, async (req, res) => {
   try {
     const normalizedCode = req.params.code.toUpperCase();
     const coupon = await Coupon.findOne({ code: normalizedCode });
@@ -389,7 +389,7 @@ router.get('/apa-application/verify-coupon/:code', async (req, res) => {
 // @route   POST /api/public/apa-application/create-checkout-session
 // @desc    Create Stripe checkout session for APA payment
 // @access  Public
-router.post('/apa-application/create-checkout-session', async (req, res) => {
+router.post('/apa-application/create-checkout-session', applyLimiter, async (req, res) => {
   try {
     const { applicationId, couponCode } = req.body;
 

@@ -209,10 +209,10 @@ router.get('/:agentId', authenticate, async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
       }
       
-      // Create with default 30-day deadline
+      // Create with default 60-day deadline (matches every other auto-create path)
       const enrollmentDate = agent.createdAt || new Date();
       const licensingDeadline = new Date(enrollmentDate);
-      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 60);
       
       licensingProgress = new LicensingProgress({
         agent: req.params.agentId,

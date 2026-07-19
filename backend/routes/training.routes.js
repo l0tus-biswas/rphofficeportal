@@ -540,6 +540,11 @@ router.post('/materials', validateRequest(schemas.trainingMaterial), logAction('
 // @access  Private (Admin only)
 router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), logAction('UPDATE_TRAINING_MATERIAL'), async (req, res) => {
   try {
+    const existing = await TrainingMaterial.findById(req.params.id);
+    if (!existing || !existing.isActive) {
+      return sendResponse(res, 404, { message: 'Training material not found' });
+    }
+
     // Auto-detect content type if URL is being updated
     const updateData = { ...req.body };
     if (updateData.url) {
@@ -551,11 +556,7 @@ router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), lo
       updateData,
       { new: true, runValidators: true }
     );
-    
-    if (!material) {
-      return sendResponse(res, 404, { message: 'Training material not found' });
-    }
-    
+
     sendResponse(res, 200, {
       message: 'Training material updated successfully',
       material
@@ -575,7 +576,7 @@ router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRA
     }
 
     const material = await TrainingMaterial.findById(req.params.id);
-    if (!material) {
+    if (!material || !material.isActive) {
       return sendResponse(res, 404, { message: 'Training material not found' });
     }
 
@@ -609,7 +610,7 @@ router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRA
 router.delete('/materials/:id/pdf', logAction('DELETE_TRAINING_PDF'), async (req, res) => {
   try {
     const material = await TrainingMaterial.findById(req.params.id);
-    if (!material) {
+    if (!material || !material.isActive) {
       return sendResponse(res, 404, { message: 'Training material not found' });
     }
 

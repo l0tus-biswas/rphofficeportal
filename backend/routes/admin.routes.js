@@ -17,6 +17,11 @@ const { generatePassword, generateToken, sendResponse, errorResponse, paginate }
 const { cancelSubscription } = require('../utils/stripe');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
+const AgentCarrierStatus = require('../models/AgentCarrierStatus');
+const ExamFXProgress = require('../models/ExamFXProgress');
+const PrintfulOrder = require('../models/PrintfulOrder');
+const DocumentRequest = require('../models/DocumentRequest');
+const DocumentHubFile = require('../models/DocumentHubFile');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
@@ -638,6 +643,20 @@ router.delete('/users/:userId/permanent', logAction('PERMANENT_DELETE_USER'), as
       try { fs.rmSync(onboardingDir, { recursive: true, force: true }); } catch (e) { console.warn(`Failed to delete onboarding files: ${e.message}`); }
     }
     
+    // Remove this agent's submitted files from any Document Hub request before
+    // the response entries referencing them are pulled below.
+    const requestsWithResponses = await DocumentRequest.find({ 'responses.agent': userId });
+    for (const request of requestsWithResponses) {
+      for (const response of request.responses) {
+        if (response.agent?.toString() === userId && response.filePath) {
+          const responsePath = path.join(__dirname, '..', response.filePath);
+          if (fs.existsSync(responsePath)) {
+            try { fs.unlinkSync(responsePath); } catch (e) { console.warn(`Failed to delete document request file: ${e.message}`); }
+          }
+        }
+      }
+    }
+
     // Hard delete all records
     await APAApplication.deleteMany({ $or: [{ userId }, { 'personalInfo.email': userEmail?.toLowerCase() }] });
     await Onboarding.deleteMany({ user: userId });
@@ -646,7 +665,22 @@ router.delete('/users/:userId/permanent', logAction('PERMANENT_DELETE_USER'), as
     await Notification.deleteMany({ userId: userId });
     await LicensingProgress.deleteMany({ user: userId });
     await ProductionSubmission.deleteMany({ agent: userId });
-    
+    await AgentCarrierStatus.deleteMany({ agent: userId });
+    await ExamFXProgress.deleteMany({ agent: userId });
+    await ACAClientRecord.deleteMany({ agent: userId });
+    await PrintfulOrder.deleteMany({ user: userId });
+    // DocumentRequest/DocumentHubFile are shared, multi-recipient records — pull
+    // this agent's references instead of deleting the whole request/file, which
+    // would destroy history still relevant to other targeted agents.
+    await DocumentRequest.updateMany(
+      {},
+      { $pull: { requestedFrom: userId, responses: { agent: userId } } }
+    );
+    await DocumentHubFile.updateMany(
+      { restrictedTo: userId },
+      { $pull: { restrictedTo: userId } }
+    );
+
     // Hard delete the user
     await User.findByIdAndDelete(userId);
     

@@ -215,7 +215,9 @@ router.post('/reset-password/:resetToken', validateRequest(schemas.resetPassword
 // @route   GET /api/auth/me
 // @desc    Get current logged in user
 // @access  Private
-router.get('/me', require('../middleware/auth.middleware').protect, async (req, res) => {
+// Shared by /me and /profile — both return the same shape (a role-agnostic
+// "who am I" lookup), so there's one implementation instead of two to keep in sync.
+const getCurrentUserHandler = async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .select('-password')
@@ -224,22 +226,13 @@ router.get('/me', require('../middleware/auth.middleware').protect, async (req, 
   } catch (error) {
     errorResponse(res, error);
   }
-});
+};
+router.get('/me', require('../middleware/auth.middleware').protect, getCurrentUserHandler);
 
 // @route   GET /api/auth/profile
 // @desc    Get user's own profile (all roles)
 // @access  Private
-router.get('/profile', require('../middleware/auth.middleware').protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id)
-      .select('-password')
-      .populate('referredBy', 'name email phone referralCode');
-    
-    sendResponse(res, 200, { user });
-  } catch (error) {
-    errorResponse(res, error);
-  }
-});
+router.get('/profile', require('../middleware/auth.middleware').protect, getCurrentUserHandler);
 
 // @route   PUT /api/auth/profile
 // @desc    Update user's own profile (all roles)

@@ -291,7 +291,14 @@ router.put('/:id', authenticate, authorize('admin'), runUpload(guideUpload.singl
         carrier.category = categoryArr;
       }
     }
-    if (isActive !== undefined) carrier.isActive = isActive;
+    if (isActive !== undefined) {
+      carrier.isActive = isActive;
+      // Reactivating clears the soft-delete tombstone so it reflects current state
+      if (isActive) {
+        carrier.deletedAt = null;
+        carrier.deletedBy = null;
+      }
+    }
     if (contractingLink !== undefined) {
       if (contractingLink && contractingLink.trim()) {
         try {
@@ -470,6 +477,8 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     // Soft delete - just mark as inactive
     carrier.isActive = false;
     carrier.lastModifiedBy = req.user._id;
+    carrier.deletedAt = new Date();
+    carrier.deletedBy = req.user._id;
     await carrier.save();
     
     res.json({ message: 'Carrier deactivated successfully', carrier });

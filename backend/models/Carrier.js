@@ -69,6 +69,17 @@ const carrierSchema = new mongoose.Schema({
   lastModifiedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+
+  // Soft-delete tracking
+  deletedAt: {
+    type: Date,
+    default: null
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   }
 }, {
   timestamps: true
@@ -77,7 +88,8 @@ const carrierSchema = new mongoose.Schema({
 // Index for quick lookups
 carrierSchema.index({ isActive: 1 });
 carrierSchema.index({ category: 1, isActive: 1 });
-// Unique per name (now that category is an array, one carrier entry per name)
-carrierSchema.index({ name: 1 }, { unique: true });
+// Unique per name, but only while active — a soft-deleted (isActive: false)
+// carrier no longer occupies the name, so it can be reused by a new entry.
+carrierSchema.index({ name: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
 
 module.exports = mongoose.model('Carrier', carrierSchema);

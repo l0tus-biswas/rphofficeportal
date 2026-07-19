@@ -151,9 +151,12 @@ router.get('/summary', authenticate, async (req, res) => {
       query = { agent: { $in: [req.user._id, ...downlineIds] } };
     }
 
-    const records = await ExamFXProgress.find(query)
+    // Populated `agent` can be null if the referenced user was hard-deleted
+    // without the ExamFXProgress record being cleaned up (e.g. by an older
+    // purge run) — drop those orphaned records rather than crashing on them.
+    const records = (await ExamFXProgress.find(query)
       .populate('agent', 'name email')
-      .lean();
+      .lean()).filter(r => r.agent);
 
     // Compute the most recent sync/import/update across all records
     let lastSynced = null;
@@ -199,12 +202,15 @@ router.get('/summary', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/import-history', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const records = await ExamFXProgress.find({ lastCsvImportDate: { $ne: null } })
+    // Populated `agent` can be null if the referenced user was hard-deleted
+    // without the ExamFXProgress record being cleaned up — drop those
+    // orphaned records rather than crashing on them.
+    const records = (await ExamFXProgress.find({ lastCsvImportDate: { $ne: null } })
       .populate('agent', 'name email')
       .populate('csvImportedBy', 'name email')
       .select('agent lastCsvImportDate csvImportedBy enrollmentStatus overallPercentComplete courses updatedAt')
       .sort({ lastCsvImportDate: -1 })
-      .lean();
+      .lean()).filter(r => r.agent);
 
     // Group by import date (rounded to minute to group same upload batch)
     const batches = {};

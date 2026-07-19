@@ -945,11 +945,37 @@ router.delete('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
     
+    const wasInForce = submission.status === 'In Force';
+
     // Soft-delete: set deletedAt timestamp instead of removing the record
     submission.deletedAt = new Date();
     submission.deletedBy = req.user._id;
     await submission.save();
-    
+
+    // Deleting an "In Force" submission changes production totals the same way
+    // a status change away from "In Force" does — re-run the same eligibility
+    // recheck for the agent and their upline chain.
+    if (wasInForce) {
+      const agentId = submission.agent._id || submission.agent;
+      const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+      (async () => {
+        try {
+          await checkAndNotifyPromotion(agentId);
+          const uplineIds = await getUplineChainIds(agentId);
+          for (const uplineId of uplineIds) {
+            await checkAndNotifyPromotion(uplineId);
+          }
+        } catch (promoErr) {
+          console.error('[Production Delete] Promotion recheck error:', {
+            submissionId: submission._id,
+            agentId: agentId.toString(),
+            error: promoErr.message,
+            stack: promoErr.stack
+          });
+        }
+      })();
+    }
+
     res.json({ message: 'Production submission deleted successfully' });
   } catch (error) {
     console.error('Error deleting production submission:', error);

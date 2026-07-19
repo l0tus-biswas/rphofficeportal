@@ -525,6 +525,16 @@ router.delete('/documents/:id', authenticate, async (req, res) => {
     doc.deletedAt = new Date();
     await doc.save();
 
+    // Soft-deleted documents are never surfaced again (every query filters
+    // deletedAt: null) and re-uploading creates a brand-new document rather
+    // than reusing this one, so the on-disk file would otherwise be orphaned.
+    if (doc.filePath) {
+      const fullPath = path.join(__dirname, '..', doc.filePath);
+      if (fs.existsSync(fullPath)) {
+        try { fs.unlinkSync(fullPath); } catch (_) {}
+      }
+    }
+
     await auditLog(req.user._id, doc.agent, 'ONBOARDING_DOC_DELETE', { docType: doc.docType.name });
 
     res.json({ message: 'Document removed' });

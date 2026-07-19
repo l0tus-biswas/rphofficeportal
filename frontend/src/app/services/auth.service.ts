@@ -12,7 +12,6 @@ export class AuthService {
   private apiUrl = environment.apiUrl;
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
-  public currentUser = this.currentUserSubject.asObservable();
 
   // Impersonation state — true when an admin is logged in as another user
   private impersonatingSubject = new BehaviorSubject<boolean>(

@@ -19,7 +19,6 @@ import { OnboardingStatusComponent } from './components/onboarding/onboarding-st
 import { SystemConfigComponent } from './components/admin/system-config/system-config.component';
 import { OneTimePaymentComponent } from './components/payment/one-time-payment/one-time-payment.component';
 import { SubscriptionPaymentComponent } from './components/payment/subscription-payment/subscription-payment.component';
-import { PaymentSuccessComponent } from './components/payment/payment-success/payment-success.component';
 import { PaymentSuccessComponent as ApaPaymentSuccessComponent } from './components/payment/payment-success.component';
 import { UserTransactionsComponent } from './components/user/user-transactions/user-transactions.component';
 import { AdminPaymentManagementComponent } from './components/admin/admin-payment-management/admin-payment-management.component';

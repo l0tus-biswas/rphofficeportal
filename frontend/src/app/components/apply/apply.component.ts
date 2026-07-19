@@ -132,9 +132,11 @@ export class ApplyComponent implements OnInit, OnDestroy {
 
     // Load branding
     this.branding = this.brandingService.getCurrentBranding();
-    this.brandingService.branding$.subscribe(branding => {
-      this.branding = branding;
-    });
+    this.subscriptions.push(
+      this.brandingService.branding$.subscribe(branding => {
+        this.branding = branding;
+      })
+    );
     
     this.initializeForms();
     this.loadReferralInfo();
@@ -233,52 +235,62 @@ export class ApplyComponent implements OnInit, OnDestroy {
 
   setupDynamicValidation(): void {
     // Mailing address validation
-    this.section1Form.get('hasDifferentMailing')?.valueChanges.subscribe(hasDifferent => {
-      const mailingFields = ['mailingStreet', 'mailingCity', 'mailingState'];
-      mailingFields.forEach(field => {
-        const control = this.section1Form.get(field);
+    const hasDifferentMailingControl = this.section1Form.get('hasDifferentMailing');
+    if (hasDifferentMailingControl) {
+      this.subscriptions.push(hasDifferentMailingControl.valueChanges.subscribe(hasDifferent => {
+        const mailingFields = ['mailingStreet', 'mailingCity', 'mailingState'];
+        mailingFields.forEach(field => {
+          const control = this.section1Form.get(field);
+          if (hasDifferent) {
+            control?.setValidators([Validators.required]);
+          } else {
+            control?.clearValidators();
+          }
+          control?.updateValueAndValidity();
+        });
+        const mailingZipControl = this.section1Form.get('mailingZipCode');
         if (hasDifferent) {
-          control?.setValidators([Validators.required]);
+          mailingZipControl?.setValidators([Validators.required, Validators.pattern(/^\d{4,10}$/)]);
         } else {
-          control?.clearValidators();
+          mailingZipControl?.clearValidators();
         }
-        control?.updateValueAndValidity();
-      });      
-      const mailingZipControl = this.section1Form.get('mailingZipCode');
-      if (hasDifferent) {
-        mailingZipControl?.setValidators([Validators.required, Validators.pattern(/^\d{4,10}$/)]);
-      } else {
-        mailingZipControl?.clearValidators();
-      }
-      mailingZipControl?.updateValueAndValidity();    });
+        mailingZipControl?.updateValueAndValidity();
+      }));
+    }
 
     // Bankruptcy validation
-    this.section4Form.get('bankruptcyFiled')?.valueChanges.subscribe(filed => {
-      const bankruptcyFields = ['bankruptcyChapter', 'bankruptcyStatus'];
-      bankruptcyFields.forEach(field => {
-        const control = this.section4Form.get(field);
-        if (filed) {
-          control?.setValidators([Validators.required]);
-        } else {
-          control?.clearValidators();
-        }
-        control?.updateValueAndValidity();
-      });
-    });
+    const bankruptcyFiledControl = this.section4Form.get('bankruptcyFiled');
+    if (bankruptcyFiledControl) {
+      this.subscriptions.push(bankruptcyFiledControl.valueChanges.subscribe(filed => {
+        const bankruptcyFields = ['bankruptcyChapter', 'bankruptcyStatus'];
+        bankruptcyFields.forEach(field => {
+          const control = this.section4Form.get(field);
+          if (filed) {
+            control?.setValidators([Validators.required]);
+          } else {
+            control?.clearValidators();
+          }
+          control?.updateValueAndValidity();
+        });
+      }));
+    }
 
     // Licensing validation
-    this.section5Form.get('currentlyLicensed')?.valueChanges.subscribe(licensed => {
-      const licenseFields = ['statesLicensed', 'licenseNumber', 'licenseStatus'];
-      licenseFields.forEach(field => {
-        const control = this.section5Form.get(field);
-        if (licensed) {
-          control?.setValidators([Validators.required]);
-        } else {
-          control?.clearValidators();
-        }
-        control?.updateValueAndValidity();
-      });
-    });
+    const currentlyLicensedControl = this.section5Form.get('currentlyLicensed');
+    if (currentlyLicensedControl) {
+      this.subscriptions.push(currentlyLicensedControl.valueChanges.subscribe(licensed => {
+        const licenseFields = ['statesLicensed', 'licenseNumber', 'licenseStatus'];
+        licenseFields.forEach(field => {
+          const control = this.section5Form.get(field);
+          if (licensed) {
+            control?.setValidators([Validators.required]);
+          } else {
+            control?.clearValidators();
+          }
+          control?.updateValueAndValidity();
+        });
+      }));
+    }
 
     const licenseOtherControl = this.section5Form.get('licenseOther');
     const descriptionControl = this.section5Form.get('licenseOtherDescription');
@@ -292,7 +304,9 @@ export class ApplyComponent implements OnInit, OnDestroy {
       descriptionControl?.updateValueAndValidity();
     };
     syncLicenseOtherValidation(!!licenseOtherControl?.value);
-    licenseOtherControl?.valueChanges.subscribe(selected => syncLicenseOtherValidation(!!selected));
+    if (licenseOtherControl) {
+      this.subscriptions.push(licenseOtherControl.valueChanges.subscribe(selected => syncLicenseOtherValidation(!!selected)));
+    }
   }
 
   checkExistingApplication(): void {
@@ -301,14 +315,17 @@ export class ApplyComponent implements OnInit, OnDestroy {
       return;
     }
 
-    emailControl.valueChanges.subscribe(email => {
+    this.subscriptions.push(emailControl.valueChanges.subscribe(email => {
       this.lookupPendingApplication(email);
-    });
+    }));
 
-    this.section2Form.get('recruiterAgentId')?.valueChanges.subscribe(() => {
-      const currentEmail = emailControl.value;
-      this.lookupPendingApplication(currentEmail);
-    });
+    const recruiterAgentIdControl = this.section2Form.get('recruiterAgentId');
+    if (recruiterAgentIdControl) {
+      this.subscriptions.push(recruiterAgentIdControl.valueChanges.subscribe(() => {
+        const currentEmail = emailControl.value;
+        this.lookupPendingApplication(currentEmail);
+      }));
+    }
   }
 
   private lookupPendingApplication(email: string | null | undefined): void {

@@ -571,8 +571,20 @@ async function handleSubscriptionDeleted(subscription) {
 async function handleInvoicePaid(invoice) {
   if (invoice.subscription) {
     const sub = await Subscription.findOne({ stripeSubscriptionId: invoice.subscription });
-    
-    if (sub) {
+
+    // Stripe may deliver invoice.paid before our own checkout.session.completed
+    // handler has finished creating the local Subscription record. Rather than
+    // silently dropping the event (leaving lastPaymentDate/notification unset
+    // until the user happens to load their transactions page and the lazy
+    // reconciler in user.routes.js backfills the Payment row), fall back to
+    // resolving the user directly by Stripe customer id.
+    let userId = sub?.user;
+    if (!userId && invoice.customer) {
+      const customerUser = await User.findOne({ stripeCustomerId: invoice.customer }).select('_id');
+      userId = customerUser?._id;
+    }
+
+    if (userId) {
       // Stripe may deliver invoice.paid more than once — upsert by invoice id so
       // we never create duplicate transaction rows for the same payment.
       const receiptUrl = invoice.hosted_invoice_url || '';
@@ -580,7 +592,7 @@ async function handleInvoicePaid(invoice) {
         { stripeInvoiceId: invoice.id },
         {
           $set: {
-            user: sub.user,
+            user: userId,
             type: 'subscription',
             amount: invoice.amount_paid,
             currency: invoice.currency,
@@ -597,14 +609,14 @@ async function handleInvoicePaid(invoice) {
       );
 
       // Update user last payment date
-      const user = await User.findById(sub.user);
+      const user = await User.findById(userId);
       if (user) {
         user.lastPaymentDate = new Date();
         user.paymentAccessEnabled = true;
         await user.save();
 
         Notification.createNotification({
-          userId: sub.user,
+          userId,
           type: 'payment_completed',
           title: 'Subscription Payment Received',
           message: `Your monthly subscription payment of $${(invoice.amount_paid / 100).toFixed(2)} was processed successfully.`,

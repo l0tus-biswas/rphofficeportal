@@ -116,8 +116,8 @@ router.get('/recruits', async (req, res) => {
     const sortBy = req.query.sortBy || '-createdAt'; // '-createdAt', 'name', etc.
     
     // Build filter
-    const filter = { referredBy: req.user._id };
-    
+    const filter = { referredBy: req.user._id, deletedAt: null };
+
     if (status === 'active') {
       filter.isActive = true;
     } else if (status === 'inactive') {
@@ -141,9 +141,9 @@ router.get('/recruits', async (req, res) => {
     const total = await User.countDocuments(filter);
     
     // Get stats
-    const totalRecruits = await User.countDocuments({ referredBy: req.user._id });
-    const activeCount = await User.countDocuments({ referredBy: req.user._id, isActive: true });
-    const inactiveCount = await User.countDocuments({ referredBy: req.user._id, isActive: false });
+    const totalRecruits = await User.countDocuments({ referredBy: req.user._id, deletedAt: null });
+    const activeCount = await User.countDocuments({ referredBy: req.user._id, deletedAt: null, isActive: true });
+    const inactiveCount = await User.countDocuments({ referredBy: req.user._id, deletedAt: null, isActive: false });
     
     sendResponse(res, 200, {
       recruits,
@@ -221,25 +221,26 @@ router.get('/downline', async (req, res) => {
 // @access  Private (Agent/Admin)
 router.get('/stats', async (req, res) => {
   try {
-    const directRecruits = await User.countDocuments({ referredBy: req.user._id });
-    
+    const directRecruits = await User.countDocuments({ referredBy: req.user._id, deletedAt: null });
+
     // Get all descendants count (recursive)
     const getDescendantsCount = async (userId) => {
-      const children = await User.find({ referredBy: userId }).select('_id');
+      const children = await User.find({ referredBy: userId, deletedAt: null }).select('_id');
       let count = children.length;
-      
+
       for (const child of children) {
         count += await getDescendantsCount(child._id);
       }
-      
+
       return count;
     };
-    
+
     const totalDownline = await getDescendantsCount(req.user._id);
-    
-    const activeRecruits = await User.countDocuments({ 
-      referredBy: req.user._id, 
-      isActive: true 
+
+    const activeRecruits = await User.countDocuments({
+      referredBy: req.user._id,
+      deletedAt: null,
+      isActive: true
     });
 
     // ACA Top 5 Leaderboards (global)
@@ -577,7 +578,8 @@ async function getAllDescendantsFlat(rootUserId) {
 
     const children = await User.find({
       referredBy: { $in: parentIds },
-      _id: { $nin: Array.from(visited) }
+      _id: { $nin: Array.from(visited) },
+      deletedAt: null
     })
     .select('_id name email role isActive createdAt referredBy referralCode')
     .populate('referredBy', 'name')

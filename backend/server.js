@@ -8,7 +8,6 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const User = require('./models/User');
 const SystemConfig = require('./models/SystemConfig');
-const { protect: authMiddleware } = require('./middleware/auth.middleware');
 const logger = require('./utils/logger');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -253,7 +252,7 @@ app.use('/api/user', require('./routes/user.routes'));
 app.use('/api/licensing', require('./routes/licensing.routes'));
 app.use('/api/examfx', require('./routes/examfx.routes'));
 app.use('/api/production', require('./routes/production.routes'));
-app.use('/api/notifications', authMiddleware, require('./routes/notification.routes'));
+app.use('/api/notifications', require('./routes/notification.routes'));
 app.use('/api/broadcasts', require('./routes/broadcast.routes'));
 app.use('/api/carriers', require('./routes/carrier.routes'));
 app.use('/api/commission-statements', require('./routes/commission-statements.routes'));
