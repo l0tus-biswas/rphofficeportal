@@ -217,11 +217,11 @@ licensingProgressSchema.virtual('completionPercentage').get(function() {
 licensingProgressSchema.set('toJSON', { virtuals: true });
 licensingProgressSchema.set('toObject', { virtuals: true });
 
-// Pre-save hook to set deadline (60 days from enrollment)
+// Pre-save hook to set deadline (30 days from enrollment)
 licensingProgressSchema.pre('save', function(next) {
   if (this.isNew && !this.licensingDeadline) {
     const deadline = new Date(this.enrollmentDate);
-    deadline.setDate(deadline.getDate() + 60);
+    deadline.setDate(deadline.getDate() + 30);
     this.licensingDeadline = deadline;
   }
   next();

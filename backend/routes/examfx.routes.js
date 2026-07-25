@@ -937,7 +937,7 @@ async function _syncToLicensingChecklist(agentId, examfxRecord, updatedBy) {
 
       const enrollmentDate = agent.createdAt || new Date();
       const licensingDeadline = new Date(enrollmentDate);
-      licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
 
       licensing = new LicensingProgress({
         agent: agentId,

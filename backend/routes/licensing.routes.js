@@ -111,7 +111,7 @@ router.get('/', authenticate, async (req, res) => {
         // Create default progress object for agents without records
         const enrollmentDate = agent.createdAt || new Date();
         const licensingDeadline = new Date(enrollmentDate);
-        licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+        licensingDeadline.setDate(licensingDeadline.getDate() + 30);
 
         const now = new Date();
         const diffTime = licensingDeadline - now;
@@ -209,10 +209,10 @@ router.get('/:agentId', authenticate, async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
       }
       
-      // Create with default 60-day deadline (matches every other auto-create path)
+      // Create with default 30-day deadline (matches every other auto-create path)
       const enrollmentDate = agent.createdAt || new Date();
       const licensingDeadline = new Date(enrollmentDate);
-      licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
       
       licensingProgress = new LicensingProgress({
         agent: req.params.agentId,
@@ -310,7 +310,7 @@ router.post('/:agentId', authenticate, authorize('admin'), async (req, res) => {
     
     const enrollmentDate = req.body.enrollmentDate || Date.now();
     const licensingDeadline = new Date(enrollmentDate);
-    licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+    licensingDeadline.setDate(licensingDeadline.getDate() + 30);
     
     const licensingProgress = new LicensingProgress({
       agent: req.params.agentId,
@@ -347,7 +347,7 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
       // Auto-create if doesn't exist
       const enrollmentDate = agent.createdAt || Date.now();
       const licensingDeadline = new Date(enrollmentDate);
-      licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
       
       licensingProgress = new LicensingProgress({
         agent: req.params.agentId,
@@ -623,7 +623,7 @@ router.post('/:agentId/upload/:checklistItem',
         // Auto-create if doesn't exist
         const enrollmentDate = agent.createdAt || Date.now();
         const licensingDeadline = new Date(enrollmentDate);
-        licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+        licensingDeadline.setDate(licensingDeadline.getDate() + 30);
         
         licensingProgress = new LicensingProgress({
           agent: req.params.agentId,
@@ -682,7 +682,7 @@ router.put('/:agentId/notes', authenticate, authorize('admin'), async (req, res)
       // Auto-create if doesn't exist
       const enrollmentDate = agent.createdAt || Date.now();
       const licensingDeadline = new Date(enrollmentDate);
-      licensingDeadline.setDate(licensingDeadline.getDate() + 60);
+      licensingDeadline.setDate(licensingDeadline.getDate() + 30);
       
       licensingProgress = new LicensingProgress({
         agent: req.params.agentId,
