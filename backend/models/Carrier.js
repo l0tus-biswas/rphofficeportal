@@ -10,7 +10,7 @@ const carrierSchema = new mongoose.Schema({
   // Product categories this carrier belongs to (supports multiple)
   category: {
     type: [String],
-    enum: ['Life Insurance', 'Health Insurance', 'Medicare', 'Supplemental Insurance'],
+    enum: ['Life Insurance', 'Health Insurance', 'Medicare', 'Supplemental Insurance', 'Annuities'],
     validate: {
       validator: function(v) { return v && v.length > 0; },
       message: 'At least one carrier category is required'

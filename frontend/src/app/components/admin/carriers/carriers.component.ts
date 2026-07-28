@@ -35,7 +35,8 @@ export class CarriersComponent implements OnInit {
     'Life Insurance',
     'Health Insurance',
     'Medicare',
-    'Supplemental Insurance'
+    'Supplemental Insurance',
+    'Annuities'
   ];
 
   constructor(private carrierService: CarrierService) {}
