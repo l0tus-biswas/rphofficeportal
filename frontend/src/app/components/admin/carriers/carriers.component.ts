@@ -31,6 +31,15 @@ export class CarriersComponent implements OnInit {
   documentError = '';
   savingDocument = false;
 
+  readonly quillModules = {
+    toolbar: [
+      ['bold', 'italic', 'underline'],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      ['link'],
+      ['clean']
+    ]
+  };
+
   readonly CATEGORIES = [
     'Life Insurance',
     'Health Insurance',
@@ -61,6 +70,12 @@ export class CarriersComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  // Strip HTML tags for a plain-text preview (e.g. the Notes table column)
+  toPlainText(html: string | undefined): string {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
   applyFilter(): void {

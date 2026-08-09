@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
+import { QuillModule } from 'ngx-quill';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -155,7 +156,8 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     FormsModule,
     DragDropModule,
     ReactiveFormsModule,
-    ApplicationSuccessComponent
+    ApplicationSuccessComponent,
+    QuillModule.forRoot()
   ],
   providers: [
     {

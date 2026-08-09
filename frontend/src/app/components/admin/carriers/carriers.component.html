@@ -87,7 +87,7 @@
                 </a>
                 <span *ngIf="!carrier.contractingLink" class="text-muted">—</span>
               </td>
-              <td><small class="text-muted">{{ carrier.notes || '—' }}</small></td>
+              <td><small class="text-muted">{{ toPlainText(carrier.notes) || '—' }}</small></td>
               <td>
                 <div class="btn-group btn-group-sm">
                   <button class="btn btn-outline-primary" (click)="editCarrier(carrier)" title="Edit"><i class="bi bi-pencil"></i></button>
@@ -154,13 +154,15 @@
           <!-- Contracting Instructions -->
           <div class="mb-3">
             <label class="form-label">Contracting Instructions</label>
-            <textarea class="form-control" [(ngModel)]="currentCarrier.contractingInstructions" name="contractingInstructions" rows="3" placeholder="Step-by-step contracting process..."></textarea>
+            <quill-editor [(ngModel)]="currentCarrier.contractingInstructions" name="contractingInstructions"
+              [modules]="quillModules" placeholder="Step-by-step contracting process..."></quill-editor>
           </div>
 
           <!-- What to Expect -->
           <div class="mb-3">
             <label class="form-label">What to Expect</label>
-            <textarea class="form-control" [(ngModel)]="currentCarrier.whatToExpect" name="whatToExpect" rows="3" placeholder="Timeline, next steps after contracting..."></textarea>
+            <quill-editor [(ngModel)]="currentCarrier.whatToExpect" name="whatToExpect"
+              [modules]="quillModules" placeholder="Timeline, next steps after contracting..."></quill-editor>
           </div>
 
           <!-- Supplemental Level Guide PDF -->
@@ -212,7 +214,8 @@
           <!-- Notes -->
           <div class="mb-3">
             <label class="form-label">Notes</label>
-            <textarea class="form-control" [(ngModel)]="currentCarrier.notes" name="notes" rows="2" placeholder="Additional notes..."></textarea>
+            <quill-editor [(ngModel)]="currentCarrier.notes" name="notes"
+              [modules]="quillModules" placeholder="Additional notes..."></quill-editor>
           </div>
         </form>
       </div>

@@ -37,3 +37,12 @@
   padding: 0.5rem 0.75rem;
   font-weight: 500;
 }
+
+quill-editor {
+  display: block;
+  width: 100%;
+}
+
+quill-editor .ql-container {
+  min-height: 100px;
+}

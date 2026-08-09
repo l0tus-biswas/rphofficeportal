@@ -1,1 +1,32 @@
 /* agent-carriers styles */
+
+.carrier-name-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+}
+
+.section-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-content {
+  margin-bottom: 0;
+}
+
+.rich-text-content p {
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-content p:last-child {
+  margin-bottom: 0;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+  margin-bottom: 0.5rem;
+  padding-left: 1.5rem;
+}

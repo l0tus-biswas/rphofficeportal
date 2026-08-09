@@ -40,7 +40,7 @@
       <div class="col-md-6 col-lg-4" *ngFor="let carrier of currentCarriers">
         <div class="card h-100 shadow-sm">
           <div class="card-header d-flex align-items-center justify-content-between">
-            <strong>{{ carrier.name }}</strong>
+            <strong class="carrier-name-heading">{{ carrier.name }}</strong>
             <!-- Appointment status badge -->
             <span class="badge" [ngClass]="statusBadgeClass(getStatus(carrier)?.status)">
               {{ statusLabel(getStatus(carrier)?.status) }}
@@ -83,7 +83,7 @@
   <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">
+        <h5 class="modal-title carrier-name-heading">
           <i class="bi bi-building me-2"></i>{{ carrier.name }}
         </h5>
         <button type="button" class="btn-close" (click)="closeDetails()"></button>
@@ -111,20 +111,20 @@
 
         <!-- Contracting Instructions -->
         <div class="mb-3" *ngIf="carrier.contractingInstructions">
-          <h6 class="fw-semibold text-muted"><i class="bi bi-list-check me-1"></i>Contracting Instructions</h6>
-          <p class="mb-0" style="white-space: pre-line">{{ carrier.contractingInstructions }}</p>
+          <h3 class="section-heading"><i class="bi bi-list-check me-1"></i>Contracting Instructions</h3>
+          <div class="rich-text-content" [innerHTML]="carrier.contractingInstructions"></div>
         </div>
 
         <!-- What to Expect -->
         <div class="mb-3" *ngIf="carrier.whatToExpect">
-          <h6 class="fw-semibold text-muted"><i class="bi bi-signpost-2 me-1"></i>What to Expect</h6>
-          <p class="mb-0" style="white-space: pre-line">{{ carrier.whatToExpect }}</p>
+          <h3 class="section-heading"><i class="bi bi-signpost-2 me-1"></i>What to Expect</h3>
+          <div class="rich-text-content" [innerHTML]="carrier.whatToExpect"></div>
         </div>
 
         <!-- Notes / Requirements -->
         <div class="mb-3" *ngIf="carrier.notes">
-          <h6 class="fw-semibold text-muted"><i class="bi bi-card-text me-1"></i>Additional Information</h6>
-          <p class="mb-0" style="white-space: pre-line">{{ carrier.notes }}</p>
+          <h3 class="section-heading"><i class="bi bi-card-text me-1"></i>Additional Information</h3>
+          <div class="rich-text-content" [innerHTML]="carrier.notes"></div>
         </div>
 
         <!-- Contracting link -->
@@ -143,7 +143,7 @@
 
         <!-- Documents (guides, forms, resources) -->
         <div class="mb-3" *ngIf="carrier.documents && carrier.documents.length > 0">
-          <h6 class="fw-semibold text-muted"><i class="bi bi-folder2-open me-1"></i>Documents</h6>
+          <h3 class="section-heading"><i class="bi bi-folder2-open me-1"></i>Documents</h3>
           <ul class="list-unstyled mb-0">
             <li *ngFor="let doc of carrier.documents" class="mb-1">
               <a href="javascript:void(0)" (click)="viewDocument(carrier, doc)">
@@ -155,7 +155,7 @@
 
         <!-- Contact Info -->
         <div class="mb-3" *ngIf="carrier.contactInfo?.phone || carrier.contactInfo?.email || carrier.contactInfo?.website">
-          <h6 class="fw-semibold text-muted"><i class="bi bi-person-rolodex me-1"></i>Contact Information</h6>
+          <h6 class="section-heading"><i class="bi bi-person-rolodex me-1"></i>Contact Information</h6>
           <ul class="list-unstyled mb-0">
             <li *ngIf="carrier.contactInfo?.phone">
               <i class="bi bi-telephone me-1 text-muted"></i>{{ carrier.contactInfo?.phone }}
@@ -174,7 +174,7 @@
         <!-- Admin Notes on the agent's appointment -->
         <ng-container *ngIf="getStatus(carrier) as status">
           <div *ngIf="status.notes && status.notes.length > 0" class="mb-1">
-            <h6 class="fw-semibold text-muted"><i class="bi bi-chat-left-text me-1"></i>Admin Notes</h6>
+            <h6 class="section-heading"><i class="bi bi-chat-left-text me-1"></i>Admin Notes</h6>
             <div *ngFor="let note of status.notes" class="border rounded p-2 mb-1 bg-light">
               <p class="small mb-0" style="white-space: pre-line">{{ note.text }}</p>
               <small class="text-muted">{{ note.addedBy?.name || 'Admin' }} — {{ note.addedAt | appDate:'medium' }}</small>
