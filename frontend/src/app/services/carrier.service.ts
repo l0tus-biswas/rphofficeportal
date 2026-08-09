@@ -70,18 +70,36 @@ export function getDocumentIcon(fileName: string): string {
   return 'bi-file-earmark text-muted';
 }
 
-// Text pasted from Word/Outlook/PDFs often carries invisible break-hint
-// characters (zero-width space, soft hyphen, BOM) at old hard-wrap points.
-// The browser treats these as valid places to break a line, which visually
-// splits ordinary words (e.g. "account" -> "accoun" / "t") even though the
-// word itself fits fine. Stripping them restores normal word-boundary wrapping.
-// Built from char codes (rather than literal characters) so the source file
-// never has to contain an actual invisible/zero-width character.
-const INVISIBLE_BREAK_CODES = [0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD];
-const INVISIBLE_BREAK_CHARS = new RegExp(`[${INVISIBLE_BREAK_CODES.map(c => String.fromCharCode(c)).join('')}]`, 'g');
+// Text pasted from Word/Outlook/PDFs can carry invisible formatting
+// characters (zero-width space/joiner, soft hyphen, BOM, directional marks,
+// etc. -- Unicode general category "Cf", Format) left over from the source
+// document's line-wrap/justification hints. \p{Cf} matches the whole
+// category rather than a hand-picked list.
+const INVISIBLE_BREAK_CHARS = /\p{Cf}/gu;
 
-export function stripInvisibleBreakChars(html: string | undefined | null): string {
-  return html ? html.replace(INVISIBLE_BREAK_CHARS, '') : (html || '');
+// ngx-quill's default valueGetter reads Quill's getSemanticHTML(), which
+// (as of Quill 2.x) deliberately encodes every literal space as the &nbsp;
+// entity to preserve exact spacing on re-parse. A non-breaking space can
+// never be a line-break point, so once every inter-word space in a
+// paragraph is &nbsp;, the whole paragraph becomes one unbreakable run of
+// text -- the browser then has no choice but to break mid-word
+// (e.g. "account" -> "accoun" / "t") to avoid overflowing the container.
+// carriers.component.ts now overrides valueGetter to read
+// quillEditor.root.innerHTML instead, which doesn't have this problem, but
+// carriers saved before that fix already have literal &nbsp; baked into
+// their stored HTML -- normalize both the raw entity and its already
+// decoded non-breaking-space form back to a normal space so old data
+// displays correctly without needing to be re-saved. Built from a char
+// code (rather than a literal non-breaking space) so the source file
+// never has to contain one.
+const DECODED_NBSP = String.fromCharCode(0x00A0);
+const NBSP_ENTITY_OR_CHAR = new RegExp('&nbsp;|' + DECODED_NBSP, 'gi');
+
+// Combines both fixes above into a single pass over rich-text HTML coming
+// either from the API (display) or the editor (save).
+export function normalizeRichText(html: string | undefined | null): string {
+  if (!html) return html || '';
+  return html.replace(INVISIBLE_BREAK_CHARS, '').replace(NBSP_ENTITY_OR_CHAR, ' ');
 }
 
 export interface AgentCarrierStatus {
@@ -212,4 +230,3 @@ export class CarrierService {
     return this.http.post(`${this.apiUrl}/admin/status/${statusId}/notes`, { text });
   }
 }
-

@@ -155,14 +155,14 @@
           <div class="mb-3">
             <label class="form-label">Contracting Instructions</label>
             <quill-editor [(ngModel)]="currentCarrier.contractingInstructions" name="contractingInstructions"
-              [modules]="quillModules" placeholder="Step-by-step contracting process..."></quill-editor>
+              [modules]="quillModules" [valueGetter]="quillValueGetter" placeholder="Step-by-step contracting process..."></quill-editor>
           </div>
 
           <!-- What to Expect -->
           <div class="mb-3">
             <label class="form-label">What to Expect</label>
             <quill-editor [(ngModel)]="currentCarrier.whatToExpect" name="whatToExpect"
-              [modules]="quillModules" placeholder="Timeline, next steps after contracting..."></quill-editor>
+              [modules]="quillModules" [valueGetter]="quillValueGetter" placeholder="Timeline, next steps after contracting..."></quill-editor>
           </div>
 
           <!-- Supplemental Level Guide PDF -->
@@ -215,7 +215,7 @@
           <div class="mb-3">
             <label class="form-label">Notes</label>
             <quill-editor [(ngModel)]="currentCarrier.notes" name="notes"
-              [modules]="quillModules" placeholder="Additional notes..."></quill-editor>
+              [modules]="quillModules" [valueGetter]="quillValueGetter" placeholder="Additional notes..."></quill-editor>
           </div>
         </form>
       </div>

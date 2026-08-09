@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, stripInvisibleBreakChars } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, normalizeRichText } from '../../../services/carrier.service';
 
 const MAX_DOCUMENT_SIZE_BYTES = 3 * 1024 * 1024;
 
@@ -40,6 +40,12 @@ export class CarriersComponent implements OnInit {
     ]
   };
 
+  // ngx-quill's default valueGetter reads Quill's getSemanticHTML(), which
+  // encodes every literal space as &nbsp; (see normalizeRichText's comment
+  // in carrier.service.ts for why that breaks word-wrapping). root.innerHTML
+  // is Quill's own live DOM and doesn't have this problem.
+  readonly quillValueGetter = (quillEditor: any): string => quillEditor.root.innerHTML;
+
   readonly CATEGORIES = [
     'Life Insurance',
     'Health Insurance',
@@ -61,9 +67,9 @@ export class CarriersComponent implements OnInit {
     this.carrierService.getAllCarriers(false).subscribe({
       next: (carriers) => {
         for (const c of carriers) {
-          c.contractingInstructions = stripInvisibleBreakChars(c.contractingInstructions);
-          c.whatToExpect = stripInvisibleBreakChars(c.whatToExpect);
-          c.notes = stripInvisibleBreakChars(c.notes);
+          c.contractingInstructions = normalizeRichText(c.contractingInstructions);
+          c.whatToExpect = normalizeRichText(c.whatToExpect);
+          c.notes = normalizeRichText(c.notes);
         }
         this.carriers = carriers;
         this.applyFilter();
@@ -77,10 +83,17 @@ export class CarriersComponent implements OnInit {
     });
   }
 
-  // Strip HTML tags for a plain-text preview (e.g. the Notes table column)
-  toPlainText(html: string | undefined): string {
+  // Plain-text, entity-decoded preview for the Notes table column (e.g.
+  // "Lorem&nbsp;ipsum..." -> "Lorem ipsum..."), truncated to a short snippet.
+  // A detached element's textContent decodes every HTML entity correctly
+  // (not just &nbsp;) using the browser's own parser, rather than a
+  // hand-rolled regex that would only cover entities we thought to list.
+  toPlainText(html: string | undefined, maxLength = 120): string {
     if (!html) return '';
-    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const div = document.createElement('div');
+    div.innerHTML = normalizeRichText(html).replace(/<\/(p|div|li)>|<br\s*\/?>/gi, ' ');
+    const text = (div.textContent || '').replace(/\s+/g, ' ').trim();
+    return text.length > maxLength ? text.slice(0, maxLength).trim() + '…' : text;
   }
 
   applyFilter(): void {
@@ -287,9 +300,9 @@ export class CarriersComponent implements OnInit {
     formData.append('category', JSON.stringify(this.currentCarrier.category));
     formData.append('isActive', String(this.currentCarrier.isActive ?? true));
     if (this.currentCarrier.contractingLink) formData.append('contractingLink', this.currentCarrier.contractingLink);
-    if (this.currentCarrier.contractingInstructions) formData.append('contractingInstructions', stripInvisibleBreakChars(this.currentCarrier.contractingInstructions));
-    if (this.currentCarrier.whatToExpect) formData.append('whatToExpect', stripInvisibleBreakChars(this.currentCarrier.whatToExpect));
-    if (this.currentCarrier.notes !== undefined) formData.append('notes', stripInvisibleBreakChars(this.currentCarrier.notes));
+    if (this.currentCarrier.contractingInstructions) formData.append('contractingInstructions', normalizeRichText(this.currentCarrier.contractingInstructions));
+    if (this.currentCarrier.whatToExpect) formData.append('whatToExpect', normalizeRichText(this.currentCarrier.whatToExpect));
+    if (this.currentCarrier.notes !== undefined) formData.append('notes', normalizeRichText(this.currentCarrier.notes));
     if (this.levelGuideFile) formData.append('levelGuideFile', this.levelGuideFile);
 
     const op = this.editMode && this.currentCarrier._id

@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, stripInvisibleBreakChars } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, normalizeRichText } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-agent-carriers',
@@ -55,9 +55,9 @@ export class AgentCarriersComponent implements OnInit {
     this.carrierService.getAllCarriers(true).subscribe({
       next: (carriers) => {
         for (const c of carriers) {
-          c.contractingInstructions = stripInvisibleBreakChars(c.contractingInstructions);
-          c.whatToExpect = stripInvisibleBreakChars(c.whatToExpect);
-          c.notes = stripInvisibleBreakChars(c.notes);
+          c.contractingInstructions = normalizeRichText(c.contractingInstructions);
+          c.whatToExpect = normalizeRichText(c.whatToExpect);
+          c.notes = normalizeRichText(c.notes);
         }
         this.carriersByCategory = {};
         for (const tab of this.TABS) {
