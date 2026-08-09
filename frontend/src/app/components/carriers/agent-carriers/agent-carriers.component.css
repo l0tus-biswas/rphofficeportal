@@ -13,8 +13,27 @@
   margin-bottom: 0.5rem;
 }
 
+/* Bootstrap's .modal-dialog-scrollable sets overflow-y: auto on .modal-body,
+   which per spec forces the computed overflow-x to auto too (since only one
+   axis can be "visible") -- that's what was producing the stray horizontal
+   scrollbar. Pin overflow-x explicitly and let long/unbroken text wrap
+   instead of pushing the modal width out. */
+.modal-body {
+  overflow-x: hidden;
+}
+
+.modal-body,
+.rich-text-content {
+  overflow-wrap: break-word;
+}
+
 .rich-text-content {
   margin-bottom: 0;
+  max-width: 100%;
+}
+
+.rich-text-content img {
+  max-width: 100%;
 }
 
 .rich-text-content p {

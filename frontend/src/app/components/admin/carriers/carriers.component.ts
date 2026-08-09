@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, stripInvisibleBreakChars } from '../../../services/carrier.service';
 
 const MAX_DOCUMENT_SIZE_BYTES = 3 * 1024 * 1024;
 
@@ -60,6 +60,11 @@ export class CarriersComponent implements OnInit {
 
     this.carrierService.getAllCarriers(false).subscribe({
       next: (carriers) => {
+        for (const c of carriers) {
+          c.contractingInstructions = stripInvisibleBreakChars(c.contractingInstructions);
+          c.whatToExpect = stripInvisibleBreakChars(c.whatToExpect);
+          c.notes = stripInvisibleBreakChars(c.notes);
+        }
         this.carriers = carriers;
         this.applyFilter();
         this.loading = false;
@@ -282,9 +287,9 @@ export class CarriersComponent implements OnInit {
     formData.append('category', JSON.stringify(this.currentCarrier.category));
     formData.append('isActive', String(this.currentCarrier.isActive ?? true));
     if (this.currentCarrier.contractingLink) formData.append('contractingLink', this.currentCarrier.contractingLink);
-    if (this.currentCarrier.contractingInstructions) formData.append('contractingInstructions', this.currentCarrier.contractingInstructions);
-    if (this.currentCarrier.whatToExpect) formData.append('whatToExpect', this.currentCarrier.whatToExpect);
-    if (this.currentCarrier.notes !== undefined) formData.append('notes', this.currentCarrier.notes || '');
+    if (this.currentCarrier.contractingInstructions) formData.append('contractingInstructions', stripInvisibleBreakChars(this.currentCarrier.contractingInstructions));
+    if (this.currentCarrier.whatToExpect) formData.append('whatToExpect', stripInvisibleBreakChars(this.currentCarrier.whatToExpect));
+    if (this.currentCarrier.notes !== undefined) formData.append('notes', stripInvisibleBreakChars(this.currentCarrier.notes));
     if (this.levelGuideFile) formData.append('levelGuideFile', this.levelGuideFile);
 
     const op = this.editMode && this.currentCarrier._id

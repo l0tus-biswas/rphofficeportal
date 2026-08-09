@@ -70,6 +70,20 @@ export function getDocumentIcon(fileName: string): string {
   return 'bi-file-earmark text-muted';
 }
 
+// Text pasted from Word/Outlook/PDFs often carries invisible break-hint
+// characters (zero-width space, soft hyphen, BOM) at old hard-wrap points.
+// The browser treats these as valid places to break a line, which visually
+// splits ordinary words (e.g. "account" -> "accoun" / "t") even though the
+// word itself fits fine. Stripping them restores normal word-boundary wrapping.
+// Built from char codes (rather than literal characters) so the source file
+// never has to contain an actual invisible/zero-width character.
+const INVISIBLE_BREAK_CODES = [0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD];
+const INVISIBLE_BREAK_CHARS = new RegExp(`[${INVISIBLE_BREAK_CODES.map(c => String.fromCharCode(c)).join('')}]`, 'g');
+
+export function stripInvisibleBreakChars(html: string | undefined | null): string {
+  return html ? html.replace(INVISIBLE_BREAK_CHARS, '') : (html || '');
+}
+
 export interface AgentCarrierStatus {
   _id?: string;
   agent?: any;

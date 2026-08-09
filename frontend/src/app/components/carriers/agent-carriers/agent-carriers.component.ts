@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Observable } from 'rxjs';
-import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon } from '../../../services/carrier.service';
+import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumentPreviewable, getDocumentMimeType, getDocumentIcon, stripInvisibleBreakChars } from '../../../services/carrier.service';
 
 @Component({
   selector: 'app-agent-carriers',
@@ -10,11 +10,14 @@ import { CarrierService, Carrier, CarrierDocument, AgentCarrierStatus, isDocumen
 export class AgentCarriersComponent implements OnInit {
   activeTab = 'Life Insurance';
 
+  // Labels/order match the CATEGORIES list in admin/carriers exactly, so a
+  // carrier's category always maps to a tab an agent can actually find it under.
   readonly TABS: { label: string; category: string; icon: string }[] = [
     { label: 'Life Insurance', category: 'Life Insurance', icon: 'bi-heart-pulse-fill' },
-    { label: 'Supplemental', category: 'Supplemental Insurance', icon: 'bi-shield-fill-plus' },
-    { label: 'Health / ACA', category: 'Health Insurance', icon: 'bi-hospital-fill' },
-    { label: 'Medicare', category: 'Medicare', icon: 'bi-bandaid-fill' }
+    { label: 'Health Insurance', category: 'Health Insurance', icon: 'bi-hospital-fill' },
+    { label: 'Medicare', category: 'Medicare', icon: 'bi-bandaid-fill' },
+    { label: 'Supplemental Insurance', category: 'Supplemental Insurance', icon: 'bi-shield-fill-plus' },
+    { label: 'Annuities', category: 'Annuities', icon: 'bi-piggy-bank-fill' }
   ];
 
   // Per-category carrier lists
@@ -51,6 +54,11 @@ export class AgentCarriersComponent implements OnInit {
 
     this.carrierService.getAllCarriers(true).subscribe({
       next: (carriers) => {
+        for (const c of carriers) {
+          c.contractingInstructions = stripInvisibleBreakChars(c.contractingInstructions);
+          c.whatToExpect = stripInvisibleBreakChars(c.whatToExpect);
+          c.notes = stripInvisibleBreakChars(c.notes);
+        }
         this.carriersByCategory = {};
         for (const tab of this.TABS) {
           this.carriersByCategory[tab.category] = carriers.filter(c =>

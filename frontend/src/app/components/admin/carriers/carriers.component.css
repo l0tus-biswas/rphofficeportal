@@ -46,3 +46,11 @@ quill-editor {
 quill-editor .ql-container {
   min-height: 100px;
 }
+
+/* .modal-dialog-scrollable sets overflow-y: auto on .modal-body, which per
+   spec forces the computed overflow-x to auto too -- pin it explicitly so a
+   long pasted line can't produce a stray horizontal scrollbar. */
+.modal-body {
+  overflow-x: hidden;
+  overflow-wrap: break-word;
+}
