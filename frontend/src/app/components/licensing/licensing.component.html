@@ -158,7 +158,7 @@
                          (change)="updateChecklistDate('preLicenseCourse', 'completedDate', $any($event.target).value)">
                   <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}</div>
                 </div>
-                <div *ngIf="isAdmin" class="mt-2">
+                <div *ngIf="canEditSelected()" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['preLicenseCourse']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Certificate
@@ -225,7 +225,7 @@
                         <strong>{{ formatDate(h.date) }}</strong>
                         <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
                         <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
-                        <span *ngIf="isAdmin" class="float-end btn-group btn-group-sm">
+                        <span *ngIf="canEditSelected()" class="float-end btn-group btn-group-sm">
                           <button type="button" class="btn btn-outline-secondary" (click)="startEditHistory('stateExam', h)" title="Edit"><i class="bi bi-pencil"></i></button>
                           <button type="button" class="btn btn-outline-danger" (click)="deleteHistoryEntry('stateExam', h)" title="Delete"><i class="bi bi-trash"></i></button>
                         </span>
@@ -292,7 +292,7 @@
                     </button>
                   </div>
                 </div>
-                <div *ngIf="isAdmin" class="mt-2">
+                <div *ngIf="canEditSelected()" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateExam']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
@@ -359,7 +359,7 @@
                         <strong>{{ formatDate(h.date) }}</strong>
                         <span class="badge bg-info text-dark ms-1">{{ h.outcome }}</span>
                         <span *ngIf="h.notes" class="text-muted"> — {{ h.notes }}</span>
-                        <span *ngIf="isAdmin" class="float-end btn-group btn-group-sm">
+                        <span *ngIf="canEditSelected()" class="float-end btn-group btn-group-sm">
                           <button type="button" class="btn btn-outline-secondary" (click)="startEditHistory('fingerprinting', h)" title="Edit"><i class="bi bi-pencil"></i></button>
                           <button type="button" class="btn btn-outline-danger" (click)="deleteHistoryEntry('fingerprinting', h)" title="Delete"><i class="bi bi-trash"></i></button>
                         </span>
@@ -424,7 +424,7 @@
                     </button>
                   </div>
                 </div>
-                <div *ngIf="isAdmin" class="mt-2">
+                <div *ngIf="canEditSelected()" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['fingerprinting']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
@@ -470,7 +470,7 @@
                          (change)="updateChecklistDate('diceApplication', 'submittedDate', $any($event.target).value)">
                   <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}</div>
                 </div>
-                <div *ngIf="isAdmin" class="mt-2">
+                <div *ngIf="canEditSelected()" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['diceApplication']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document
@@ -517,7 +517,7 @@
                          (change)="updateChecklistDate('stateAppointment', 'approvedDate', $any($event.target).value)">
                   <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}</div>
                 </div>
-                <div *ngIf="isAdmin" class="mt-2">
+                <div *ngIf="canEditSelected()" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateAppointment']">
                   <label class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-upload"></i> Upload Document

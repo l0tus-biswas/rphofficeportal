@@ -556,9 +556,8 @@ router.put('/:agentId/checklist', authenticate, requireAdminOrUpline, async (req
 
 // @route   PUT /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
 // @desc    Edit a single attempt/reschedule entry (state exam or fingerprinting)
-// @access  Admin only -- deliberately not opened to uplines: this corrects an
-// already-recorded attempt, unlike the checklist/notes routes above.
-router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
+// @access  Admin, or any upline of this agent
+router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, requireAdminOrUpline, async (req, res) => {
   try {
     const { checklistItem, historyId } = req.params;
     if (!['stateExam', 'fingerprinting'].includes(checklistItem)) {
@@ -601,9 +600,8 @@ router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate
 // @route   DELETE /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
 // @desc    Delete a single attempt/reschedule entry; keeps `attempts` in sync
 //          with the remaining history so the two values never disagree.
-// @access  Admin only -- deliberately not opened to uplines; see the PUT
-// history route above for why.
-router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
+// @access  Admin, or any upline of this agent
+router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, requireAdminOrUpline, async (req, res) => {
   try {
     const { checklistItem, historyId } = req.params;
     if (!['stateExam', 'fingerprinting'].includes(checklistItem)) {
@@ -643,11 +641,10 @@ router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authentic
 
 // @route   POST /api/licensing/:agentId/upload/:checklistItem
 // @desc    Upload document for checklist item
-// @access  Admin only -- deliberately not opened to uplines; document
-// handling stays with admins even though checklist/notes edits don't.
+// @access  Admin, or any upline of this agent
 router.post('/:agentId/upload/:checklistItem',
-  authenticate, 
-  authorize('admin'), 
+  authenticate,
+  requireAdminOrUpline,
   upload.single('document'),
   async (req, res) => {
     try {

@@ -188,9 +188,7 @@ export class LicensingComponent implements OnInit {
 
   onFileSelected(event: any, item: string): void {
     const file = event.target.files?.[0];
-    // Document upload stays admin-only even for uplines -- see the backend
-    // route comment on POST /:agentId/upload/:checklistItem for why.
-    if (!file || !this.selectedAgent || !this.isAdmin) return;
+    if (!file || !this.selectedAgent || !this.canEditSelected()) return;
 
     this.uploadingFile[item] = true;
 
@@ -341,7 +339,7 @@ export class LicensingComponent implements OnInit {
   }
 
   startEditHistory(item: string, entry: any): void {
-    if (!this.isAdmin) return;
+    if (!this.canEditSelected()) return;
     this.editHistoryForm[this.historyKey(item, entry._id)] = {
       date: this.toDateInput(entry.date),
       outcome: entry.outcome,
@@ -354,7 +352,7 @@ export class LicensingComponent implements OnInit {
   }
 
   saveEditHistory(item: string, entry: any): void {
-    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!this.selectedAgent || !this.canEditSelected()) return;
     const key = this.historyKey(item, entry._id);
     const form = this.editHistoryForm[key];
     if (!form || !form.date) {
@@ -384,7 +382,7 @@ export class LicensingComponent implements OnInit {
   }
 
   deleteHistoryEntry(item: string, entry: any): void {
-    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!this.selectedAgent || !this.canEditSelected()) return;
     if (!confirm('Delete this attempt/reschedule entry? This cannot be undone.')) return;
 
     this.licensingService.deleteScheduleHistory(this.selectedAgent.agent._id, item, entry._id).subscribe({
