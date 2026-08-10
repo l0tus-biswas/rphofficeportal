@@ -32,98 +32,86 @@
   max-width: 100%;
 }
 
-.rich-text-content img {
+/* Everything below targets elements that land inside .rich-text-content via
+   [innerHTML] -- raw DOM the browser inserted directly, not template nodes
+   Angular's compiler ever saw. Angular's emulated view encapsulation stamps
+   a scoping attribute onto every part of a descendant selector (so
+   ".rich-text-content .foo" only matches a ".foo" that *also* carries this
+   component's attribute); innerHTML content never gets that attribute, so
+   plain descendant selectors here silently never match anything. ::ng-deep
+   is Angular's (deprecated but still supported) escape hatch for exactly
+   this -- it drops the attribute requirement for everything after it. */
+.rich-text-content ::ng-deep img {
   max-width: 100%;
 }
 
-.rich-text-content p {
+.rich-text-content ::ng-deep p {
   margin-bottom: 0.5rem;
 }
 
-.rich-text-content p:last-child {
+.rich-text-content ::ng-deep p:last-child {
   margin-bottom: 0;
 }
 
-.rich-text-content ul,
-.rich-text-content ol {
+.rich-text-content ::ng-deep ul,
+.rich-text-content ::ng-deep ol {
   margin-bottom: 0.5rem;
   padding-left: 1.5rem;
 }
 
-/* Quill (both bullet and numbered lists) always emits <ol><li data-list="...">
-   -- the only thing that distinguishes a bullet from a numbered item is the
-   data-list attribute plus Quill's own CSS, which is scoped under
-   ".ql-editor" (present on the live editor, absent here since this is a
-   plain innerHTML dump). Without it the browser falls back to native <ol>
-   behavior -- numbers, regardless of data-list -- which is why bullet lists
-   were rendering as numbered ones outside the editor. Porting just the
-   list-marker rules (not Quill's editor chrome) fixes that. */
-.rich-text-content li {
-  list-style-type: none;
-  position: relative;
-}
+/* Bullet vs. numbered list type is fixed up at the source (see
+   normalizeRichText / fixQuillListTags in carrier.service.ts, which rewrites
+   Quill's <ol><li data-list="bullet"> into a real <ul>), so no CSS is needed
+   here -- native browser <ul>/<ol> rendering handles the marker correctly on
+   its own. */
 
-.rich-text-content li[data-list] {
-  padding-left: 1.5em;
-}
-
-.rich-text-content li[data-list] > .ql-ui {
-  position: absolute;
-}
-
-.rich-text-content li[data-list] > .ql-ui::before {
-  display: inline-block;
-  margin-left: -1.5em;
-  margin-right: 0.3em;
-  text-align: right;
-  white-space: nowrap;
-  width: 1.2em;
-}
-
-.rich-text-content li[data-list='bullet'] > .ql-ui::before {
-  content: '\2022';
-}
-
-.rich-text-content ol {
-  counter-reset: list-0;
-}
-
-.rich-text-content li[data-list='ordered'] {
-  counter-increment: list-0;
-}
-
-.rich-text-content li[data-list='ordered'] > .ql-ui::before {
-  content: counter(list-0, decimal) '. ';
-}
-
-/* Same reasoning as the list fix above: Quill's font/size pickers apply
-   class names (ql-font-*, ql-size-*) whose actual font-family/font-size
-   values are defined in CSS scoped under ".ql-editor". Porting just those
-   value rules so headings/fonts/sizes chosen in the admin editor render
-   the same way here. */
-.rich-text-content .ql-font-serif {
+/* Quill's font/size pickers apply class names (ql-font-*, ql-size-*) whose
+   actual font-family/font-size values are defined in CSS scoped under
+   ".ql-editor". Porting just those value rules so headings/fonts/sizes
+   chosen in the admin editor render the same way here. */
+.rich-text-content ::ng-deep .ql-font-serif {
   font-family: Georgia, 'Times New Roman', serif;
 }
 
-.rich-text-content .ql-font-monospace {
+.rich-text-content ::ng-deep .ql-font-monospace {
   font-family: Monaco, 'Courier New', monospace;
 }
 
-.rich-text-content .ql-size-small {
+.rich-text-content ::ng-deep .ql-size-small {
   font-size: 0.75em;
 }
 
-.rich-text-content .ql-size-large {
+.rich-text-content ::ng-deep .ql-size-large {
   font-size: 1.5em;
 }
 
-.rich-text-content .ql-size-huge {
+.rich-text-content ::ng-deep .ql-size-huge {
   font-size: 2.5em;
 }
 
-.rich-text-content h1,
-.rich-text-content h2,
-.rich-text-content h3 {
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
+/* styles.css forces every <h1>/<h2> on the entire site to the same 1.375rem
+   page-title size via an unscoped "h1, h2 { font-size: ... !important }"
+   rule -- that's the site's page-header convention, not something specific
+   to this component, but it also catches these headings since a rich-text
+   <h1> is just as much an <h1> to that selector. !important is required to
+   win here; a plain override loses to !important regardless of specificity. */
+.rich-text-content ::ng-deep h1 {
+  font-size: 2em !important;
+  font-weight: 700 !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.rich-text-content ::ng-deep h2 {
+  font-size: 1.5em !important;
+  font-weight: 700 !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.rich-text-content ::ng-deep h3 {
+  font-size: 1.17em !important;
+  font-weight: 600 !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
 }

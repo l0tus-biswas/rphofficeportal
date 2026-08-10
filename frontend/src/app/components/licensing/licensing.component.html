@@ -2,8 +2,8 @@
 <div class="licensing-page">
   <div class="container-fluid py-4">
     <div class="row">
-      <!-- Sidebar - Agent List (Admin only) -->
-      <div *ngIf="isAdmin" class="col-lg-3 col-md-4 mb-4">
+      <!-- Sidebar - Agent List (admins see everyone; uplines see themselves + their downline) -->
+      <div *ngIf="isManagerView" class="col-lg-3 col-md-4 mb-4">
         <div class="card shadow-sm">
           <div class="card-header bg-primary text-white">
             <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Agents</h5>
@@ -58,17 +58,17 @@
       </div>
 
       <!-- Main Content - Licensing Details -->
-      <div [class]="isAdmin ? 'col-lg-9 col-md-8' : 'col-12'">
+      <div [class]="isManagerView ? 'col-lg-9 col-md-8' : 'col-12'">
         <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
           <button type="button" class="btn-close" (click)="error = ''" aria-label="Close"></button>
         </div>
 
-        <div *ngIf="!loading && !selectedAgent && isAdmin" class="alert alert-info">
+        <div *ngIf="!loading && !selectedAgent && isManagerView" class="alert alert-info">
           <i class="bi bi-info-circle me-2"></i>Select an agent from the list to view their licensing progress
         </div>
 
-        <div *ngIf="!loading && !selectedAgent && !isAdmin && !error" class="alert alert-warning">
+        <div *ngIf="!loading && !selectedAgent && !isManagerView && !error" class="alert alert-warning">
           <i class="bi bi-exclamation-triangle me-2"></i>No licensing progress found. Please contact your administrator.
         </div>
 
@@ -139,7 +139,7 @@
                     <input class="form-check-input" 
                            type="checkbox" 
                            [checked]="selectedAgent.checklist.preLicenseCourse.completed"
-                           [disabled]="!isAdmin"
+                           [disabled]="!canEditSelected()"
                            (change)="updateChecklistItem('preLicenseCourse', 'completed', ($any($event.target)).checked)">
                     <label class="form-check-label">
                       <strong>1. Pre-license Course Completion</strong>
@@ -153,10 +153,10 @@
                 </div>
                 <div class="mb-2">
                   <label class="small fw-semibold d-block">Completed Date:</label>
-                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                  <input *ngIf="canEditSelected()" type="date" class="form-control form-control-sm" style="max-width: 220px;"
                          [value]="toDateInput(selectedAgent.checklist.preLicenseCourse.completedDate)"
                          (change)="updateChecklistDate('preLicenseCourse', 'completedDate', $any($event.target).value)">
-                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}</div>
+                  <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.preLicenseCourse.completedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['preLicenseCourse']">
@@ -186,7 +186,7 @@
                     <input class="form-check-input" 
                            type="checkbox" 
                            [checked]="selectedAgent.checklist.stateExam.scheduled"
-                           [disabled]="!isAdmin"
+                           [disabled]="!canEditSelected()"
                            (change)="updateChecklistItem('stateExam', 'scheduled', ($any($event.target)).checked)">
                     <label class="form-check-label">
                       <strong>2. State Exam Scheduling</strong>
@@ -200,10 +200,10 @@
                 <div class="row g-2 mb-2">
                   <div class="col-md-6">
                     <label class="small fw-semibold">Scheduled Date:</label>
-                    <input *ngIf="isAdmin" type="date" class="form-control form-control-sm"
+                    <input *ngIf="canEditSelected()" type="date" class="form-control form-control-sm"
                            [value]="toDateInput(selectedAgent.checklist.stateExam.scheduledDate)"
                            (change)="updateChecklistDate('stateExam', 'scheduledDate', $any($event.target).value)">
-                    <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
+                    <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.stateExam.scheduledDate) }}</div>
                   </div>
                   <div class="col-md-6">
                     <label class="small fw-semibold">Total Attempts:</label>
@@ -259,8 +259,8 @@
                   </ul>
                 </div>
 
-                <!-- Add attempt / reschedule (admin) -->
-                <div *ngIf="isAdmin" class="mb-2">
+                <!-- Add attempt / reschedule (admin or upline) -->
+                <div *ngIf="canEditSelected()" class="mb-2">
                   <button class="btn btn-sm btn-outline-secondary" (click)="toggleReschedule('stateExam')">
                     <i class="bi bi-calendar-plus"></i> {{ showReschedule['stateExam'] ? 'Cancel' : 'Add Attempt / Reschedule' }}
                   </button>
@@ -320,7 +320,7 @@
                     <input class="form-check-input" 
                            type="checkbox" 
                            [checked]="selectedAgent.checklist.fingerprinting.scheduled"
-                           [disabled]="!isAdmin"
+                           [disabled]="!canEditSelected()"
                            (change)="updateChecklistItem('fingerprinting', 'scheduled', ($any($event.target)).checked)">
                     <label class="form-check-label">
                       <strong>3. Fingerprinting Appointment Scheduled</strong>
@@ -334,10 +334,10 @@
                 <div class="row g-2 mb-2">
                   <div class="col-md-6">
                     <label class="small fw-semibold">Appointment Date:</label>
-                    <input *ngIf="isAdmin" type="date" class="form-control form-control-sm"
+                    <input *ngIf="canEditSelected()" type="date" class="form-control form-control-sm"
                            [value]="toDateInput(selectedAgent.checklist.fingerprinting.appointmentDate)"
                            (change)="updateChecklistDate('fingerprinting', 'appointmentDate', $any($event.target).value)">
-                    <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}</div>
+                    <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.fingerprinting.appointmentDate) }}</div>
                   </div>
                   <div class="col-md-6">
                     <label class="small fw-semibold">Total Attempts:</label>
@@ -392,8 +392,8 @@
                   </ul>
                 </div>
 
-                <!-- Add attempt / reschedule (admin) -->
-                <div *ngIf="isAdmin" class="mb-2">
+                <!-- Add attempt / reschedule (admin or upline) -->
+                <div *ngIf="canEditSelected()" class="mb-2">
                   <button class="btn btn-sm btn-outline-secondary" (click)="toggleReschedule('fingerprinting')">
                     <i class="bi bi-calendar-plus"></i> {{ showReschedule['fingerprinting'] ? 'Cancel' : 'Add Attempt / Reschedule' }}
                   </button>
@@ -452,7 +452,7 @@
                     <input class="form-check-input" 
                            type="checkbox" 
                            [checked]="selectedAgent.checklist.diceApplication.submitted"
-                           [disabled]="!isAdmin"
+                           [disabled]="!canEditSelected()"
                            (change)="updateChecklistItem('diceApplication', 'submitted', ($any($event.target)).checked)">
                     <label class="form-check-label">
                       <strong>4. License Application Submitted via DICE</strong>
@@ -465,10 +465,10 @@
                 </div>
                 <div class="mb-2">
                   <label class="small fw-semibold d-block">Submitted Date:</label>
-                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                  <input *ngIf="canEditSelected()" type="date" class="form-control form-control-sm" style="max-width: 220px;"
                          [value]="toDateInput(selectedAgent.checklist.diceApplication.submittedDate)"
                          (change)="updateChecklistDate('diceApplication', 'submittedDate', $any($event.target).value)">
-                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}</div>
+                  <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.diceApplication.submittedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['diceApplication']">
@@ -498,7 +498,7 @@
                     <input class="form-check-input" 
                            type="checkbox" 
                            [checked]="selectedAgent.checklist.stateAppointment.approved"
-                           [disabled]="!isAdmin"
+                           [disabled]="!canEditSelected()"
                            (change)="updateChecklistItem('stateAppointment', 'approved', ($any($event.target)).checked)">
                     <label class="form-check-label">
                       <strong>5. State Appointment Approved</strong>
@@ -512,10 +512,10 @@
                 </div>
                 <div class="mb-2">
                   <label class="small fw-semibold d-block">Approved Date:</label>
-                  <input *ngIf="isAdmin" type="date" class="form-control form-control-sm" style="max-width: 220px;"
+                  <input *ngIf="canEditSelected()" type="date" class="form-control form-control-sm" style="max-width: 220px;"
                          [value]="toDateInput(selectedAgent.checklist.stateAppointment.approvedDate)"
                          (change)="updateChecklistDate('stateAppointment', 'approvedDate', $any($event.target).value)">
-                  <div *ngIf="!isAdmin" class="small">{{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}</div>
+                  <div *ngIf="!canEditSelected()" class="small">{{ formatDate(selectedAgent.checklist.stateAppointment.approvedDate) }}</div>
                 </div>
                 <div *ngIf="isAdmin" class="mt-2">
                   <input type="text" class="form-control form-control-sm mb-2" placeholder="Notes (optional)" [(ngModel)]="uploadFileNotes['stateAppointment']">
@@ -539,8 +539,8 @@
               </div>
             </div>
 
-            <!-- Admin Notes -->
-            <div *ngIf="isAdmin" class="mt-4">
+            <!-- Notes (admin or upline) -->
+            <div *ngIf="canEditSelected()" class="mt-4">
               <div class="card">
                 <div class="card-header bg-light">
                   <div class="d-flex justify-content-between align-items-center">

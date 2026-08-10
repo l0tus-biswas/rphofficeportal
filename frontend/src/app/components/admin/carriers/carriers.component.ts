@@ -46,8 +46,11 @@ export class CarriersComponent implements OnInit {
   // ngx-quill's default valueGetter reads Quill's getSemanticHTML(), which
   // encodes every literal space as &nbsp; (see normalizeRichText's comment
   // in carrier.service.ts for why that breaks word-wrapping). root.innerHTML
-  // is Quill's own live DOM and doesn't have this problem.
-  readonly quillValueGetter = (quillEditor: any): string => quillEditor.root.innerHTML;
+  // is Quill's own live DOM and doesn't have this problem, but still needs
+  // the same normalization (e.g. rewriting bullet lists to a real <ul>) that
+  // display and save both rely on, so a freshly-saved carrier is already
+  // correct rather than depending on the load-time pass to fix it up.
+  readonly quillValueGetter = (quillEditor: any): string => normalizeRichText(quillEditor.root.innerHTML);
 
   readonly CATEGORIES = [
     'Life Insurance',

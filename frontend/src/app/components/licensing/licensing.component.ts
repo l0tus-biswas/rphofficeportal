@@ -2,7 +2,6 @@ import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { LicensingService, LicensingProgress } from '../../services/licensing.service';
 import { AuthService } from '../../services/auth.service';
-import { Router, ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-licensing',
@@ -14,8 +13,22 @@ export class LicensingComponent implements OnInit {
   selectedAgent: LicensingProgress | null = null;
   loading = true;
   error = '';
-  isAdmin = false;
   currentUserId = '';
+
+  // A real admin, regardless of which route got them here (this used to be
+  // tied to the /admin/licensing path, which meant an admin visiting plain
+  // /licensing got a broken "self view" -- admins don't have their own
+  // licensing checklist). Gates admin-only actions (document upload,
+  // editing/deleting a past attempt/reschedule entry) that stay off-limits
+  // even to uplines.
+  isAdmin = false;
+
+  // True when this user manages a list of agents -- either because they're
+  // an admin (sees everyone) or because they're an upline of at least one
+  // agent (sees themselves + their full downline). Drives whether the
+  // agent-picker sidebar shows at all, as opposed to the single-agent
+  // "just my own progress" view.
+  isManagerView = false;
 
   // Filters
   filterIsLicensed: string = 'all'; // 'all', 'licensed', 'unlicensed'
@@ -36,18 +49,14 @@ export class LicensingComponent implements OnInit {
 
   constructor(
     private licensingService: LicensingService,
-    private authService: AuthService,
-    private router: Router,
-    private route: ActivatedRoute
+    private authService: AuthService
   ) {}
 
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
-    // Only show admin view when on /admin/licensing route
-    const isAdminRoute = this.router.url.startsWith('/admin/');
-    this.isAdmin = user?.role === 'admin' && isAdminRoute;
     this.currentUserId = user?._id || '';
-    
+    this.isAdmin = user?.role === 'admin';
+
     this.loadLicensingProgress();
   }
 
@@ -55,23 +64,45 @@ export class LicensingComponent implements OnInit {
     this.loading = true;
     this.error = '';
 
-    // Personal view: fetch only own licensing record
-    if (!this.isAdmin) {
-      this.licensingService.getLicensingProgress(this.currentUserId).subscribe({
-        next: (data) => {
-          this.selectedAgent = data;
-          this.loading = false;
-        },
-        error: (error) => {
-          console.error('Error loading licensing progress:', error);
-          this.error = 'No licensing progress found. Please contact your administrator.';
-          this.loading = false;
-        }
-      });
+    if (this.isAdmin) {
+      this.isManagerView = true;
+      this.loadAllAgents();
       return;
     }
 
-    // Admin view: fetch all agents
+    // Not an admin -- GET /downline is a dedicated endpoint that returns
+    // only this agent's downline (recruits, their recruits, etc.), never
+    // including themselves, so an empty array unambiguously means "no
+    // downline" rather than colliding with "this is just my own record".
+    const filters: any = {};
+    if (this.filterIsLicensed === 'licensed') {
+      filters.isLicensed = true;
+    } else if (this.filterIsLicensed === 'unlicensed') {
+      filters.isLicensed = false;
+    }
+
+    this.licensingService.getDownlineLicensingProgress(filters).subscribe({
+      next: (data) => {
+        if (data.length === 0) {
+          this.isManagerView = false;
+          this.loadOwnProgress();
+          return;
+        }
+        this.isManagerView = true;
+        this.licensingProgress = data;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading downline licensing progress:', error);
+        // Fall back to the plain self view rather than showing an error --
+        // most agents have no downline, so this is the common case.
+        this.isManagerView = false;
+        this.loadOwnProgress();
+      }
+    });
+  }
+
+  private loadAllAgents(): void {
     const filters: any = {};
     if (this.filterIsLicensed === 'licensed') {
       filters.isLicensed = true;
@@ -92,6 +123,30 @@ export class LicensingComponent implements OnInit {
     });
   }
 
+  private loadOwnProgress(): void {
+    this.licensingService.getLicensingProgress(this.currentUserId).subscribe({
+      next: (data) => {
+        this.selectedAgent = data;
+        this.loading = false;
+      },
+      error: (error) => {
+        console.error('Error loading licensing progress:', error);
+        this.error = 'No licensing progress found. Please contact your administrator.';
+        this.loading = false;
+      }
+    });
+  }
+
+  // Whether the current user can edit the selected record's checklist/notes.
+  // Admins always can. Otherwise, true exactly when in manager view --
+  // every entry there is, by construction, someone in the viewer's downline
+  // (GET /downline never includes the viewer themselves), so no per-record
+  // check is needed. The server independently re-checks this on every write,
+  // so this only controls the UI's affordances, not the security boundary.
+  canEditSelected(): boolean {
+    return this.isAdmin || this.isManagerView;
+  }
+
   selectAgent(progress: LicensingProgress): void {
     this.selectedAgent = progress;
     this.editingItem = null;
@@ -104,7 +159,7 @@ export class LicensingComponent implements OnInit {
   }
 
   updateChecklistItem(item: string, field: string, value: any): void {
-    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!this.selectedAgent || !this.canEditSelected()) return;
 
     const data: any = {};
     data[field] = value;
@@ -133,7 +188,9 @@ export class LicensingComponent implements OnInit {
 
   onFileSelected(event: any, item: string): void {
     const file = event.target.files?.[0];
-    if (!file || !this.selectedAgent) return;
+    // Document upload stays admin-only even for uplines -- see the backend
+    // route comment on POST /:agentId/upload/:checklistItem for why.
+    if (!file || !this.selectedAgent || !this.isAdmin) return;
 
     this.uploadingFile[item] = true;
 
@@ -165,7 +222,7 @@ export class LicensingComponent implements OnInit {
   }
 
   updateAdminNotes(): void {
-    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!this.selectedAgent || !this.canEditSelected()) return;
 
     const notes = prompt('Enter admin notes:', this.selectedAgent.adminNotes || '');
     if (notes === null) return;
@@ -233,7 +290,7 @@ export class LicensingComponent implements OnInit {
 
   // Save a date field for a checklist item (e.g. scheduledDate, appointmentDate)
   updateChecklistDate(item: string, field: string, value: string): void {
-    if (!this.isAdmin) return;
+    if (!this.canEditSelected()) return;
     // Empty string clears the date
     this.updateChecklistItem(item, field, value || null);
   }
@@ -246,7 +303,7 @@ export class LicensingComponent implements OnInit {
   }
 
   addReschedule(item: string): void {
-    if (!this.selectedAgent || !this.isAdmin) return;
+    if (!this.selectedAgent || !this.canEditSelected()) return;
     const form = this.rescheduleForm[item];
     if (!form || !form.date) {
       alert('Please choose a date for this attempt.');

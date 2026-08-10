@@ -83,6 +83,16 @@ export class LicensingService {
     return this.http.get<LicensingProgress[]>(this.apiUrl, { params });
   }
 
+  // This agent's downline (recruits, their recruits, etc., any depth) with
+  // their licensing progress -- never includes the requester themselves.
+  // Empty array if they have no downline.
+  getDownlineLicensingProgress(filters?: any): Observable<LicensingProgress[]> {
+    let params = new HttpParams();
+    if (filters?.isLicensed !== undefined) params = params.set('isLicensed', filters.isLicensed);
+
+    return this.http.get<LicensingProgress[]>(`${this.apiUrl}/downline`, { params });
+  }
+
   // Get specific agent's licensing progress
   getLicensingProgress(agentId: string): Observable<LicensingProgress> {
     return this.http.get<LicensingProgress>(`${this.apiUrl}/${agentId}`);

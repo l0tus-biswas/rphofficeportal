@@ -6,6 +6,7 @@ const Notification = require('../models/Notification');
 const APAApplication = require('../models/APAApplication');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { isAgentLicensed } = require('../utils/licensing');
+const { isUplineOf, getDownlineIds } = require('../utils/hierarchy');
 const { syncAgentToQBO } = require('../utils/quickbooksSync');
 const multer = require('multer');
 const path = require('path');
@@ -47,121 +48,160 @@ const upload = multer({
 // from utils/licensing so the admin list, agent profile, dashboard, and the
 // QuickBooks sync gate never disagree.
 
+// Allows an admin OR anyone in the target agent's upline chain (their direct
+// recruiter, that recruiter's recruiter, etc., at any depth) to manage a
+// checklist — not just the agent's own admin. Uplines help their downline get
+// licensed, so they need write access to that agent's checklist without
+// needing full admin rights over the rest of the app.
+async function requireAdminOrUpline(req, res, next) {
+  try {
+    if (req.user.role === 'admin') return next();
+    const allowed = await isUplineOf(req.user._id, req.params.agentId);
+    if (!allowed) {
+      return res.status(403).json({ message: "Not authorized to manage this agent's licensing" });
+    }
+    next();
+  } catch (error) {
+    console.error('Error checking upline authorization:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+}
+
+// Builds the same "agent + progress (real or default)" shape used by the
+// admin list, restricted to a specific set of agent ids when provided (used
+// for an upline's self+downline list) or unrestricted (the admin view of
+// every agent). Kept as one function so the two callers can never drift out
+// of sync on how a missing LicensingProgress record gets defaulted.
+async function buildLicensingList(restrictToIds = null) {
+  const userFilter = { role: 'agent', isActive: true };
+  if (restrictToIds) userFilter._id = { $in: restrictToIds };
+
+  const agents = await User.find(userFilter)
+    .select('name email phone metadata createdAt')
+    .sort({ name: 1 });
+  const agentIds = agents.map(a => a._id);
+
+  const progressRecords = await LicensingProgress.find({ agent: { $in: agentIds } })
+    .populate('lastUpdatedBy', 'name');
+  const progressMap = {};
+  progressRecords.forEach(record => {
+    progressMap[record.agent.toString()] = record;
+  });
+
+  // APA links to the user via either `user` or `userId` depending on vintage,
+  // so match and index on both to avoid missing records.
+  const apaRecords = await APAApplication.find({
+    $or: [{ user: { $in: agentIds } }, { userId: { $in: agentIds } }]
+  }).select('user userId licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
+  const apaMap = {};
+  apaRecords.forEach(rec => {
+    const key = (rec.user || rec.userId);
+    if (key) apaMap[key.toString()] = rec;
+  });
+
+  return agents.map(agent => {
+    const progress = progressMap[agent._id.toString()];
+    const apa = apaMap[agent._id.toString()];
+    const licensed = isAgentLicensed(progress, apa, agent.metadata);
+
+    if (progress) {
+      const obj = progress.toObject();
+      obj.isLicensed = licensed;
+      if (licensed) obj.completionPercentage = 100;
+      if (!progress.checklist?.stateAppointment?.approved) {
+        obj.licenseObtainedDate = null;
+      }
+      obj.agent = {
+        _id: agent._id,
+        name: agent.name,
+        email: agent.email,
+        phone: agent.phone
+      };
+      return obj;
+    }
+
+    const enrollmentDate = agent.createdAt || new Date();
+    const licensingDeadline = new Date(enrollmentDate);
+    licensingDeadline.setDate(licensingDeadline.getDate() + 30);
+
+    const now = new Date();
+    const diffTime = licensingDeadline - now;
+    const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return {
+      agent: {
+        _id: agent._id,
+        name: agent.name,
+        email: agent.email,
+        phone: agent.phone
+      },
+      enrollmentDate: enrollmentDate,
+      licensingDeadline: licensingDeadline,
+      daysRemaining: licensed ? 0 : (daysRemaining > 0 ? daysRemaining : 0),
+      isLicensed: licensed,
+      completionPercentage: licensed ? 100 : 0,
+      checklist: {
+        preLicenseCourse: { completed: false },
+        stateExam: { scheduled: false, attempts: 0, scheduleHistory: [] },
+        fingerprinting: { scheduled: false, attempts: 0, scheduleHistory: [] },
+        diceApplication: { submitted: false },
+        stateAppointment: { approved: false }
+      },
+      documents: [],
+      adminNotes: ''
+    };
+  });
+}
+
 // @route   GET /api/licensing
-// @desc    Get all licensing progress (admin) or own progress (agent)
+// @desc    Get all licensing progress (admin) or own progress (agent) --
+//          unchanged from before the upline feature; see GET /downline
+//          below for a non-admin's downline list.
 // @access  Private
 router.get('/', authenticate, async (req, res) => {
   try {
-    // If admin, return all agents with their licensing progress
     if (req.user.role === 'admin') {
-      // Get all agents (include metadata so we can resolve imported license flags)
-      const agents = await User.find({ role: 'agent', isActive: true })
-        .select('name email phone metadata createdAt')
-        .sort({ name: 1 });
-
-      // Get all licensing progress records
-      const progressRecords = await LicensingProgress.find()
-        .populate('lastUpdatedBy', 'name');
-
-      // Map progress to agents
-      const progressMap = {};
-      progressRecords.forEach(record => {
-        progressMap[record.agent.toString()] = record;
-      });
-
-      // Map APA applications (self-reported licensing status) by user id. APA
-      // links to the user via either `user` or `userId` depending on vintage,
-      // so match and index on both to avoid missing records.
-      const agentIds = agents.map(a => a._id);
-      const apaRecords = await APAApplication.find({
-        $or: [{ user: { $in: agentIds } }, { userId: { $in: agentIds } }]
-      }).select('user userId licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
-      const apaMap = {};
-      apaRecords.forEach(rec => {
-        const key = (rec.user || rec.userId);
-        if (key) apaMap[key.toString()] = rec;
-      });
-
-      // Build result with all agents
-      const result = agents.map(agent => {
-        const progress = progressMap[agent._id.toString()];
-        const apa = apaMap[agent._id.toString()];
-        const licensed = isAgentLicensed(progress, apa, agent.metadata);
-
-        if (progress) {
-          const obj = progress.toObject();
-          // Reflect cross-source licensing status so licensed agents never
-          // get bucketed as unlicensed in the admin view.
-          obj.isLicensed = licensed;
-          if (licensed) obj.completionPercentage = 100;
-          // A stale obtained date (final step later unchecked) shouldn't read as
-          // pipeline-completed; null it unless the final step is actually approved.
-          if (!progress.checklist?.stateAppointment?.approved) {
-            obj.licenseObtainedDate = null;
-          }
-          obj.agent = {
-            _id: agent._id,
-            name: agent.name,
-            email: agent.email,
-            phone: agent.phone
-          };
-          return obj;
-        }
-
-        // Create default progress object for agents without records
-        const enrollmentDate = agent.createdAt || new Date();
-        const licensingDeadline = new Date(enrollmentDate);
-        licensingDeadline.setDate(licensingDeadline.getDate() + 30);
-
-        const now = new Date();
-        const diffTime = licensingDeadline - now;
-        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        return {
-          agent: {
-            _id: agent._id,
-            name: agent.name,
-            email: agent.email,
-            phone: agent.phone
-          },
-          enrollmentDate: enrollmentDate,
-          licensingDeadline: licensingDeadline,
-          daysRemaining: licensed ? 0 : (daysRemaining > 0 ? daysRemaining : 0),
-          isLicensed: licensed,
-          completionPercentage: licensed ? 100 : 0,
-          checklist: {
-            preLicenseCourse: { completed: false },
-            stateExam: { scheduled: false, attempts: 0, scheduleHistory: [] },
-            fingerprinting: { scheduled: false, attempts: 0, scheduleHistory: [] },
-            diceApplication: { submitted: false },
-            stateAppointment: { approved: false }
-          },
-          documents: [],
-          adminNotes: ''
-        };
-      });
-
-      // Apply filters if provided
-      let filteredResult = result;
-      if (req.query.isLicensed !== undefined) {
-        const isLicensed = req.query.isLicensed === 'true';
-        filteredResult = result.filter(r => r.isLicensed === isLicensed);
-      }
-
+      const result = await buildLicensingList();
+      const filteredResult = req.query.isLicensed !== undefined
+        ? result.filter(r => r.isLicensed === (req.query.isLicensed === 'true'))
+        : result;
       return res.json(filteredResult);
     }
-    
+
     // For agents, only show own licensing progress
-    let query = { agent: req.user._id };
-    
-    const licensingProgress = await LicensingProgress.find(query)
+    const licensingProgress = await LicensingProgress.find({ agent: req.user._id })
       .populate('agent', 'name email phone')
       .populate('lastUpdatedBy', 'name')
       .sort({ enrollmentDate: -1 });
-    
+
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error fetching licensing progress:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/licensing/downline
+// @desc    List of this agent's downline (recruits, their recruits, etc.,
+//          any depth) with their licensing progress -- never includes the
+//          requester themselves. Empty array if they have no downline.
+//          A separate endpoint (rather than folding into GET / above) so
+//          the frontend never has to guess, from array contents alone,
+//          whether it got "my own record" or "a list to manage".
+// @access  Private (any authenticated agent)
+router.get('/downline', authenticate, async (req, res) => {
+  try {
+    const downlineIds = await getDownlineIds(req.user._id);
+    if (downlineIds.length === 0) return res.json([]);
+
+    const result = await buildLicensingList(downlineIds);
+    const filteredResult = req.query.isLicensed !== undefined
+      ? result.filter(r => r.isLicensed === (req.query.isLicensed === 'true'))
+      : result;
+
+    res.json(filteredResult);
+  } catch (error) {
+    console.error('Error fetching downline licensing progress:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -175,7 +215,7 @@ router.get('/countdown/all', authenticate, authorize('admin'), async (req, res) 
       .populate('agent', 'name email')
       .select('agent enrollmentDate licensingDeadline daysRemaining')
       .sort({ licensingDeadline: 1 });
-    
+
     res.json(unlicensedAgents);
   } catch (error) {
     console.error('Error fetching countdown data:', error);
@@ -188,11 +228,13 @@ router.get('/countdown/all', authenticate, authorize('admin'), async (req, res) 
 // @access  Private
 router.get('/:agentId', authenticate, async (req, res) => {
   try {
-    // Agents can only view their own, admins can view anyone's
-    if (req.user.role !== 'admin' && req.user._id.toString() !== req.params.agentId) {
+    // Agents can view their own; admins and this agent's uplines (their
+    // recruiter, that recruiter's recruiter, etc., any depth) can view anyone's.
+    const isSelf = req.user._id.toString() === req.params.agentId;
+    if (req.user.role !== 'admin' && !isSelf && !(await isUplineOf(req.user._id, req.params.agentId))) {
       return res.status(403).json({ message: 'Access denied' });
     }
-    
+
     let licensingProgress = await LicensingProgress.findOne({ agent: req.params.agentId })
       .populate('agent', 'name email phone')
       .populate('lastUpdatedBy', 'name')
@@ -331,8 +373,8 @@ router.post('/:agentId', authenticate, authorize('admin'), async (req, res) => {
 
 // @route   PUT /api/licensing/:agentId/checklist
 // @desc    Update checklist items
-// @access  Admin only
-router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, res) => {
+// @access  Admin, or any upline of this agent
+router.put('/:agentId/checklist', authenticate, requireAdminOrUpline, async (req, res) => {
   try {
     // Check if agent exists
     const agent = await User.findById(req.params.agentId);
@@ -514,7 +556,8 @@ router.put('/:agentId/checklist', authenticate, authorize('admin'), async (req, 
 
 // @route   PUT /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
 // @desc    Edit a single attempt/reschedule entry (state exam or fingerprinting)
-// @access  Admin only
+// @access  Admin only -- deliberately not opened to uplines: this corrects an
+// already-recorded attempt, unlike the checklist/notes routes above.
 router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { checklistItem, historyId } = req.params;
@@ -558,7 +601,8 @@ router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate
 // @route   DELETE /api/licensing/:agentId/checklist/:checklistItem/history/:historyId
 // @desc    Delete a single attempt/reschedule entry; keeps `attempts` in sync
 //          with the remaining history so the two values never disagree.
-// @access  Admin only
+// @access  Admin only -- deliberately not opened to uplines; see the PUT
+// history route above for why.
 router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { checklistItem, historyId } = req.params;
@@ -599,8 +643,9 @@ router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authentic
 
 // @route   POST /api/licensing/:agentId/upload/:checklistItem
 // @desc    Upload document for checklist item
-// @access  Admin only
-router.post('/:agentId/upload/:checklistItem', 
+// @access  Admin only -- deliberately not opened to uplines; document
+// handling stays with admins even though checklist/notes edits don't.
+router.post('/:agentId/upload/:checklistItem',
   authenticate, 
   authorize('admin'), 
   upload.single('document'),
@@ -666,8 +711,8 @@ router.post('/:agentId/upload/:checklistItem',
 
 // @route   PUT /api/licensing/:agentId/notes
 // @desc    Update admin notes
-// @access  Admin only
-router.put('/:agentId/notes', authenticate, authorize('admin'), async (req, res) => {
+// @access  Admin, or any upline of this agent
+router.put('/:agentId/notes', authenticate, requireAdminOrUpline, async (req, res) => {
   try {
     // Check if agent exists
     const agent = await User.findById(req.params.agentId);

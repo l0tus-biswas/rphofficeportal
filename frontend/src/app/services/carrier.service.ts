@@ -95,11 +95,38 @@ const INVISIBLE_BREAK_CHARS = /\p{Cf}/gu;
 const DECODED_NBSP = String.fromCharCode(0x00A0);
 const NBSP_ENTITY_OR_CHAR = new RegExp('&nbsp;|' + DECODED_NBSP, 'gi');
 
-// Combines both fixes above into a single pass over rich-text HTML coming
-// either from the API (display) or the editor (save).
+// Quill always stores both bullet and numbered lists as <ol><li data-list="...">
+// -- data-list is meaningful only to Quill's own CSS/JS. Anything else that
+// renders this HTML (a plain [innerHTML] div, Angular's sanitizer stripping
+// an attribute it doesn't recognize, or even Quill's own importer re-reading
+// it back into the editor when a carrier is reopened for editing) decides
+// list type purely from the tag, so a bullet list -- always stored as <ol> --
+// renders as numbered everywhere except inside the specific live editor
+// instance that just created it. Rewriting bullet blocks into a real <ul>
+// makes list type a property of the tag itself, so it's correct anywhere
+// this HTML ends up, with no reliance on data-list surviving the trip.
+function fixQuillListTags(html: string): string {
+  if (!html.includes('data-list="bullet"') && !html.includes("data-list='bullet'")) return html;
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  container.querySelectorAll('ol').forEach(ol => {
+    const items = Array.from(ol.children).filter(el => el.tagName === 'LI');
+    if (items.length > 0 && items.every(li => li.getAttribute('data-list') === 'bullet')) {
+      const ul = document.createElement('ul');
+      while (ol.firstChild) ul.appendChild(ol.firstChild);
+      ol.replaceWith(ul);
+    }
+  });
+  return container.innerHTML;
+}
+
+// Combines all three fixes above into a single pass over rich-text HTML
+// coming either from the API (display) or the editor (save).
 export function normalizeRichText(html: string | undefined | null): string {
   if (!html) return html || '';
-  return html.replace(INVISIBLE_BREAK_CHARS, '').replace(NBSP_ENTITY_OR_CHAR, ' ');
+  const cleaned = html.replace(INVISIBLE_BREAK_CHARS, '').replace(NBSP_ENTITY_OR_CHAR, ' ');
+  return fixQuillListTags(cleaned);
 }
 
 export interface AgentCarrierStatus {
