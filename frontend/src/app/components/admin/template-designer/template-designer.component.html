@@ -61,6 +61,25 @@
           </div>
         </div>
 
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small mb-1" title="Artwork beyond the trim line (red band on the canvas). Match your print vendor's published bleed spec.">
+              Bleed (px)
+            </label>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="template.printFile.bleedPx" (ngModelChange)="changed()" placeholder="auto: 0.125in">
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" title="Extra margin inside the trim line — keep all text/logos inside this to survive normal cutting tolerance.">
+              Safe margin (px)
+            </label>
+            <input type="number" class="form-control form-control-sm" [(ngModel)]="template.printFile.safePx" (ngModelChange)="changed()" placeholder="auto: 0.125in">
+          </div>
+        </div>
+        <div class="form-text mb-2">
+          Match these to your print vendor's template (e.g. Printful's product page shows bleed size &amp;
+          "Safe Print Area"). Leave blank to default to 0.125" of each at this DPI.
+        </div>
+
         <!-- Variants -->
         <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
           <span class="fw-semibold small">Variants (price tiers)</span>

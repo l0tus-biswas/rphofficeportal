@@ -8,8 +8,12 @@
  * Run:  node scripts/seed-card-template.js
  * Undo: node scripts/seed-card-template.js --remove
  *
- * Verified Printful spec (product 724 "Set of Business Cards"):
- *   print file 1200x750 @ 300 DPI (portrait synced file 750x1200); placements front+back.
+ * Verified Printful spec (product 430918225, per the product's own template page —
+ * "Width: 4.00 units, Height: 2.29 units"):
+ *   print file 1200x687 @ 300 DPI, landscape; placements front+back.
+ * (Previously this stub used 750x1200 portrait / 2.50x4.00in, which didn't match
+ * Printful's real 2.29in height for this product and is suspected to have
+ * contributed to the printed card's top/bottom clipping.)
  */
 const mongoose = require('mongoose');
 const path = require('path');

@@ -40,6 +40,10 @@ export class VistaprintConfigComponent implements OnInit {
   testMessage = '';
   testError = '';
 
+  // Bleed/safe-area warnings for any field or photo frame that will likely be
+  // clipped by the cutter (surfaced by the server on load + on every save).
+  safetyWarnings: string[] = [];
+
   constructor(private businessCardsService: BusinessCardsService) {}
 
   ngOnInit(): void {
@@ -56,6 +60,7 @@ export class VistaprintConfigComponent implements OnInit {
         this.textFields = res.config.textFields || [];
         this.fees = res.config.fees || [];
         this.templates = res.config.templates || [];
+        this.safetyWarnings = res.warnings || [];
         this.loading = false;
       },
       error: (err) => {
@@ -112,6 +117,7 @@ export class VistaprintConfigComponent implements OnInit {
         this.textFields = res.config.textFields || [];
         this.fees = res.config.fees || [];
         this.templates = res.config.templates || [];
+        this.safetyWarnings = res.warnings || [];
         this.successMessage = 'Configuration saved.';
         this.saving = false;
         this.apiKey = '';

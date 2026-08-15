@@ -6,7 +6,7 @@ const PrintfulOrder = require('../models/PrintfulOrder');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { stripe, createPaymentIntent } = require('../utils/stripe');
-const { renderCard } = require('../services/cardRenderer');
+const { renderCard, computeSafeWarnings } = require('../services/cardRenderer');
 
 // ---------------------------------------------------------------------------
 // Printful API Configuration
@@ -1030,9 +1030,11 @@ router.get('/admin/config', authenticate, authorize('admin'), async (req, res) =
 
     const templates = await getCardTemplates();
     const fees = await getConvenienceFees();
+    const warnings = templates.flatMap(t => computeSafeWarnings(t));
 
     return sendResponse(res, 200, {
-      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields, templates, fees }
+      config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey, textFields, templates, fees },
+      warnings
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -1077,11 +1079,13 @@ router.post('/admin/config', authenticate, authorize('admin'), async (req, res) 
 
     const currentTemplates = await getCardTemplates();
     const currentFees = await getConvenienceFees();
+    const safetyWarnings = currentTemplates.flatMap(t => computeSafeWarnings(t));
 
     return sendResponse(res, 200, {
       message: 'Printful configuration updated.',
       config: { ...config, apiKey: maskedKey, hasApiKey: !!config.apiKey,
-                textFields: currentTextFields, templates: currentTemplates, fees: currentFees }
+                textFields: currentTextFields, templates: currentTemplates, fees: currentFees },
+      warnings: safetyWarnings
     });
   } catch (err) {
     return errorResponse(res, err);

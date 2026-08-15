@@ -220,6 +220,21 @@
               to Printful as a print-ready file when an agent orders. Remember to <strong>Save Configuration</strong>.
             </p>
 
+            <!-- Bleed/safe-area warnings: exactly the class of mistake that clipped the
+                 RHP card's heading and email — text placed with no safe-area margin. -->
+            <div *ngIf="safetyWarnings.length" class="alert alert-warning mb-3">
+              <div class="fw-semibold mb-1">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                {{ safetyWarnings.length }} item(s) may get cut off when printed
+              </div>
+              <ul class="mb-0 ps-3 small">
+                <li *ngFor="let w of safetyWarnings">{{ w }}</li>
+              </ul>
+              <div class="small text-muted mt-1">
+                Drag the item inside the dashed "Safe Print Area" guide on the canvas below, or resize its box to fit.
+              </div>
+            </div>
+
             <app-template-designer [templates]="templates" (templatesChange)="onTemplatesChange($event)"></app-template-designer>
 
             <!-- Advanced raw JSON (escape hatch) -->

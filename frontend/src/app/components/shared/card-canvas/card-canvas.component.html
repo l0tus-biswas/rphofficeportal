@@ -15,21 +15,38 @@
       <span *ngIf="editable && selectedKey === 'bg'" class="cc-resize" (pointerdown)="startResize($event, 'bg')"></span>
     </div>
 
-    <!-- Safety-area guide (designer only): keep important content inside this box -->
+    <!-- Bleed band (designer only): artwork out here gets trimmed away or is
+         unreliable — background/color fills may extend into it, never text. -->
+    <ng-container *ngIf="editable">
+      <div class="cc-bleed-band" [ngStyle]="bleedBandStyle('top')"></div>
+      <div class="cc-bleed-band" [ngStyle]="bleedBandStyle('bottom')"></div>
+      <div class="cc-bleed-band" [ngStyle]="bleedBandStyle('left')"></div>
+      <div class="cc-bleed-band" [ngStyle]="bleedBandStyle('right')"></div>
+    </ng-container>
+
+    <!-- Trim line (designer only): where the cutter actually cuts. -->
+    <div *ngIf="editable" class="cc-trim"
+         [style.left.px]="trimRect.x" [style.top.px]="trimRect.y"
+         [style.width.px]="trimRect.w" [style.height.px]="trimRect.h"></div>
+
+    <!-- Safe-area guide (designer only): keep all text/logos inside this box
+         so normal cutting tolerance can never clip them. -->
     <div *ngIf="editable" class="cc-safety"
-         [style.left.px]="pw * 0.04" [style.top.px]="ph * 0.04"
-         [style.width.px]="pw * 0.92" [style.height.px]="ph * 0.92"></div>
+         [style.left.px]="safeRect.x" [style.top.px]="safeRect.y"
+         [style.width.px]="safeRect.w" [style.height.px]="safeRect.h"></div>
 
     <!-- Photo frame -->
     <div *ngIf="side?.photo"
          class="cc-item cc-photo"
          [class.cc-selected]="editable && selectedKey === 'photo'"
          [class.cc-editable]="editable"
+         [class.cc-unsafe]="editable && photoOutsideSafe()"
          [ngStyle]="photoStyle()"
          (pointerdown)="startMove($event, 'photo')">
       <img *ngIf="photoDataUrl" [src]="photoDataUrl" class="cc-photo-img" alt="">
       <div *ngIf="!photoDataUrl && editable" class="cc-photo-ph">Photo</div>
       <span *ngIf="editable && selectedKey === 'photo'" class="cc-resize" (pointerdown)="startResize($event, 'photo')"></span>
+      <span *ngIf="editable && photoOutsideSafe()" class="cc-unsafe-badge" title="May be cut off — move inside the dashed safe area">!</span>
     </div>
 
     <!-- Text fields -->
@@ -38,7 +55,8 @@
          [class.cc-selected]="editable && selectedKey === f.key"
          [class.cc-editable]="editable"
          [class.cc-placeholder]="editable && !(values[f.key] || '').trim()"
+         [class.cc-unsafe]="editable && fieldOutsideSafe(f)"
          [ngStyle]="fieldStyle(f)"
-         (pointerdown)="startMove($event, f.key)">{{ fieldText(f) }}</div>
+         (pointerdown)="startMove($event, f.key)">{{ fieldText(f) }}<span *ngIf="editable && fieldOutsideSafe(f)" class="cc-unsafe-badge" title="May be cut off — move inside the dashed safe area">!</span></div>
   </div>
 </div>

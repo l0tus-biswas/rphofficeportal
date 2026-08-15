@@ -138,6 +138,19 @@ export interface CardTemplateVariant {
   price: number;
 }
 
+// bleedPx: artwork extends this far beyond the trim line (prevents white edge
+// after cutting). safePx: extra margin INSIDE the trim line that all text/
+// logos must stay within, since normal cutting tolerance can clip anything
+// placed closer than that. Both default to 0.125in * dpi when omitted — see
+// backend/services/cardRenderer.js#bleedGeometry, the single source of truth.
+export interface CardPrintFile {
+  widthPx: number;
+  heightPx: number;
+  dpi: number;
+  bleedPx?: number;
+  safePx?: number;
+}
+
 export interface CardTemplate {
   id: string;
   name: string;
@@ -145,7 +158,7 @@ export interface CardTemplate {
   previewImage?: string;
   variants: CardTemplateVariant[];
   orientation: string;
-  printFile: { widthPx: number; heightPx: number; dpi: number };
+  printFile: CardPrintFile;
   sides: CardTemplateSideMeta[];
 }
 
@@ -183,7 +196,7 @@ export interface CardTemplateFull {
   syncProductId: number;
   variants: CardTemplateVariant[];
   orientation: 'portrait' | 'landscape';
-  printFile: { widthPx: number; heightPx: number; dpi: number };
+  printFile: CardPrintFile;
   sides: CardSideFull[];
 }
 
@@ -291,12 +304,12 @@ export class BusinessCardsService {
 
   // ── Admin Config ──
 
-  getAdminConfig(): Observable<{ config: PrintfulAdminConfig }> {
-    return this.http.get<{ config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`);
+  getAdminConfig(): Observable<{ config: PrintfulAdminConfig; warnings?: string[] }> {
+    return this.http.get<{ config: PrintfulAdminConfig; warnings?: string[] }>(`${this.apiUrl}/business-cards/admin/config`);
   }
 
-  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean; textFields: OptionField[]; templates: any[] }>): Observable<{ message: string; config: PrintfulAdminConfig }> {
-    return this.http.post<{ message: string; config: PrintfulAdminConfig }>(`${this.apiUrl}/business-cards/admin/config`, body);
+  updateConfig(body: Partial<{ apiKey: string; storeId: string; enabled: boolean; textFields: OptionField[]; templates: any[] }>): Observable<{ message: string; config: PrintfulAdminConfig; warnings?: string[] }> {
+    return this.http.post<{ message: string; config: PrintfulAdminConfig; warnings?: string[] }>(`${this.apiUrl}/business-cards/admin/config`, body);
   }
 
   testConnection(): Observable<{ message: string; store: any }> {

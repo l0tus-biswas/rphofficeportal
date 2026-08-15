@@ -42,6 +42,69 @@ function clampBox(b, W, H) {
   return { x, y, w, h };
 }
 
+// Standard print bleed: 1/8" (0.125") of artwork beyond the trim line so the
+// cutter never exposes white edge, plus another 1/8" safe margin INSIDE the
+// trim line where text/logos must stay so normal cutting tolerance can't clip
+// them. This matches Printful's own template guides (striped bleed border +
+// dashed "Safe Print Area"). Falls back to these inches-based defaults unless
+// the template explicitly overrides bleedPx/safePx (e.g. for a Printful
+// product with different published margins).
+const DEFAULT_BLEED_IN = 0.125;
+const DEFAULT_SAFE_IN = 0.125;
+
+/**
+ * Compute the trim line and safe-print-area rectangles for a printFile, in
+ * print-file pixels. `trim` is where the card is actually cut; `safe` is the
+ * inner box all text/logos must stay within to survive normal cutting
+ * tolerance. See DEFAULT_BLEED_IN/DEFAULT_SAFE_IN above.
+ */
+function bleedGeometry(printFile) {
+  const W = printFile?.widthPx || 0;
+  const H = printFile?.heightPx || 0;
+  const dpi = printFile?.dpi || 300;
+  const bleedPx = Number.isFinite(printFile?.bleedPx) ? printFile.bleedPx : Math.round(DEFAULT_BLEED_IN * dpi);
+  const safePx = Number.isFinite(printFile?.safePx) ? printFile.safePx : Math.round(DEFAULT_SAFE_IN * dpi);
+  const trim = { x: bleedPx, y: bleedPx, w: Math.max(0, W - 2 * bleedPx), h: Math.max(0, H - 2 * bleedPx) };
+  const safeInset = bleedPx + safePx;
+  const safe = { x: safeInset, y: safeInset, w: Math.max(0, W - 2 * safeInset), h: Math.max(0, H - 2 * safeInset) };
+  return { bleedPx, safePx, trim, safe };
+}
+
+function isOutsideSafe(box, safe) {
+  return box.x < safe.x || box.y < safe.y ||
+    (box.x + box.w) > (safe.x + safe.w) || (box.y + box.h) > (safe.y + safe.h);
+}
+
+/**
+ * Scan a template's fields/photo frames against its safe print area and
+ * return human-readable warnings for anything that will likely get clipped
+ * by the cutter (the exact defect that clipped the RHP card's heading and
+ * email — text was placed with no bleed/safe-area margin at all).
+ */
+function computeSafeWarnings(template) {
+  const warnings = [];
+  if (!template?.printFile) return warnings;
+  const { safe } = bleedGeometry(template.printFile);
+  const tplName = template.name || template.id || 'Template';
+  for (const side of (template.sides || [])) {
+    const sideLabel = side.label || side.placement || 'side';
+    if (side.photo) {
+      const p = side.photo;
+      const box = { x: p.x || 0, y: p.y || 0, w: p.w || 0, h: p.h || 0 };
+      if (isOutsideSafe(box, safe)) {
+        warnings.push(`${tplName} — "${sideLabel}": photo frame extends outside the safe print area and may be cut off.`);
+      }
+    }
+    for (const f of (side.fields || [])) {
+      const box = { x: f.x || 0, y: f.y || 0, w: f.w || 100, h: (f.size || 24) * (f.lineHeight || 1.15) };
+      if (isOutsideSafe(box, safe)) {
+        warnings.push(`${tplName} — "${sideLabel}": field "${f.label || f.key}" extends outside the safe print area and may be cut off.`);
+      }
+    }
+  }
+  return warnings;
+}
+
 /** Build the SVG text overlay for one side (one <text> per filled field). */
 function buildTextSvg(W, H, side, fieldValues) {
   const els = (side.fields || []).map(f => {
@@ -148,4 +211,4 @@ async function renderCard(template, fieldValues, photoWebPath, filenameHint = 'c
 // is used anymore, so this is a no-op.
 async function closeBrowser() {}
 
-module.exports = { renderCard, renderSide, closeBrowser, PRINTS_DIR };
+module.exports = { renderCard, renderSide, closeBrowser, PRINTS_DIR, bleedGeometry, computeSafeWarnings };

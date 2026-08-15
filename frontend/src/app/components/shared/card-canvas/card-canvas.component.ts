@@ -69,6 +69,63 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
   get scale(): number { return this.displayWidth / this.pw; }
   get displayHeight(): number { return this.ph * this.scale; }
 
+  // ── Bleed / trim / safe-area geometry ──
+  // Mirrors backend/services/cardRenderer.js#bleedGeometry exactly, so what the
+  // designer shows is what the cutter will actually do. bleedPx = artwork
+  // beyond the trim line (no white edge); safePx = extra margin INSIDE the
+  // trim line that text/logos must clear to survive normal cutting tolerance.
+  // This replaces a flat 4%-of-canvas guide that had no relationship to the
+  // print vendor's real, DPI-based bleed spec — the root cause of the RHP
+  // card's clipped heading/email.
+  private static readonly DEFAULT_BLEED_IN = 0.125;
+  private static readonly DEFAULT_SAFE_IN = 0.125;
+
+  get bleedPx(): number {
+    const dpi = this.printFile?.dpi || 300;
+    return Number.isFinite(this.printFile?.bleedPx) ? this.printFile.bleedPx : Math.round(CardCanvasComponent.DEFAULT_BLEED_IN * dpi);
+  }
+  get safePx(): number {
+    const dpi = this.printFile?.dpi || 300;
+    return Number.isFinite(this.printFile?.safePx) ? this.printFile.safePx : Math.round(CardCanvasComponent.DEFAULT_SAFE_IN * dpi);
+  }
+  /** Where the cutter actually cuts. */
+  get trimRect(): { x: number; y: number; w: number; h: number } {
+    const b = this.bleedPx;
+    return { x: b, y: b, w: Math.max(0, this.pw - 2 * b), h: Math.max(0, this.ph - 2 * b) };
+  }
+  /** Keep all text/logos inside this box. */
+  get safeRect(): { x: number; y: number; w: number; h: number } {
+    const inset = this.bleedPx + this.safePx;
+    return { x: inset, y: inset, w: Math.max(0, this.pw - 2 * inset), h: Math.max(0, this.ph - 2 * inset) };
+  }
+
+  private isOutsideSafe(box: { x: number; y: number; w: number; h: number }): boolean {
+    const s = this.safeRect;
+    return box.x < s.x || box.y < s.y || (box.x + box.w) > (s.x + s.w) || (box.y + box.h) > (s.y + s.h);
+  }
+
+  fieldOutsideSafe(f: any): boolean {
+    const h = (f.size || 24) * (f.lineHeight || 1.15);
+    return this.isOutsideSafe({ x: f.x || 0, y: f.y || 0, w: f.w || 100, h });
+  }
+
+  photoOutsideSafe(): boolean {
+    const p = this.side?.photo;
+    if (!p) return false;
+    return this.isOutsideSafe({ x: p.x || 0, y: p.y || 0, w: p.w || 0, h: p.h || 0 });
+  }
+
+  /** Four hatched strips (top/bottom/left/right) between the canvas edge and the trim line. */
+  bleedBandStyle(edge: 'top' | 'bottom' | 'left' | 'right'): { [k: string]: string } {
+    const b = this.bleedPx;
+    switch (edge) {
+      case 'top':    return { left: '0px', top: '0px', width: this.pw + 'px', height: b + 'px' };
+      case 'bottom': return { left: '0px', top: (this.ph - b) + 'px', width: this.pw + 'px', height: b + 'px' };
+      case 'left':   return { left: '0px', top: '0px', width: b + 'px', height: this.ph + 'px' };
+      default:       return { left: (this.pw - b) + 'px', top: '0px', width: b + 'px', height: this.ph + 'px' };
+    }
+  }
+
   /** Resolve a "/uploads/..." path to the backend origin so <img>/bg can load it. */
   assetUrl(p: string): string {
     if (!p) return '';

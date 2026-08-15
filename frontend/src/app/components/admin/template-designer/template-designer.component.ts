@@ -53,7 +53,10 @@ export class TemplateDesignerComponent {
       id, name: 'New Card', syncProductId: 0,
       variants: [{ label: '50 pieces', syncVariantId: 0, price: 0 }],
       orientation: 'landscape',
-      printFile: { widthPx: 1050, heightPx: 600, dpi: 300 },
+      // bleedPx/safePx default to 0.125in * dpi when omitted (see cardRenderer's
+      // bleedGeometry), but are set explicitly here so the numbers are visible
+      // and editable from the start.
+      printFile: { widthPx: 1050, heightPx: 600, dpi: 300, bleedPx: 38, safePx: 38 },
       sides: [this.rhpFrontSide(), this.rhpBackSide()]
     });
     this.tplIndex = this.templates.length - 1;
@@ -61,16 +64,24 @@ export class TemplateDesignerComponent {
     this.emit();
   }
 
-  /** Landscape front: left photo + name/title/email/phone beside the icon strip. */
+  /**
+   * Landscape front: left photo + name/title/email/phone beside the icon strip.
+   * Every box here is kept inside the safe print area for the default 1050x600
+   * canvas at bleedPx:38/safePx:38 (safe rect x:76 y:76 w:898 h:448, i.e. right
+   * edge 974 / bottom edge 524) — the ACTUAL earlier version of this template
+   * placed the email field's right edge at x1015 and the photo's bottom edge
+   * at y560, both past the safe boundary, which is what got clipped when
+   * printed. Keep new coordinates inside those bounds.
+   */
   private rhpFrontSide(): any {
     return {
       placement: 'default', label: 'Front', backgroundImage: '', fonts: [],
-      photo: { x: 40, y: 40, w: 380, h: 520, fit: 'cover', shape: 'rect', borderRadius: 8 },
+      photo: { x: 76, y: 76, w: 350, h: 448, fit: 'cover', shape: 'rect', borderRadius: 8 },
       fields: [
-        { key: 'name',  label: 'Full Name', required: true,  x: 545, y: 70,  w: 470, align: 'left', family: 'Arial', weight: 700, size: 46, color: '#ffffff' },
-        { key: 'title', label: 'Title',     required: false, x: 545, y: 210, w: 470, align: 'left', family: 'Arial', weight: 400, size: 40, color: '#e5e7eb' },
-        { key: 'email', label: 'Email',     required: true,  x: 545, y: 345, w: 470, align: 'left', family: 'Arial', weight: 400, size: 34, color: '#ffffff' },
-        { key: 'phone', label: 'Phone',     required: true,  x: 545, y: 478, w: 470, align: 'left', family: 'Arial', weight: 400, size: 38, color: '#ffffff' }
+        { key: 'name',  label: 'Full Name', required: true,  x: 460, y: 100, w: 500, align: 'left', family: 'Arial', weight: 700, size: 46, color: '#ffffff' },
+        { key: 'title', label: 'Title',     required: false, x: 460, y: 230, w: 500, align: 'left', family: 'Arial', weight: 400, size: 40, color: '#e5e7eb' },
+        { key: 'email', label: 'Email',     required: true,  x: 460, y: 350, w: 500, align: 'left', family: 'Arial', weight: 400, size: 34, color: '#ffffff' },
+        { key: 'phone', label: 'Phone',     required: true,  x: 460, y: 440, w: 500, align: 'left', family: 'Arial', weight: 400, size: 38, color: '#ffffff' }
       ]
     };
   }
