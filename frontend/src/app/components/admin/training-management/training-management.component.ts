@@ -76,7 +76,7 @@ export class TrainingManagementComponent implements OnInit {
       title: ['', [Validators.required, Validators.minLength(3)]],
       description: ['', [Validators.required]],
       type: ['video', [Validators.required]],
-      url: ['', [Validators.required]],
+      url: [''],
       duration: [''],
       category: ['General'],
       folder: ['']
@@ -222,17 +222,19 @@ export class TrainingManagementComponent implements OnInit {
     });
   }
 
-  getSubfolders(parentId: string): any[] {
-    return this.folders.filter((f: any) => {
-      const pid = f.parent?._id || f.parent;
-      return pid === parentId;
-    });
-  }
-
   getFolderPath(folder: any): string {
     if (!folder) return '';
-    const parentName = folder.parent?.name || '';
-    return parentName ? `${parentName} / ${folder.name}` : folder.name;
+    const names: string[] = [];
+    const visited = new Set<string>();
+    let current: any = folder;
+    while (current) {
+      names.unshift(current.name);
+      const parentId: string | undefined = current.parent?._id || current.parent;
+      if (!parentId || visited.has(parentId)) break;
+      visited.add(parentId);
+      current = this.folders.find((f: any) => f._id === parentId);
+    }
+    return names.join(' / ');
   }
 
   openFolderModal(parentId?: string): void {
@@ -561,6 +563,10 @@ export class TrainingManagementComponent implements OnInit {
     if (this.trainingForm.invalid) {
       return;
     }
+    if (!this.trainingForm.value.url && !this.selectedPdfFile) {
+      this.error = 'Provide a URL or attach a PDF file for this material.';
+      return;
+    }
 
     this.loading = true;
     const materialData = {
@@ -592,6 +598,11 @@ export class TrainingManagementComponent implements OnInit {
 
   updateMaterial(): void {
     if (this.trainingForm.invalid || !this.selectedMaterial) {
+      return;
+    }
+    const hasExistingPdf = !!this.selectedMaterial.pdfAttachment?.filePath;
+    if (!this.trainingForm.value.url && !this.selectedPdfFile && !hasExistingPdf) {
+      this.error = 'Provide a URL or attach a PDF file for this material.';
       return;
     }
 
@@ -725,25 +736,6 @@ export class TrainingManagementComponent implements OnInit {
       this.loadFolders();
     }).catch(() => {
       this.error = 'Failed to reorder folders.';
-      setTimeout(() => this.error = '', 5000);
-      this.loadFolders();
-    });
-  }
-
-  dropSubfolder(event: CdkDragDrop<any[]>, parentId: string): void {
-    if (event.previousIndex === event.currentIndex) return;
-    const subs = this.getSubfolders(parentId);
-    moveItemInArray(subs, event.previousIndex, event.currentIndex);
-    const updates: Promise<any>[] = [];
-    subs.forEach((folder, index) => {
-      folder.order = index;
-      updates.push(this.trainingService.updateFolder(folder._id, { order: index }).toPromise());
-    });
-    Promise.all(updates).then(() => {
-      this.success = 'Subfolders reordered successfully!';
-      setTimeout(() => this.success = '', 3000);
-    }).catch(() => {
-      this.error = 'Failed to reorder subfolders.';
       setTimeout(() => this.error = '', 5000);
       this.loadFolders();
     });

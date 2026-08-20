@@ -85,7 +85,7 @@ exports.schemas = {
     title: Joi.string().trim().min(2).max(200).required(),
     description: Joi.string().trim().max(1000).optional(),
     type: Joi.string().valid('link', 'youtube', 'loom', 'document', 'video', 'article', 'other').required(),
-    url: Joi.string().uri().required(),
+    url: Joi.string().uri().optional().allow(''),
     category: Joi.string().trim().max(50).optional(),
     folder: Joi.string().hex().length(24).optional().allow(null, ''),
     tags: Joi.array().items(Joi.string()).optional(),
@@ -94,12 +94,12 @@ exports.schemas = {
     thumbnail: Joi.string().uri().optional(),
     order: Joi.number().integer().min(0).optional()
   }),
-  
+
   updateTrainingMaterial: Joi.object({
     title: Joi.string().trim().min(2).max(200).optional(),
     description: Joi.string().trim().max(1000).optional(),
     type: Joi.string().valid('link', 'youtube', 'loom', 'document', 'video', 'article', 'other').optional(),
-    url: Joi.string().uri().optional(),
+    url: Joi.string().uri().optional().allow(''),
     category: Joi.string().trim().max(50).optional(),
     folder: Joi.string().hex().length(24).optional().allow(null, ''),
     tags: Joi.array().items(Joi.string()).optional(),

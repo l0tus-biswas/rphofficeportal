@@ -24,6 +24,7 @@ import { SidebarComponent } from './components/shared/sidebar/sidebar.component'
 import { UserManagementComponent } from './components/admin/user-management/user-management.component';
 import { HierarchyComponent } from './components/admin/hierarchy/hierarchy.component';
 import { TrainingManagementComponent } from './components/admin/training-management/training-management.component';
+import { TrainingFolderNodeComponent } from './components/admin/training-management/training-folder-node.component';
 import { CouponManagementComponent } from './components/admin/coupon-management/coupon-management.component';
 import { ForgotPasswordComponent } from './components/forgot-password/forgot-password.component';
 import { ResetPasswordComponent } from './components/reset-password/reset-password.component';
@@ -95,6 +96,7 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     UserManagementComponent,
     HierarchyComponent,
     TrainingManagementComponent,
+    TrainingFolderNodeComponent,
     CouponManagementComponent,
     ForgotPasswordComponent,
     ResetPasswordComponent,

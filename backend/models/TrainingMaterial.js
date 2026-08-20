@@ -17,8 +17,8 @@ const trainingMaterialSchema = new mongoose.Schema({
   },
   url: {
     type: String,
-    required: [true, 'URL is required'],
-    trim: true
+    trim: true,
+    default: ''
   },
   category: {
     type: String,
