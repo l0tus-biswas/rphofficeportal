@@ -48,6 +48,37 @@ const promotionLevelSchema = new mongoose.Schema({
     default: 60,
     min: 1
   },
+  // Team composition by rank — replaces the plain agent-count check when set.
+  // OR semantics across entries: satisfied if ANY entry's count is met by
+  // downline members at-or-above that rank (e.g. "2 Advisors OR 1 Senior Advisor").
+  builderRequiredRanks: [{
+    rank: { type: String, required: true, trim: true, lowercase: true },
+    count: { type: Number, required: true, min: 1 },
+    _id: false
+  }],
+
+  // --- Income requirement (both tracks) ---
+  // Fed by admin-approved IncomePaid entries. 0 threshold = not required.
+  producerIncomeThreshold: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  producerIncomeWindowDays: {
+    type: Number,
+    default: 180,
+    min: 1
+  },
+  builderIncomeThreshold: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  builderIncomeWindowDays: {
+    type: Number,
+    default: 180,
+    min: 1
+  },
 
   // --- Skip-level promotion ---
   canSkipTo: {

@@ -154,5 +154,11 @@ exports.schemas = {
     customFields: Joi.object().optional(),
     inForceDate: Joi.date().optional().allow(null),
     priority: Joi.string().valid('Low', 'Medium', 'High', 'Urgent').optional().allow(null)
+  }),
+
+  incomePaid: Joi.object({
+    amount: Joi.number().min(0).required(),
+    datePaidByCarrier: Joi.date().required(),
+    notes: Joi.string().trim().max(1000).optional().allow('', null)
   })
 };

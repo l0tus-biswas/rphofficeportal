@@ -15,6 +15,17 @@ export interface ProducerTrack {
   targetPremium: number;
   progressPercent: number;
   windowDays: number;
+  income: number;
+  targetIncome: number;
+  incomeProgress: number;
+  incomeWindowDays: number;
+}
+
+export interface RankRequirementDetail {
+  rank: string;
+  requiredCount: number;
+  currentCount: number;
+  met: boolean;
 }
 
 export interface BuilderTrack {
@@ -26,6 +37,12 @@ export interface BuilderTrack {
   agentProgress: number;
   overallProgress: number;
   windowDays: number;
+  requiredRanks: RankRequirementDetail[];
+  rankRequirementMet: boolean;
+  income: number;
+  targetIncome: number;
+  incomeProgress: number;
+  incomeWindowDays: number;
 }
 
 export interface FastTrackInfo {
@@ -53,6 +70,11 @@ export interface PromotionTrackerData {
 }
 
 // ---------- Admin level config ----------
+export interface BuilderRequiredRank {
+  rank: string;
+  count: number;
+}
+
 export interface PromotionLevel {
   _id: string;
   name: string;
@@ -60,9 +82,14 @@ export interface PromotionLevel {
   commissionPercent: number;
   producerPremiumThreshold: number;
   producerWindowDays: number;
+  producerIncomeThreshold: number;
+  producerIncomeWindowDays: number;
   builderPremiumThreshold: number;
   builderAgentCountThreshold: number;
   builderWindowDays: number;
+  builderRequiredRanks: BuilderRequiredRank[];
+  builderIncomeThreshold: number;
+  builderIncomeWindowDays: number;
   canSkipTo: boolean;
   skipMultiplier: number;
   skipLegCapPercent: number;

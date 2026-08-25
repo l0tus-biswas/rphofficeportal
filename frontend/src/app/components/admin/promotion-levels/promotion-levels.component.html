@@ -73,15 +73,29 @@
               <!-- Producer Track -->
               <div class="col-md-4">
                 <div class="small text-muted mb-1"><i class="bi bi-graph-up-arrow text-primary me-1"></i>Producer Track</div>
-                <div class="small">
+                <div class="small" *ngIf="level.producerPremiumThreshold > 0">
                   <strong>${{ level.producerPremiumThreshold | number }}</strong> premium in <strong>{{ level.producerWindowDays }}</strong> days
+                </div>
+                <div class="small" *ngIf="level.producerIncomeThreshold > 0">
+                  <strong>${{ level.producerIncomeThreshold | number }}</strong> income / <strong>{{ level.producerIncomeWindowDays }}</strong> days
                 </div>
               </div>
               <!-- Builder Track -->
               <div class="col-md-5">
                 <div class="small text-muted mb-1"><i class="bi bi-people-fill text-success me-1"></i>Builder Track</div>
-                <div class="small">
-                  <strong>${{ level.builderPremiumThreshold | number }}</strong> premium + <strong>{{ level.builderAgentCountThreshold }}</strong> agents in <strong>{{ level.builderWindowDays }}</strong> days
+                <div class="small" *ngIf="level.builderPremiumThreshold > 0">
+                  <strong>${{ level.builderPremiumThreshold | number }}</strong> team premium in <strong>{{ level.builderWindowDays }}</strong> days
+                </div>
+                <div class="small" *ngIf="level.builderAgentCountThreshold > 0 && (!level.builderRequiredRanks || level.builderRequiredRanks.length === 0)">
+                  <strong>{{ level.builderAgentCountThreshold }}</strong> agents
+                </div>
+                <div class="small" *ngIf="(level.builderRequiredRanks?.length || 0) > 0">
+                  Team: <span *ngFor="let r of level.builderRequiredRanks; let last = last">
+                    <strong>{{ r.count }} {{ formatLevel(r.rank) }}{{ r.count > 1 ? 's' : '' }}</strong>{{ !last ? ' OR ' : '' }}
+                  </span>
+                </div>
+                <div class="small" *ngIf="level.builderIncomeThreshold > 0">
+                  <strong>${{ level.builderIncomeThreshold | number }}</strong> income / <strong>{{ level.builderIncomeWindowDays }}</strong> days
                 </div>
               </div>
               <!-- Skip config -->
@@ -175,6 +189,15 @@
               <label class="form-label">Rolling Window (days)</label>
               <input type="number" class="form-control" [(ngModel)]="editingLevel.producerWindowDays" min="1">
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Income Threshold ($)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.producerIncomeThreshold" min="0">
+              <small class="text-muted">0 = no income requirement. Fed by approved Income Paid entries.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Income Window (days)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.producerIncomeWindowDays" min="1">
+            </div>
           </div>
 
           <hr class="my-3">
@@ -184,17 +207,56 @@
           <p class="text-muted small mb-2">Team leadership targets needed to reach this level.</p>
           <div class="row g-3">
             <div class="col-md-4">
-              <label class="form-label">Premium Threshold ($)</label>
+              <label class="form-label">Team Premium Threshold ($)</label>
               <input type="number" class="form-control" [(ngModel)]="editingLevel.builderPremiumThreshold" min="0">
             </div>
             <div class="col-md-4">
-              <label class="form-label">Agent Count</label>
-              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderAgentCountThreshold" min="0">
+              <label class="form-label">Plain Agent Count</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderAgentCountThreshold" min="0"
+                     [disabled]="(editingLevel.builderRequiredRanks?.length || 0) > 0">
+              <small class="text-muted">Ignored if any Team Composition rule below is set.</small>
             </div>
             <div class="col-md-4">
               <label class="form-label">Rolling Window (days)</label>
               <input type="number" class="form-control" [(ngModel)]="editingLevel.builderWindowDays" min="1">
             </div>
+            <div class="col-md-6">
+              <label class="form-label">Income Threshold ($)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderIncomeThreshold" min="0">
+              <small class="text-muted">0 = no income requirement. Fed by approved Income Paid entries.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Income Window (days)</label>
+              <input type="number" class="form-control" [(ngModel)]="editingLevel.builderIncomeWindowDays" min="1">
+            </div>
+          </div>
+
+          <!-- Team Composition (rank-gated requirements) -->
+          <div class="mt-3">
+            <label class="form-label fw-semibold mb-1">Team Composition Requirements</label>
+            <p class="text-muted small mb-2">
+              Require specific ranks (or higher) on the agent's team, instead of a plain headcount.
+              Multiple rows are <strong>OR</strong> conditions — any one satisfies the requirement.
+            </p>
+            <div *ngFor="let req of editingLevel.builderRequiredRanks; let i = index" class="row g-2 align-items-center mb-2">
+              <div class="col-md-6">
+                <select class="form-select form-select-sm" [(ngModel)]="req.rank" [name]="'rankSelect' + i">
+                  <option value="" disabled>Select a rank...</option>
+                  <option *ngFor="let opt of availableRankOptions" [value]="opt.name">{{ formatLevel(opt.name) }}</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <input type="number" class="form-control form-control-sm" [(ngModel)]="req.count" [name]="'rankCount' + i" min="1" placeholder="Count">
+              </div>
+              <div class="col-md-2">
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeRankRequirement(i)">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-success" (click)="addRankRequirement()">
+              <i class="bi bi-plus-lg me-1"></i>Add Rank Requirement
+            </button>
           </div>
 
           <hr class="my-3">

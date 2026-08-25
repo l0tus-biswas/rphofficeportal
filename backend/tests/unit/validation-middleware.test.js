@@ -248,4 +248,61 @@ describe('Middleware: validation.middleware.js', () => {
       expect(error).toBeDefined();
     });
   });
+
+  describe('schemas.incomePaid', () => {
+    it('should accept a valid submission', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 5000,
+        datePaidByCarrier: '2026-01-01',
+        notes: 'January carrier statement'
+      });
+      expect(error).toBeUndefined();
+    });
+
+    it('should accept a submission with no notes (optional)', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 5000,
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeUndefined();
+    });
+
+    it('should reject a negative amount', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: -100,
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should reject a missing amount', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should reject a missing datePaidByCarrier', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 5000
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should reject an invalid datePaidByCarrier', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 5000,
+        datePaidByCarrier: 'not-a-date'
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should accept an amount of exactly 0', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 0,
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeUndefined();
+    });
+  });
 });

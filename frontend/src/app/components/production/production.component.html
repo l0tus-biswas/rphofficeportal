@@ -18,6 +18,9 @@
         <button class="btn btn-outline-warning" (click)="toggleRanking()">
           <i class="bi bi-trophy me-1"></i>{{ showRanking ? 'Hide Ranking' : 'Ranking' }}
         </button>
+        <a routerLink="/production/income-paid" class="btn btn-outline-primary">
+          <i class="bi bi-cash-stack me-1"></i>Income Paid
+        </a>
         <button *ngIf="isAdmin" class="btn btn-outline-secondary" (click)="openCustomFieldsConfig()">
           <i class="bi bi-gear me-1"></i>Custom Fields
         </button>

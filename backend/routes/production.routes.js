@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const ProductionSubmission = require('../models/ProductionSubmission');
 const Carrier = require('../models/Carrier');
 const User = require('../models/User');
+const IncomePaid = require('../models/IncomePaid');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
@@ -644,6 +645,211 @@ router.put('/custom-fields', authenticate, authorize('admin'), async (req, res) 
     );
     res.json({ message: 'Custom fields configuration saved.', fields });
   } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================================================
+// INCOME PAID
+// Agent-submitted "income paid" entry — a single policy can pay out in
+// several installments over time (e.g. an upfront payment, then trailing
+// monthly commission for months afterward), so an agent logs one entry per
+// carrier payment, each with its own "date paid by carrier" so admins can
+// line it up against carrier statements when reviewing. Gated by admin
+// approval before it feeds any promotion-level income requirement (see
+// promotion.routes.js).
+// NOTE: these fixed-path routes MUST be registered before the generic
+// GET/PUT/DELETE '/:id' routes below — otherwise Express would match
+// "/income-paid" itself against ':id' and never reach these handlers.
+// ============================================================================
+
+// @route   POST /api/production/income-paid
+// @desc    Agent submits an Income Paid entry (pending approval)
+// @access  Authenticated
+router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), async (req, res) => {
+  try {
+    const { amount, datePaidByCarrier, notes } = req.body;
+
+    const entry = await IncomePaid.create({
+      agent: req.user._id,
+      amount,
+      datePaidByCarrier,
+      notes,
+      status: 'pending'
+    });
+
+    // Notify admins there's a new entry awaiting approval. The entry is
+    // already saved at this point, so a notification failure (e.g. an
+    // email/push provider hiccup) must never surface as a failed submission.
+    try {
+      const admins = await User.find({ role: 'admin' }).select('_id').lean();
+      for (const admin of admins) {
+        await Notification.createNotification({
+          userId: admin._id,
+          type: 'income_paid_pending',
+          title: 'Income Paid Awaiting Approval',
+          message: `${req.user.name} submitted an Income Paid entry of $${amount.toLocaleString()} for review.`,
+          data: { agentId: String(req.user._id), agentName: req.user.name, entryId: String(entry._id) },
+          link: '/admin/production'
+        });
+      }
+    } catch (notifyErr) {
+      console.error('[Income Paid Submit] Failed to notify admins:', notifyErr.message);
+    }
+
+    res.status(201).json({ message: 'Income Paid submitted for approval', entry });
+  } catch (error) {
+    console.error('Error creating income paid entry:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/production/income-paid/mine
+// @desc    Get the current agent's own Income Paid entries
+// @access  Authenticated
+router.get('/income-paid/mine', authenticate, async (req, res) => {
+  try {
+    const entries = await IncomePaid.find({ agent: req.user._id })
+      .sort('-datePaidByCarrier')
+      .lean();
+    res.json({ entries });
+  } catch (error) {
+    console.error('Error fetching income paid entries:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/production/income-paid
+// @desc    Admin — list Income Paid entries (filterable by status, agent, and
+//          date-paid range so admins can line entries up against carrier statements)
+// @access  Admin only
+router.get('/income-paid', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.agentId) filter.agent = req.query.agentId;
+    if (req.query.fromDate || req.query.toDate) {
+      filter.datePaidByCarrier = {};
+      if (req.query.fromDate) filter.datePaidByCarrier.$gte = new Date(req.query.fromDate);
+      if (req.query.toDate) filter.datePaidByCarrier.$lte = new Date(req.query.toDate);
+    }
+
+    const entries = await IncomePaid.find(filter)
+      .populate('agent', 'name email')
+      .populate('reviewedBy', 'name')
+      .sort('-datePaidByCarrier')
+      .lean();
+    res.json({ entries });
+  } catch (error) {
+    console.error('Error fetching income paid entries:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/production/income-paid/:id/approve
+// @desc    Admin — approve an Income Paid entry
+// @access  Admin only
+router.put('/income-paid/:id/approve', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const entry = await IncomePaid.findById(req.params.id);
+    if (!entry) return res.status(404).json({ message: 'Income Paid entry not found' });
+
+    entry.status = 'approved';
+    entry.reviewedBy = req.user._id;
+    entry.reviewedAt = new Date();
+    entry.reviewNotes = req.body.reviewNotes || '';
+    await entry.save();
+
+    // The approval itself is already saved — a notification failure must
+    // never surface as a failed approval.
+    try {
+      await Notification.createNotification({
+        userId: entry.agent,
+        type: 'income_paid_approved',
+        title: 'Income Paid Approved',
+        message: `Your Income Paid entry of $${entry.amount.toLocaleString()} was approved and now counts toward your promotion tracker.`,
+        data: { entryId: String(entry._id) },
+        link: '/dashboard'
+      });
+    } catch (notifyErr) {
+      console.error('[Income Paid Approve] Failed to notify agent:', notifyErr.message);
+    }
+
+    // Re-check promotion eligibility now that income counts
+    const { checkAndNotifyPromotion, getUplineChainIds } = require('./promotion.routes');
+    (async () => {
+      try {
+        await checkAndNotifyPromotion(entry.agent);
+        const uplineIds = await getUplineChainIds(entry.agent);
+        for (const uplineId of uplineIds) {
+          await checkAndNotifyPromotion(uplineId);
+        }
+      } catch (promoErr) {
+        console.error('[Income Paid Approve] Promotion chain check error:', promoErr.message);
+      }
+    })();
+
+    res.json({ message: 'Income Paid entry approved', entry });
+  } catch (error) {
+    console.error('Error approving income paid entry:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/production/income-paid/:id/reject
+// @desc    Admin — reject an Income Paid entry
+// @access  Admin only
+router.put('/income-paid/:id/reject', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const entry = await IncomePaid.findById(req.params.id);
+    if (!entry) return res.status(404).json({ message: 'Income Paid entry not found' });
+
+    entry.status = 'rejected';
+    entry.reviewedBy = req.user._id;
+    entry.reviewedAt = new Date();
+    entry.reviewNotes = req.body.reviewNotes || '';
+    await entry.save();
+
+    // The rejection itself is already saved — a notification failure must
+    // never surface as a failed rejection.
+    try {
+      await Notification.createNotification({
+        userId: entry.agent,
+        type: 'income_paid_rejected',
+        title: 'Income Paid Rejected',
+        message: `Your Income Paid entry of $${entry.amount.toLocaleString()} was rejected.${entry.reviewNotes ? ' Reason: ' + entry.reviewNotes : ''}`,
+        data: { entryId: String(entry._id) },
+        link: '/production'
+      });
+    } catch (notifyErr) {
+      console.error('[Income Paid Reject] Failed to notify agent:', notifyErr.message);
+    }
+
+    res.json({ message: 'Income Paid entry rejected', entry });
+  } catch (error) {
+    console.error('Error rejecting income paid entry:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/production/income-paid/:id
+// @desc    Delete an Income Paid entry (owner may delete only while pending; admin may always delete)
+// @access  Authenticated
+router.delete('/income-paid/:id', authenticate, async (req, res) => {
+  try {
+    const entry = await IncomePaid.findById(req.params.id);
+    if (!entry) return res.status(404).json({ message: 'Income Paid entry not found' });
+
+    const isOwner = entry.agent.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !(isOwner && entry.status === 'pending')) {
+      return res.status(403).json({ message: 'You can only delete your own pending entries.' });
+    }
+
+    await entry.deleteOne();
+    res.json({ message: 'Income Paid entry deleted' });
+  } catch (error) {
+    console.error('Error deleting income paid entry:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

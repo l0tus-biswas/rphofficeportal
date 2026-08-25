@@ -55,6 +55,9 @@ const notificationSchema = new mongoose.Schema({
       // Misc
       'system_announcement',
       'promotion_eligible',
+      'income_paid_pending',
+      'income_paid_approved',
+      'income_paid_rejected',
       // Carrier
       'carrier_contract_requested',
       'carrier_appointed',

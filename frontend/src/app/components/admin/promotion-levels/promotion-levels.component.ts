@@ -62,9 +62,14 @@ export class PromotionLevelsComponent implements OnInit {
       commissionPercent: 0,
       producerPremiumThreshold: 0,
       producerWindowDays: 30,
+      producerIncomeThreshold: 0,
+      producerIncomeWindowDays: 180,
       builderPremiumThreshold: 0,
       builderAgentCountThreshold: 0,
       builderWindowDays: 60,
+      builderRequiredRanks: [],
+      builderIncomeThreshold: 0,
+      builderIncomeWindowDays: 180,
       canSkipTo: false,
       skipMultiplier: 1.4,
       skipLegCapPercent: 50,
@@ -81,13 +86,31 @@ export class PromotionLevelsComponent implements OnInit {
     this.editingLevel = {
       ...level,
       skipMultiplier: level.skipMultiplier || 1.4,
-      skipLegCapPercent: level.skipLegCapPercent || 50
+      skipLegCapPercent: level.skipLegCapPercent || 50,
+      builderRequiredRanks: (level.builderRequiredRanks || []).map(r => ({ ...r }))
     };
     this.editingLevelId = level._id;
     this.modalError = '';
     this.showAdvanced = true;
     this.showEditModal = true;
     this.showAddModal = false;
+  }
+
+  // --- Team composition (rank requirement) rows ---
+  addRankRequirement(): void {
+    if (!this.editingLevel.builderRequiredRanks) this.editingLevel.builderRequiredRanks = [];
+    this.editingLevel.builderRequiredRanks.push({ rank: '', count: 1 });
+  }
+
+  removeRankRequirement(index: number): void {
+    this.editingLevel.builderRequiredRanks?.splice(index, 1);
+  }
+
+  /** Levels a rank requirement could reference — any level below the one being edited */
+  get availableRankOptions(): PromotionLevel[] {
+    const currentRank = this.editingLevel.rank;
+    if (currentRank == null) return this.levels;
+    return this.levels.filter(l => l.rank < currentRank);
   }
 
   onSkipToggle(): void {

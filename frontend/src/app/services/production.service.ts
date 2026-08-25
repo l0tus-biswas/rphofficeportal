@@ -63,6 +63,19 @@ export interface RankingEntry {
   inForcePremium: number;
 }
 
+export interface IncomePaidEntry {
+  _id: string;
+  agent: any;
+  amount: number;
+  datePaidByCarrier: string | Date;
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy?: any;
+  reviewedAt?: string | Date;
+  reviewNotes?: string;
+  createdAt?: string | Date;
+}
+
 export interface CustomFieldDef {
   key: string;
   label: string;
@@ -330,5 +343,42 @@ export class ProductionService {
   // 8.2: Save custom field definitions (admin)
   saveCustomFields(fields: CustomFieldDef[]): Observable<any> {
     return this.http.put(`${this.apiUrl}/custom-fields`, { fields });
+  }
+
+  // ---------- Income Paid ----------
+
+  /** Agent — submit an Income Paid entry (pending admin approval) */
+  submitIncomePaid(data: { amount: number; datePaidByCarrier: string; notes?: string }): Observable<{ entry: IncomePaidEntry; message: string }> {
+    return this.http.post<{ entry: IncomePaidEntry; message: string }>(`${this.apiUrl}/income-paid`, data);
+  }
+
+  /** Agent — get my own Income Paid entries */
+  getMyIncomePaid(): Observable<{ entries: IncomePaidEntry[] }> {
+    return this.http.get<{ entries: IncomePaidEntry[] }>(`${this.apiUrl}/income-paid/mine`);
+  }
+
+  /** Admin — list Income Paid entries, optionally filtered by status/agent/date-paid range */
+  getIncomePaidAdmin(filters?: { status?: string; agentId?: string; fromDate?: string; toDate?: string }): Observable<{ entries: IncomePaidEntry[] }> {
+    let params = new HttpParams();
+    if (filters?.status) params = params.set('status', filters.status);
+    if (filters?.agentId) params = params.set('agentId', filters.agentId);
+    if (filters?.fromDate) params = params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params = params.set('toDate', filters.toDate);
+    return this.http.get<{ entries: IncomePaidEntry[] }>(`${this.apiUrl}/income-paid`, { params });
+  }
+
+  /** Admin — approve an entry */
+  approveIncomePaid(id: string, reviewNotes?: string): Observable<{ entry: IncomePaidEntry; message: string }> {
+    return this.http.put<{ entry: IncomePaidEntry; message: string }>(`${this.apiUrl}/income-paid/${id}/approve`, { reviewNotes });
+  }
+
+  /** Admin — reject an entry */
+  rejectIncomePaid(id: string, reviewNotes?: string): Observable<{ entry: IncomePaidEntry; message: string }> {
+    return this.http.put<{ entry: IncomePaidEntry; message: string }>(`${this.apiUrl}/income-paid/${id}/reject`, { reviewNotes });
+  }
+
+  /** Delete an entry (owner may delete only while pending; admin may always delete) */
+  deleteIncomePaid(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/income-paid/${id}`);
   }
 }

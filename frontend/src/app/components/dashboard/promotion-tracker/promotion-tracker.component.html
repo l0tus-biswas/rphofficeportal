@@ -86,6 +86,27 @@
             <div class="track-meta">
               <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.producer.windowDays }}-day window
             </div>
+
+            <!-- Producer Income Requirement -->
+            <ng-container *ngIf="data!.producer.targetIncome > 0">
+              <div class="track-row mt-3">
+                <span class="track-key">Paid Income</span>
+                <span class="track-val">{{ formatCurrency(data!.producer.income) }} <span class="track-target">/ {{ formatCurrency(data!.producer.targetIncome) }}</span></span>
+              </div>
+              <div class="progress track-progress" style="height:18px">
+                <div class="progress-bar bg-{{ progressColor(data!.producer.incomeProgress) }}"
+                     role="progressbar"
+                     [style.width.%]="data!.producer.incomeProgress"
+                     [attr.aria-valuenow]="data!.producer.incomeProgress"
+                     aria-valuemin="0" aria-valuemax="100">
+                  {{ data!.producer.incomeProgress }}%
+                </div>
+              </div>
+              <div class="track-meta">
+                <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.producer.incomeWindowDays }}-day income window
+                &middot; Based on admin-approved Income Paid entries
+              </div>
+            </ng-container>
           </div>
         </div>
       </div>
@@ -134,7 +155,7 @@
                   </div>
                 </div>
               </div>
-              <div class="col-12 col-md-6">
+              <div class="col-12 col-md-6" *ngIf="data!.builder.requiredRanks.length === 0">
                 <div class="track-row">
                   <span class="track-key">Active Producing Agents</span>
                   <span class="track-val">{{ data!.builder.activeAgents }} <span class="track-target">/ {{ data!.builder.targetAgentCount }}</span></span>
@@ -149,11 +170,41 @@
                   </div>
                 </div>
               </div>
+
+              <!-- Team composition (rank-gated) requirement -->
+              <div class="col-12 col-md-6" *ngIf="data!.builder.requiredRanks.length > 0">
+                <div class="track-key mb-1">Team Composition <span *ngIf="data!.builder.rankRequirementMet" class="badge bg-success ms-1">Met</span></div>
+                <div *ngFor="let req of data!.builder.requiredRanks" class="small mb-1">
+                  <i class="bi" [ngClass]="req.met ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'"></i>
+                  {{ req.currentCount }} / {{ req.requiredCount }} {{ formatLevel(req.rank) }}{{ req.requiredCount > 1 ? 's' : '' }} (or higher)
+                </div>
+              </div>
             </div>
             <div class="track-meta mt-2">
               <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.builder.windowDays }}-day window
               &middot; {{ data!.totalDownline }} total downline
             </div>
+
+            <!-- Builder Income Requirement -->
+            <ng-container *ngIf="data!.builder.targetIncome > 0">
+              <div class="track-row mt-3">
+                <span class="track-key">Paid Income</span>
+                <span class="track-val">{{ formatCurrency(data!.builder.income) }} <span class="track-target">/ {{ formatCurrency(data!.builder.targetIncome) }}</span></span>
+              </div>
+              <div class="progress track-progress" style="height:18px">
+                <div class="progress-bar bg-{{ progressColor(data!.builder.incomeProgress) }}"
+                     role="progressbar"
+                     [style.width.%]="data!.builder.incomeProgress"
+                     [attr.aria-valuenow]="data!.builder.incomeProgress"
+                     aria-valuemin="0" aria-valuemax="100">
+                  {{ data!.builder.incomeProgress }}%
+                </div>
+              </div>
+              <div class="track-meta">
+                <i class="bi bi-calendar3 me-1"></i>Rolling {{ data!.builder.incomeWindowDays }}-day income window
+                &middot; Based on admin-approved Income Paid entries
+              </div>
+            </ng-container>
           </div>
         </div>
       </div>

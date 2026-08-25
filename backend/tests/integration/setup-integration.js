@@ -32,6 +32,7 @@ jest.mock('mongoose', () => {
 // Mock all 30 models with factory mocks to avoid Mongoose schema compilation errors
 jest.mock('../../models/ACAClientRecord', () => require('../helpers/mock-model')('ACAClientRecord'));
 jest.mock('../../models/AcaTierConfig', () => require('../helpers/mock-model')('AcaTierConfig'));
+jest.mock('../../models/IncomePaid', () => require('../helpers/mock-model')('IncomePaid'));
 jest.mock('../../models/AgentCarrierStatus', () => require('../helpers/mock-model')('AgentCarrierStatus'));
 jest.mock('../../models/APAApplication', () => require('../helpers/mock-model')('APAApplication'));
 jest.mock('../../models/AuditLog', () => require('../helpers/mock-model')('AuditLog'));

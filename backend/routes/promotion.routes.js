@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const PromotionLevel = require('../models/PromotionLevel');
 const ProductionSubmission = require('../models/ProductionSubmission');
+const IncomePaid = require('../models/IncomePaid');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
@@ -220,6 +221,70 @@ async function countProducingAgents(agentIds, windowDays, sinceDate, transferDat
 }
 
 // ============================================================================
+// Helper: sum an agent's admin-approved Income Paid entries over a
+// rolling window (or since a fixed date, e.g. promotedAt) — mirrors the
+// sumQualifyingPremium cutoff pattern for consistency.
+// ============================================================================
+async function sumApprovedIncome(agentId, windowDays, sinceDate) {
+  const baseCutoff = sinceDate ? new Date(sinceDate) : new Date();
+  if (!sinceDate) {
+    baseCutoff.setDate(baseCutoff.getDate() - windowDays);
+  }
+
+  const result = await IncomePaid.aggregate([
+    {
+      $match: {
+        agent: new mongoose.Types.ObjectId(agentId),
+        status: 'approved',
+        datePaidByCarrier: { $gte: baseCutoff }
+      }
+    },
+    { $group: { _id: null, total: { $sum: '$amount' } } }
+  ]);
+  return result.length > 0 ? result[0].total : 0;
+}
+
+// ============================================================================
+// Helper: count downline members currently at or above a given rank number.
+// "At or above" means someone further along the ladder also satisfies a
+// lower-rank team-composition requirement (e.g. a Senior Advisor counts
+// toward an "1 Advisor on your team" requirement).
+// ============================================================================
+async function countDownlineAtOrAboveRank(downlineIds, targetRank, rankByName) {
+  if (!downlineIds || downlineIds.length === 0) return 0;
+  const members = await User.find({ _id: { $in: downlineIds } }).select('level').lean();
+  let count = 0;
+  for (const m of members) {
+    const r = rankByName.get((m.level || '').toLowerCase());
+    if (r != null && r >= targetRank) count++;
+  }
+  return count;
+}
+
+// ============================================================================
+// Helper: evaluate a level's builderRequiredRanks (OR across alternatives).
+// Returns { met, details } where details describes each alternative's
+// current count vs. required count, for display on the tracker.
+// ============================================================================
+async function evaluateBuilderRankRequirement(requiredRanks, downlineIds, rankByName) {
+  if (!requiredRanks || requiredRanks.length === 0) {
+    return { met: true, details: [] };
+  }
+  const details = [];
+  let met = false;
+  for (const req of requiredRanks) {
+    const targetRank = rankByName.get((req.rank || '').toLowerCase());
+    const count = targetRank != null
+      ? await countDownlineAtOrAboveRank(downlineIds, targetRank, rankByName)
+      : 0;
+    const alternativeMet = targetRank != null && count >= req.count;
+    if (alternativeMet) met = true;
+    details.push({ rank: req.rank, requiredCount: req.count, currentCount: count, met: alternativeMet });
+  }
+  return { met, details };
+}
+
+// ============================================================================
 // Fast-Track: default multiplier (used if level doesn't specify one)
 // ============================================================================
 const DEFAULT_SKIP_MULTIPLIER = 1.4;
@@ -313,6 +378,63 @@ async function getUplineChainIds(userId, maxDepth = 10) {
 }
 
 // ============================================================================
+// Helper: evaluate both Producer and Builder tracks for an agent against a
+// target level. Single source of truth used by the tracker, the manual
+// check-advancement endpoint, and the auto-notify hook so all three agree.
+// ============================================================================
+async function evaluateTracks(agentId, next, promotedAt, rankByName) {
+  // ---- Producer track: personal premium + personal income ----
+  const producerPremium = await sumQualifyingPremium([agentId], next.producerWindowDays, promotedAt);
+  const producerPremiumMet = next.producerPremiumThreshold > 0
+    ? producerPremium >= next.producerPremiumThreshold
+    : true;
+
+  let producerIncome = 0;
+  let producerIncomeMet = true;
+  if (next.producerIncomeThreshold > 0) {
+    producerIncome = await sumApprovedIncome(agentId, next.producerIncomeWindowDays, promotedAt);
+    producerIncomeMet = producerIncome >= next.producerIncomeThreshold;
+  }
+  const producerMet = producerPremiumMet && producerIncomeMet;
+
+  // ---- Builder track: team premium + team rank composition + personal income ----
+  const downlineIds = await getDownlineIds(agentId);
+  const transferDates = await getTransferDatesForDownline(downlineIds);
+  const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+  const builderPremiumMet = next.builderPremiumThreshold > 0
+    ? builderPremium >= next.builderPremiumThreshold
+    : true;
+
+  let activeAgents = 0;
+  let rankMet = true;
+  let rankDetails = [];
+  if (next.builderRequiredRanks && next.builderRequiredRanks.length > 0) {
+    const rankEval = await evaluateBuilderRankRequirement(next.builderRequiredRanks, downlineIds, rankByName);
+    rankMet = rankEval.met;
+    rankDetails = rankEval.details;
+  } else if (next.builderAgentCountThreshold > 0) {
+    activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+    rankMet = activeAgents >= next.builderAgentCountThreshold;
+  }
+
+  let builderIncome = 0;
+  let builderIncomeMet = true;
+  if (next.builderIncomeThreshold > 0) {
+    builderIncome = await sumApprovedIncome(agentId, next.builderIncomeWindowDays, promotedAt);
+    builderIncomeMet = builderIncome >= next.builderIncomeThreshold;
+  }
+
+  const builderMet = builderPremiumMet && rankMet && builderIncomeMet;
+
+  return {
+    downlineIds,
+    producerMet, producerPremium, producerIncome, producerPremiumMet, producerIncomeMet,
+    builderMet, builderPremium, activeAgents, builderIncome, rankDetails,
+    builderPremiumMet, rankMet, builderIncomeMet
+  };
+}
+
+// ============================================================================
 // Helper: run a promotion eligibility check for a single agent and notify admins
 // Called for both the submitting agent AND all upline ancestors
 // ============================================================================
@@ -330,43 +452,32 @@ async function checkAndNotifyPromotion(agentId) {
 
     const next = levels[currentIdx + 1];
     const promotedAt = agent.promotedAt || null;
+    const rankByName = new Map(levels.map(l => [l.name.toLowerCase(), l.rank]));
 
-    // Check Producer track (personal production)
-    const producerPremium = await sumQualifyingPremium([agentId], next.producerWindowDays, promotedAt);
-    const producerMet = producerPremium >= next.producerPremiumThreshold;
+    const { producerMet, builderMet } = await evaluateTracks(agentId, next, promotedAt, rankByName);
 
-    // Check Builder track (downline production)
-    const downlineIds = await getDownlineIds(agentId);
-    if (downlineIds.length > 0 || producerMet) {
-      const transferDates = await getTransferDatesForDownline(downlineIds);
-      const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
-      const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt, transferDates);
-      const builderMet = builderPremium >= next.builderPremiumThreshold &&
-                         activeAgents >= next.builderAgentCountThreshold;
+    if (producerMet || builderMet) {
+      // Deduplicate: skip if already notified in past 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const recentNotif = await Notification.findOne({
+        type: 'promotion_eligible',
+        'data.agentId': String(agentId),
+        'data.nextLevel': next.name,
+        createdAt: { $gte: sevenDaysAgo }
+      }).lean();
 
-      if (producerMet || builderMet) {
-        // Deduplicate: skip if already notified in past 7 days
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const recentNotif = await Notification.findOne({
-          type: 'promotion_eligible',
-          'data.agentId': String(agentId),
-          'data.nextLevel': next.name,
-          createdAt: { $gte: sevenDaysAgo }
-        }).lean();
-
-        if (!recentNotif) {
-          const admins = await User.find({ role: 'admin' }).select('_id').lean();
-          const track = producerMet ? 'producer' : 'builder';
-          for (const admin of admins) {
-            await Notification.createNotification({
-              userId: admin._id,
-              type: 'promotion_eligible',
-              title: 'Agent Promotion Eligible',
-              message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
-              data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
-              link: '/admin/user-management'
-            });
-          }
+      if (!recentNotif) {
+        const admins = await User.find({ role: 'admin' }).select('_id').lean();
+        const track = producerMet ? 'producer' : 'builder';
+        for (const admin of admins) {
+          await Notification.createNotification({
+            userId: admin._id,
+            type: 'promotion_eligible',
+            title: 'Agent Promotion Eligible',
+            message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
+            data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
+            link: '/admin/user-management'
+          });
         }
       }
     }
@@ -404,40 +515,74 @@ router.get('/tracker', authenticate, async (req, res) => {
     // Use promotedAt as production reset point; fall back to rolling window if no promotion date
     const promotedAt = user.promotedAt || null;
 
+    const rankByName = new Map(levels.map(l => [l.name.toLowerCase(), l.rank]));
+    const relevantLevel = next || current; // the level whose thresholds are being displayed
+
     // ---- Producer Track ----
-    const producerWindow = windowParam || (next ? next.producerWindowDays : current.producerWindowDays);
+    const producerWindow = windowParam || relevantLevel.producerWindowDays;
     const producerPremium = await sumQualifyingPremium([userId], producerWindow, promotedAt);
-    const producerTarget = next ? next.producerPremiumThreshold : current.producerPremiumThreshold;
+    const producerTarget = relevantLevel.producerPremiumThreshold;
     const producerProgress = producerTarget > 0
       ? Math.min(Math.round((producerPremium / producerTarget) * 100), 100)
       : 100;
 
+    const producerIncomeWindow = windowParam || relevantLevel.producerIncomeWindowDays;
+    const producerIncomeTarget = relevantLevel.producerIncomeThreshold || 0;
+    const producerIncome = producerIncomeTarget > 0
+      ? await sumApprovedIncome(userId, producerIncomeWindow, promotedAt)
+      : 0;
+    const producerIncomeProgress = producerIncomeTarget > 0
+      ? Math.min(Math.round((producerIncome / producerIncomeTarget) * 100), 100)
+      : 100;
+
     // ---- Builder Track ----
     const downlineIds = await getDownlineIds(userId);
-    const builderWindow = windowParam || (next ? next.builderWindowDays : current.builderWindowDays);
+    const builderWindow = windowParam || relevantLevel.builderWindowDays;
     // Get transfer dates for downline agents to ensure only post-transfer production counts
     const transferDates = await getTransferDatesForDownline(downlineIds);
     const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow, promotedAt, transferDates);
-    const builderTarget = next ? next.builderPremiumThreshold : current.builderPremiumThreshold;
+    const builderTarget = relevantLevel.builderPremiumThreshold;
     const builderProgress = builderTarget > 0
       ? Math.min(Math.round((builderPremium / builderTarget) * 100), 100)
       : 100;
 
-    const activeAgents = await countProducingAgents(downlineIds, builderWindow, promotedAt, transferDates);
-    const targetAgentCount = next ? next.builderAgentCountThreshold : current.builderAgentCountThreshold;
-    const agentProgress = targetAgentCount > 0
-      ? Math.min(Math.round((activeAgents / targetAgentCount) * 100), 100)
+    const builderRequiredRanks = relevantLevel.builderRequiredRanks || [];
+    let activeAgents = 0;
+    let targetAgentCount = 0;
+    let agentProgress = 100;
+    let rankRequirement = { met: true, details: [] };
+    if (builderRequiredRanks.length > 0) {
+      rankRequirement = await evaluateBuilderRankRequirement(builderRequiredRanks, downlineIds, rankByName);
+      agentProgress = rankRequirement.met ? 100 : Math.min(
+        Math.round(Math.max(...rankRequirement.details.map(d => d.requiredCount > 0 ? (d.currentCount / d.requiredCount) * 100 : 100), 0)),
+        100
+      );
+    } else {
+      targetAgentCount = relevantLevel.builderAgentCountThreshold || 0;
+      activeAgents = await countProducingAgents(downlineIds, builderWindow, promotedAt, transferDates);
+      agentProgress = targetAgentCount > 0
+        ? Math.min(Math.round((activeAgents / targetAgentCount) * 100), 100)
+        : 100;
+    }
+
+    const builderIncomeWindow = windowParam || relevantLevel.builderIncomeWindowDays;
+    const builderIncomeTarget = relevantLevel.builderIncomeThreshold || 0;
+    const builderIncome = builderIncomeTarget > 0
+      ? await sumApprovedIncome(userId, builderIncomeWindow, promotedAt)
+      : 0;
+    const builderIncomeProgress = builderIncomeTarget > 0
+      ? Math.min(Math.round((builderIncome / builderIncomeTarget) * 100), 100)
       : 100;
 
-    // Combined builder progress = BOTH conditions must be met
-    const builderOverallProgress = Math.min(builderProgress, agentProgress);
+    // Combined builder progress = ALL configured conditions must be met
+    const builderOverallProgress = Math.min(builderProgress, agentProgress, builderIncomeProgress);
 
-    // ---- Promotion eligibility ----
-    const producerMet = next ? (producerPremium >= next.producerPremiumThreshold) : false;
-    const builderMet  = next ? (
-      builderPremium >= next.builderPremiumThreshold &&
-      activeAgents   >= next.builderAgentCountThreshold
-    ) : false;
+    // ---- Promotion eligibility (always evaluated against the level's own configured windows) ----
+    const trackResult = next
+      ? await evaluateTracks(userId, next, promotedAt, rankByName)
+      : { producerMet: false, builderMet: false };
+    const producerMet = trackResult.producerMet;
+    const builderMet = trackResult.builderMet;
     const promotionReady = producerMet || builderMet;
 
     // ---- Fast-Track Skip Logic ----
@@ -535,7 +680,11 @@ router.get('/tracker', authenticate, async (req, res) => {
         premium: producerPremium,
         targetPremium: producerTarget,
         progressPercent: producerProgress,
-        windowDays: producerWindow
+        windowDays: producerWindow,
+        income: producerIncome,
+        targetIncome: producerIncomeTarget,
+        incomeProgress: producerIncomeProgress,
+        incomeWindowDays: producerIncomeWindow
       },
 
       // Builder track
@@ -547,7 +696,13 @@ router.get('/tracker', authenticate, async (req, res) => {
         targetAgentCount,
         agentProgress,
         overallProgress: builderOverallProgress,
-        windowDays: builderWindow
+        windowDays: builderWindow,
+        requiredRanks: rankRequirement.details,
+        rankRequirementMet: rankRequirement.met,
+        income: builderIncome,
+        targetIncome: builderIncomeTarget,
+        incomeProgress: builderIncomeProgress,
+        incomeWindowDays: builderIncomeWindow
       },
 
       // Downline stats
@@ -644,7 +799,9 @@ router.put('/admin/levels/:id', authenticate, authorize('admin'), async (req, re
     const allowed = [
       'name', 'commissionPercent',
       'producerPremiumThreshold', 'producerWindowDays',
+      'producerIncomeThreshold', 'producerIncomeWindowDays',
       'builderPremiumThreshold', 'builderAgentCountThreshold', 'builderWindowDays',
+      'builderRequiredRanks', 'builderIncomeThreshold', 'builderIncomeWindowDays',
       'canSkipTo', 'skipMultiplier', 'skipLegCapPercent', 'isActive'
     ];
     const updates = {};
@@ -676,7 +833,9 @@ router.put('/admin/levels/:id', authenticate, authorize('admin'), async (req, re
 router.post('/admin/levels', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { name, rank, commissionPercent, producerPremiumThreshold, producerWindowDays,
+            producerIncomeThreshold, producerIncomeWindowDays,
             builderPremiumThreshold, builderAgentCountThreshold, builderWindowDays,
+            builderRequiredRanks, builderIncomeThreshold, builderIncomeWindowDays,
             canSkipTo, skipMultiplier, skipLegCapPercent, isActive } = req.body;
 
     if (!name || !name.trim()) {
@@ -698,9 +857,14 @@ router.post('/admin/levels', authenticate, authorize('admin'), async (req, res) 
       commissionPercent: commissionPercent || 0,
       producerPremiumThreshold: producerPremiumThreshold || 0,
       producerWindowDays: producerWindowDays || 30,
+      producerIncomeThreshold: producerIncomeThreshold || 0,
+      producerIncomeWindowDays: producerIncomeWindowDays || 180,
       builderPremiumThreshold: builderPremiumThreshold || 0,
       builderAgentCountThreshold: builderAgentCountThreshold || 0,
       builderWindowDays: builderWindowDays || 60,
+      builderRequiredRanks: builderRequiredRanks || [],
+      builderIncomeThreshold: builderIncomeThreshold || 0,
+      builderIncomeWindowDays: builderIncomeWindowDays || 180,
       canSkipTo: canSkipTo || false,
       skipMultiplier: skipMultiplier || 1.4,
       skipLegCapPercent: skipLegCapPercent || 50,
@@ -778,18 +942,12 @@ router.post('/check-advancement', authenticate, async (req, res) => {
 
     const next = levels[currentIdx + 1];
     const promotedAt = user.promotedAt || null;
+    const rankByName = new Map(levels.map(l => [l.name.toLowerCase(), l.rank]));
 
-    // Check Producer track
-    const producerPremium = await sumQualifyingPremium([userId], next.producerWindowDays, promotedAt);
-    const producerMet = producerPremium >= next.producerPremiumThreshold;
-
-    // Check Builder track
-    const downlineIds = await getDownlineIds(userId);
-    const transferDates = await getTransferDatesForDownline(downlineIds);
-    const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
-    const activeAgents = await countProducingAgents(downlineIds, next.builderWindowDays, promotedAt, transferDates);
-    const builderMet = builderPremium >= next.builderPremiumThreshold &&
-                       activeAgents >= next.builderAgentCountThreshold;
+    const {
+      producerMet, producerPremium, producerIncome,
+      builderMet, builderPremium, activeAgents, builderIncome, rankDetails
+    } = await evaluateTracks(userId, next, promotedAt, rankByName);
 
     const eligible = producerMet || builderMet;
 
@@ -818,8 +976,17 @@ router.post('/check-advancement', authenticate, async (req, res) => {
       eligible,
       currentLevel: user.level,
       nextLevel: next.name,
-      producer: { premium: producerPremium, target: next.producerPremiumThreshold, met: producerMet },
-      builder: { premium: builderPremium, target: next.builderPremiumThreshold, agents: activeAgents, targetAgents: next.builderAgentCountThreshold, met: builderMet }
+      producer: {
+        premium: producerPremium, target: next.producerPremiumThreshold,
+        income: producerIncome, targetIncome: next.producerIncomeThreshold,
+        met: producerMet
+      },
+      builder: {
+        premium: builderPremium, target: next.builderPremiumThreshold,
+        agents: activeAgents, targetAgents: next.builderAgentCountThreshold,
+        requiredRanks: rankDetails, income: builderIncome, targetIncome: next.builderIncomeThreshold,
+        met: builderMet
+      }
     });
   } catch (err) {
     return errorResponse(res, err);
@@ -829,3 +996,8 @@ router.post('/check-advancement', authenticate, async (req, res) => {
 module.exports = router;
 module.exports.checkAndNotifyPromotion = checkAndNotifyPromotion;
 module.exports.getUplineChainIds = getUplineChainIds;
+// Exported for unit testing — pure(ish) calculation helpers
+module.exports.sumApprovedIncome = sumApprovedIncome;
+module.exports.countDownlineAtOrAboveRank = countDownlineAtOrAboveRank;
+module.exports.evaluateBuilderRankRequirement = evaluateBuilderRankRequirement;
+module.exports.evaluateTracks = evaluateTracks;
