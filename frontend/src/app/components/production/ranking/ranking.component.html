@@ -1,0 +1,69 @@
+<div class="production-page">
+  <div class="container-fluid py-4">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <div>
+        <a routerLink="/production" class="text-decoration-none small d-inline-block mb-1">
+          <i class="bi bi-arrow-left me-1"></i>Back to Production
+        </a>
+        <h2 class="mb-0"><i class="bi bi-trophy me-2"></i>Agent Ranking</h2>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-trophy me-2"></i>Agent Ranking</span>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <label class="mb-0 small">Sort by:</label>
+          <select class="form-select form-select-sm w-auto" [(ngModel)]="rankingSortBy" (change)="loadRanking()">
+            <option value="premium">Premium</option>
+            <option value="policies">Policies</option>
+            <option value="members">Members</option>
+          </select>
+          <label class="mb-0 small ms-2">Window:</label>
+          <select class="form-select form-select-sm w-auto" [(ngModel)]="rankingWindow" (change)="loadRanking()">
+            <option [ngValue]="0">All Time</option>
+            <option [ngValue]="30">30 Days</option>
+            <option [ngValue]="60">60 Days</option>
+            <option [ngValue]="90">90 Days</option>
+            <option [ngValue]="180">6 Months</option>
+            <option [ngValue]="365">12 Months</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div *ngIf="rankingLoading" class="text-center py-3">
+          <div class="spinner-border text-warning" role="status"></div>
+        </div>
+        <table *ngIf="!rankingLoading && ranking.length > 0" class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Agent</th>
+              <th class="text-end">Total Premium</th>
+              <th class="text-end">Policies</th>
+              <th class="text-end">Members</th>
+              <th class="text-end">In Force</th>
+              <th class="text-end">In Force Premium</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let r of ranking">
+              <td><span class="badge bg-warning text-dark">{{ r.rank }}</span></td>
+              <td>{{ r.agentName }}<br><small class="text-muted">{{ r.agentEmail }}</small></td>
+              <td class="text-end">{{ formatCurrency(r.totalPremium) }}</td>
+              <td class="text-end">{{ r.totalPolicies }}</td>
+              <td class="text-end">{{ r.totalMembers }}</td>
+              <td class="text-end">{{ r.inForceCount }}</td>
+              <td class="text-end">{{ formatCurrency(r.inForcePremium) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="!rankingLoading && ranking.length === 0" class="text-center text-muted py-3">
+          No ranking data available.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

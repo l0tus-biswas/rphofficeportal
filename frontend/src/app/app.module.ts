@@ -40,6 +40,7 @@ import { AdminPaymentManagementComponent } from './components/admin/admin-paymen
 import { LicensingComponent } from './components/licensing/licensing.component';
 import { ProductionComponent } from './components/production/production.component';
 import { IncomePaidComponent } from './components/production/income-paid/income-paid.component';
+import { RankingComponent } from './components/production/ranking/ranking.component';
 import { CarriersComponent } from './components/admin/carriers/carriers.component';
 import { ProductManagementComponent } from './components/admin/product-management/product-management.component';
 import { BrandingComponent } from './components/admin/branding/branding.component';
@@ -113,6 +114,7 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     LicensingComponent,
     ProductionComponent,
     IncomePaidComponent,
+    RankingComponent,
     CarriersComponent,
     ProductManagementComponent,
     BrandingComponent,

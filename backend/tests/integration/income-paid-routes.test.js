@@ -9,6 +9,7 @@ const request = require('supertest');
 const User = require('../../models/User');
 const SystemConfig = require('../../models/SystemConfig');
 const IncomePaid = require('../../models/IncomePaid');
+const ProductionSubmission = require('../../models/ProductionSubmission');
 const Notification = require('../../models/Notification');
 const { generateTestToken, generateAdminToken, createMockUser, createMockAdmin } = require('../helpers/test-utils');
 
@@ -31,6 +32,11 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
     User.findById.mockImplementation(() => ({
       select: jest.fn().mockResolvedValue(createMockUser({ _id: 'agent-id', name: 'Test Agent' }))
     }));
+    // Default: the submission lookup (agent-owned policy check) succeeds.
+    // Tests for the "not found" / "not owned" case override this per-test.
+    ProductionSubmission.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue({ _id: 'submission-1' }) })
+    });
   });
 
   // ---- Auth / validation ----
@@ -38,21 +44,22 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
   it('requires authentication to submit an entry', async () => {
     const res = await request(app)
       .post('/api/production/income-paid')
-      .send({ amount: 5000, datePaidByCarrier: '2026-01-01' });
+      .send({ productionSubmissionId: 'submission-1', amount: 5000, datePaidByCarrier: '2026-01-01' });
     expect(res.status).toBe(401);
   });
 
-  // Payload validation (negative amount / missing datePaidByCarrier) is covered at
-  // the unit level in tests/unit/validation-middleware.test.js — this repo's
-  // integration harness mocks Joi globally (see setup-integration.js) to work
-  // around a VM sandbox issue, so `validateRequest` always passes here and
-  // can't be exercised through a live route in this test tier.
+  // Payload validation (negative amount / missing datePaidByCarrier /
+  // missing productionSubmissionId) is covered at the unit level in
+  // tests/unit/validation-middleware.test.js — this repo's integration
+  // harness mocks Joi globally (see setup-integration.js) to work around a
+  // VM sandbox issue, so `validateRequest` always passes here and can't be
+  // exercised through a live route in this test tier.
 
   // ---- Happy path: submit ----
 
   it('creates a pending entry owned by the submitting agent and notifies admins', async () => {
     IncomePaid.create.mockResolvedValue({
-      _id: 'entry-1', agent: 'agent-id', amount: 5000, datePaidByCarrier: new Date('2026-01-01'), status: 'pending'
+      _id: 'entry-1', agent: 'agent-id', productionSubmission: 'submission-1', amount: 5000, datePaidByCarrier: new Date('2026-01-01'), status: 'pending'
     });
     User.find.mockReturnValue({
       select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ _id: 'admin-id' }]) })
@@ -61,15 +68,32 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
     const res = await request(app)
       .post('/api/production/income-paid')
       .set('Authorization', `Bearer ${agentToken}`)
-      .send({ amount: 5000, datePaidByCarrier: '2026-01-01', notes: 'January carrier statement' });
+      .send({ productionSubmissionId: 'submission-1', amount: 5000, datePaidByCarrier: '2026-01-01', notes: 'January carrier statement' });
 
     expect(res.status).toBe(201);
+    expect(ProductionSubmission.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'submission-1', agent: 'agent-id' })
+    );
     expect(IncomePaid.create).toHaveBeenCalledWith(
-      expect.objectContaining({ agent: 'agent-id', amount: 5000, status: 'pending' })
+      expect.objectContaining({ agent: 'agent-id', productionSubmission: 'submission-1', amount: 5000, status: 'pending' })
     );
     expect(Notification.createNotification).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'admin-id', type: 'income_paid_pending' })
     );
+  });
+
+  it("rejects a submission ID that doesn't belong to the requesting agent", async () => {
+    ProductionSubmission.findOne.mockReturnValue({
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(null) })
+    });
+
+    const res = await request(app)
+      .post('/api/production/income-paid')
+      .set('Authorization', `Bearer ${agentToken}`)
+      .send({ productionSubmissionId: 'someone-elses-submission', amount: 5000, datePaidByCarrier: '2026-01-01' });
+
+    expect(res.status).toBe(404);
+    expect(IncomePaid.create).not.toHaveBeenCalled();
   });
 
   it('stores the exact date paid by carrier as submitted (no month-rounding)', async () => {
@@ -84,7 +108,7 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
     await request(app)
       .post('/api/production/income-paid')
       .set('Authorization', `Bearer ${agentToken}`)
-      .send({ amount: 5000, datePaidByCarrier: '2026-01-17' });
+      .send({ productionSubmissionId: 'submission-1', amount: 5000, datePaidByCarrier: '2026-01-17' });
 
     const createArg = IncomePaid.create.mock.calls[0][0];
     expect(createArg.datePaidByCarrier).toBe('2026-01-17');
@@ -94,7 +118,9 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
 
   it("returns only the caller's own entries via /mine", async () => {
     IncomePaid.find.mockReturnValue({
-      sort: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ _id: 'e1', agent: 'agent-id' }]) })
+      populate: jest.fn().mockReturnValue({
+        sort: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ _id: 'e1', agent: 'agent-id' }]) })
+      })
     });
 
     const res = await request(app)
@@ -123,7 +149,9 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
     IncomePaid.find.mockReturnValue({
       populate: jest.fn().mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockReturnValue({ lean: leanMock })
+          populate: jest.fn().mockReturnValue({
+            sort: jest.fn().mockReturnValue({ lean: leanMock })
+          })
         })
       })
     });

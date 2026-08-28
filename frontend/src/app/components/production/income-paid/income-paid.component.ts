@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { ProductionService, IncomePaidEntry } from '../../../services/production.service';
+import { ProductionService, IncomePaidEntry, ProductionSubmission, CustomFieldDef } from '../../../services/production.service';
 import { AuthService } from '../../../services/auth.service';
 
 @Component({
@@ -11,6 +11,15 @@ export class IncomePaidComponent implements OnInit {
   isAdmin = false;
   error = '';
   success = '';
+
+  // The agent's own production submissions — picked from here so an Income
+  // Paid entry is always tied to a specific client/policy, instead of a
+  // blind free-text entry.
+  mySubmissions: ProductionSubmission[] = [];
+  submissionsLoading = false;
+  submissionSearchTerm = '';
+  customFieldDefs: CustomFieldDef[] = [];
+  selectedSubmission: ProductionSubmission | null = null;
 
   myIncomePaid: IncomePaidEntry[] = [];
   adminIncomePaid: IncomePaidEntry[] = [];
@@ -31,8 +40,53 @@ export class IncomePaidComponent implements OnInit {
   ngOnInit(): void {
     const user = this.authService.getCurrentUser();
     this.isAdmin = user?.role === 'admin';
+    this.loadMySubmissions();
+    this.loadCustomFields();
     this.loadMyIncomePaid();
     if (this.isAdmin) this.loadAdminIncomePaid();
+  }
+
+  loadMySubmissions(): void {
+    this.submissionsLoading = true;
+    // Non-admins only ever see their own submissions from this endpoint.
+    this.productionService.getProductionSubmissions({ limit: 500 }).subscribe({
+      next: (res) => { this.mySubmissions = res.submissions; this.submissionsLoading = false; },
+      error: () => { this.submissionsLoading = false; }
+    });
+  }
+
+  loadCustomFields(): void {
+    this.productionService.getCustomFields().subscribe({
+      next: (res) => { this.customFieldDefs = res.fields; },
+      error: () => {}
+    });
+  }
+
+  get filteredSubmissions(): ProductionSubmission[] {
+    const term = this.submissionSearchTerm.trim().toLowerCase();
+    if (!term) return this.mySubmissions;
+    return this.mySubmissions.filter(s =>
+      (s.clientName || '').toLowerCase().includes(term) ||
+      (s.productSold || '').toLowerCase().includes(term) ||
+      (s.carrier?.name || '').toLowerCase().includes(term)
+    );
+  }
+
+  getCustomFieldValue(submission: ProductionSubmission, key: string): string {
+    if (!submission.customFields) return '—';
+    const val = submission.customFields[key];
+    if (val == null || val === '') return '—';
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    return String(val);
+  }
+
+  selectSubmission(sub: ProductionSubmission): void {
+    this.selectedSubmission = sub;
+    this.error = '';
+  }
+
+  clearSelectedSubmission(): void {
+    this.selectedSubmission = null;
   }
 
   loadMyIncomePaid(): void {
@@ -59,18 +113,24 @@ export class IncomePaidComponent implements OnInit {
   }
 
   submitIncomePaid(): void {
+    if (!this.selectedSubmission) {
+      this.error = 'Please select which policy/client this income was paid on.';
+      return;
+    }
     if (!this.newIncomeAmount || this.newIncomeAmount < 0 || !this.newIncomeDatePaid) {
       this.error = 'Please provide a valid amount and date paid by carrier.';
       return;
     }
     this.incomePaidSaving = true;
     this.productionService.submitIncomePaid({
+      productionSubmissionId: this.selectedSubmission._id!,
       amount: this.newIncomeAmount,
       datePaidByCarrier: this.newIncomeDatePaid,
       notes: this.newIncomeNotes
     }).subscribe({
       next: () => {
         this.success = 'Income Paid submitted for admin approval.';
+        this.selectedSubmission = null;
         this.newIncomeAmount = null;
         this.newIncomeDatePaid = '';
         this.newIncomeNotes = '';
@@ -126,6 +186,12 @@ export class IncomePaidComponent implements OnInit {
     return classes[status] || 'bg-secondary';
   }
 
+  /** Read-only linked-submission info for display in the entries tables (My Submissions / Approval Queue) */
+  getEntrySubmission(entry: IncomePaidEntry): ProductionSubmission | null {
+    const sub = entry.productionSubmission;
+    return sub && typeof sub === 'object' ? sub as ProductionSubmission : null;
+  }
+
   formatDatePaid(date: any): string {
     if (!date) return '';
     // Date Paid by Carrier is a calendar date, not a point in time — stored as
@@ -133,6 +199,11 @@ export class IncomePaidComponent implements OnInit {
     // components. Converting to the viewer's local timezone would otherwise
     // roll the displayed date back by one day for timezones behind UTC.
     return new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+
+  formatDate(date: any): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-US', { timeZone: 'UTC' });
   }
 
   formatCurrency(amount: number): string {

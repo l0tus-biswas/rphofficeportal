@@ -250,8 +250,11 @@ describe('Middleware: validation.middleware.js', () => {
   });
 
   describe('schemas.incomePaid', () => {
+    const VALID_SUBMISSION_ID = '507f1f77bcf86cd799439011';
+
     it('should accept a valid submission', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: 5000,
         datePaidByCarrier: '2026-01-01',
         notes: 'January carrier statement'
@@ -261,14 +264,33 @@ describe('Middleware: validation.middleware.js', () => {
 
     it('should accept a submission with no notes (optional)', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: 5000,
         datePaidByCarrier: '2026-01-01'
       });
       expect(error).toBeUndefined();
     });
 
+    it('should reject a missing productionSubmissionId', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        amount: 5000,
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeDefined();
+    });
+
+    it('should reject a malformed productionSubmissionId', () => {
+      const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: 'not-a-valid-object-id',
+        amount: 5000,
+        datePaidByCarrier: '2026-01-01'
+      });
+      expect(error).toBeDefined();
+    });
+
     it('should reject a negative amount', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: -100,
         datePaidByCarrier: '2026-01-01'
       });
@@ -277,6 +299,7 @@ describe('Middleware: validation.middleware.js', () => {
 
     it('should reject a missing amount', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         datePaidByCarrier: '2026-01-01'
       });
       expect(error).toBeDefined();
@@ -284,6 +307,7 @@ describe('Middleware: validation.middleware.js', () => {
 
     it('should reject a missing datePaidByCarrier', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: 5000
       });
       expect(error).toBeDefined();
@@ -291,6 +315,7 @@ describe('Middleware: validation.middleware.js', () => {
 
     it('should reject an invalid datePaidByCarrier', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: 5000,
         datePaidByCarrier: 'not-a-date'
       });
@@ -299,6 +324,7 @@ describe('Middleware: validation.middleware.js', () => {
 
     it('should accept an amount of exactly 0', () => {
       const { error } = validation.schemas.incomePaid.validate({
+        productionSubmissionId: VALID_SUBMISSION_ID,
         amount: 0,
         datePaidByCarrier: '2026-01-01'
       });

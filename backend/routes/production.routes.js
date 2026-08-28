@@ -668,10 +668,23 @@ router.put('/custom-fields', authenticate, authorize('admin'), async (req, res) 
 // @access  Authenticated
 router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), async (req, res) => {
   try {
-    const { amount, datePaidByCarrier, notes } = req.body;
+    const { productionSubmissionId, amount, datePaidByCarrier, notes } = req.body;
+
+    // The policy being paid on must be one of the agent's own submissions —
+    // this is what lets admins see exactly which client/policy the payment
+    // is for when reviewing, and prevents attaching someone else's policy.
+    const submission = await ProductionSubmission.findOne({
+      _id: productionSubmissionId,
+      agent: req.user._id,
+      deletedAt: null
+    }).select('_id').lean();
+    if (!submission) {
+      return res.status(404).json({ message: 'Production submission not found for this agent.' });
+    }
 
     const entry = await IncomePaid.create({
       agent: req.user._id,
+      productionSubmission: productionSubmissionId,
       amount,
       datePaidByCarrier,
       notes,
@@ -710,6 +723,11 @@ router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), a
 router.get('/income-paid/mine', authenticate, async (req, res) => {
   try {
     const entries = await IncomePaid.find({ agent: req.user._id })
+      .populate({
+        path: 'productionSubmission',
+        select: 'clientName productSold carrier customFields submissionDate inForceDate',
+        populate: { path: 'carrier', select: 'name' }
+      })
       .sort('-datePaidByCarrier')
       .lean();
     res.json({ entries });
@@ -737,6 +755,11 @@ router.get('/income-paid', authenticate, authorize('admin'), async (req, res) =>
     const entries = await IncomePaid.find(filter)
       .populate('agent', 'name email')
       .populate('reviewedBy', 'name')
+      .populate({
+        path: 'productionSubmission',
+        select: 'clientName productSold carrier customFields submissionDate inForceDate',
+        populate: { path: 'carrier', select: 'name' }
+      })
       .sort('-datePaidByCarrier')
       .lean();
     res.json({ entries });

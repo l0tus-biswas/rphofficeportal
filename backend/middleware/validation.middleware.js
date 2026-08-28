@@ -157,6 +157,7 @@ exports.schemas = {
   }),
 
   incomePaid: Joi.object({
+    productionSubmissionId: Joi.string().hex().length(24).required(),
     amount: Joi.number().min(0).required(),
     datePaidByCarrier: Joi.date().required(),
     notes: Joi.string().trim().max(1000).optional().allow('', null)

@@ -66,6 +66,7 @@ export interface RankingEntry {
 export interface IncomePaidEntry {
   _id: string;
   agent: any;
+  productionSubmission: ProductionSubmission | string;
   amount: number;
   datePaidByCarrier: string | Date;
   notes?: string;
@@ -348,7 +349,7 @@ export class ProductionService {
   // ---------- Income Paid ----------
 
   /** Agent — submit an Income Paid entry (pending admin approval) */
-  submitIncomePaid(data: { amount: number; datePaidByCarrier: string; notes?: string }): Observable<{ entry: IncomePaidEntry; message: string }> {
+  submitIncomePaid(data: { productionSubmissionId: string; amount: number; datePaidByCarrier: string; notes?: string }): Observable<{ entry: IncomePaidEntry; message: string }> {
     return this.http.post<{ entry: IncomePaidEntry; message: string }>(`${this.apiUrl}/income-paid`, data);
   }
 

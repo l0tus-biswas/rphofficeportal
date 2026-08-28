@@ -12,6 +12,14 @@ const incomePaidSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // The specific policy/production submission this payment was for — lets
+  // admins see exactly what client/policy an agent got paid on when reviewing.
+  productionSubmission: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ProductionSubmission',
+    required: [true, 'A production submission (policy) must be selected'],
+    index: true
+  },
   amount: {
     type: Number,
     required: [true, 'Income amount is required'],

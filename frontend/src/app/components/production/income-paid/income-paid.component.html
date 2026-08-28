@@ -21,46 +21,70 @@
       <button type="button" class="btn-close" (click)="error = ''"></button>
     </div>
 
+    <!-- Step 1: pick the policy this payment was for -->
     <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white">
+        <i class="bi bi-clipboard-data me-2"></i>Your Production — select the policy this payment was for
+      </div>
       <div class="card-body">
-        <p class="text-muted small mb-3">
-          A single policy is often paid out in more than one installment (e.g. an upfront payment, then several months
-          of trailing commission). Log each carrier payment separately with the date it was actually paid — once an
-          admin approves an entry, it counts toward your promotion tracker's income requirements.
-        </p>
+        <input type="text" class="form-control mb-3" placeholder="Search by client, product, or carrier..."
+               [(ngModel)]="submissionSearchTerm">
 
-        <!-- Submit form -->
-        <form (ngSubmit)="submitIncomePaid()" class="row g-3 align-items-end mb-4">
-          <div class="col-sm-3">
-            <label class="form-label small mb-1">Amount</label>
-            <div class="input-group">
-              <span class="input-group-text">$</span>
-              <input type="number" min="0" step="0.01" class="form-control" [(ngModel)]="newIncomeAmount" name="newIncomeAmount" required>
-            </div>
-          </div>
-          <div class="col-sm-3">
-            <label class="form-label small mb-1">Date Paid by Carrier</label>
-            <input type="date" class="form-control" [(ngModel)]="newIncomeDatePaid" name="newIncomeDatePaid" required>
-          </div>
-          <div class="col-sm-4">
-            <label class="form-label small mb-1">Notes (optional)</label>
-            <input type="text" class="form-control" [(ngModel)]="newIncomeNotes" name="newIncomeNotes" placeholder="e.g. policy/client reference">
-          </div>
-          <div class="col-sm-2">
-            <button type="submit" class="btn btn-primary w-100" [disabled]="incomePaidSaving">
-              <span *ngIf="incomePaidSaving" class="spinner-border spinner-border-sm me-1"></span>Submit
-            </button>
-          </div>
-        </form>
+        <div *ngIf="submissionsLoading" class="text-center py-3">
+          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        </div>
 
-        <!-- My entries -->
-        <h6 class="fw-semibold">My Submissions</h6>
+        <div class="table-responsive" *ngIf="!submissionsLoading">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Product</th>
+                <th>Carrier</th>
+                <th class="text-end">Premium</th>
+                <th>Status</th>
+                <th *ngFor="let cf of customFieldDefs">{{ cf.label }}</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let sub of filteredSubmissions" [class.table-primary]="selectedSubmission?._id === sub._id">
+                <td>{{ formatDate(sub.submissionDate) }}</td>
+                <td>{{ sub.clientName }}</td>
+                <td>{{ sub.productSold }}</td>
+                <td>{{ sub.carrier?.name || '—' }}</td>
+                <td class="text-end">{{ formatCurrency(sub.premiumAmount) }}</td>
+                <td><span class="badge bg-secondary">{{ sub.status }}</span></td>
+                <td *ngFor="let cf of customFieldDefs">{{ getCustomFieldValue(sub, cf.key) }}</td>
+                <td>
+                  <button type="button" class="btn btn-sm btn-primary" (click)="selectSubmission(sub)">
+                    Add Income
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div *ngIf="filteredSubmissions.length === 0" class="text-muted small text-center py-3">
+            No production submissions found. Log a submission on the Production tab first.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- My submitted income entries -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white">
+        <i class="bi bi-list-check me-2"></i>My Income Paid Submissions
+      </div>
+      <div class="card-body">
         <div *ngIf="incomePaidLoading" class="text-center py-3">
           <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
         </div>
         <table *ngIf="!incomePaidLoading && myIncomePaid.length > 0" class="table table-sm table-hover">
           <thead class="table-light">
             <tr>
+              <th>Client / Policy</th>
               <th>Date Paid by Carrier</th>
               <th class="text-end">Amount</th>
               <th>Notes</th>
@@ -70,6 +94,12 @@
           </thead>
           <tbody>
             <tr *ngFor="let e of myIncomePaid">
+              <td>
+                <ng-container *ngIf="getEntrySubmission(e) as sub; else noSub">
+                  {{ sub.clientName }} <span class="text-muted small">— {{ sub.productSold }}</span>
+                </ng-container>
+                <ng-template #noSub>—</ng-template>
+              </td>
               <td>{{ formatDatePaid(e.datePaidByCarrier) }}</td>
               <td class="text-end">{{ formatCurrency(e.amount) }}</td>
               <td class="small text-muted">{{ e.notes || '—' }}</td>
@@ -85,58 +115,121 @@
         <div *ngIf="!incomePaidLoading && myIncomePaid.length === 0" class="text-muted small py-2">
           No Income Paid entries submitted yet.
         </div>
+      </div>
+    </div>
 
-        <!-- Admin approval queue -->
-        <div *ngIf="isAdmin" class="mt-4 pt-3 border-top">
-          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-            <h6 class="fw-semibold mb-0">Approval Queue</h6>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <select class="form-select form-select-sm w-auto" [(ngModel)]="incomePaidStatusFilter" (change)="onIncomePaidFilterChange()">
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="">All</option>
-              </select>
-              <label class="small text-muted mb-0">Paid from</label>
-              <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="incomePaidFromDateFilter" (change)="onIncomePaidFilterChange()">
-              <label class="small text-muted mb-0">to</label>
-              <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="incomePaidToDateFilter" (change)="onIncomePaidFilterChange()">
-            </div>
+    <!-- Admin approval queue -->
+    <div class="card border-0 shadow-sm mb-4" *ngIf="isAdmin">
+      <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span><i class="bi bi-check2-square me-2"></i>Approval Queue</span>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <select class="form-select form-select-sm w-auto" [(ngModel)]="incomePaidStatusFilter" (change)="onIncomePaidFilterChange()">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="">All</option>
+            </select>
+            <label class="small text-muted mb-0">Paid from</label>
+            <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="incomePaidFromDateFilter" (change)="onIncomePaidFilterChange()">
+            <label class="small text-muted mb-0">to</label>
+            <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="incomePaidToDateFilter" (change)="onIncomePaidFilterChange()">
           </div>
-          <table *ngIf="adminIncomePaid.length > 0" class="table table-sm table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>Agent</th>
-                <th>Date Paid by Carrier</th>
-                <th class="text-end">Amount</th>
-                <th>Notes</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let e of adminIncomePaid">
-                <td>{{ e.agent?.name || '—' }}</td>
-                <td>{{ formatDatePaid(e.datePaidByCarrier) }}</td>
-                <td class="text-end">{{ formatCurrency(e.amount) }}</td>
-                <td class="small text-muted">{{ e.notes || '—' }}</td>
-                <td><span class="badge" [ngClass]="getIncomeStatusBadgeClass(e.status)">{{ e.status }}</span></td>
-                <td class="d-flex gap-1">
-                  <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-success" (click)="approveIncomePaid(e)">
-                    <i class="bi bi-check-lg"></i>
-                  </button>
-                  <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-outline-danger" (click)="rejectIncomePaid(e)">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div *ngIf="adminIncomePaid.length === 0" class="text-muted small py-2">
-            No entries match this filter.
-          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <table *ngIf="adminIncomePaid.length > 0" class="table table-sm table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Agent</th>
+              <th>Client / Policy</th>
+              <th>Date Paid by Carrier</th>
+              <th class="text-end">Amount</th>
+              <th>Notes</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of adminIncomePaid">
+              <td>{{ e.agent?.name || '—' }}</td>
+              <td>
+                <ng-container *ngIf="getEntrySubmission(e) as sub; else noSub2">
+                  {{ sub.clientName }}
+                  <div class="text-muted small">{{ sub.productSold }} · {{ sub.carrier?.name || '—' }}</div>
+                </ng-container>
+                <ng-template #noSub2>—</ng-template>
+              </td>
+              <td>{{ formatDatePaid(e.datePaidByCarrier) }}</td>
+              <td class="text-end">{{ formatCurrency(e.amount) }}</td>
+              <td class="small text-muted">{{ e.notes || '—' }}</td>
+              <td><span class="badge" [ngClass]="getIncomeStatusBadgeClass(e.status)">{{ e.status }}</span></td>
+              <td class="d-flex gap-1">
+                <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-success" (click)="approveIncomePaid(e)">
+                  <i class="bi bi-check-lg"></i>
+                </button>
+                <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-outline-danger" (click)="rejectIncomePaid(e)">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div *ngIf="adminIncomePaid.length === 0" class="text-muted small py-2">
+          No entries match this filter.
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Add Income Paid modal -->
+<div class="modal fade" [class.show]="selectedSubmission" [style.display]="selectedSubmission ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" *ngIf="selectedSubmission">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-cash-stack me-2"></i>Adding income for
+        </h5>
+        <button type="button" class="btn-close" (click)="clearSelectedSubmission()"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          <strong>{{ selectedSubmission.clientName }}</strong> — {{ selectedSubmission.productSold }}
+          <span *ngIf="selectedSubmission.carrier?.name">({{ selectedSubmission.carrier?.name }})</span>
+        </p>
+        <p class="text-muted small mb-3">
+          A single policy is often paid out in more than one installment (e.g. an upfront payment, then several months
+          of trailing commission) — log each carrier payment as its own entry, with the date it was actually paid.
+          Once an admin approves an entry, it counts toward your promotion tracker's income requirements.
+        </p>
+
+        <form (ngSubmit)="submitIncomePaid()" class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label small mb-1">Amount</label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" min="0" step="0.01" class="form-control" [(ngModel)]="newIncomeAmount" name="newIncomeAmount" required>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small mb-1">Date Paid by Carrier</label>
+            <input type="date" class="form-control" [(ngModel)]="newIncomeDatePaid" name="newIncomeDatePaid" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1">Notes (optional)</label>
+            <input type="text" class="form-control" [(ngModel)]="newIncomeNotes" name="newIncomeNotes" placeholder="e.g. installment 2 of 3">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="clearSelectedSubmission()" [disabled]="incomePaidSaving">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="submitIncomePaid()" [disabled]="incomePaidSaving">
+          <span *ngIf="incomePaidSaving" class="spinner-border spinner-border-sm me-1"></span>
+          {{ incomePaidSaving ? 'Saving...' : 'Submit' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="selectedSubmission" *ngIf="selectedSubmission"></div>

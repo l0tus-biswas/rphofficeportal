@@ -1,7 +1,7 @@
 import { getAppTimezone } from '../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { ProductionService, ProductionSubmission, ProductionFilters, STATUS_VALUES, RankingEntry, CustomFieldDef } from '../../services/production.service';
+import { ProductionService, ProductionSubmission, ProductionFilters, STATUS_VALUES, CustomFieldDef } from '../../services/production.service';
 import { CarrierService, Carrier } from '../../services/carrier.service';
 import { AuthService } from '../../services/auth.service';
 import { AdminService } from '../../services/admin.service';
@@ -68,13 +68,6 @@ export class ProductionComponent implements OnInit {
   teamReport: any = null;
   teamReportWindow = 30;
   teamReportLoading = false;
-
-  // 8.7: Ranking
-  showRanking = false;
-  ranking: RankingEntry[] = [];
-  rankingSortBy = 'premium';
-  rankingWindow = 0;
-  rankingLoading = false;
 
   // 8.2: Custom fields
   customFieldDefs: CustomFieldDef[] = [];
@@ -467,22 +460,6 @@ export class ProductionComponent implements OnInit {
     this.filters.startDate = start ? start.toISOString().split('T')[0] : undefined;
     this.filters.endDate = preset === 'all' ? undefined : now.toISOString().split('T')[0];
     this.applyFilters();
-  }
-
-  // --- 8.7: Ranking ---
-  toggleRanking(): void {
-    this.showRanking = !this.showRanking;
-    if (this.showRanking && this.ranking.length === 0) {
-      this.loadRanking();
-    }
-  }
-
-  loadRanking(): void {
-    this.rankingLoading = true;
-    this.productionService.getRanking(this.rankingSortBy, this.rankingWindow).subscribe({
-      next: (data) => { this.ranking = data.ranking; this.rankingLoading = false; },
-      error: () => { this.rankingLoading = false; }
-    });
   }
 
   // --- 8.2: Custom field configuration ---
