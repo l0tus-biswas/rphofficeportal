@@ -42,6 +42,7 @@ import { ProductionComponent } from './components/production/production.componen
 import { IncomePaidComponent } from './components/production/income-paid/income-paid.component';
 import { RankingComponent } from './components/production/ranking/ranking.component';
 import { SupportComponent } from './components/support/support.component';
+import { IncomePaidApprovalsComponent } from './components/admin/income-paid-approvals/income-paid-approvals.component';
 import { CarriersComponent } from './components/admin/carriers/carriers.component';
 import { ProductManagementComponent } from './components/admin/product-management/product-management.component';
 import { BrandingComponent } from './components/admin/branding/branding.component';
@@ -117,6 +118,7 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     IncomePaidComponent,
     RankingComponent,
     SupportComponent,
+    IncomePaidApprovalsComponent,
     CarriersComponent,
     ProductManagementComponent,
     BrandingComponent,

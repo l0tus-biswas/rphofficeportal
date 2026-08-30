@@ -58,6 +58,7 @@ import { WelcomeMessageComponent } from './components/admin/welcome-message/welc
 import { SystemMonitoringComponent } from './components/admin/system-monitoring/system-monitoring.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
 import { SupportComponent } from './components/support/support.component';
+import { IncomePaidApprovalsComponent } from './components/admin/income-paid-approvals/income-paid-approvals.component';
 import { LoginRedirectGuard } from './guards/login-redirect.guard';
 
 const routes: Routes = [
@@ -365,6 +366,12 @@ const routes: Routes = [
     path: 'support',
     component: SupportComponent,
     canActivate: [AuthGuard]
+  },
+  {
+    path: 'admin/income-paid-approvals',
+    component: IncomePaidApprovalsComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['admin'] }
   },
   { path: '**', component: NotFoundComponent }
 ];

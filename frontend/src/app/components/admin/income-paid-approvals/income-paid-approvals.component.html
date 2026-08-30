@@ -1,0 +1,82 @@
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-check2-square me-2"></i>Income Paid Approval Queue</h2>
+  </div>
+
+  <!-- Alerts -->
+  <div *ngIf="success" class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle-fill me-2"></i>{{ success }}
+    <button type="button" class="btn-close" (click)="success = ''"></button>
+  </div>
+  <div *ngIf="error" class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}
+    <button type="button" class="btn-close" (click)="error = ''"></button>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-funnel me-2"></i>Filters</span>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <select class="form-select form-select-sm w-auto" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="">All</option>
+          </select>
+          <label class="small text-muted mb-0">Paid from</label>
+          <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="fromDateFilter" (change)="onFilterChange()">
+          <label class="small text-muted mb-0">to</label>
+          <input type="date" class="form-control form-control-sm w-auto" [(ngModel)]="toDateFilter" (change)="onFilterChange()">
+        </div>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div *ngIf="loading" class="text-center py-4">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+      </div>
+      <table *ngIf="!loading && entries.length > 0" class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Agent</th>
+            <th>Client / Policy</th>
+            <th>Date Paid by Carrier</th>
+            <th class="text-end">Amount</th>
+            <th>Notes</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let e of entries">
+            <td>{{ e.agent?.name || '—' }}</td>
+            <td>
+              <ng-container *ngIf="getEntrySubmission(e) as sub; else noSub">
+                {{ sub.clientName }}
+                <div class="text-muted small">{{ sub.productSold }} · {{ sub.carrier?.name || '—' }}</div>
+              </ng-container>
+              <ng-template #noSub>—</ng-template>
+            </td>
+            <td>{{ formatDatePaid(e.datePaidByCarrier) }}</td>
+            <td class="text-end">{{ formatCurrency(e.amount) }}</td>
+            <td class="small text-muted">{{ e.notes || '—' }}</td>
+            <td><span class="badge" [ngClass]="getStatusBadgeClass(e.status)">{{ e.status }}</span></td>
+            <td class="d-flex gap-1">
+              <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-success" (click)="approve(e)" title="Approve">
+                <i class="bi bi-check-lg"></i>
+              </button>
+              <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-outline-danger" (click)="reject(e)" title="Reject">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div *ngIf="!loading && entries.length === 0" class="text-muted small text-center py-4">
+        No entries match this filter.
+      </div>
+    </div>
+  </div>
+</div>

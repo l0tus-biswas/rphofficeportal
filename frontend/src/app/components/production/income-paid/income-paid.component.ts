@@ -22,10 +22,6 @@ export class IncomePaidComponent implements OnInit {
   selectedSubmission: ProductionSubmission | null = null;
 
   myIncomePaid: IncomePaidEntry[] = [];
-  adminIncomePaid: IncomePaidEntry[] = [];
-  incomePaidStatusFilter = 'pending';
-  incomePaidFromDateFilter = '';
-  incomePaidToDateFilter = '';
   incomePaidLoading = false;
   incomePaidSaving = false;
   newIncomeAmount: number | null = null;
@@ -43,7 +39,6 @@ export class IncomePaidComponent implements OnInit {
     this.loadMySubmissions();
     this.loadCustomFields();
     this.loadMyIncomePaid();
-    if (this.isAdmin) this.loadAdminIncomePaid();
   }
 
   loadMySubmissions(): void {
@@ -97,21 +92,6 @@ export class IncomePaidComponent implements OnInit {
     });
   }
 
-  loadAdminIncomePaid(): void {
-    this.productionService.getIncomePaidAdmin({
-      status: this.incomePaidStatusFilter || undefined,
-      fromDate: this.incomePaidFromDateFilter || undefined,
-      toDate: this.incomePaidToDateFilter || undefined
-    }).subscribe({
-      next: (res) => { this.adminIncomePaid = res.entries; },
-      error: () => {}
-    });
-  }
-
-  onIncomePaidFilterChange(): void {
-    this.loadAdminIncomePaid();
-  }
-
   submitIncomePaid(): void {
     if (!this.selectedSubmission) {
       this.error = 'Please select which policy/client this income was paid on.';
@@ -151,33 +131,9 @@ export class IncomePaidComponent implements OnInit {
       next: () => {
         this.success = 'Entry deleted';
         this.loadMyIncomePaid();
-        if (this.isAdmin) this.loadAdminIncomePaid();
         setTimeout(() => this.success = '', 3000);
       },
       error: (err) => { this.error = this.extractError(err, 'Failed to delete entry'); }
-    });
-  }
-
-  approveIncomePaid(entry: IncomePaidEntry): void {
-    this.productionService.approveIncomePaid(entry._id).subscribe({
-      next: () => {
-        this.success = 'Income Paid approved.';
-        this.loadAdminIncomePaid();
-        setTimeout(() => this.success = '', 3000);
-      },
-      error: (err) => { this.error = this.extractError(err, 'Failed to approve entry'); }
-    });
-  }
-
-  rejectIncomePaid(entry: IncomePaidEntry): void {
-    const reason = prompt('Reason for rejecting this entry (optional):') || '';
-    this.productionService.rejectIncomePaid(entry._id, reason).subscribe({
-      next: () => {
-        this.success = 'Income Paid rejected.';
-        this.loadAdminIncomePaid();
-        setTimeout(() => this.success = '', 3000);
-      },
-      error: (err) => { this.error = this.extractError(err, 'Failed to reject entry'); }
     });
   }
 
@@ -186,7 +142,7 @@ export class IncomePaidComponent implements OnInit {
     return classes[status] || 'bg-secondary';
   }
 
-  /** Read-only linked-submission info for display in the entries tables (My Submissions / Approval Queue) */
+  /** Read-only linked-submission info for display in the My Income Paid Submissions table */
   getEntrySubmission(entry: IncomePaidEntry): ProductionSubmission | null {
     const sub = entry.productionSubmission;
     return sub && typeof sub === 'object' ? sub as ProductionSubmission : null;

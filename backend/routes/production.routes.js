@@ -703,7 +703,7 @@ router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), a
           title: 'Income Paid Awaiting Approval',
           message: `${req.user.name} submitted an Income Paid entry of $${amount.toLocaleString()} for review.`,
           data: { agentId: String(req.user._id), agentName: req.user.name, entryId: String(entry._id) },
-          link: '/production/income-paid'
+          link: '/admin/income-paid-approvals'
         });
       }
     } catch (notifyErr) {
