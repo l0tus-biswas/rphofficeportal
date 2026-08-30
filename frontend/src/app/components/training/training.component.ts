@@ -227,10 +227,17 @@ export class TrainingComponent implements OnInit {
     return `${environment.baseUrl}${path}`;
   }
 
+  /** Combines the legacy single pdfAttachment (if any) with the pdfAttachments array for display. */
+  getAllPdfAttachments(material: any): any[] {
+    const list = [...(material?.pdfAttachments || [])];
+    if (material?.pdfAttachment?.filePath) list.unshift(material.pdfAttachment);
+    return list;
+  }
+
   // training-pdfs are protected (unlike thumbnails) — a raw <a href> can't
   // send the Authorization header, so fetch via HttpClient and open as a blob.
-  viewPdfAttachment(material: any): void {
-    const filePath = material?.pdfAttachment?.filePath;
+  viewPdfAttachment(attachment: any): void {
+    const filePath = attachment?.filePath;
     if (!filePath) return;
     const win = window.open('', '_blank');
     this.trainingService.downloadFileBlob(this.getFileUrl(filePath)).subscribe({

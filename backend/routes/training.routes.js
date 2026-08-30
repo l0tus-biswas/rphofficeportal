@@ -575,11 +575,11 @@ router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), lo
 });
 
 // @route   POST /api/training/materials/:id/pdf
-// @desc    Upload or replace PDF attachment for a training material
+// @desc    Upload one or more PDF attachments for a training material (added to existing ones)
 // @access  Private (Admin only)
-router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRAINING_PDF'), async (req, res) => {
+router.post('/materials/:id/pdf', uploadPdf.array('pdf', 10), logAction('UPLOAD_TRAINING_PDF'), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       return sendResponse(res, 400, { message: 'No PDF file uploaded' });
     }
 
@@ -588,23 +588,18 @@ router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRA
       return sendResponse(res, 404, { message: 'Training material not found' });
     }
 
-    // Delete old PDF file if it exists
-    if (material.pdfAttachment?.filePath) {
-      const oldPath = path.join(__dirname, '..', material.pdfAttachment.filePath);
-      try { await fs.unlink(oldPath); } catch (_) { /* ignore if not found */ }
-    }
-
-    material.pdfAttachment = {
-      fileName: req.file.originalname,
-      filePath: `/uploads/training-pdfs/${req.file.filename}`,
+    const newAttachments = req.files.map(file => ({
+      fileName: file.originalname,
+      filePath: `/uploads/training-pdfs/${file.filename}`,
       uploadedAt: new Date()
-    };
+    }));
+    material.pdfAttachments.push(...newAttachments);
 
     await material.save();
 
     sendResponse(res, 200, {
-      message: 'PDF uploaded successfully',
-      pdfAttachment: material.pdfAttachment,
+      message: 'PDF(s) uploaded successfully',
+      pdfAttachments: material.pdfAttachments,
       material
     });
   } catch (error) {
@@ -612,8 +607,35 @@ router.post('/materials/:id/pdf', uploadPdf.single('pdf'), logAction('UPLOAD_TRA
   }
 });
 
+// @route   DELETE /api/training/materials/:id/pdf/:attachmentId
+// @desc    Remove a single PDF attachment from a training material
+// @access  Private (Admin only)
+router.delete('/materials/:id/pdf/:attachmentId', logAction('DELETE_TRAINING_PDF'), async (req, res) => {
+  try {
+    const material = await TrainingMaterial.findById(req.params.id);
+    if (!material || !material.isActive) {
+      return sendResponse(res, 404, { message: 'Training material not found' });
+    }
+
+    const attachment = material.pdfAttachments.id(req.params.attachmentId);
+    if (!attachment) {
+      return sendResponse(res, 404, { message: 'Attachment not found' });
+    }
+
+    const filePath = path.join(__dirname, '..', attachment.filePath);
+    try { await fs.unlink(filePath); } catch (_) { /* ignore */ }
+
+    attachment.deleteOne();
+    await material.save();
+
+    sendResponse(res, 200, { message: 'PDF attachment removed successfully', material });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   DELETE /api/training/materials/:id/pdf
-// @desc    Remove PDF attachment from training material
+// @desc    Remove the legacy single PDF attachment from a training material
 // @access  Private (Admin only)
 router.delete('/materials/:id/pdf', logAction('DELETE_TRAINING_PDF'), async (req, res) => {
   try {

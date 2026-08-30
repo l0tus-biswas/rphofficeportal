@@ -158,10 +158,11 @@
                   </a>
                 </div>
 
-                <!-- PDF Attachment badge/download -->
-                <div *ngIf="material.pdfAttachment?.filePath" class="mb-3">
-                  <button type="button" (click)="viewPdfAttachment(material)" class="btn btn-sm btn-outline-danger w-100">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>PDF: {{ material.pdfAttachment.fileName }}
+                <!-- PDF Attachments badges/downloads -->
+                <div *ngIf="getAllPdfAttachments(material).length > 0" class="mb-3 d-flex flex-column gap-1">
+                  <button *ngFor="let att of getAllPdfAttachments(material)" type="button"
+                    (click)="viewPdfAttachment(att)" class="btn btn-sm btn-outline-danger w-100 text-truncate">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>{{ att.fileName }}
                   </button>
                 </div>
 
@@ -337,11 +338,19 @@
 
           <div class="mb-3">
             <label class="form-label">
-              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachment
+              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachments
               <small class="text-muted ms-2">(Required if no URL is provided above)</small>
             </label>
-            <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
-            <small class="text-muted">Upload a PDF — resource guide, commission schedule, etc. (max 20 MB)</small>
+            <input type="file" class="form-control" accept=".pdf" multiple (change)="onPdfFileChange($event)">
+            <small class="text-muted">Upload one or more PDFs — resource guides, commission schedules, etc. (max 20 MB each)</small>
+            <ul *ngIf="selectedPdfFiles.length > 0" class="list-group mt-2">
+              <li *ngFor="let file of selectedPdfFiles; let i = index" class="list-group-item d-flex justify-content-between align-items-center py-1">
+                <span class="small text-truncate"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ file.name }}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeSelectedPdfFile(i)">
+                  <i class="bi bi-x"></i>
+                </button>
+              </li>
+            </ul>
           </div>
 
           <div class="mb-3">
@@ -432,26 +441,43 @@
             <small class="text-muted">Optional - e.g., "10 mins", "1 hour"</small>
           </div>
 
-          <!-- PDF Attachment section for Edit modal -->
+          <!-- PDF Attachments section for Edit modal -->
           <div class="mb-3">
             <label class="form-label">
-              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachment
+              <i class="bi bi-file-earmark-pdf me-1 text-danger"></i>PDF Attachments
             </label>
-            <!-- Existing PDF -->
+            <!-- Legacy single attachment -->
             <div *ngIf="selectedMaterial?.pdfAttachment?.filePath" class="d-flex align-items-center gap-2 mb-2 p-2 bg-light rounded">
               <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
               <span class="small flex-grow-1">{{ selectedMaterial.pdfAttachment.fileName }}</span>
-              <button type="button" (click)="viewPdfAttachment(selectedMaterial)" class="btn btn-sm btn-outline-primary">
+              <button type="button" (click)="viewPdfAttachment(selectedMaterial.pdfAttachment)" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-download"></i> View
               </button>
-              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removePdf(selectedMaterial)">
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeLegacyPdf(selectedMaterial)">
                 <i class="bi bi-trash"></i>
               </button>
             </div>
-            <input type="file" class="form-control" accept=".pdf" (change)="onPdfFileChange($event)">
-            <small class="text-muted">
-              {{ selectedMaterial?.pdfAttachment?.filePath ? 'Upload a new PDF to replace the current one' : 'Attach a PDF resource (max 20 MB)' }}
-            </small>
+            <!-- Existing attachments -->
+            <div *ngFor="let att of selectedMaterial?.pdfAttachments" class="d-flex align-items-center gap-2 mb-2 p-2 bg-light rounded">
+              <i class="bi bi-file-earmark-pdf-fill text-danger fs-5"></i>
+              <span class="small flex-grow-1">{{ att.fileName }}</span>
+              <button type="button" (click)="viewPdfAttachment(att)" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-download"></i> View
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger" (click)="removePdfAttachment(selectedMaterial, att)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+            <input type="file" class="form-control" accept=".pdf" multiple (change)="onPdfFileChange($event)">
+            <small class="text-muted">Add one or more new PDFs (max 20 MB each)</small>
+            <ul *ngIf="selectedPdfFiles.length > 0" class="list-group mt-2">
+              <li *ngFor="let file of selectedPdfFiles; let i = index" class="list-group-item d-flex justify-content-between align-items-center py-1">
+                <span class="small text-truncate"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ file.name }}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger" (click)="removeSelectedPdfFile(i)">
+                  <i class="bi bi-x"></i>
+                </button>
+              </li>
+            </ul>
           </div>
 
           <div class="mb-3">

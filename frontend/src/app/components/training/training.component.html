@@ -173,12 +173,13 @@
                 <i class="bi bi-box-arrow-up-right me-2"></i>View Material
               </a>
 
-              <!-- PDF Attachment Download -->
-              <button *ngIf="material.pdfAttachment?.filePath"
-                 type="button" (click)="viewPdfAttachment(material)"
-                 class="btn btn-outline-danger w-100 mt-2">
-                <i class="bi bi-file-earmark-pdf me-2"></i>Download PDF
-              </button>
+              <!-- PDF Attachment Downloads -->
+              <div *ngFor="let att of getAllPdfAttachments(material)" class="mt-2">
+                <button type="button" (click)="viewPdfAttachment(att)"
+                   class="btn btn-outline-danger w-100 text-truncate">
+                  <i class="bi bi-file-earmark-pdf me-2"></i>{{ getAllPdfAttachments(material).length > 1 ? att.fileName : 'Download PDF' }}
+                </button>
+              </div>
 
               <!-- Uploaded By -->
               <div class="mt-3 text-center" *ngIf="material.uploadedBy">

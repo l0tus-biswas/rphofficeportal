@@ -21,7 +21,7 @@ export class TrainingManagementComponent implements OnInit {
   showEditModal = false;
   trainingForm!: FormGroup;
   selectedMaterial: any = null;
-  selectedPdfFile: File | null = null;
+  selectedPdfFiles: File[] = [];
   pdfUploading = false;
   selectedMaterialThumbnailFile: File | null = null;
   materialThumbnailPreview: string | null = null;
@@ -466,6 +466,7 @@ export class TrainingManagementComponent implements OnInit {
   openCreateModal(): void {
     this.trainingForm.reset({ type: 'video', category: 'General', folder: '' });
     this.selectedMaterial = null;
+    this.selectedPdfFiles = [];
     this.selectedMaterialThumbnailFile = null;
     this.materialThumbnailPreview = null;
     this.showCreateModal = true;
@@ -477,6 +478,7 @@ export class TrainingManagementComponent implements OnInit {
       ...material,
       folder: material.folder?._id || material.folder || ''
     });
+    this.selectedPdfFiles = [];
     this.selectedMaterialThumbnailFile = null;
     this.materialThumbnailPreview = material.thumbnail ? this.getThumbnailUrl(material.thumbnail) : null;
     this.showEditModal = true;
@@ -486,7 +488,7 @@ export class TrainingManagementComponent implements OnInit {
     this.showCreateModal = false;
     this.showEditModal = false;
     this.selectedMaterial = null;
-    this.selectedPdfFile = null;
+    this.selectedPdfFiles = [];
     this.selectedMaterialThumbnailFile = null;
     this.materialThumbnailPreview = null;
     this.trainingForm.reset();
@@ -494,16 +496,20 @@ export class TrainingManagementComponent implements OnInit {
 
   onPdfFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.selectedPdfFile = input.files && input.files.length > 0 ? input.files[0] : null;
+    this.selectedPdfFiles = input.files ? Array.from(input.files) : [];
+  }
+
+  removeSelectedPdfFile(index: number): void {
+    this.selectedPdfFiles.splice(index, 1);
   }
 
   private uploadPdfIfSelected(materialId: string, callback: () => void): void {
-    if (!this.selectedPdfFile) {
+    if (this.selectedPdfFiles.length === 0) {
       callback();
       return;
     }
     this.pdfUploading = true;
-    this.trainingService.uploadPdf(materialId, this.selectedPdfFile).subscribe({
+    this.trainingService.uploadPdf(materialId, this.selectedPdfFiles).subscribe({
       next: () => {
         this.pdfUploading = false;
         callback();
@@ -516,7 +522,22 @@ export class TrainingManagementComponent implements OnInit {
     });
   }
 
-  removePdf(material: any): void {
+  removePdfAttachment(material: any, attachment: any): void {
+    if (!confirm(`Remove "${attachment.fileName}" from "${material.title}"?`)) return;
+    this.trainingService.removePdfAttachment(material._id, attachment._id).subscribe({
+      next: () => {
+        this.success = 'PDF attachment removed';
+        this.loadMaterials();
+        setTimeout(() => this.success = '', 3000);
+      },
+      error: (err: any) => {
+        this.error = err.error?.message || 'Failed to remove PDF';
+      }
+    });
+  }
+
+  /** Removes the legacy single pdfAttachment field (materials created before multi-attachment support). */
+  removeLegacyPdf(material: any): void {
     if (!confirm(`Remove the PDF attachment from "${material.title}"?`)) return;
     this.trainingService.removePdf(material._id).subscribe({
       next: () => {
@@ -584,7 +605,7 @@ export class TrainingManagementComponent implements OnInit {
     if (this.trainingForm.invalid) {
       return;
     }
-    if (!this.trainingForm.value.url && !this.selectedPdfFile) {
+    if (!this.trainingForm.value.url && this.selectedPdfFiles.length === 0) {
       this.error = 'Provide a URL or attach a PDF file for this material.';
       return;
     }
@@ -621,8 +642,8 @@ export class TrainingManagementComponent implements OnInit {
     if (this.trainingForm.invalid || !this.selectedMaterial) {
       return;
     }
-    const hasExistingPdf = !!this.selectedMaterial.pdfAttachment?.filePath;
-    if (!this.trainingForm.value.url && !this.selectedPdfFile && !hasExistingPdf) {
+    const hasExistingPdf = this.getAllPdfAttachments(this.selectedMaterial).length > 0;
+    if (!this.trainingForm.value.url && this.selectedPdfFiles.length === 0 && !hasExistingPdf) {
       this.error = 'Provide a URL or attach a PDF file for this material.';
       return;
     }
@@ -766,6 +787,13 @@ export class TrainingManagementComponent implements OnInit {
   get cf() { return this.categoryForm.controls; }
   get ff() { return this.folderForm.controls; }
 
+  /** Combines the legacy single pdfAttachment (if any) with the pdfAttachments array for display. */
+  getAllPdfAttachments(material: any): any[] {
+    const list = [...(material?.pdfAttachments || [])];
+    if (material?.pdfAttachment?.filePath) list.unshift(material.pdfAttachment);
+    return list;
+  }
+
   getMaterialFolderName(material: any): string {
     if (!material.folder) return 'No folder';
     return material.folder?.name || 'Unknown folder';
@@ -780,8 +808,8 @@ export class TrainingManagementComponent implements OnInit {
 
   // training-pdfs are protected (unlike thumbnails) — a raw <a href> can't
   // send the Authorization header, so fetch via HttpClient and open as a blob.
-  viewPdfAttachment(material: any): void {
-    const filePath = material?.pdfAttachment?.filePath;
+  viewPdfAttachment(attachment: any): void {
+    const filePath = attachment?.filePath;
     if (!filePath) return;
     const win = window.open('', '_blank');
     this.trainingService.downloadFileBlob(this.getFileUrl(filePath)).subscribe({

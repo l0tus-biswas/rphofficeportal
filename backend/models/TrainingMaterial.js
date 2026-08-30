@@ -44,12 +44,20 @@ const trainingMaterialSchema = new mongoose.Schema({
   },
   thumbnail: String,
   
-  // PDF Attachment
+  // PDF Attachment (legacy single-file field, kept for materials created before
+  // multi-attachment support — new uploads go into pdfAttachments below)
   pdfAttachment: {
     fileName: { type: String },
     filePath: { type: String },
     uploadedAt: { type: Date, default: Date.now }
   },
+
+  // PDF Attachments (multiple)
+  pdfAttachments: [{
+    fileName: { type: String, required: true },
+    filePath: { type: String, required: true },
+    uploadedAt: { type: Date, default: Date.now }
+  }],
 
   // Access control
   accessLevel: {

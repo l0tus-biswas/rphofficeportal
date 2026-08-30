@@ -115,9 +115,9 @@ export class TrainingService {
     return this.http.delete(`${this.apiUrl}/training/materials/${id}`, this.getHeaders());
   }
 
-  uploadPdf(id: string, file: File): Observable<any> {
+  uploadPdf(id: string, files: File[]): Observable<any> {
     const formData = new FormData();
-    formData.append('pdf', file);
+    files.forEach(file => formData.append('pdf', file));
     // Only pass Authorization — do NOT set Content-Type so the browser sets multipart/form-data boundary
     const authHeader = new HttpHeaders({ 'Authorization': `Bearer ${this.authService.getToken()}` });
     return this.http.post(
@@ -127,6 +127,11 @@ export class TrainingService {
     );
   }
 
+  removePdfAttachment(id: string, attachmentId: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/training/materials/${id}/pdf/${attachmentId}`, this.getHeaders());
+  }
+
+  /** Removes the legacy single pdfAttachment field (materials created before multi-attachment support). */
   removePdf(id: string): Observable<any> {
     return this.http.delete(`${this.apiUrl}/training/materials/${id}/pdf`, this.getHeaders());
   }
