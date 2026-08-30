@@ -16,6 +16,8 @@ export class IncomePaidApprovalsComponent implements OnInit {
   fromDateFilter = '';
   toDateFilter = '';
 
+  selectedEntry: IncomePaidEntry | null = null;
+
   constructor(private productionService: ProductionService) {}
 
   ngOnInit(): void {
@@ -38,10 +40,19 @@ export class IncomePaidApprovalsComponent implements OnInit {
     this.loadEntries();
   }
 
+  viewEntry(entry: IncomePaidEntry): void {
+    this.selectedEntry = entry;
+  }
+
+  closeView(): void {
+    this.selectedEntry = null;
+  }
+
   approve(entry: IncomePaidEntry): void {
     this.productionService.approveIncomePaid(entry._id).subscribe({
       next: () => {
         this.success = 'Income Paid approved.';
+        if (this.selectedEntry?._id === entry._id) this.closeView();
         this.loadEntries();
         setTimeout(() => this.success = '', 3000);
       },
@@ -54,6 +65,7 @@ export class IncomePaidApprovalsComponent implements OnInit {
     this.productionService.rejectIncomePaid(entry._id, reason).subscribe({
       next: () => {
         this.success = 'Income Paid rejected.';
+        if (this.selectedEntry?._id === entry._id) this.closeView();
         this.loadEntries();
         setTimeout(() => this.success = '', 3000);
       },

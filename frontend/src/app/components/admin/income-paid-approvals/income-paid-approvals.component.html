@@ -64,6 +64,9 @@
             <td class="small text-muted">{{ e.notes || '—' }}</td>
             <td><span class="badge" [ngClass]="getStatusBadgeClass(e.status)">{{ e.status }}</span></td>
             <td class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-secondary" (click)="viewEntry(e)" title="View">
+                <i class="bi bi-eye"></i> View
+              </button>
               <button *ngIf="e.status === 'pending'" class="btn btn-sm btn-success" (click)="approve(e)" title="Approve">
                 <i class="bi bi-check-lg"></i>
               </button>
@@ -80,3 +83,93 @@
     </div>
   </div>
 </div>
+
+<!-- View Entry Modal -->
+<div class="modal fade" [class.show]="selectedEntry" [style.display]="selectedEntry ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" *ngIf="selectedEntry as e">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-cash-stack me-2"></i>Income Paid Entry
+          <span class="badge ms-2" [ngClass]="getStatusBadgeClass(e.status)">{{ e.status }}</span>
+        </h5>
+        <button type="button" class="btn-close" (click)="closeView()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <div class="text-muted small">Agent</div>
+            <div>{{ e.agent?.name || '—' }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-muted small">Amount</div>
+            <div>{{ formatCurrency(e.amount) }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-muted small">Date Paid by Carrier</div>
+            <div>{{ formatDatePaid(e.datePaidByCarrier) }}</div>
+          </div>
+          <div class="col-sm-6">
+            <div class="text-muted small">Submitted</div>
+            <div>{{ e.createdAt | appDate: 'medium' }}</div>
+          </div>
+
+          <div class="col-12"><hr class="my-1"></div>
+
+          <ng-container *ngIf="getEntrySubmission(e) as sub; else noSub">
+            <div class="col-sm-6">
+              <div class="text-muted small">Client</div>
+              <div>{{ sub.clientName }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Product</div>
+              <div>{{ sub.productSold }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Carrier</div>
+              <div>{{ sub.carrier?.name || '—' }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Premium Amount</div>
+              <div>{{ formatCurrency(sub.premiumAmount) }}</div>
+            </div>
+          </ng-container>
+          <ng-template #noSub>
+            <div class="col-12 text-muted small">Linked policy is unavailable.</div>
+          </ng-template>
+
+          <div class="col-12" *ngIf="e.notes">
+            <div class="text-muted small">Notes</div>
+            <div>{{ e.notes }}</div>
+          </div>
+
+          <ng-container *ngIf="e.status !== 'pending'">
+            <div class="col-12"><hr class="my-1"></div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Reviewed By</div>
+              <div>{{ e.reviewedBy?.name || '—' }}</div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-muted small">Reviewed At</div>
+              <div>{{ e.reviewedAt | appDate: 'medium' }}</div>
+            </div>
+            <div class="col-12" *ngIf="e.reviewNotes">
+              <div class="text-muted small">Review Notes</div>
+              <div>{{ e.reviewNotes }}</div>
+            </div>
+          </ng-container>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeView()">Close</button>
+        <button *ngIf="e.status === 'pending'" type="button" class="btn btn-outline-danger" (click)="reject(e)">
+          <i class="bi bi-x-lg me-1"></i>Reject
+        </button>
+        <button *ngIf="e.status === 'pending'" type="button" class="btn btn-success" (click)="approve(e)">
+          <i class="bi bi-check-lg me-1"></i>Approve
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade" [class.show]="selectedEntry" *ngIf="selectedEntry" (click)="closeView()"></div>
