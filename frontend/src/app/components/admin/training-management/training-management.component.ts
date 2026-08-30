@@ -464,7 +464,11 @@ export class TrainingManagementComponent implements OnInit {
   }
 
   openCreateModal(): void {
-    this.trainingForm.reset({ type: 'video', category: 'General', folder: '' });
+    // FormGroup.reset() sets any control NOT included in the passed value back to
+    // null (not its original FormBuilder default) — every optional field must be
+    // listed explicitly here, or it gets submitted as null and fails Joi's string
+    // validation on the backend (which allows '' but not null).
+    this.trainingForm.reset({ title: '', description: '', type: 'video', url: '', duration: '', category: 'General', folder: '' });
     this.selectedMaterial = null;
     this.selectedPdfFiles = [];
     this.selectedMaterialThumbnailFile = null;
@@ -474,8 +478,17 @@ export class TrainingManagementComponent implements OnInit {
 
   openEditModal(material: any): void {
     this.selectedMaterial = material;
+    // Explicit fallbacks (not a `...material` spread) so a field the material
+    // never set (e.g. duration) doesn't leave behind whatever null/stale value
+    // was in the control from a previous reset(), which would fail validation
+    // on save even though the user never touched that field.
     this.trainingForm.patchValue({
-      ...material,
+      title: material.title || '',
+      description: material.description || '',
+      type: material.type || 'video',
+      url: material.url || '',
+      duration: material.duration || '',
+      category: material.category || 'General',
       folder: material.folder?._id || material.folder || ''
     });
     this.selectedPdfFiles = [];
@@ -494,9 +507,19 @@ export class TrainingManagementComponent implements OnInit {
     this.trainingForm.reset();
   }
 
+  // A native <input type="file"> replaces its FileList on every selection
+  // rather than adding to it, so reopening the picker to attach more PDFs
+  // would otherwise silently drop everything picked earlier. Accumulate
+  // across selections instead, and reset the input so re-adding a file
+  // that was removed from the list still fires a change event.
   onPdfFileChange(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.selectedPdfFiles = input.files ? Array.from(input.files) : [];
+    const picked = input.files ? Array.from(input.files) : [];
+    const isDuplicate = (a: File, b: File) =>
+      a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+    const newFiles = picked.filter(f => !this.selectedPdfFiles.some(existing => isDuplicate(existing, f)));
+    this.selectedPdfFiles = [...this.selectedPdfFiles, ...newFiles];
+    input.value = '';
   }
 
   removeSelectedPdfFile(index: number): void {

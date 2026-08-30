@@ -158,10 +158,10 @@
                 </small>
               </div>
 
-              <!-- Embeddable: open in new tab -->
-              <a *ngIf="material.url && isEmbeddable(material)" [href]="material.url" target="_blank" rel="noopener" class="btn btn-primary w-100">
+              <!-- Embeddable: play inline in the modal player -->
+              <button *ngIf="material.url && isEmbeddable(material)" type="button" (click)="openPlayer(material)" class="btn btn-primary w-100">
                 <i class="bi bi-play-circle me-2"></i>Watch / View
-              </a>
+              </button>
               <!-- Documents: open in new tab -->
               <a *ngIf="material.url && !isEmbeddable(material) && material.type === 'document'"
                  [href]="material.url" target="_blank" rel="noopener" class="btn btn-primary w-100">
