@@ -57,6 +57,7 @@ import { ExamfxProgressComponent } from './components/examfx-progress/examfx-pro
 import { WelcomeMessageComponent } from './components/admin/welcome-message/welcome-message.component';
 import { SystemMonitoringComponent } from './components/admin/system-monitoring/system-monitoring.component';
 import { NotFoundComponent } from './components/not-found/not-found.component';
+import { SupportComponent } from './components/support/support.component';
 import { LoginRedirectGuard } from './guards/login-redirect.guard';
 
 const routes: Routes = [
@@ -359,6 +360,11 @@ const routes: Routes = [
     component: SystemMonitoringComponent,
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
+  },
+  {
+    path: 'support',
+    component: SupportComponent,
+    canActivate: [AuthGuard]
   },
   { path: '**', component: NotFoundComponent }
 ];

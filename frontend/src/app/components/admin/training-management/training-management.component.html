@@ -640,7 +640,7 @@
             <select class="form-select" formControlName="parent">
               <option value="">Root (No Parent)</option>
               <option *ngFor="let f of folders" [value]="f._id"
-                [disabled]="f._id === selectedFolder?._id">{{ getFolderPath(f) }}</option>
+                [disabled]="!isValidParentOption(f)">{{ getFolderPath(f) }}</option>
             </select>
           </div>
         </div>

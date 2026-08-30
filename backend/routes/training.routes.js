@@ -378,6 +378,14 @@ router.put('/folders/:id', logAction('UPDATE_TRAINING_FOLDER'), async (req, res)
       if (!parentFolder || !parentFolder.isActive) {
         return sendResponse(res, 400, { message: 'Parent folder not found' });
       }
+      // Prevent creating a cycle by reparenting under one of this folder's own descendants
+      let ancestor = parentFolder;
+      while (ancestor?.parent) {
+        if (String(ancestor.parent) === String(folder._id)) {
+          return sendResponse(res, 400, { message: 'Cannot move a folder into one of its own subfolders' });
+        }
+        ancestor = await TrainingFolder.findById(ancestor.parent);
+      }
     }
     if (name) folder.name = name.trim();
     if (description !== undefined) folder.description = description.trim();

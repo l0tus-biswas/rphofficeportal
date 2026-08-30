@@ -111,7 +111,13 @@
         <span *ngIf="unreadBroadcasts > 0" class="badge bg-danger ms-auto">{{ unreadBroadcasts > 99 ? '99+' : unreadBroadcasts }}</span>
       </a>
     </li>
-    
+
+    <li class="nav-item">
+      <a class="nav-link" routerLink="/support" routerLinkActive="active">
+        <i class="bi bi-life-preserver me-2"></i>Support
+      </a>
+    </li>
+
     <div *ngIf="authService.isAdmin()">
       <hr>
       <h6 class="px-3 text-muted">ADMIN</h6>

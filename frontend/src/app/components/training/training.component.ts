@@ -136,6 +136,20 @@ export class TrainingComponent implements OnInit {
     this.applyFilters();
   }
 
+  /** True when browsing the unfiltered root (no folder open, no active search/filter). */
+  get isBrowsingRoot(): boolean {
+    return !this.currentFolder && this.selectedFolder === 'all' &&
+      !this.searchTerm && this.selectedCategory === 'all' && this.selectedType === 'all';
+  }
+
+  /** Materials to display: unfoldered ones at the bare root, otherwise the active filter/folder scope. */
+  getDisplayMaterials(): any[] {
+    if (this.isBrowsingRoot) {
+      return this.filteredMaterials.filter(m => !m.folder);
+    }
+    return this.filteredMaterials;
+  }
+
   openPlayer(material: any): void {
     this.activePlayer = material;
     this.playerUrl = this.resolveEmbedUrl(material.url);

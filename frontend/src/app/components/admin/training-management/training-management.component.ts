@@ -222,6 +222,25 @@ export class TrainingManagementComponent implements OnInit {
     });
   }
 
+  isDescendantOf(folder: any, ancestorId: string): boolean {
+    const visited = new Set<string>();
+    let current: any = folder;
+    while (current) {
+      const parentId: string | undefined = current.parent?._id || current.parent;
+      if (!parentId || visited.has(parentId)) return false;
+      if (parentId === ancestorId) return true;
+      visited.add(parentId);
+      current = this.folders.find((f: any) => f._id === parentId);
+    }
+    return false;
+  }
+
+  isValidParentOption(folder: any): boolean {
+    if (!this.selectedFolder) return true;
+    if (folder._id === this.selectedFolder._id) return false;
+    return !this.isDescendantOf(folder, this.selectedFolder._id);
+  }
+
   getFolderPath(folder: any): string {
     if (!folder) return '';
     const names: string[] = [];
@@ -240,6 +259,8 @@ export class TrainingManagementComponent implements OnInit {
   openFolderModal(parentId?: string): void {
     this.folderForm.reset({ parent: parentId || '' });
     this.selectedFolder = null;
+    this.selectedThumbnailFile = null;
+    this.thumbnailPreview = null;
     this.showFolderModal = true;
   }
 
