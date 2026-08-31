@@ -146,7 +146,13 @@
               
               <!-- Title & Description -->
               <h5 class="card-title mb-2">{{ material.title }}</h5>
-              <p class="card-text text-muted small mb-3">{{ material.description }}</p>
+              <div class="mb-3">
+                <p class="card-text text-muted small mb-0" [class.expanded]="isDescriptionExpanded(material)">{{ material.description }}</p>
+                <button *ngIf="material.description && material.description.length > 120" type="button"
+                  class="btn btn-link btn-sm p-0" (click)="toggleDescription(material)">
+                  {{ isDescriptionExpanded(material) ? 'Show less' : 'Read more' }}
+                </button>
+              </div>
               
               <!-- Metadata -->
               <div class="mb-3">

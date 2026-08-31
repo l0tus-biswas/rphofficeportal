@@ -54,6 +54,12 @@
   font-size: 0.9rem;
 }
 
+.card-text.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
 /* Badges */
 .badge {
   font-size: 0.75rem;

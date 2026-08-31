@@ -32,6 +32,9 @@ export class TrainingComponent implements OnInit {
   activePlayer: any = null;
   playerUrl: SafeResourceUrl | null = null;
 
+  // Card descriptions are clamped to 3 lines by default; track which ones are expanded.
+  private expandedDescriptionIds = new Set<string>();
+
   constructor(
     private trainingService: TrainingService,
     private sanitizer: DomSanitizer
@@ -134,6 +137,18 @@ export class TrainingComponent implements OnInit {
 
   onFilterChange(): void {
     this.applyFilters();
+  }
+
+  isDescriptionExpanded(material: any): boolean {
+    return this.expandedDescriptionIds.has(material._id);
+  }
+
+  toggleDescription(material: any): void {
+    if (this.expandedDescriptionIds.has(material._id)) {
+      this.expandedDescriptionIds.delete(material._id);
+    } else {
+      this.expandedDescriptionIds.add(material._id);
+    }
   }
 
   /** True when browsing the unfiltered root (no folder open, no active search/filter). */

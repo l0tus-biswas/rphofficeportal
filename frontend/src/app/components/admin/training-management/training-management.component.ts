@@ -51,6 +51,9 @@ export class TrainingManagementComponent implements OnInit {
   // === Active Tab ===
   activeTab: 'materials' | 'categories' | 'folders' = 'materials';
 
+  // Card descriptions are clamped to 3 lines by default; track which ones are expanded.
+  private expandedDescriptionIds = new Set<string>();
+
   constructor(
     private formBuilder: FormBuilder,
     private trainingService: TrainingService
@@ -461,6 +464,18 @@ export class TrainingManagementComponent implements OnInit {
 
   onFilterChange(): void {
     this.applyFilters();
+  }
+
+  isDescriptionExpanded(material: any): boolean {
+    return this.expandedDescriptionIds.has(material._id);
+  }
+
+  toggleDescription(material: any): void {
+    if (this.expandedDescriptionIds.has(material._id)) {
+      this.expandedDescriptionIds.delete(material._id);
+    } else {
+      this.expandedDescriptionIds.add(material._id);
+    }
   }
 
   openCreateModal(): void {
