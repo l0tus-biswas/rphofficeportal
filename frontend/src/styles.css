@@ -291,6 +291,12 @@ h6 { font-size: 0.875rem !important; font-weight: 600 !important; color: var(--g
   border-bottom: 1px solid var(--border-color) !important;
   padding: 1rem 1.25rem !important;
 }
+/* Dark-themed modals (e.g. the training video player) opt out of the
+   light header above so their white close icon stays visible. */
+.modal-header.bg-dark {
+  background: var(--gray-900) !important;
+  border-bottom: 1px solid var(--border-color-dark, rgba(255, 255, 255, 0.15)) !important;
+}
 .modal-title { font-size: 1rem !important; font-weight: 700 !important; color: var(--gray-800) !important; }
 .modal-body  { padding: 1.25rem !important; font-size: var(--font-size-sm) !important; }
 .modal-footer { background: var(--gray-50) !important; border-top: 1px solid var(--border-color) !important; padding: 0.875rem 1.25rem !important; }

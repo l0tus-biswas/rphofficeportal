@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { TrainingService } from '../../services/training.service';
 import { environment } from '../../../environments/environment';
@@ -31,6 +31,9 @@ export class TrainingComponent implements OnInit {
   // Video player modal
   activePlayer: any = null;
   playerUrl: SafeResourceUrl | null = null;
+  // Tracks whether we pushed a history entry for the open player, so the
+  // browser Back button closes the modal instead of leaving the page.
+  private playerHistoryPushed = false;
 
   // Card descriptions are clamped to 3 lines by default; track which ones are expanded.
   private expandedDescriptionIds = new Set<string>();
@@ -168,11 +171,34 @@ export class TrainingComponent implements OnInit {
   openPlayer(material: any): void {
     this.activePlayer = material;
     this.playerUrl = this.resolveEmbedUrl(material.url);
+
+    // Push a history entry so the browser Back button closes the modal
+    // (via popstate below) instead of navigating away from the page.
+    if (!this.playerHistoryPushed) {
+      history.pushState({ trainingPlayer: true }, '');
+      this.playerHistoryPushed = true;
+    }
   }
 
   closePlayer(): void {
+    if (this.playerHistoryPushed) {
+      // Undo the history entry pushed in openPlayer; onPopState will clear
+      // activePlayer/playerUrl once the browser processes it.
+      this.playerHistoryPushed = false;
+      history.back();
+      return;
+    }
     this.activePlayer = null;
     this.playerUrl = null;
+  }
+
+  @HostListener('window:popstate')
+  onPopState(): void {
+    if (this.activePlayer) {
+      this.playerHistoryPushed = false;
+      this.activePlayer = null;
+      this.playerUrl = null;
+    }
   }
 
   resolveEmbedUrl(url: string): SafeResourceUrl {

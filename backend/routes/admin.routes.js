@@ -14,7 +14,7 @@ const { validateRequest, schemas } = require('../middleware/validation.middlewar
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, generateToken, sendResponse, errorResponse, paginate } = require('../utils/helpers');
-const { cancelSubscription } = require('../utils/stripe');
+const { cancelSubscription, cancelSubscriptionAtPeriodEnd } = require('../utils/stripe');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
 const AgentCarrierStatus = require('../models/AgentCarrierStatus');
@@ -365,8 +365,37 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
 
     await user.save();
 
+    // If granting exemption and the user has an active Stripe subscription,
+    // stop it from continuing to bill — the app-side flag alone does not
+    // affect Stripe's own billing engine, which keeps auto-invoicing
+    // otherwise. Schedule cancellation at period end (mirrors the
+    // self-service cancel flow) so no proration/refund is needed and the
+    // user isn't cut off mid-period.
+    let stripeWarning = null;
+    if (exempt && user.stripeSubscriptionId) {
+      try {
+        const stripeSubscription = await cancelSubscriptionAtPeriodEnd(user.stripeSubscriptionId);
+
+        const subscription = await Subscription.findOne({
+          stripeSubscriptionId: user.stripeSubscriptionId
+        });
+        if (subscription) {
+          subscription.cancelAtPeriodEnd = true;
+          subscription.canceledAt = new Date();
+          if (stripeSubscription.current_period_end) {
+            subscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+          }
+          await subscription.save();
+        }
+      } catch (stripeError) {
+        console.error('Failed to cancel Stripe subscription for exempted user:', stripeError);
+        stripeWarning = 'User was marked billing exempt, but their Stripe subscription could not be canceled automatically. Please cancel it manually to avoid further charges.';
+      }
+    }
+
     sendResponse(res, 200, {
-      message: exempt ? 'User marked as billing exempt' : 'Billing exempt status removed',
+      message: stripeWarning || (exempt ? 'User marked as billing exempt' : 'Billing exempt status removed'),
+      warning: stripeWarning || undefined,
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {
