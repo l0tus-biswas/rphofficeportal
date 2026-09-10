@@ -534,7 +534,10 @@ async function handleSubscriptionUpdate(subscription) {
       // Enable access if subscription is active
       if (subscription.status === 'active' && user.oneTimePaymentCompleted) {
         user.paymentAccessEnabled = true;
-      } else if (['past_due', 'canceled', 'unpaid'].includes(subscription.status)) {
+      } else if (['past_due', 'canceled', 'unpaid'].includes(subscription.status) && !user.billingExempt) {
+        // Billing-exempt users keep access regardless of the underlying
+        // subscription's Stripe status (their subscription is often
+        // intentionally paused/canceled as part of granting Free Access).
         user.paymentAccessEnabled = false;
       }
       
@@ -554,7 +557,11 @@ async function handleSubscriptionDeleted(subscription) {
     const user = await User.findById(sub.user);
     if (user) {
       user.subscriptionStatus = 'canceled';
-      user.paymentAccessEnabled = false;
+      // Billing-exempt users keep access even after their (now-redundant)
+      // Stripe subscription is canceled/deleted.
+      if (!user.billingExempt) {
+        user.paymentAccessEnabled = false;
+      }
       await user.save();
 
       Notification.createNotification({
@@ -635,7 +642,9 @@ async function handleInvoicePaymentFailed(invoice) {
       // Update user access
       const user = await User.findById(sub.user);
       if (user) {
-        user.paymentAccessEnabled = false;
+        if (!user.billingExempt) {
+          user.paymentAccessEnabled = false;
+        }
         await user.save();
 
         Notification.createNotification({
