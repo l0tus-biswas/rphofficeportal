@@ -14,7 +14,7 @@ const { validateRequest, schemas } = require('../middleware/validation.middlewar
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, generateToken, sendResponse, errorResponse, paginate } = require('../utils/helpers');
-const { cancelSubscription, cancelSubscriptionAtPeriodEnd } = require('../utils/stripe');
+const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription } = require('../utils/stripe');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
 const AgentCarrierStatus = require('../models/AgentCarrierStatus');
@@ -393,9 +393,40 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
       }
     }
 
+    // If removing exemption, resume billing automatically — but only when
+    // it's actually possible: the subscription must still exist in Stripe
+    // and merely be *scheduled* to cancel (cancel_at_period_end), i.e. it
+    // was paused by our own exempt flow above and hasn't lapsed yet. If the
+    // subscription was fully canceled/deleted (e.g. an immediate cancel, or
+    // the scheduled cancellation already took effect), there is nothing in
+    // Stripe to resume — Stripe requires a brand-new subscription in that
+    // case, which needs the agent to re-enter payment details, so we can't
+    // silently recreate billing from here.
+    let stripeNote = null;
+    if (!exempt && user.stripeSubscriptionId) {
+      try {
+        const subscription = await Subscription.findOne({
+          stripeSubscriptionId: user.stripeSubscriptionId
+        });
+
+        if (subscription && subscription.cancelAtPeriodEnd && !subscription.endedAt && subscription.status !== 'canceled') {
+          const stripeSubscription = await reactivateSubscription(user.stripeSubscriptionId);
+          subscription.cancelAtPeriodEnd = false;
+          subscription.canceledAt = null;
+          subscription.status = stripeSubscription.status;
+          await subscription.save();
+        } else if (subscription && (subscription.status === 'canceled' || subscription.endedAt)) {
+          stripeNote = 'Billing exempt status removed, but the agent\'s previous Stripe subscription has already ended and cannot be resumed automatically. They will need to re-subscribe (enter payment details again) to be billed.';
+        }
+      } catch (stripeError) {
+        console.error('Failed to resume Stripe subscription for un-exempted user:', stripeError);
+        stripeNote = 'Billing exempt status removed, but the agent\'s Stripe subscription could not be resumed automatically. They may need to re-subscribe manually.';
+      }
+    }
+
     sendResponse(res, 200, {
-      message: stripeWarning || (exempt ? 'User marked as billing exempt' : 'Billing exempt status removed'),
-      warning: stripeWarning || undefined,
+      message: stripeWarning || stripeNote || (exempt ? 'User marked as billing exempt' : 'Billing exempt status removed'),
+      warning: stripeWarning || stripeNote || undefined,
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {

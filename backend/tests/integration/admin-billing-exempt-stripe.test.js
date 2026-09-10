@@ -137,4 +137,69 @@ describe('Integration: Admin billing-exempt route cancels Stripe subscription', 
     expect(agent.billingExempt).toBe(true);
     expect(res.body.warning).toMatch(/could not be canceled automatically/i);
   });
+
+  describe('Removing exempt status resumes billing when possible', () => {
+    it('reactivates a subscription that is merely scheduled to cancel (not yet ended)', async () => {
+      mockUsers({ stripeSubscriptionId: 'sub_mock', billingExempt: true });
+      const sub = mockSubscription({ cancelAtPeriodEnd: true, canceledAt: new Date(), status: 'active', endedAt: null });
+      Subscription.findOne.mockReturnValue(asQuery(sub));
+
+      const res = await request(app)
+        .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exempt: false, reason: '' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warning).toBeUndefined();
+      expect(stripe.reactivateSubscription).toHaveBeenCalledWith('sub_mock');
+      expect(sub.cancelAtPeriodEnd).toBe(false);
+      expect(sub.canceledAt).toBeNull();
+      expect(sub.save).toHaveBeenCalled();
+    });
+
+    it('does not attempt to reactivate and warns when the subscription has already ended', async () => {
+      mockUsers({ stripeSubscriptionId: 'sub_mock', billingExempt: true });
+      Subscription.findOne.mockReturnValue(asQuery(mockSubscription({
+        status: 'canceled', endedAt: new Date(), cancelAtPeriodEnd: true
+      })));
+
+      const res = await request(app)
+        .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exempt: false, reason: '' });
+
+      expect(res.status).toBe(200);
+      expect(stripe.reactivateSubscription).not.toHaveBeenCalled();
+      expect(res.body.warning).toMatch(/already ended and cannot be resumed automatically/i);
+    });
+
+    it('does nothing when the user never had a Stripe subscription', async () => {
+      mockUsers({ stripeSubscriptionId: undefined, billingExempt: true });
+
+      const res = await request(app)
+        .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exempt: false, reason: '' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warning).toBeUndefined();
+      expect(stripe.reactivateSubscription).not.toHaveBeenCalled();
+    });
+
+    it('warns when the reactivation call to Stripe fails', async () => {
+      mockUsers({ stripeSubscriptionId: 'sub_mock', billingExempt: true });
+      Subscription.findOne.mockReturnValue(asQuery(mockSubscription({
+        cancelAtPeriodEnd: true, status: 'active', endedAt: null
+      })));
+      stripe.reactivateSubscription.mockRejectedValueOnce(new Error('Stripe API error'));
+
+      const res = await request(app)
+        .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exempt: false, reason: '' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warning).toMatch(/could not be resumed automatically/i);
+    });
+  });
 });
