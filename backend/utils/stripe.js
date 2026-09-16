@@ -16,6 +16,20 @@ const ensureStripeConfigured = () => {
   }
 };
 
+// Stripe has moved current_period_start/end off the subscription object and
+// onto each subscription item (subscription.items.data[]) on newer API
+// versions - the top-level fields are simply absent there. This resolves
+// the period boundaries (as unix seconds, like the raw Stripe fields) from
+// whichever shape the account's pinned API version actually returns, so
+// callers work regardless of version.
+const getSubscriptionPeriod = (subscription) => {
+  if (subscription?.current_period_start && subscription?.current_period_end) {
+    return { start: subscription.current_period_start, end: subscription.current_period_end };
+  }
+  const item = subscription?.items?.data?.[0];
+  return { start: item?.current_period_start || null, end: item?.current_period_end || null };
+};
+
 const createCustomer = async (email, name, metadata = {}) => {
   ensureStripeConfigured();
   try {
@@ -111,6 +125,47 @@ const reactivateSubscription = async (subscriptionId) => {
     return subscription;
   } catch (error) {
     console.error('Stripe reactivate subscription error:', error);
+    throw error;
+  }
+};
+
+// Recreate a subscription for a customer whose previous one has already
+// fully ended (so reactivateSubscription/cancel_at_period_end no longer
+// applies), attempting to charge their saved default payment method
+// immediately rather than requiring the agent to re-enter card details.
+// Throws with err.code === 'NO_PAYMENT_METHOD' if the customer has nothing
+// on file to charge; throws Stripe's own error if the charge attempt fails
+// (declined card, requires authentication, etc.) — payment_behavior:
+// 'error_if_incomplete' means no subscription is left behind on failure.
+const resumeSubscriptionForCustomer = async (customerId, priceId, metadata = {}) => {
+  ensureStripeConfigured();
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    let defaultPaymentMethod = customer?.invoice_settings?.default_payment_method;
+
+    if (!defaultPaymentMethod) {
+      const paymentMethods = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
+      defaultPaymentMethod = paymentMethods?.data?.[0]?.id;
+    }
+
+    if (!defaultPaymentMethod) {
+      const err = new Error('Customer has no saved payment method to charge');
+      err.code = 'NO_PAYMENT_METHOD';
+      throw err;
+    }
+
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId }],
+      default_payment_method: defaultPaymentMethod,
+      collection_method: 'charge_automatically',
+      payment_behavior: 'error_if_incomplete',
+      expand: ['latest_invoice.payment_intent'],
+      metadata
+    });
+    return subscription;
+  } catch (error) {
+    console.error('Stripe resume subscription error:', error);
     throw error;
   }
 };
@@ -278,6 +333,8 @@ module.exports = {
   cancelSubscription,
   cancelSubscriptionAtPeriodEnd,
   reactivateSubscription,
+  resumeSubscriptionForCustomer,
+  getSubscriptionPeriod,
   updateSubscription,
   retrieveSubscription,
   retrievePaymentIntent,

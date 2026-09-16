@@ -180,6 +180,21 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Set when Free Access is removed but the agent's old subscription has
+  // already fully ended: the agent has been notified, and a scheduled job
+  // will attempt to resume billing (charge their saved card) once this
+  // grace period elapses, giving them advance notice before any charge.
+  // Also used as the "next retry" date if an attempt fails.
+  pendingBillingResumeAt: {
+    type: Date,
+    default: null
+  },
+  // Number of resume-billing charge attempts made so far (initial attempt +
+  // retries). Reset to 0 whenever a resume is scheduled or succeeds.
+  billingResumeAttempts: {
+    type: Number,
+    default: 0
+  },
 
   // Welcome message: tracks if user has dismissed the welcome popup
   welcomeMessageSeenAt: {

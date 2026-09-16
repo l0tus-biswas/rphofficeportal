@@ -185,12 +185,26 @@ export class UserManagementComponent implements OnInit {
   toggleBillingExempt(user: any): void {
     const newStatus = !user.billingExempt;
     const action = newStatus ? 'grant Free Access to' : 'remove Free Access from';
+
+    let reason = '';
+    if (newStatus) {
+      const promptResult = prompt(
+        `Why is ${user.name} being granted Free Access? (required)`
+      );
+      if (promptResult === null) return; // admin canceled the prompt
+      reason = promptResult.trim();
+      if (!reason) {
+        this.error = 'A reason is required to grant Free Access.';
+        return;
+      }
+    }
+
     const confirmMessage = newStatus
       ? `Are you sure you want to ${action} ${user.name}?\n\nFree Access users retain full platform access without setup fees or monthly charges. If this user has an active paid subscription, it will be canceled in Stripe (effective at the end of the current billing period) so they are not charged again.`
       : `Are you sure you want to ${action} ${user.name}?`;
     if (!confirm(confirmMessage)) return;
 
-    this.adminService.setBillingExempt(user._id, newStatus, '').subscribe({
+    this.adminService.setBillingExempt(user._id, newStatus, reason).subscribe({
       next: (response: any) => {
         if (response?.warning) {
           // Free Access was granted, but Stripe's subscription could not be

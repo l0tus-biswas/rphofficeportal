@@ -22,7 +22,7 @@ const {
 const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
-const { stripe, resolveStripeReceiptUrl } = require('../utils/stripe');
+const { stripe, resolveStripeReceiptUrl, getSubscriptionPeriod } = require('../utils/stripe');
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 
@@ -675,11 +675,12 @@ const verifyPaymentHandler = async (req, res) => {
       try {
         const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
         subscriptionStatus = stripeSubscription.status || subscriptionStatus;
-        if (stripeSubscription.current_period_start) {
-          subscriptionStart = new Date(stripeSubscription.current_period_start * 1000);
+        const period = getSubscriptionPeriod(stripeSubscription);
+        if (period.start) {
+          subscriptionStart = new Date(period.start * 1000);
         }
-        if (stripeSubscription.current_period_end) {
-          subscriptionEnd = new Date(stripeSubscription.current_period_end * 1000);
+        if (period.end) {
+          subscriptionEnd = new Date(period.end * 1000);
         }
 
         const firstItem = stripeSubscription.items?.data?.[0];

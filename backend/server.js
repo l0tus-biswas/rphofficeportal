@@ -10,6 +10,10 @@ const User = require('./models/User');
 const SystemConfig = require('./models/SystemConfig');
 const logger = require('./utils/logger');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+// Required after dotenv.config() — it pulls in utils/stripe.js, which reads
+// STRIPE_SECRET_KEY at module-load time and would otherwise initialize with
+// Stripe disabled for the whole process.
+const { startResumeBillingJob } = require('./jobs/resumeBilling.job');
 
 // Critical startup validation: refuse to start without required secrets
 if (process.env.NODE_ENV !== 'test') {
@@ -405,6 +409,10 @@ app.locals.io = io;
 
 async function startServer(port = PORT) {
   await connectDatabase();
+
+  if (process.env.NODE_ENV !== 'test') {
+    startResumeBillingJob();
+  }
 
   if (httpServer.listening) {
     return httpServer;

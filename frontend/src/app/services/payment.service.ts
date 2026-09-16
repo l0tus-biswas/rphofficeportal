@@ -64,6 +64,12 @@ export class PaymentService {
     return this.http.post(`${this.apiUrl}/payments/reactivate-subscription`, {}, this.getHeaders());
   }
 
+  // Agent self-service - pay early to resume billing now instead of waiting
+  // for the scheduled auto-charge (after Free Access is removed)
+  resumeMyBillingNow(): Observable<any> {
+    return this.http.post(`${this.apiUrl}/payments/resume-now`, {}, this.getHeaders());
+  }
+
   // Admin - Get all payments
   getAllPayments(page: number = 1, limit: number = 50, filters?: any): Observable<any> {
     let url = `${this.apiUrl}/admin/payments?page=${page}&limit=${limit}`;

@@ -18,6 +18,7 @@ export class UserTransactionsComponent implements OnInit {
   cancelProcessing = false;
   actionMessage = '';
   actionError = '';
+  resumeNowProcessing = false;
 
   // Per-payment receipt loading state (keyed by payment id)
   receiptLoading: { [id: string]: boolean } = {};
@@ -70,6 +71,37 @@ export class UserTransactionsComponent implements OnInit {
       },
       error: (error) => {
         console.log('No subscription found');
+      }
+    });
+  }
+
+  // Set when Free Access was removed and the old subscription had already
+  // ended: billing is scheduled to auto-resume (with retries) on this date.
+  get pendingBillingResumeAt(): string | null {
+    return this.paymentStatus?.pendingBillingResumeAt || null;
+  }
+
+  resumeBillingNow(): void {
+    const amount = this.subscription?.amount ? this.formatAmount(this.subscription.amount) : 'your subscription amount';
+    const confirmed = confirm(
+      `Pay now to resume your subscription immediately?\n\n` +
+      `${amount}/month will be charged to your card on file right away, instead of waiting for the scheduled date.`
+    );
+    if (!confirmed) return;
+
+    this.resumeNowProcessing = true;
+    this.actionMessage = '';
+    this.actionError = '';
+    this.paymentService.resumeMyBillingNow().subscribe({
+      next: (response) => {
+        this.actionMessage = response?.message || 'Payment successful — your subscription has resumed.';
+        this.resumeNowProcessing = false;
+        this.loadSubscription();
+        this.loadPaymentStatus();
+      },
+      error: (error) => {
+        this.actionError = error.error?.message || 'Payment failed. Please try again or contact support.';
+        this.resumeNowProcessing = false;
       }
     });
   }

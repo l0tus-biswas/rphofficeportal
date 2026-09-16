@@ -14,6 +14,7 @@ const request = require('supertest');
 
 const User = require('../../models/User');
 const Subscription = require('../../models/Subscription');
+const Notification = require('../../models/Notification');
 const stripe = require('../../utils/stripe');
 const { generateAdminToken, createMockAdmin, createMockUser } = require('../helpers/test-utils');
 
@@ -157,8 +158,36 @@ describe('Integration: Admin billing-exempt route cancels Stripe subscription', 
       expect(sub.save).toHaveBeenCalled();
     });
 
-    it('does not attempt to reactivate and warns when the subscription has already ended', async () => {
-      mockUsers({ stripeSubscriptionId: 'sub_mock', billingExempt: true });
+    it('schedules a billing resume and notifies the agent when the old subscription has already ended', async () => {
+      const agent = mockUsers({ stripeSubscriptionId: 'sub_mock', stripeCustomerId: 'cus_mock', billingExempt: true });
+      Subscription.findOne.mockReturnValue(asQuery(mockSubscription({
+        status: 'canceled', endedAt: new Date(), cancelAtPeriodEnd: true
+      })));
+      process.env.STRIPE_MONTHLY_PRICE_ID = 'price_mock';
+
+      const res = await request(app)
+        .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ exempt: false, reason: '' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warning).toBeUndefined();
+      expect(res.body.message).toMatch(/notified.*billing will automatically resume/i);
+      // No immediate charge — that's the resume-billing job's job, once the
+      // grace period elapses.
+      expect(stripe.reactivateSubscription).not.toHaveBeenCalled();
+      expect(stripe.resumeSubscriptionForCustomer).not.toHaveBeenCalled();
+      expect(agent.pendingBillingResumeAt).toBeInstanceOf(Date);
+      expect(agent.pendingBillingResumeAt.getTime()).toBeGreaterThan(Date.now());
+      expect(agent.save).toHaveBeenCalled();
+      expect(Notification.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'subscription_resume_scheduled', userId: AGENT_ID }),
+        true
+      );
+    });
+
+    it('warns instead of scheduling a resume when the user has no Stripe customer/price on file', async () => {
+      mockUsers({ stripeSubscriptionId: 'sub_mock', stripeCustomerId: undefined, billingExempt: true });
       Subscription.findOne.mockReturnValue(asQuery(mockSubscription({
         status: 'canceled', endedAt: new Date(), cancelAtPeriodEnd: true
       })));
@@ -169,8 +198,7 @@ describe('Integration: Admin billing-exempt route cancels Stripe subscription', 
         .send({ exempt: false, reason: '' });
 
       expect(res.status).toBe(200);
-      expect(stripe.reactivateSubscription).not.toHaveBeenCalled();
-      expect(res.body.warning).toMatch(/already ended and cannot be resumed automatically/i);
+      expect(res.body.warning).toMatch(/no Stripe customer\/price on file/i);
     });
 
     it('does nothing when the user never had a Stripe subscription', async () => {
@@ -199,7 +227,7 @@ describe('Integration: Admin billing-exempt route cancels Stripe subscription', 
         .send({ exempt: false, reason: '' });
 
       expect(res.status).toBe(200);
-      expect(res.body.warning).toMatch(/could not be resumed automatically/i);
+      expect(res.body.warning).toMatch(/automatically resuming billing failed/i);
     });
   });
 });

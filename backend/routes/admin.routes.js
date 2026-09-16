@@ -14,7 +14,8 @@ const { validateRequest, schemas } = require('../middleware/validation.middlewar
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, generateToken, sendResponse, errorResponse, paginate } = require('../utils/helpers');
-const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription } = require('../utils/stripe');
+const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription, getSubscriptionPeriod } = require('../utils/stripe');
+const { RESUME_GRACE_PERIOD_DAYS } = require('../config/billingResume.constants');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
 const AgentCarrierStatus = require('../models/AgentCarrierStatus');
@@ -358,9 +359,13 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
     user.billingExemptSetBy = req.user._id;
     user.billingExemptSetAt = new Date();
 
-    // If exempting, also grant payment access so they can use the platform
+    // If exempting, also grant payment access so they can use the platform,
+    // and cancel any billing resume that was scheduled from a previous
+    // un-exempt (e.g. admin flip-flopped before the grace period elapsed).
     if (exempt) {
       user.paymentAccessEnabled = true;
+      user.pendingBillingResumeAt = null;
+      user.billingResumeAttempts = 0;
     }
 
     await user.save();
@@ -382,8 +387,9 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
         if (subscription) {
           subscription.cancelAtPeriodEnd = true;
           subscription.canceledAt = new Date();
-          if (stripeSubscription.current_period_end) {
-            subscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+          const period = getSubscriptionPeriod(stripeSubscription);
+          if (period.end) {
+            subscription.currentPeriodEnd = new Date(period.end * 1000);
           }
           await subscription.save();
         }
@@ -393,40 +399,123 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
       }
     }
 
-    // If removing exemption, resume billing automatically — but only when
-    // it's actually possible: the subscription must still exist in Stripe
-    // and merely be *scheduled* to cancel (cancel_at_period_end), i.e. it
-    // was paused by our own exempt flow above and hasn't lapsed yet. If the
-    // subscription was fully canceled/deleted (e.g. an immediate cancel, or
-    // the scheduled cancellation already took effect), there is nothing in
-    // Stripe to resume — Stripe requires a brand-new subscription in that
-    // case, which needs the agent to re-enter payment details, so we can't
-    // silently recreate billing from here.
+    // If removing exemption, resume billing.
+    // Case A: the subscription still exists in Stripe and is merely
+    // *scheduled* to cancel (cancel_at_period_end) — it was paused by our
+    // own exempt flow above and hasn't lapsed yet. Reactivating it doesn't
+    // trigger an immediate charge (Stripe just continues on the existing
+    // billing cycle), so this happens right away.
+    // Case B: the subscription has already fully ended (immediate cancel,
+    // or its scheduled cancellation already took effect). Resuming here
+    // means creating a brand-new subscription that charges the agent's
+    // saved card right away — so instead of doing that silently, we notify
+    // the agent now and schedule the actual charge for
+    // RESUME_GRACE_PERIOD_DAYS from now (see jobs/resumeBilling.job.js),
+    // giving them advance notice before any money moves.
     let stripeNote = null;
+    let stripeInfo = null;
     if (!exempt && user.stripeSubscriptionId) {
       try {
         const subscription = await Subscription.findOne({
           stripeSubscriptionId: user.stripeSubscriptionId
         });
 
-        if (subscription && subscription.cancelAtPeriodEnd && !subscription.endedAt && subscription.status !== 'canceled') {
+        const stillPausedNotEnded = subscription
+          && subscription.cancelAtPeriodEnd
+          && !subscription.endedAt
+          && subscription.status !== 'canceled';
+
+        if (stillPausedNotEnded) {
           const stripeSubscription = await reactivateSubscription(user.stripeSubscriptionId);
           subscription.cancelAtPeriodEnd = false;
           subscription.canceledAt = null;
           subscription.status = stripeSubscription.status;
           await subscription.save();
-        } else if (subscription && (subscription.status === 'canceled' || subscription.endedAt)) {
-          stripeNote = 'Billing exempt status removed, but the agent\'s previous Stripe subscription has already ended and cannot be resumed automatically. They will need to re-subscribe (enter payment details again) to be billed.';
+
+          Notification.createNotification({
+            userId: user._id,
+            type: 'subscription_resumed',
+            title: 'Billing Resumed',
+            message: 'Your Free Access has ended and your subscription has resumed on its existing billing schedule.',
+            link: '/transactions'
+          }, true).catch(() => {});
+        } else {
+          const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
+          if (!user.stripeCustomerId || !priceId) {
+            stripeNote = 'Billing exempt status removed, but billing could not be resumed automatically (no Stripe customer/price on file). The agent will need to re-subscribe.';
+          } else {
+            const resumeDate = new Date(Date.now() + RESUME_GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+            user.pendingBillingResumeAt = resumeDate;
+            user.billingResumeAttempts = 0;
+            await user.save();
+
+            const amount = ((parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000) / 100).toFixed(2);
+            Notification.createNotification({
+              userId: user._id,
+              type: 'subscription_resume_scheduled',
+              title: 'Free Access Ended',
+              message: `Your Free Access has ended for RHP office. Your $${amount}/month subscription will resume ${resumeDate.toLocaleDateString('en-US')}, charged to your card on file.`,
+              link: '/transactions'
+            }, true).catch(() => {});
+
+            stripeInfo = `Billing exempt status removed. The agent has been notified by email and billing will automatically resume on ${resumeDate.toLocaleDateString('en-US')}.`;
+          }
         }
       } catch (stripeError) {
-        console.error('Failed to resume Stripe subscription for un-exempted user:', stripeError);
-        stripeNote = 'Billing exempt status removed, but the agent\'s Stripe subscription could not be resumed automatically. They may need to re-subscribe manually.';
+        console.error('Failed to resume billing for un-exempted user:', stripeError);
+        stripeNote = 'Billing exempt status removed, but automatically resuming billing failed. The agent may need to re-subscribe manually.';
       }
     }
 
     sendResponse(res, 200, {
-      message: stripeWarning || stripeNote || (exempt ? 'User marked as billing exempt' : 'Billing exempt status removed'),
+      message: stripeWarning || stripeNote || stripeInfo || (exempt ? 'User marked as billing exempt' : 'Billing exempt status removed'),
       warning: stripeWarning || stripeNote || undefined,
+      user: await User.findById(user._id).select('-password')
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/billing-resumes
+// @desc    List agents with a scheduled billing resume (Free Access was
+//          removed and their old subscription had already ended, so a
+//          new charge is scheduled/retrying — see jobs/resumeBilling.job.js)
+// @access  Private (Admin only)
+router.get('/billing-resumes', async (req, res) => {
+  try {
+    const users = await User.find({ pendingBillingResumeAt: { $ne: null } })
+      .select('name email pendingBillingResumeAt billingResumeAttempts paymentAccessEnabled billingExemptSetAt')
+      .sort({ pendingBillingResumeAt: 1 });
+
+    sendResponse(res, 200, { billingResumes: users });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   DELETE /api/admin/users/:userId/billing-resume
+// @desc    Cancel a scheduled billing resume (stop automatic retries)
+//          without re-granting Free Access — e.g. the agent said they'll
+//          pay manually, or the admin wants to stop retrying a dead card.
+// @access  Private (Admin only)
+router.delete('/users/:userId/billing-resume', logAction('CANCEL_BILLING_RESUME'), async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    if (!user.pendingBillingResumeAt) {
+      return sendResponse(res, 400, { message: 'This user has no scheduled billing resume to cancel.' });
+    }
+
+    user.pendingBillingResumeAt = null;
+    user.billingResumeAttempts = 0;
+    await user.save();
+
+    sendResponse(res, 200, {
+      message: 'Scheduled billing resume canceled. Billing will not automatically resume for this user.',
       user: await User.findById(user._id).select('-password')
     });
   } catch (error) {

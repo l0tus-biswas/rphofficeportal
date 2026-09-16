@@ -13,6 +13,8 @@ const {
   cancelSubscription,
   cancelSubscriptionAtPeriodEnd,
   reactivateSubscription,
+  resumeSubscriptionForCustomer,
+  getSubscriptionPeriod,
   retrieveSubscription,
   retrieveCharge,
   resolveStripeReceiptUrl,
@@ -145,14 +147,15 @@ router.post('/subscription-intent', protect, async (req, res) => {
     );
 
     // Create subscription record
+    const period = getSubscriptionPeriod(subscription);
     await Subscription.create({
       user: user._id,
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: customerId,
       stripePriceId: priceId,
       status: subscription.status,
-      currentPeriodStart: new Date(subscription.current_period_start * 1000),
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      currentPeriodStart: period.start ? new Date(period.start * 1000) : undefined,
+      currentPeriodEnd: period.end ? new Date(period.end * 1000) : undefined,
       amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
       currency: 'usd',
       interval: 'month'
@@ -160,8 +163,8 @@ router.post('/subscription-intent', protect, async (req, res) => {
 
     user.stripeSubscriptionId = subscription.id;
     user.subscriptionStatus = subscription.status;
-    user.subscriptionStartDate = new Date(subscription.current_period_start * 1000);
-    user.nextBillingDate = new Date(subscription.current_period_end * 1000);
+    if (period.start) user.subscriptionStartDate = new Date(period.start * 1000);
+    if (period.end) user.nextBillingDate = new Date(period.end * 1000);
     await user.save();
 
     const clientSecret = subscription.latest_invoice.payment_intent.client_secret;
@@ -228,7 +231,12 @@ router.get('/status', protect, async (req, res) => {
       nextBillingDate: nextBillingDate,
       lastPaymentDate: user.lastPaymentDate,
       paymentAccessEnabled: user.paymentAccessEnabled || subscriptionActive,
-      subscription: subscriptionDetails
+      subscription: subscriptionDetails,
+      // Set when Free Access was removed and the old subscription had
+      // already ended: billing is scheduled to auto-resume (with retries)
+      // on this date. The agent can also pay early via /resume-now.
+      pendingBillingResumeAt: user.pendingBillingResumeAt || null,
+      billingResumeAttempts: user.billingResumeAttempts || 0
     });
   } catch (error) {
     errorResponse(res, error);
@@ -269,8 +277,9 @@ router.post('/cancel-subscription', protect, async (req, res) => {
     // Schedule cancellation at period end in Stripe (source of truth)
     const stripeSubscription = await cancelSubscriptionAtPeriodEnd(user.stripeSubscriptionId);
 
-    const periodEnd = stripeSubscription.current_period_end
-      ? new Date(stripeSubscription.current_period_end * 1000)
+    const stripePeriod = getSubscriptionPeriod(stripeSubscription);
+    const periodEnd = stripePeriod.end
+      ? new Date(stripePeriod.end * 1000)
       : (subscription ? subscription.currentPeriodEnd : user.nextBillingDate);
 
     // Sync local subscription record (webhook customer.subscription.updated will
@@ -278,7 +287,7 @@ router.post('/cancel-subscription', protect, async (req, res) => {
     if (subscription) {
       subscription.cancelAtPeriodEnd = true;
       subscription.canceledAt = new Date();
-      if (stripeSubscription.current_period_end) {
+      if (stripePeriod.end) {
         subscription.currentPeriodEnd = periodEnd;
       }
       await subscription.save();
@@ -364,6 +373,91 @@ router.post('/reactivate-subscription', protect, async (req, res) => {
     sendResponse(res, 200, {
       message: 'Your subscription has been reactivated and will continue to renew.',
       cancelAtPeriodEnd: false
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/payments/resume-now
+// @desc    Agent self-service: voluntarily pay early to resume billing right
+//          now, instead of waiting for the scheduled resume (after Free
+//          Access was removed) to auto-charge their card on file.
+// @access  Private
+router.post('/resume-now', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user.pendingBillingResumeAt) {
+      return sendResponse(res, 400, { message: 'There is no scheduled billing resume to pay early for.' });
+    }
+
+    const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
+    if (!user.stripeCustomerId || !priceId) {
+      return sendResponse(res, 400, { message: 'Missing billing information on your account. Please contact support.' });
+    }
+
+    let newSubscription;
+    try {
+      newSubscription = await resumeSubscriptionForCustomer(user.stripeCustomerId, priceId, {
+        userId: user._id.toString(),
+        email: user.email
+      });
+    } catch (stripeError) {
+      const message = stripeError.code === 'NO_PAYMENT_METHOD'
+        ? 'You have no saved payment method on file. Please add a card in the billing portal and try again.'
+        : `Payment failed: ${stripeError.message || 'your card was declined.'}`;
+      return sendResponse(res, 400, { message });
+    }
+
+    // The Subscription schema enforces one document per user (unique index
+    // on `user`) — this user already has one from their original
+    // subscription, so upsert-by-user rather than create() (which would
+    // throw E11000 duplicate key every time this path runs).
+    const newPeriod = getSubscriptionPeriod(newSubscription);
+    await Subscription.findOneAndUpdate(
+      { user: user._id },
+      {
+        $set: {
+          user: user._id,
+          stripeSubscriptionId: newSubscription.id,
+          stripeCustomerId: user.stripeCustomerId,
+          stripePriceId: priceId,
+          status: newSubscription.status,
+          currentPeriodStart: newPeriod.start ? new Date(newPeriod.start * 1000) : undefined,
+          currentPeriodEnd: newPeriod.end ? new Date(newPeriod.end * 1000) : undefined,
+          amount: parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE) || 2000,
+          currency: 'usd',
+          interval: 'month',
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          endedAt: null
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    user.stripeSubscriptionId = newSubscription.id;
+    user.subscriptionStatus = newSubscription.status;
+    if (newPeriod.start) user.subscriptionStartDate = new Date(newPeriod.start * 1000);
+    if (newPeriod.end) user.nextBillingDate = new Date(newPeriod.end * 1000);
+    user.paymentAccessEnabled = true;
+    user.pendingBillingResumeAt = null;
+    user.billingResumeAttempts = 0;
+    await user.save();
+
+    Notification.createNotification({
+      userId: user._id,
+      type: 'subscription_resumed',
+      title: 'Billing Resumed',
+      message: 'Your payment was successful and your subscription has resumed.',
+      link: '/transactions'
+    }, true).catch(() => {});
+
+    sendResponse(res, 200, {
+      message: 'Payment successful — your subscription has resumed.',
+      subscriptionId: newSubscription.id,
+      status: newSubscription.status
     });
   } catch (error) {
     errorResponse(res, error);
@@ -517,11 +611,12 @@ async function handlePaymentIntentFailed(paymentIntent) {
 
 async function handleSubscriptionUpdate(subscription) {
   const sub = await Subscription.findOne({ stripeSubscriptionId: subscription.id });
-  
+  const period = getSubscriptionPeriod(subscription);
+
   if (sub) {
     sub.status = subscription.status;
-    sub.currentPeriodStart = new Date(subscription.current_period_start * 1000);
-    sub.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    if (period.start) sub.currentPeriodStart = new Date(period.start * 1000);
+    if (period.end) sub.currentPeriodEnd = new Date(period.end * 1000);
     sub.cancelAtPeriodEnd = subscription.cancel_at_period_end;
     await sub.save();
 
@@ -529,8 +624,8 @@ async function handleSubscriptionUpdate(subscription) {
     const user = await User.findById(sub.user);
     if (user) {
       user.subscriptionStatus = subscription.status;
-      user.nextBillingDate = new Date(subscription.current_period_end * 1000);
-      
+      if (period.end) user.nextBillingDate = new Date(period.end * 1000);
+
       // Enable access if subscription is active
       if (subscription.status === 'active' && user.oneTimePaymentCompleted) {
         user.paymentAccessEnabled = true;

@@ -101,6 +101,16 @@ jest.mock('../../utils/quickbooks', () => ({
   createInvoice: jest.fn().mockResolvedValue({ id: 'mock-invoice' }),
 }));
 jest.mock('../../utils/stripe', () => ({
+  // Real implementation (pure function) so tests exercise the same
+  // period-resolution logic used in production, across both old
+  // (top-level) and new (subscription.items.data[]) Stripe API shapes.
+  getSubscriptionPeriod: (subscription) => {
+    if (subscription?.current_period_start && subscription?.current_period_end) {
+      return { start: subscription.current_period_start, end: subscription.current_period_end };
+    }
+    const item = subscription?.items?.data?.[0];
+    return { start: item?.current_period_start || null, end: item?.current_period_end || null };
+  },
   createPaymentIntent: jest.fn().mockResolvedValue({ client_secret: 'mock_secret' }),
   createCustomer: jest.fn().mockResolvedValue({ id: 'cus_mock' }),
   createSubscription: jest.fn().mockResolvedValue({
@@ -121,6 +131,12 @@ jest.mock('../../utils/stripe', () => ({
     id: 'sub_mock',
     status: 'active',
     cancel_at_period_end: false
+  }),
+  resumeSubscriptionForCustomer: jest.fn().mockResolvedValue({
+    id: 'sub_new_mock',
+    status: 'active',
+    current_period_start: 1700000000,
+    current_period_end: 1702592000
   }),
   retrieveSubscription: jest.fn().mockResolvedValue({ id: 'sub_mock', status: 'active' }),
   retrievePaymentIntent: jest.fn().mockResolvedValue({ id: 'pi_mock', latest_charge: 'ch_mock' }),

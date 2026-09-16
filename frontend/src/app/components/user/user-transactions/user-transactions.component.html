@@ -76,6 +76,29 @@
       </div>
     </div>
 
+    <!-- Free Access ended: billing scheduled to auto-resume, or pay now -->
+    <div class="card mb-4 border-warning" *ngIf="pendingBillingResumeAt">
+      <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+          Your Free Access has ended. Your subscription will automatically resume on
+          <strong>{{ formatDate(pendingBillingResumeAt) }}</strong>, charged to your card on file.
+        </span>
+        <button class="btn btn-sm btn-primary" (click)="resumeBillingNow()" [disabled]="resumeNowProcessing">
+          <span *ngIf="resumeNowProcessing" class="spinner-border spinner-border-sm me-1"></span>
+          <i *ngIf="!resumeNowProcessing" class="bi bi-credit-card me-1"></i>Pay Now
+        </button>
+      </div>
+
+      <!-- Action feedback (shared with subscription actions below) -->
+      <div *ngIf="actionMessage" class="alert alert-success mx-3 mb-3">
+        <i class="bi bi-check-circle-fill me-2"></i>{{ actionMessage }}
+      </div>
+      <div *ngIf="actionError" class="alert alert-danger mx-3 mb-3">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ actionError }}
+      </div>
+    </div>
+
     <!-- Subscription Details -->
     <div class="card mb-4" *ngIf="subscription">
       <div class="card-header d-flex justify-content-between align-items-center">
@@ -105,11 +128,11 @@
           </div>
         </div>
 
-        <!-- Action feedback -->
-        <div *ngIf="actionMessage" class="alert alert-success mt-3 mb-0">
+        <!-- Action feedback (shown here unless the pending-resume banner above already shows it) -->
+        <div *ngIf="actionMessage && !pendingBillingResumeAt" class="alert alert-success mt-3 mb-0">
           <i class="bi bi-check-circle-fill me-2"></i>{{ actionMessage }}
         </div>
-        <div *ngIf="actionError" class="alert alert-danger mt-3 mb-0">
+        <div *ngIf="actionError && !pendingBillingResumeAt" class="alert alert-danger mt-3 mb-0">
           <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ actionError }}
         </div>
 
