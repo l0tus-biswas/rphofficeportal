@@ -61,6 +61,10 @@ export class AuthService {
           if (response.success && response.token) {
             localStorage.setItem('token', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));
+            // A fresh, direct login is never an impersonation session — clear any
+            // stale impersonation state left over from a session that ended
+            // abnormally (closed tab, expired token) without hitting "Exit impersonation".
+            this.clearImpersonationState();
             this.currentUserSubject.next(response.user);
           }
         })
@@ -190,6 +194,7 @@ export class AuthService {
           if (response.success && response.token) {
             localStorage.setItem('token', response.token);
             localStorage.setItem('user', JSON.stringify(response.user));
+            this.clearImpersonationState();
             this.currentUserSubject.next(response.user);
           }
         })
