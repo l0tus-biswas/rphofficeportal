@@ -483,6 +483,11 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: (res) => {
         this.previewUrl = res.previewUrl;
+        // The Order Summary thumbnail (shipping/payment steps) reads
+        // mockupUrl, not previewUrl — set both so it shows this agent's
+        // actual personalized card instead of falling back to the generic
+        // per-template stock thumbnail.
+        this.mockupUrl = res.previewUrl;
         this.previewLoading = false;
       },
       error: (err) => {
@@ -526,9 +531,17 @@ export class BusinessCardsComponent implements OnInit, OnDestroy {
   proceedToShipping(): void {
     this.checkoutStep = 'shipping';
     this.orderError = '';
-    // The live preview is the in-browser canvas, so we no longer call the
-    // server render here. The print-ready file is rendered server-side only at
-    // order confirmation; the order thumbnail falls back to the template image.
+
+    // The customize step's live preview is the in-browser canvas, not an
+    // image — so without this, the Order Summary thumbnail (and the
+    // mockupUrl stored on the order, shown later in order history/admin)
+    // fell back to the template's generic stock preview image, the same
+    // one shown for every order of this template, not this agent's actual
+    // photo/name/etc. Render the real personalized front side now, using
+    // the same saved template config the checkout will print from.
+    if (this.activeTemplate) {
+      this.updateCardPreview();
+    }
   }
 
   backToProduct(): void {

@@ -339,7 +339,8 @@
               </div>
               <div class="card-body">
                 <div class="d-flex align-items-start mb-3">
-                  <img *ngIf="mockupUrl || selectedProduct?.thumbnail" [src]="mockupUrl || selectedProduct?.thumbnail" class="rounded me-3" style="width: 60px; height: 60px; object-fit: cover;">
+                  <span *ngIf="isTemplated && previewLoading" class="spinner-border spinner-border-sm text-primary me-3 mt-1"></span>
+                  <img *ngIf="!(isTemplated && previewLoading) && (mockupUrl || selectedProduct?.thumbnail)" [src]="mockupUrl || selectedProduct?.thumbnail" class="rounded me-3" style="width: 60px; height: 60px; object-fit: cover;">
                   <div>
                     <div class="fw-semibold small">{{ selectedProduct?.name }}</div>
                     <div class="text-muted small">{{ selectedVariant?.name }}</div>
