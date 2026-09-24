@@ -126,11 +126,11 @@
             <!-- Personalized instant live preview (templated products): every
                  side updates as the agent types / uploads a photo. -->
             <div *ngIf="isTemplated" class="d-flex flex-wrap justify-content-center gap-3">
-              <div *ngFor="let s of activeTemplate?.sides" class="text-center">
+              <div *ngFor="let s of activeTemplate?.sides" class="text-center w-100" style="max-width: 340px;">
                 <app-card-canvas
                   [side]="s" [printFile]="activeTemplate?.printFile"
                   [values]="cardFieldValues" [photoDataUrl]="photoDataUrl"
-                  [displayWidth]="340" [editable]="false">
+                  [autoFit]="true" [maxWidth]="340" [displayWidth]="340" [editable]="false">
                 </app-card-canvas>
                 <div class="small text-muted mt-1">{{ s.label || s.placement }}</div>
               </div>
