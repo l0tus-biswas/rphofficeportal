@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ElementRef, NgZone, AfterViewInit, OnDestroy } from '@angular/core';
 import { environment } from '../../../../environments/environment';
+import { CARD_ICON_PATHS } from './card-icons';
 
 /**
  * Renders ONE side of a card template at scale, as an in-browser mirror of the
@@ -115,6 +116,11 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
     return this.isOutsideSafe({ x: p.x || 0, y: p.y || 0, w: p.w || 0, h: p.h || 0 });
   }
 
+  iconOutsideSafe(ic: any): boolean {
+    const size = ic.size || 60;
+    return this.isOutsideSafe({ x: ic.x || 0, y: ic.y || 0, w: size, h: size });
+  }
+
   /** Four hatched strips (top/bottom/left/right) between the canvas edge and the trim line. */
   bleedBandStyle(edge: 'top' | 'bottom' | 'left' | 'right'): { [k: string]: string } {
     const b = this.bleedPx;
@@ -212,11 +218,31 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
     };
   }
 
+  // ── Icons — real, positioned circle+glyph elements (see cardIcons.ts /
+  // backend/services/cardIcons.js), not pixels baked into the background art.
+  iconPath(glyph: string): string { return CARD_ICON_PATHS[glyph] || ''; }
+
+  iconCircleStyle(ic: any): { [k: string]: string } {
+    const size = ic.size || 60;
+    return {
+      position: 'absolute',
+      left: (ic.x || 0) + 'px', top: (ic.y || 0) + 'px',
+      width: size + 'px', height: size + 'px',
+      'border-radius': '50%',
+      background: ic.bg || '#ffffff',
+      display: 'flex', 'align-items': 'center', 'justify-content': 'center'
+    };
+  }
+
+  iconGlyphSize(ic: any): number { return (ic.size || 60) * 0.55; }
+
   // ── Drag / resize (editable mode only) ──
 
   private itemFor(key: string): any {
     if (key === 'photo') return this.side?.photo;
     if (key === 'bg') return this.bgRect;   // defaults to full bleed
+    const icon = (this.side?.icons || []).find((ic: any) => ic.key === key);
+    if (icon) return { x: icon.x, y: icon.y, w: icon.size, h: icon.size };
     return (this.side?.fields || []).find((f: any) => f.key === key);
   }
 

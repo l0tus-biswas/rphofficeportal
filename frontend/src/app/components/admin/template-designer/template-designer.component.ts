@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { BusinessCardsService } from '../../../services/business-cards.service';
+import { CARD_ICON_GLYPHS } from '../../shared/card-canvas/card-icons';
 
 /**
  * Visual drag-position designer for card templates. Edits the SAME JSON shape
@@ -27,6 +28,7 @@ export class TemplateDesignerComponent {
     'Courier New', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Impact'];
   readonly WEIGHTS = [300, 400, 500, 600, 700, 800];
   readonly ALIGNS = ['left', 'center', 'right'];
+  readonly ICON_GLYPHS = CARD_ICON_GLYPHS;
 
   constructor(private svc: BusinessCardsService) {}
 
@@ -36,6 +38,10 @@ export class TemplateDesignerComponent {
   get selectedField(): any {
     if (!this.side || !this.selectedKey || this.selectedKey === 'photo') return null;
     return (this.side.fields || []).find((f: any) => f.key === this.selectedKey) || null;
+  }
+  get selectedIcon(): any {
+    if (!this.side || !this.selectedKey) return null;
+    return (this.side.icons || []).find((ic: any) => ic.key === this.selectedKey) || null;
   }
   get pw(): number { return this.template?.printFile?.widthPx || 750; }
   get ph(): number { return this.template?.printFile?.heightPx || 1200; }
@@ -198,6 +204,25 @@ export class TemplateDesignerComponent {
     this.emit();
   }
 
+  // ── Icon CRUD (real, positioned circle+glyph elements — see card-icons.ts) ──
+  addIcon(): void {
+    const n = (this.side.icons || []).length + 1;
+    const key = 'icon' + n + '_' + Date.now().toString(36).slice(-3);
+    this.side.icons = this.side.icons || [];
+    this.side.icons.push({
+      key, glyph: this.ICON_GLYPHS[0], x: 75, y: 75, size: 60,
+      bg: '#ffffff', color: '#2d3748'
+    });
+    this.selectedKey = key;
+    this.emit();
+  }
+
+  removeIcon(key: string): void {
+    this.side.icons = (this.side.icons || []).filter((ic: any) => ic.key !== key);
+    if (this.selectedKey === key) this.selectedKey = null;
+    this.emit();
+  }
+
   // ── Background layer (position/resize) ──
   ensureBgRect(): any {
     if (!this.side.bgRect) this.side.bgRect = { x: 0, y: 0, w: this.pw, h: this.ph };
@@ -213,6 +238,8 @@ export class TemplateDesignerComponent {
   private targetFor(key: string): any {
     if (key === 'photo') return this.side.photo;
     if (key === 'bg') return this.ensureBgRect();
+    const icon = (this.side.icons || []).find((ic: any) => ic.key === key);
+    if (icon) return icon;
     return (this.side.fields || []).find((f: any) => f.key === key);
   }
 
@@ -223,7 +250,13 @@ export class TemplateDesignerComponent {
 
   onResizeItem(e: { key: string; w: number; h: number }): void {
     const item = this.targetFor(e.key);
-    if (item) { item.w = e.w; item.h = e.h; this.emit(); }
+    if (!item) return;
+    // Icons are circles (a single `size`, not independent w/h) — the shared
+    // drag-resize handle in card-canvas reports a w/h pair regardless, so
+    // collapse it to one uniform size here.
+    if ('size' in item) { item.size = Math.max(20, Math.round((e.w + e.h) / 2)); }
+    else { item.w = e.w; item.h = e.h; }
+    this.emit();
   }
 
   // Any inline field/style edit funnels through here to bubble persistence.

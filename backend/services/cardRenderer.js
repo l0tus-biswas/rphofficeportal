@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { CARD_ICON_PATHS } = require('./cardIcons');
 
 const PRINTS_DIR = path.join(__dirname, '..', 'uploads', 'business-card-prints');
 if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
@@ -101,6 +102,13 @@ function computeSafeWarnings(template) {
         warnings.push(`${tplName} — "${sideLabel}": field "${f.label || f.key}" extends outside the safe print area and may be cut off.`);
       }
     }
+    for (const ic of (side.icons || [])) {
+      const size = ic.size || 60;
+      const box = { x: ic.x || 0, y: ic.y || 0, w: size, h: size };
+      if (isOutsideSafe(box, safe)) {
+        warnings.push(`${tplName} — "${sideLabel}": icon "${ic.key || ic.glyph}" extends outside the safe print area and may be cut off.`);
+      }
+    }
     // A side with a background image but no separate text fields (e.g. a flat
     // "here's what we offer" back design) may still have a heading or other
     // text baked directly into that raster art. We can check the positions of
@@ -134,6 +142,30 @@ async function measureTextWidth(text, family, size, weight) {
     `font-size="${size}" font-weight="${weight}" fill="#000000">${escXml(str)}</text></svg>`;
   const { info } = await sharp(Buffer.from(svg)).trim({ background: '#ffffff' }).toBuffer({ resolveWithObject: true });
   return info.width;
+}
+
+/**
+ * Build the SVG overlay for one side's icons — a colored circle plus a
+ * bootstrap-icons glyph (see cardIcons.js), sized and positioned as real
+ * data instead of pixels baked into the background art.
+ */
+function buildIconSvg(W, H, side) {
+  const els = (side.icons || []).map(ic => {
+    const size = ic.size || 60;
+    const cx = (ic.x || 0) + size / 2;
+    const cy = (ic.y || 0) + size / 2;
+    const bg = ic.bg || '#ffffff';
+    const color = ic.color || '#2d3748';
+    const glyphPath = CARD_ICON_PATHS[ic.glyph];
+    if (!glyphPath) return `<circle cx="${cx}" cy="${cy}" r="${size / 2}" fill="${bg}"/>`;
+    const glyphSize = size * 0.55;
+    const scale = glyphSize / 16;
+    const tx = cx - glyphSize / 2;
+    const ty = cy - glyphSize / 2;
+    return `<circle cx="${cx}" cy="${cy}" r="${size / 2}" fill="${bg}"/>` +
+      `<g transform="translate(${tx},${ty}) scale(${scale})"><path d="${glyphPath}" fill="${color}"/></g>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${els}</svg>`;
 }
 
 /**
@@ -200,6 +232,13 @@ async function renderSide(printFile, side, fieldValues, photoWebPath, filenameHi
       .resize(r.w, r.h, { fit, background: { r: 255, g: 255, b: 255, alpha: 0 } })
       .toBuffer();
     composites.push({ input: bgBuf, left: r.x, top: r.y });
+  }
+
+  // 1.5. Icons — real, positioned circle+glyph elements (not baked into the
+  // background art), so their size/spacing is configurable and can't drift
+  // out of alignment with the text field next to them.
+  if ((side.icons || []).length) {
+    composites.push({ input: Buffer.from(buildIconSvg(W, H, side)), left: 0, top: 0 });
   }
 
   // 2. Photo (optional), with circle / rounded-rect mask

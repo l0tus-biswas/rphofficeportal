@@ -49,6 +49,22 @@
       <span *ngIf="editable && photoOutsideSafe()" class="cc-unsafe-badge" title="May be cut off — move inside the dashed safe area">!</span>
     </div>
 
+    <!-- Icons — real, positioned circle+glyph elements, not pixels baked
+         into the background art (see card-icons.ts). -->
+    <div *ngFor="let ic of (side?.icons || [])"
+         class="cc-item cc-icon"
+         [class.cc-selected]="editable && selectedKey === ic.key"
+         [class.cc-editable]="editable"
+         [class.cc-unsafe]="editable && iconOutsideSafe(ic)"
+         [ngStyle]="iconCircleStyle(ic)"
+         (pointerdown)="startMove($event, ic.key)">
+      <svg [style.width.px]="iconGlyphSize(ic)" [style.height.px]="iconGlyphSize(ic)" viewBox="0 0 16 16">
+        <path [attr.d]="iconPath(ic.glyph)" [attr.fill]="ic.color || '#2d3748'"></path>
+      </svg>
+      <span *ngIf="editable && selectedKey === ic.key" class="cc-resize" (pointerdown)="startResize($event, ic.key)"></span>
+      <span *ngIf="editable && iconOutsideSafe(ic)" class="cc-unsafe-badge" title="May be cut off — move inside the dashed safe area">!</span>
+    </div>
+
     <!-- Text fields -->
     <div *ngFor="let f of (side?.fields || [])"
          class="cc-item cc-field"

@@ -142,6 +142,18 @@
     <div class="col-12 col-xl-4">
       <div class="border rounded p-3 h-100">
 
+        <!-- Icons list -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold small">Icons on {{ side.label }}</span>
+          <button class="btn btn-sm btn-outline-success py-0" (click)="addIcon()"><i class="bi bi-plus-lg"></i> Add</button>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mb-3">
+          <button *ngFor="let ic of side.icons" type="button"
+                  class="btn btn-sm" [class.btn-info]="selectedKey === ic.key" [class.btn-outline-info]="selectedKey !== ic.key"
+                  (click)="onSelect(ic.key)"><i class="bi bi-circle me-1"></i>{{ ic.glyph }}</button>
+          <div *ngIf="!side.icons?.length" class="text-muted small">No icons yet.</div>
+        </div>
+
         <!-- Fields list -->
         <div class="d-flex justify-content-between align-items-center mb-2">
           <span class="fw-semibold small">Fields on {{ side.label }}</span>
@@ -155,6 +167,32 @@
                   *ngIf="side.photo" (click)="onSelect('photo')"><i class="bi bi-image"></i> Photo</button>
           <button type="button" class="btn btn-sm" [class.btn-info]="selectedKey === 'bg'" [class.btn-outline-info]="selectedKey !== 'bg'"
                   *ngIf="side.backgroundImage" (click)="selectBgLayer()"><i class="bi bi-aspect-ratio"></i> Background</button>
+        </div>
+
+        <!-- Icon inspector -->
+        <div *ngIf="selectedIcon as ic" class="mb-3">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label small mb-1">Glyph</label>
+              <select class="form-select form-select-sm" [(ngModel)]="ic.glyph" (ngModelChange)="changed()">
+                <option *ngFor="let g of ICON_GLYPHS" [value]="g">{{ g }}</option>
+              </select>
+            </div>
+            <div class="col-4"><label class="form-label small mb-1">X</label><input type="number" class="form-control form-control-sm" [(ngModel)]="ic.x" (ngModelChange)="changed()"></div>
+            <div class="col-4"><label class="form-label small mb-1">Y</label><input type="number" class="form-control form-control-sm" [(ngModel)]="ic.y" (ngModelChange)="changed()"></div>
+            <div class="col-4"><label class="form-label small mb-1">Size</label><input type="number" class="form-control form-control-sm" [(ngModel)]="ic.size" (ngModelChange)="changed()"></div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Circle color</label>
+              <input type="color" class="form-control form-control-sm form-control-color w-100" [(ngModel)]="ic.bg" (ngModelChange)="changed()">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">Glyph color</label>
+              <input type="color" class="form-control form-control-sm form-control-color w-100" [(ngModel)]="ic.color" (ngModelChange)="changed()">
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline-danger mt-3 w-100" (click)="removeIcon(ic.key)">
+            <i class="bi bi-trash me-1"></i> Remove icon
+          </button>
         </div>
 
         <!-- Field inspector -->
@@ -264,8 +302,8 @@
           </button>
         </div>
 
-        <div *ngIf="!selectedField && selectedKey !== 'photo' && selectedKey !== 'bg'" class="text-muted small">
-          Select a field, the photo, or the background on the card to edit it.
+        <div *ngIf="!selectedField && !selectedIcon && selectedKey !== 'photo' && selectedKey !== 'bg'" class="text-muted small">
+          Select an icon, a field, the photo, or the background on the card to edit it.
         </div>
       </div>
     </div>
