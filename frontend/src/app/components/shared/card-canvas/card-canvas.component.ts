@@ -156,7 +156,29 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
     return this.editable ? (f.label || f.key || '') : '';
   }
 
+  // Mirrors backend/services/cardRenderer.js#estimateTextWidth — same rough
+  // per-glyph average, used only to decide whether text is likely to overflow.
+  private estimateTextWidth(text: string, size: number, weight: number): number {
+    const factor = (weight || 400) >= 600 ? 0.58 : 0.52;
+    return text.length * size * factor;
+  }
+
   fieldStyle(f: any): { [k: string]: string } {
+    const size = f.size || 24;
+    const boxW = f.w || 0;
+    const text = this.fieldText(f);
+    const estWidth = this.estimateTextWidth(text, size, f.weight);
+
+    // The print renderer draws each field as a single line and compresses it
+    // (via SVG textLength) to fit its box instead of letting it overflow past
+    // the safe/trim area — see cardRenderer.js#buildTextSvg. The browser's
+    // default wrapping would instead push overflow onto a second line, which
+    // looks fine here but doesn't match what actually gets printed. Mirror the
+    // same "single line, squeeze to fit" behavior so this preview is accurate.
+    const overflow = boxW > 0 && estWidth > boxW;
+    const scaleX = overflow ? boxW / estWidth : 1;
+    const origin = f.align === 'center' ? 'center' : (f.align === 'right' ? 'right' : 'left');
+
     return {
       position: 'absolute',
       left: (f.x || 0) + 'px',
@@ -166,12 +188,15 @@ export class CardCanvasComponent implements AfterViewInit, OnDestroy {
       'font-family': `'${f.family || 'Arial'}', Arial, sans-serif`,
       'font-weight': String(f.weight || 400),
       'font-style': f.style || 'normal',
-      'font-size': (f.size || 24) + 'px',
+      'font-size': size + 'px',
       color: f.color || '#000',
       'line-height': String(f.lineHeight || 1.15),
       'text-transform': f.transform || 'none',
-      'letter-spacing': (f.letterSpacing ? f.letterSpacing + 'px' : 'normal'),
-      'white-space': 'pre-wrap'
+      'letter-spacing': (overflow ? 'normal' : (f.letterSpacing ? f.letterSpacing + 'px' : 'normal')),
+      'white-space': overflow ? 'nowrap' : 'pre-wrap',
+      overflow: overflow ? 'hidden' : 'visible',
+      transform: overflow ? `scaleX(${scaleX})` : 'none',
+      'transform-origin': origin
     };
   }
 

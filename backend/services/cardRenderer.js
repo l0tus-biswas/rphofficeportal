@@ -116,17 +116,54 @@ function computeSafeWarnings(template) {
   return warnings;
 }
 
-/** Build the SVG text overlay for one side (one <text> per filled field). */
-function buildTextSvg(W, H, side, fieldValues) {
-  const els = (side.fields || []).map(f => {
+// Measures the actual rendered width of a text run by drawing it on a scratch
+// canvas and trimming to its ink bounding box — sharp/librsvg does NOT honor
+// SVG's textLength/lengthAdjust (verified: it silently ignores them), so an
+// estimate or the SVG spec's own "shrink to fit" mechanism can't be trusted.
+// This round-trip is the only reliable way to know how wide a string will
+// actually render before the real composite happens.
+async function measureTextWidth(text, family, size, weight) {
+  const str = String(text);
+  if (!str) return 0;
+  const pad = 8;
+  const W = Math.max(20, Math.ceil(str.length * size * 1.4) + pad * 2);
+  const H = Math.max(20, Math.ceil(size * 2.2));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">` +
+    `<rect width="${W}" height="${H}" fill="#ffffff"/>` +
+    `<text x="${pad}" y="${H * 0.7}" font-family="${escXml(family)}, Arial, Helvetica, sans-serif" ` +
+    `font-size="${size}" font-weight="${weight}" fill="#000000">${escXml(str)}</text></svg>`;
+  const { info } = await sharp(Buffer.from(svg)).trim({ background: '#ffffff' }).toBuffer({ resolveWithObject: true });
+  return info.width;
+}
+
+/**
+ * Build the SVG text overlay for one side (one <text> per filled field).
+ *
+ * A field's box width (f.w) is a layout hint, not an enforced limit — nothing
+ * previously stopped a long name/email/title from rendering past its box,
+ * past the safe print area, and off the edge of the card. We measure each
+ * field's actual rendered width and, if it's wider than its box, scale the
+ * font size down to fit — instead of silently overflowing into the
+ * bleed/trim zone.
+ */
+async function buildTextSvg(W, H, side, fieldValues) {
+  const parts = await Promise.all((side.fields || []).map(async f => {
     let val = fieldValues?.[f.key];
     if (val === undefined || val === null || String(val) === '') return '';
     if (f.transform === 'uppercase') val = String(val).toUpperCase();
     else if (f.transform === 'lowercase') val = String(val).toLowerCase();
-    const size = f.size || 24;
+    let size = f.size || 24;
+    const weight = f.weight || 400;
+    const family = f.family || 'Arial';
     const align = f.align || 'left';
     const anchor = align === 'center' ? 'middle' : (align === 'right' ? 'end' : 'start');
     const boxW = f.w || (W - (f.x || 0));
+
+    if (boxW > 0) {
+      const measured = await measureTextWidth(val, family, size, weight);
+      if (measured > boxW) size = size * (boxW / measured);
+    }
+
     let x = f.x || 0;
     if (anchor === 'middle') x = (f.x || 0) + boxW / 2;
     else if (anchor === 'end') x = (f.x || 0) + boxW;
@@ -135,11 +172,12 @@ function buildTextSvg(W, H, side, fieldValues) {
     const y = (f.y || 0) + size * 0.88;
     const ls = f.letterSpacing ? ` letter-spacing="${f.letterSpacing}"` : '';
     const style = f.style === 'italic' ? ' font-style="italic"' : '';
-    return `<text x="${x}" y="${y}" font-family="${escXml(f.family || 'Arial')}, Arial, Helvetica, sans-serif" ` +
-      `font-size="${size}" font-weight="${f.weight || 400}" fill="${f.color || '#000000'}" ` +
+
+    return `<text x="${x}" y="${y}" font-family="${escXml(family)}, Arial, Helvetica, sans-serif" ` +
+      `font-size="${size}" font-weight="${weight}" fill="${f.color || '#000000'}" ` +
       `text-anchor="${anchor}"${ls}${style}>${escXml(val)}</text>`;
-  }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${els}</svg>`;
+  }));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${parts.join('')}</svg>`;
 }
 
 /**
@@ -184,7 +222,7 @@ async function renderSide(printFile, side, fieldValues, photoWebPath, filenameHi
   }
 
   // 3. Text fields (single SVG overlay)
-  const svg = buildTextSvg(W, H, side, fieldValues);
+  const svg = await buildTextSvg(W, H, side, fieldValues);
   composites.push({ input: Buffer.from(svg), left: 0, top: 0 });
 
   const buffer = await sharp({
