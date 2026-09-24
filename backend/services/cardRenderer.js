@@ -101,6 +101,17 @@ function computeSafeWarnings(template) {
         warnings.push(`${tplName} — "${sideLabel}": field "${f.label || f.key}" extends outside the safe print area and may be cut off.`);
       }
     }
+    // A side with a background image but no separate text fields (e.g. a flat
+    // "here's what we offer" back design) may still have a heading or other
+    // text baked directly into that raster art. We can check the positions of
+    // real fields against the safe area, but we have no way to see what's
+    // drawn inside a flat PNG/JPG — that gap is exactly what let the original
+    // RHP card ship with a heading clipped at the top. Flag it so whoever
+    // uploads new background art is prompted to check it visually against the
+    // safe-print-area guide in the Template Designer before saving.
+    if (side.backgroundImage && !(side.fields || []).length) {
+      warnings.push(`${tplName} — "${sideLabel}": this side is a single background image with no separate text fields. If it has a heading or other text baked into the art, this can't be checked automatically — visually confirm it stays inside the dashed safe-print-area guide in the Template Designer before saving.`);
+    }
   }
   return warnings;
 }
