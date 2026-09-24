@@ -172,9 +172,19 @@
 }
 
 /* Mockup Preview */
+/* Must be a block box, not inline-block: inline-block sizes to its content's
+   natural width, which breaks the percentage-width chain the templated
+   preview's app-card-canvas needs to measure its real available width
+   (autoFit's ResizeObserver reads an ancestor's clientWidth — against a
+   shrink-to-fit inline-block ancestor that resolves to an indefinite width,
+   so it silently falls back to the canvas's own current width instead of
+   the column's, and the card never shrinks below its default 340px). A
+   block box takes the full width of its own containing column, which is
+   what autoFit needs, and text-align: center still centers the inline-level
+   legacy <img> mockup the same as before. */
 .mockup-preview-container {
   position: relative;
-  display: inline-block;
+  display: block;
 }
 
 .mockup-img {
