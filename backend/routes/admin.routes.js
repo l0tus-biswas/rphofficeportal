@@ -14,7 +14,7 @@ const { validateRequest, schemas } = require('../middleware/validation.middlewar
 const { logAction } = require('../middleware/audit.middleware');
 const { sendWelcomeEmail } = require('../utils/neuzmail');
 const { generatePassword, generateToken, sendResponse, errorResponse, paginate } = require('../utils/helpers');
-const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription, getSubscriptionPeriod } = require('../utils/stripe');
+const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription, getSubscriptionPeriod, listActiveCustomerSubscriptions } = require('../utils/stripe');
 const { RESUME_GRACE_PERIOD_DAYS } = require('../config/billingResume.constants');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ACAClientRecord = require('../models/ACAClientRecord');
@@ -377,25 +377,35 @@ router.put('/users/:userId/billing-exempt', logAction('SET_BILLING_EXEMPT'), asy
     // self-service cancel flow) so no proration/refund is needed and the
     // user isn't cut off mid-period.
     let stripeWarning = null;
-    if (exempt && user.stripeSubscriptionId) {
-      try {
-        const stripeSubscription = await cancelSubscriptionAtPeriodEnd(user.stripeSubscriptionId);
+    if (exempt && (user.stripeSubscriptionId || user.stripeCustomerId)) {
+      // Cancel the stored subscription AND any other live subscription on the
+      // Stripe customer, so billing stops even if our local subscription id is
+      // missing or stale (that gap is how an exempt agent kept being charged).
+      const subscriptionIds = new Set();
+      if (user.stripeSubscriptionId) subscriptionIds.add(user.stripeSubscriptionId);
+      const customerSubs = await listActiveCustomerSubscriptions(user.stripeCustomerId);
+      for (const s of customerSubs) {
+        if (!s.cancel_at_period_end || s.id === user.stripeSubscriptionId) subscriptionIds.add(s.id);
+      }
 
-        const subscription = await Subscription.findOne({
-          stripeSubscriptionId: user.stripeSubscriptionId
-        });
-        if (subscription) {
-          subscription.cancelAtPeriodEnd = true;
-          subscription.canceledAt = new Date();
-          const period = getSubscriptionPeriod(stripeSubscription);
-          if (period.end) {
-            subscription.currentPeriodEnd = new Date(period.end * 1000);
+      for (const subscriptionId of subscriptionIds) {
+        try {
+          const stripeSubscription = await cancelSubscriptionAtPeriodEnd(subscriptionId);
+
+          const subscription = await Subscription.findOne({ stripeSubscriptionId: subscriptionId });
+          if (subscription) {
+            subscription.cancelAtPeriodEnd = true;
+            subscription.canceledAt = new Date();
+            const period = getSubscriptionPeriod(stripeSubscription);
+            if (period.end) {
+              subscription.currentPeriodEnd = new Date(period.end * 1000);
+            }
+            await subscription.save();
           }
-          await subscription.save();
+        } catch (stripeError) {
+          console.error('Failed to cancel Stripe subscription for exempted user:', stripeError);
+          stripeWarning = 'User was marked billing exempt, but their Stripe subscription could not be canceled automatically. Please cancel it manually to avoid further charges.';
         }
-      } catch (stripeError) {
-        console.error('Failed to cancel Stripe subscription for exempted user:', stripeError);
-        stripeWarning = 'User was marked billing exempt, but their Stripe subscription could not be canceled automatically. Please cancel it manually to avoid further charges.';
       }
     }
 

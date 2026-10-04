@@ -145,6 +145,13 @@ jest.mock('../../utils/stripe', () => ({
   listInvoices: jest.fn().mockResolvedValue([]),
   resolveStripeReceiptUrl: jest.fn().mockResolvedValue('https://stripe.test/receipt'),
   createBillingPortalSession: jest.fn().mockResolvedValue({ url: 'https://stripe.test/portal' }),
+  getInvoiceSubscriptionId: (invoice) => {
+    const id = invoice?.subscription || invoice?.parent?.subscription_details?.subscription || null;
+    return typeof id === 'object' && id !== null ? id.id : id;
+  },
+  listActiveCustomerSubscriptions: jest.fn().mockResolvedValue([]),
+  refundInvoicePayment: jest.fn().mockResolvedValue({ id: 're_mock' }),
+  discardInvoice: jest.fn().mockResolvedValue({ id: 'in_mock' }),
   constructWebhookEvent: jest.fn(),
   constructEvent: jest.fn(),
 }));

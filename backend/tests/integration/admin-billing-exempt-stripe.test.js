@@ -101,6 +101,52 @@ describe('Integration: Admin billing-exempt route cancels Stripe subscription', 
     expect(sub.save).toHaveBeenCalled();
   });
 
+  it('cancels live Stripe subscriptions found on the customer even when no subscription id is stored locally', async () => {
+    mockUsers({ stripeSubscriptionId: undefined, stripeCustomerId: 'cus_mock' });
+    stripe.listActiveCustomerSubscriptions.mockResolvedValueOnce([
+      { id: 'sub_orphan', status: 'active', cancel_at_period_end: false }
+    ]);
+
+    const res = await request(app)
+      .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ exempt: true, reason: 'Orphaned subscription' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.warning).toBeUndefined();
+    expect(stripe.cancelSubscriptionAtPeriodEnd).toHaveBeenCalledWith('sub_orphan');
+  });
+
+  it('cancels every live subscription on the customer, not just the stored one', async () => {
+    mockUsers({ stripeSubscriptionId: 'sub_mock', stripeCustomerId: 'cus_mock' });
+    stripe.listActiveCustomerSubscriptions.mockResolvedValueOnce([
+      { id: 'sub_mock', status: 'active', cancel_at_period_end: false },
+      { id: 'sub_dupe', status: 'active', cancel_at_period_end: false },
+      { id: 'sub_already', status: 'active', cancel_at_period_end: true }
+    ]);
+
+    await request(app)
+      .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ exempt: true, reason: 'Duplicate subs' });
+
+    const canceled = stripe.cancelSubscriptionAtPeriodEnd.mock.calls.map((c) => c[0]).sort();
+    expect(canceled).toEqual(['sub_dupe', 'sub_mock']);
+  });
+
+  it('warns the admin when any Stripe cancellation fails', async () => {
+    mockUsers({ stripeSubscriptionId: 'sub_mock', stripeCustomerId: 'cus_mock' });
+    stripe.cancelSubscriptionAtPeriodEnd.mockRejectedValueOnce(new Error('stripe down'));
+
+    const res = await request(app)
+      .put(`/api/admin/users/${AGENT_ID}/billing-exempt`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ exempt: true, reason: 'Stripe outage' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.warning).toMatch(/cancel it manually/);
+  });
+
   it('does not call Stripe when the user has no subscription to cancel', async () => {
     mockUsers({ stripeSubscriptionId: undefined });
 

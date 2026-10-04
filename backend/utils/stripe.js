@@ -310,6 +310,67 @@ const resolveStripeReceiptUrl = async ({ paymentIntentId, invoiceId, chargeId, s
   return null;
 };
 
+// Newer Stripe API versions (e.g. 2025-11-17.clover, which this account is
+// pinned to) removed invoice.subscription and moved it under
+// invoice.parent.subscription_details.subscription. Older versions still send
+// the top-level field. Resolve either shape.
+const getInvoiceSubscriptionId = (invoice) => {
+  const id = invoice?.subscription || invoice?.parent?.subscription_details?.subscription || null;
+  return typeof id === 'object' && id !== null ? id.id : id;
+};
+
+// Refund an already-collected invoice payment in full. Prefers an explicit
+// payment intent / charge; otherwise resolves the intent from the invoice's
+// payments (newer API versions no longer put payment_intent/charge on the
+// invoice itself).
+const refundInvoicePayment = async ({ invoiceId, paymentIntentId, chargeId }) => {
+  ensureStripeConfigured();
+  try {
+    let paymentIntent = paymentIntentId;
+    if (!paymentIntent && !chargeId && invoiceId) {
+      const payments = await stripe.invoicePayments.list({ invoice: invoiceId, limit: 10 });
+      const paid = (payments?.data || []).find((p) => p.status === 'paid' && p.payment?.payment_intent);
+      paymentIntent = paid?.payment?.payment_intent;
+    }
+    if (!paymentIntent && !chargeId) {
+      throw new Error('refundInvoicePayment could not resolve a payment intent or charge');
+    }
+    return await stripe.refunds.create(
+      paymentIntent ? { payment_intent: paymentIntent } : { charge: chargeId }
+    );
+  } catch (error) {
+    console.error('Stripe refund error:', error);
+    throw error;
+  }
+};
+
+// Stop an invoice from ever being collected: drafts are deleted outright,
+// open invoices are voided. Already-paid/void invoices are left alone.
+const discardInvoice = async (invoiceId, status) => {
+  ensureStripeConfigured();
+  try {
+    if (status === 'draft') return await stripe.invoices.del(invoiceId);
+    if (status === 'open') return await stripe.invoices.voidInvoice(invoiceId);
+    return null;
+  } catch (error) {
+    console.error('Stripe discard invoice error:', error);
+    throw error;
+  }
+};
+
+// Every non-canceled subscription on a customer (used to stop billing even
+// when we never stored the subscription id locally). Never throws.
+const listActiveCustomerSubscriptions = async (customerId) => {
+  if (!stripe || !customerId) return [];
+  try {
+    const result = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
+    return (result?.data || []).filter((s) => !['canceled', 'incomplete_expired'].includes(s.status));
+  } catch (error) {
+    console.error('Stripe list customer subscriptions error:', error.message);
+    return [];
+  }
+};
+
 const constructWebhookEvent = (payload, signature) => {
   ensureStripeConfigured();
   try {
@@ -343,5 +404,9 @@ module.exports = {
   listInvoices,
   resolveStripeReceiptUrl,
   createBillingPortalSession,
+  getInvoiceSubscriptionId,
+  listActiveCustomerSubscriptions,
+  refundInvoicePayment,
+  discardInvoice,
   constructWebhookEvent
 };

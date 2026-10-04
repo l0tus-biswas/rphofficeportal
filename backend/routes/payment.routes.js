@@ -19,6 +19,9 @@ const {
   retrieveCharge,
   resolveStripeReceiptUrl,
   createBillingPortalSession,
+  getInvoiceSubscriptionId,
+  refundInvoicePayment,
+  discardInvoice,
   constructWebhookEvent
 } = require('../utils/stripe');
 
@@ -535,6 +538,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         await handleSubscriptionDeleted(event.data.object);
         break;
 
+      case 'invoice.created':
+        await handleInvoiceCreated(event.data.object);
+        break;
+
       case 'invoice.paid':
         await handleInvoicePaid(event.data.object);
         break;
@@ -670,9 +677,79 @@ async function handleSubscriptionDeleted(subscription) {
   }
 }
 
+// Safety net for Free Access: the admin "exempt" flow schedules a Stripe
+// cancellation, but if that never happened (no local subscription id, a failed
+// Stripe call, a subscription created outside our flow) Stripe keeps billing.
+// Resolve the invoice's owner and, if they're billing exempt, stop the
+// subscription so it can't bill again. Returns the exempt user, else null.
+async function findExemptUserForInvoice(invoice) {
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
+  if (!subscriptionId && !invoice.customer) return null;
+
+  let user = null;
+  if (subscriptionId) {
+    const sub = await Subscription.findOne({ stripeSubscriptionId: subscriptionId });
+    if (sub?.user) user = await User.findById(sub.user);
+  }
+  if (!user && invoice.customer) {
+    user = await User.findOne({ stripeCustomerId: invoice.customer });
+  }
+  return user && user.billingExempt ? user : null;
+}
+
+async function cancelExemptUserSubscription(invoice) {
+  const subscriptionId = getInvoiceSubscriptionId(invoice);
+  if (!subscriptionId) return;
+  try {
+    await cancelSubscription(subscriptionId);
+  } catch (e) {
+    // Already canceled/missing is fine; anything else is logged for follow-up.
+    console.error(`[Free Access] Could not cancel subscription ${subscriptionId}:`, e.message);
+  }
+}
+
+// A renewal invoice is created as a draft about an hour before it is charged,
+// which is our window to prevent the charge entirely (no fees, no refund).
+async function handleInvoiceCreated(invoice) {
+  if (!getInvoiceSubscriptionId(invoice) || !(invoice.amount_due > 0)) return;
+
+  const user = await findExemptUserForInvoice(invoice);
+  if (!user) return;
+
+  console.warn(`[Free Access] Blocking $${(invoice.amount_due / 100).toFixed(2)} invoice ${invoice.id} for exempt user ${user._id}`);
+  try {
+    await discardInvoice(invoice.id, invoice.status);
+  } catch (e) {
+    console.error(`[Free Access] Could not discard invoice ${invoice.id}:`, e.message);
+  }
+  await cancelExemptUserSubscription(invoice);
+}
+
 async function handleInvoicePaid(invoice) {
-  if (invoice.subscription) {
-    const sub = await Subscription.findOne({ stripeSubscriptionId: invoice.subscription });
+  // An exempt user was charged anyway (e.g. invoice.created wasn't delivered):
+  // give the money back, stop the subscription, and don't record it as a
+  // normal payment or tell the agent their payment "was processed".
+  if (getInvoiceSubscriptionId(invoice) && invoice.amount_paid > 0) {
+    const exemptUser = await findExemptUserForInvoice(invoice);
+    if (exemptUser) {
+      console.warn(`[Free Access] Refunding $${(invoice.amount_paid / 100).toFixed(2)} invoice ${invoice.id} charged to exempt user ${exemptUser._id}`);
+      try {
+        await refundInvoicePayment({
+          invoiceId: invoice.id,
+          paymentIntentId: invoice.payment_intent,
+          chargeId: invoice.charge
+        });
+      } catch (e) {
+        console.error(`[Free Access] REFUND FAILED for invoice ${invoice.id} — refund manually in Stripe:`, e.message);
+      }
+      await cancelExemptUserSubscription(invoice);
+      return;
+    }
+  }
+
+  const invoiceSubscriptionId = getInvoiceSubscriptionId(invoice);
+  if (invoiceSubscriptionId) {
+    const sub = await Subscription.findOne({ stripeSubscriptionId: invoiceSubscriptionId });
 
     // Stripe may deliver invoice.paid before our own checkout.session.completed
     // handler has finished creating the local Subscription record. Rather than
@@ -730,8 +807,9 @@ async function handleInvoicePaid(invoice) {
 }
 
 async function handleInvoicePaymentFailed(invoice) {
-  if (invoice.subscription) {
-    const sub = await Subscription.findOne({ stripeSubscriptionId: invoice.subscription });
+  const failedSubscriptionId = getInvoiceSubscriptionId(invoice);
+  if (failedSubscriptionId) {
+    const sub = await Subscription.findOne({ stripeSubscriptionId: failedSubscriptionId });
     
     if (sub) {
       // Update user access

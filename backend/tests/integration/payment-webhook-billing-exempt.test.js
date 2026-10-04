@@ -126,6 +126,136 @@ describe('Integration: Stripe webhooks preserve access for billing-exempt users'
     expect(user.paymentAccessEnabled).toBe(true);
   });
 
+  describe('Free Access safety net (Stripe still billing an exempt user)', () => {
+    const Payment = require('../../models/Payment');
+
+    beforeEach(() => {
+      Subscription.findOne.mockReturnValue(mockSubscription());
+    });
+
+    it('invoice.created discards the draft invoice and cancels the subscription', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+
+      const res = await postWebhook(app, {
+        type: 'invoice.created',
+        data: { object: { id: 'in_1', subscription: 'sub_mock', customer: 'cus_mock', status: 'draft', amount_due: 2000 } }
+      });
+
+      expect(res.status).toBe(200);
+      expect(stripe.discardInvoice).toHaveBeenCalledWith('in_1', 'draft');
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+    });
+
+    it('invoice.created leaves a non-exempt user alone', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: false }));
+
+      await postWebhook(app, {
+        type: 'invoice.created',
+        data: { object: { id: 'in_1', subscription: 'sub_mock', customer: 'cus_mock', status: 'draft', amount_due: 2000 } }
+      });
+
+      expect(stripe.discardInvoice).not.toHaveBeenCalled();
+      expect(stripe.cancelSubscription).not.toHaveBeenCalled();
+    });
+
+    it('invoice.paid refunds an exempt user, cancels the subscription and records no payment', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+
+      const res = await postWebhook(app, {
+        type: 'invoice.paid',
+        data: { object: { id: 'in_2', subscription: 'sub_mock', customer: 'cus_mock', amount_paid: 2000, payment_intent: 'pi_1' } }
+      });
+
+      expect(res.status).toBe(200);
+      expect(stripe.refundInvoicePayment).toHaveBeenCalledWith({ invoiceId: 'in_2', paymentIntentId: 'pi_1', chargeId: undefined });
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+      expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    // The live account is pinned to API 2025-11-17.clover: invoices carry the
+    // subscription under parent.subscription_details and have no payment_intent.
+    const cloverInvoice = (extra = {}) => ({
+      id: 'in_clover',
+      customer: 'cus_mock',
+      parent: { type: 'subscription_details', subscription_details: { subscription: 'sub_mock' } },
+      ...extra
+    });
+
+    it('clover-shaped invoice.created is blocked for an exempt user', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+
+      await postWebhook(app, {
+        type: 'invoice.created',
+        data: { object: cloverInvoice({ status: 'draft', amount_due: 2000 }) }
+      });
+
+      expect(stripe.discardInvoice).toHaveBeenCalledWith('in_clover', 'draft');
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+    });
+
+    it('clover-shaped invoice.paid refunds by invoice id for an exempt user', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+
+      await postWebhook(app, {
+        type: 'invoice.paid',
+        data: { object: cloverInvoice({ amount_paid: 2000 }) }
+      });
+
+      expect(stripe.refundInvoicePayment).toHaveBeenCalledWith(expect.objectContaining({ invoiceId: 'in_clover' }));
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+      expect(Payment.findOneAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('clover-shaped invoice.paid still records a normal payment for a non-exempt user', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: false }));
+
+      await postWebhook(app, {
+        type: 'invoice.paid',
+        data: { object: cloverInvoice({ amount_paid: 2000, currency: 'usd', hosted_invoice_url: 'https://x' }) }
+      });
+
+      expect(stripe.refundInvoicePayment).not.toHaveBeenCalled();
+      expect(Payment.findOneAndUpdate).toHaveBeenCalled();
+    });
+
+    it('a failed refund is swallowed (logged) but the subscription is still canceled', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+      stripe.refundInvoicePayment.mockRejectedValueOnce(new Error('already refunded'));
+
+      const res = await postWebhook(app, {
+        type: 'invoice.paid',
+        data: { object: cloverInvoice({ amount_paid: 2000 }) }
+      });
+
+      expect(res.status).toBe(200);
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+    });
+
+    it('a failed discard does not stop the subscription from being canceled', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: true }));
+      stripe.discardInvoice.mockRejectedValueOnce(new Error('nope'));
+
+      const res = await postWebhook(app, {
+        type: 'invoice.created',
+        data: { object: cloverInvoice({ status: 'draft', amount_due: 2000 }) }
+      });
+
+      expect(res.status).toBe(200);
+      expect(stripe.cancelSubscription).toHaveBeenCalledWith('sub_mock');
+    });
+
+    it('invoice.paid does not refund a non-exempt user', async () => {
+      User.findById.mockReturnValue(createMockUser({ _id: 'agent-test-id', billingExempt: false }));
+
+      await postWebhook(app, {
+        type: 'invoice.paid',
+        data: { object: { id: 'in_2', subscription: 'sub_mock', customer: 'cus_mock', amount_paid: 2000, payment_intent: 'pi_1' } }
+      });
+
+      expect(stripe.refundInvoicePayment).not.toHaveBeenCalled();
+    });
+  });
+
   it('invoice.payment_failed still disables access for a non-exempt user', async () => {
     const sub = mockSubscription();
     Subscription.findOne.mockReturnValue(sub);
