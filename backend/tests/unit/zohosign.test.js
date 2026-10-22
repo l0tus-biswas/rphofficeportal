@@ -137,10 +137,15 @@ describe('Utils: zohosign.js', () => {
       expect(field_text_data.firstName).toBe('John');
       expect(field_text_data.lastName).toBe('Doe');
       expect(field_text_data.socialSecurityNumber).toBe('123-45-6789');
+      expect(field_text_data.emailAddress).toBe('john@test.com');
       expect(field_boolean_data.genderMale).toBe(true);
       expect(field_boolean_data.genderFemale).toBe(false);
       expect(field_boolean_data.currentlyLicensedYes).toBe(true);
       expect(field_boolean_data.licenseTypeLife).toBe(true);
+      // licenseStatus is a checkbox group on the template (not a text field)
+      expect(field_boolean_data.licenseStatusActive).toBe(true);
+      expect(field_boolean_data.licenseStatusInactive).toBe(false);
+      expect(field_text_data.licenseStatus).toBeUndefined();
       // bankruptcy not filed -> chapter/status checkboxes not set at all
       expect(field_boolean_data.bankruptcyChapter7).toBeUndefined();
     });

@@ -132,7 +132,7 @@ async function authHeader() {
 
 const TEXT_FIELD_NAMES = [
   'resident_state', 'firstName', 'middleName', 'lastName', 'dateOfBirth',
-  'socialSecurityNumber', 'mobileNumber', 'streetAddress', 'city', 'state', 'zipcode',
+  'socialSecurityNumber', 'mobileNumber', 'emailAddress', 'streetAddress', 'city', 'state', 'zipcode',
   'recruiterFullName', 'recruiterAgentId', 'recruiterEmail', 'recruiterPhone',
   'uplineLeaderName', 'teamName',
   'previouslyContractedYesDescribe', 'convictedOfFelonyYesDescribe',
@@ -140,7 +140,7 @@ const TEXT_FIELD_NAMES = [
   'insuranceLicenseYesDescribe', 'difficultyObtainingYesDescribe',
   'unsatisfiedJudgmentDescribe', 'unsatisfiedTaxLiensYesDescribe',
   'oweInsuranceCompanyYesDescribe', 'bankruptcyAdditionalDetails',
-  'licenseTypeOtherDescribe', 'stateLicensedIn', 'primaryLicenseNumber', 'licenseStatus',
+  'licenseTypeOtherDescribe', 'stateLicensedIn', 'primaryLicenseNumber',
   // Pages 6-35: the agreement's later sections re-ask for the agent's full
   // legal name, repeated at 5 blanks across pages 6-35. Zoho repeats a
   // value at every field sharing its name, so one entry here covers all 5.
@@ -207,6 +207,7 @@ function buildFieldData(application) {
   setText('dateOfBirth', formatDate(personalInfo.dateOfBirth));
   setText('socialSecurityNumber', personalInfo.ssn || '');
   setText('mobileNumber', personalInfo.mobilePhone || '');
+  setText('emailAddress', personalInfo.email || '');
   setText('streetAddress', personalInfo.homeAddress?.street || '');
   setText('city', personalInfo.homeAddress?.city || '');
   setText('state', personalInfo.homeAddress?.state || '');
@@ -242,7 +243,8 @@ function buildFieldData(application) {
   setText('licenseTypeOtherDescribe', licensingStatus.licenseOtherDescription || '');
   setText('stateLicensedIn', licensingStatus.statesLicensed ? licensingStatus.statesLicensed.join(', ') : '');
   setText('primaryLicenseNumber', licensingStatus.licenseNumber || '');
-  setText('licenseStatus', licensingStatus.licenseStatus || '');
+  // licenseStatus is a checkbox group (licenseStatusActive/Inactive/Pending) on
+  // the template, not a text field — set via setBool() below, not here.
 
   // ===== PAGES 6-35: full legal name (still a prefilled text merge field,
   // repeated at 5 positions) =====
