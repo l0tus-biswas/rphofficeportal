@@ -16,7 +16,7 @@ export class ApaPaymentComponent implements OnInit {
   error = '';
   success = false;
   isPendingSignature = false;
-  docusignUrl = '';
+  signingUrl = '';
   
   paymentForm!: FormGroup;
   branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
@@ -75,9 +75,9 @@ export class ApaPaymentComponent implements OnInit {
           this.isPendingSignature = true;
           this.error = `Application is not ready for payment (status: ${app.status})`;
           
-          // Get DocuSign URL if envelope exists
+          // Get signing URL if a signature request exists
           if (app.docusign?.envelopeId) {
-            this.docusignUrl = response.docusignUrl || '';
+            this.signingUrl = response.docusignUrl || '';
           }
           return;
         }
@@ -140,16 +140,16 @@ export class ApaPaymentComponent implements OnInit {
   }
 
   proceedToSign(): void {
-    // Try to resend DocuSign if no URL available
-    if (!this.docusignUrl) {
+    // Try to resend the signature request if no URL is available
+    if (!this.signingUrl) {
       this.loading = true;
-      this.publicService.resendDocuSign(this.applicationId).subscribe({
+      this.publicService.resendSignatureRequest(this.applicationId).subscribe({
         next: (response) => {
           this.loading = false;
           if (response.docusignUrl) {
             window.location.href = response.docusignUrl;
           } else {
-            this.error = 'Unable to retrieve DocuSign URL. Please contact support.';
+            this.error = 'Unable to retrieve the signing URL. Please contact support.';
           }
         },
         error: (error) => {
@@ -158,7 +158,7 @@ export class ApaPaymentComponent implements OnInit {
         }
       });
     } else {
-      window.location.href = this.docusignUrl;
+      window.location.href = this.signingUrl;
     }
   }
 

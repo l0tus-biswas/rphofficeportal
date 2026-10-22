@@ -8,7 +8,7 @@ const User = require('../models/User');
 const APAApplication = require('../models/APAApplication');
 const { protect } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
-const { downloadSignedDocument } = require('../utils/docusign');
+const { downloadSignedDocument } = require('../utils/zohosign'); // migrated from docusign.js
 const { resolveStripeReceiptUrl, listInvoices } = require('../utils/stripe');
 
 // Reconcile a user's paid Stripe invoices into Payment records so every monthly

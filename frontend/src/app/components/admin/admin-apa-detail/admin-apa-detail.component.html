@@ -63,18 +63,18 @@
             </button>
           </div>
           
-          <!-- Resend DocuSign Button -->
+          <!-- Resend Signature Request Button -->
           <div *ngIf="application.status === 'pending_signature' || application.docusign?.status !== 'completed'" class="mt-2">
-            <button 
-              class="btn btn-warning btn-sm" 
-              (click)="resendDocuSign()"
+            <button
+              class="btn btn-warning btn-sm"
+              (click)="resendSignatureRequest()"
               [disabled]="loading">
               <i class="bi bi-envelope-paper me-2"></i>
-              <span *ngIf="!loading">Resend DocuSign Email</span>
+              <span *ngIf="!loading">Resend Signature Email</span>
               <span *ngIf="loading">Sending...</span>
             </button>
             <p class="text-muted small mt-2 mb-0">
-              <i class="bi bi-info-circle me-1"></i>Send a new DocuSign envelope with signing instructions to the applicant
+              <i class="bi bi-info-circle me-1"></i>Send a new signature request with signing instructions to the applicant
             </p>
           </div>
           
@@ -310,14 +310,14 @@
     </div>
 
 
-    <!-- DocuSign & Payment Info -->
+    <!-- Signature & Payment Info -->
     <div class="col-md-6 mb-4">
       <div class="card h-100">
         <div class="card-header">
-          <h5 class="mb-0">DocuSign & Payment</h5>
+          <h5 class="mb-0">Signature & Payment</h5>
         </div>
         <div class="card-body">
-          <h6>DocuSign</h6>
+          <h6>Signature (Zoho Sign)</h6>
           <table class="table table-sm mb-3">
             <tr>
               <th>Status:</th>

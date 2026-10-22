@@ -46,7 +46,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
   invalidReferral = false;
   branding: BrandingConfig = { appName: 'RHP Office', appLogo: null };
   showInstructions = false;
-  docusignUrl = '';
+  signingUrl = '';
   isPendingSignature = false;
   existingApplicationId = '';
   resendSuccessMessage = '';
@@ -342,7 +342,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
         if (response.application && response.application.status === 'pending_signature') {
           this.isPendingSignature = true;
           this.existingApplicationId = response.application._id;
-          this.docusignUrl = response.application.docusignUrl || '';
+          this.signingUrl = response.application.docusignUrl || '';
           console.log('Found pending signature application:', this.existingApplicationId);
         }
       },
@@ -355,7 +355,7 @@ export class ApplyComponent implements OnInit, OnDestroy {
   private clearPendingSignatureState(): void {
     this.isPendingSignature = false;
     this.existingApplicationId = '';
-    this.docusignUrl = '';
+    this.signingUrl = '';
     this.resendSuccessMessage = '';
   }
 
@@ -812,24 +812,24 @@ export class ApplyComponent implements OnInit, OnDestroy {
   }
 
   showSigningInstructions(url: string): void {
-    this.docusignUrl = url;
+    this.signingUrl = url;
     this.showInstructions = true;
     window.scrollTo(0, 0);
   }
 
-  proceedToDocuSign(): void {
-    console.log('Proceeding to DocuSign URL:', this.docusignUrl);
-    if (this.docusignUrl) {
-      window.location.href = this.docusignUrl;
+  proceedToSigning(): void {
+    console.log('Proceeding to signing URL:', this.signingUrl);
+    if (this.signingUrl) {
+      window.location.href = this.signingUrl;
     } else {
-      alert('DocuSign URL not available. Please contact support.');
+      alert('Signing URL not available. Please contact support.');
     }
   }
 
   resumeSigning(): void {
     console.log('Resuming signing for application:', this.existingApplicationId);
-    // DocuSign signing here is email-based (no embedded signing URL is ever
-    // issued), so "resume" means resending the signing email.
+    // Signing here is email-based (no embedded signing URL is ever issued),
+    // so "resume" means resending the signing email.
     if (!this.existingApplicationId) {
       this.error = 'Application information not available. Please contact support.';
       return;
@@ -838,15 +838,15 @@ export class ApplyComponent implements OnInit, OnDestroy {
     this.loading = true;
     this.error = '';
     this.resendSuccessMessage = '';
-    this.publicService.resendDocuSign(this.existingApplicationId).subscribe({
+    this.publicService.resendSignatureRequest(this.existingApplicationId).subscribe({
       next: (response: any) => {
         this.loading = false;
-        console.log('DocuSign resend response:', response);
+        console.log('Signature request resend response:', response);
         this.resendSuccessMessage = response.message || 'A new signing email has been sent. Please check your inbox.';
       },
       error: (err) => {
         this.loading = false;
-        console.error('Error resending DocuSign:', err);
+        console.error('Error resending signature request:', err);
         this.error = err.error?.message || 'Failed to resend signing email. Please try again or contact support.';
       }
     });

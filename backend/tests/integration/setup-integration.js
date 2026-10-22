@@ -78,10 +78,25 @@ jest.mock('../../utils/neuzmail', () => ({
   EMAIL_SETTING_KEYS: { fromName: 'email_from_name', fromEmail: 'email_from_email', replyTo: 'email_reply_to' },
   TEMPLATE_IDS: {},
 }));
+// Legacy mock, kept only because utils/docusign.js itself is kept for
+// rollback — no route requires this module anymore (see utils/zohosign.js).
 jest.mock('../../utils/docusign', () => ({
   createAndSendEnvelope: jest.fn().mockResolvedValue({ envelopeId: 'mock-envelope-id' }),
   getEnvelopeStatus: jest.fn().mockResolvedValue({ status: 'completed' }),
   downloadDocument: jest.fn().mockResolvedValue(Buffer.from('mock-pdf')),
+}));
+// Real mock in use — apa.routes.js, admin-apa.routes.js, and user.routes.js
+// all require this module now (see utils/zohosign.js).
+jest.mock('../../utils/zohosign', () => ({
+  createAPAEnvelope: jest.fn().mockResolvedValue({ envelopeId: 'mock-request-id', status: 'sent' }),
+  getEnvelopeStatus: jest.fn().mockResolvedValue({ status: 'completed', sentDateTime: new Date(), completedDateTime: new Date(), statusChangedDateTime: new Date(), recipients: [] }),
+  downloadSignedDocument: jest.fn().mockResolvedValue('/tmp/mock-signed.pdf'),
+  processWebhook: jest.fn().mockResolvedValue({ envelopeId: 'mock-request-id', status: 'completed', appStatus: 'pending_payment', signedAt: new Date(), recipients: [] }),
+  validateWebhookSignature: jest.fn().mockReturnValue(true),
+  getActiveTemplateId: jest.fn().mockResolvedValue('mock-template-id'),
+  updateTemplateDocument: jest.fn().mockResolvedValue({ templateId: 'mock-template-id', documentId: 'mock-doc-id', fileName: 'mock.pdf', updatedAt: new Date().toISOString(), skippedFields: [] }),
+  createTemplateFromPDF: jest.fn().mockResolvedValue({ templateId: 'mock-template-id', name: 'mock template' }),
+  getTemplateInfo: jest.fn().mockResolvedValue({ templateId: 'mock-template-id', name: 'mock template', description: '', lastModified: new Date(), documents: [] }),
 }));
 // puppeteer ships ESM that Jest can't transform; mock it (used by the
 // business-cards card renderer, pulled in transitively via server.js).

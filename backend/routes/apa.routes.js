@@ -11,14 +11,20 @@ const fs = require('fs');
 const { sendResponse, errorResponse, generatePassword } = require('../utils/helpers');
 const { sendApplicationConfirmationEmail, sendPaymentLinkEmail, sendAccountActivatedEmail, sendWelcomeSetPasswordEmail } = require('../utils/neuzmail');
 const { applyLimiter } = require('../middleware/rateLimiter.middleware');
-const { 
-  createAPAEnvelope, 
-  getEnvelopeStatus, 
+// Migrated from DocuSign to Zoho Sign (see backend/utils/zohosign.js for the
+// integration code; backend/utils/docusign.js is kept temporarily for
+// reference/rollback but is no longer called anywhere). The `docusign` field
+// name on APAApplication documents is kept as-is deliberately — it is a
+// generic envelope/status/document shape, not DocuSign-specific, and
+// renaming it would require touching every admin and frontend read site for
+// no functional benefit.
+const {
+  createAPAEnvelope,
+  getEnvelopeStatus,
   downloadSignedDocument,
   processWebhook,
-  validateWebhookSignature,
-  getTemplateFields
-} = require('../utils/docusign');
+  validateWebhookSignature
+} = require('../utils/zohosign');
 const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
@@ -185,7 +191,7 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
     }
 
     sendResponse(res, 201, {
-      message: 'Application submitted successfully. Review the next screen to confirm the email and send your DocuSign packet.',
+      message: 'Application submitted successfully. Review the next screen to confirm the email and send your signature packet.',
       applicationId: application._id,
       nextStep: 'signature',
       docusignStatus: application.docusign?.status || 'draft'
@@ -200,25 +206,39 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
 // @route   GET /api/public/apa-application/docusign-webhook
 // @desc    Info page for webhook endpoint (for browser access)
 // @access  Public
+// NOTE: path kept as "docusign-webhook" even though this now handles Zoho
+// Sign — nothing external has this URL registered yet, so renaming it costs
+// nothing, but keeping one name avoids a second config value to track during
+// the migration. Rename once Zoho Sign is registered and settled.
 router.get('/apa-application/docusign-webhook', async (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'DocuSign webhook endpoint is active',
-    info: 'This is a POST endpoint for DocuSign webhooks. It should not be accessed directly via browser.',
-    status: 'Webhook endpoint is ready to receive events from DocuSign',
-    events: ['envelope-sent', 'envelope-delivered', 'envelope-completed', 'envelope-declined', 'envelope-voided']
+    message: 'Zoho Sign webhook endpoint is active',
+    info: 'This is a POST endpoint for Zoho Sign webhooks. It should not be accessed directly via browser.',
+    status: 'Webhook endpoint is ready to receive events from Zoho Sign'
   });
 });
 
 // @route   POST /api/public/apa-application/docusign-webhook
-// @desc    DocuSign webhook - handle signature completion (global endpoint)
-// @access  Public (validates DocuSign HMAC signature)
-router.post('/apa-application/docusign-webhook', async (req, res) => {
+// @desc    Zoho Sign webhook - handle signature completion (global endpoint)
+// @access  Public (validates Zoho Sign HMAC signature)
+// Raw body is required for HMAC verification — see the ZOHO_SIGN_WEBHOOK_PATH
+// exemption in server.js that skips the global JSON parser for this route.
+router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), async (req, res) => {
   try {
-    console.log('\n=== DocuSign Webhook Received ===');
+    console.log('\n=== Zoho Sign Webhook Received ===');
     console.log('Timestamp:', new Date().toISOString());
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
+
+    req.rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body || {});
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(req.rawBody);
+    } catch (parseErr) {
+      console.error('❌ Zoho Sign webhook body was not valid JSON:', parseErr.message);
+      return res.status(200).json({ message: 'Webhook received but body was not valid JSON' });
+    }
+    console.log('Body:', JSON.stringify(parsedBody, null, 2));
 
     // Lenient signature validation - allow webhooks through even if signature validation fails
     const isValidSignature = validateWebhookSignature(req);
@@ -229,10 +249,10 @@ router.post('/apa-application/docusign-webhook', async (req, res) => {
     }
 
     // Process webhook data
-    const webhookData = await processWebhook(req.body);
+    const webhookData = await processWebhook(parsedBody);
     const { envelopeId, status, appStatus, signedAt } = webhookData;
 
-    console.log('📋 Processing DocuSign webhook:', {
+    console.log('📋 Processing Zoho Sign webhook:', {
       envelopeId,
       status,
       appStatus,
@@ -935,7 +955,7 @@ router.get('/apa-application/:id/docusign-return', async (req, res) => {
       <body>
         <div class="container">
           <h2>✅ Thank You!</h2>
-          <p>Please check your email from DocuSign to sign your agreement.</p>
+          <p>Please check your email from Zoho Sign to sign your agreement.</p>
           <p>After signing, you'll receive instructions for payment setup.</p>
           <p>Redirecting to home page in 3 seconds...</p>
         </div>
@@ -960,7 +980,7 @@ router.post('/apa-application/:id/send-docusign', async (req, res) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!normalizedEmail) {
-      return errorResponse(res, new Error('Email is required to send DocuSign'), 400);
+      return errorResponse(res, new Error('Email is required to send the signature request'), 400);
     }
 
     if (!emailRegex.test(normalizedEmail)) {
@@ -974,11 +994,11 @@ router.post('/apa-application/:id/send-docusign', async (req, res) => {
     }
 
     if (application.status !== 'pending_signature') {
-      return errorResponse(res, new Error('Application is not ready for DocuSign'), 400);
+      return errorResponse(res, new Error('Application is not ready for signature'), 400);
     }
 
     if (application.docusign?.envelopeId && application.docusign?.status && application.docusign.status !== 'draft') {
-      return errorResponse(res, new Error('DocuSign envelope already sent. Use the resend option if needed.'), 400);
+      return errorResponse(res, new Error('Signature request already sent. Use the resend option if needed.'), 400);
     }
 
     const conflictingApplication = await APAApplication.findOne({
@@ -1012,7 +1032,7 @@ router.post('/apa-application/:id/send-docusign', async (req, res) => {
     });
 
     sendResponse(res, 200, {
-      message: 'DocuSign envelope sent successfully. Please check your email from DocuSign to sign the agreement.',
+      message: 'Signature request sent successfully. Please check your email from Zoho Sign to sign the agreement.',
       docusign: {
         envelopeId: application.docusign.envelopeId,
         status: application.docusign.status,
@@ -1067,7 +1087,7 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
     console.log('✅ DocuSign resent successfully');
 
     sendResponse(res, 200, {
-      message: 'DocuSign envelope resent successfully. Check your email from DocuSign to sign.',
+      message: 'Signature request resent successfully. Check your email from Zoho Sign to sign.',
       envelopeId: docusignResult.envelopeId
     });
 
@@ -1090,7 +1110,7 @@ router.get('/apa-application/:id/payment-page', async (req, res) => {
     }
 
     if (application.status !== 'pending_payment') {
-      return errorResponse(res, new Error('Application not ready for payment. Please complete DocuSign first.'), 403);
+      return errorResponse(res, new Error('Application not ready for payment. Please complete the signature step first.'), 403);
     }
 
     // No setup fee - subscription only at $20/mo
@@ -1321,45 +1341,42 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
 // Helper functions
 async function initiateDocuSign(application) {
   try {
-    // Check if DocuSign is fully configured
-    const hasIntegrationKey = !!process.env.DOCUSIGN_INTEGRATION_KEY;
-    const hasAccountId = !!process.env.DOCUSIGN_ACCOUNT_ID;
-    const hasUserId = !!process.env.DOCUSIGN_USER_ID;
-    const hasPrivateKey = !!(process.env.DOCUSIGN_PRIVATE_KEY || process.env.DOCUSIGN_PRIVATE_KEY_PATH);
-    const hasTemplateId = !!process.env.DOCUSIGN_TEMPLATE_ID;
-    
-    console.log('=== DocuSign Configuration Check ===');
-    console.log('Integration Key:', hasIntegrationKey ? 'SET' : 'MISSING');
-    console.log('Account ID:', hasAccountId ? 'SET' : 'MISSING');
-    console.log('User ID:', hasUserId ? 'SET' : 'MISSING');
-    console.log('Private Key:', hasPrivateKey ? 'SET' : 'MISSING');
+    // Check if Zoho Sign is fully configured
+    const hasClientId = !!process.env.ZOHO_CLIENT_ID;
+    const hasClientSecret = !!process.env.ZOHO_CLIENT_SECRET;
+    const hasRefreshToken = !!process.env.ZOHO_REFRESH_TOKEN;
+    const hasTemplateId = !!process.env.ZOHO_SIGN_TEMPLATE_ID;
+
+    console.log('=== Zoho Sign Configuration Check ===');
+    console.log('Client ID:', hasClientId ? 'SET' : 'MISSING');
+    console.log('Client Secret:', hasClientSecret ? 'SET' : 'MISSING');
+    console.log('Refresh Token:', hasRefreshToken ? 'SET' : 'MISSING');
     console.log('Template ID:', hasTemplateId ? 'SET' : 'MISSING');
-    
-    // Use real DocuSign integration if ALL required variables are configured
-    if (hasIntegrationKey && hasAccountId && hasUserId && hasPrivateKey && hasTemplateId) {
-      console.log('✓ DocuSign fully configured - Creating real envelope');
-      console.log('Creating DocuSign envelope for application:', application._id);
+
+    // Use real Zoho Sign integration if ALL required variables are configured
+    if (hasClientId && hasClientSecret && hasRefreshToken && hasTemplateId) {
+      console.log('✓ Zoho Sign fully configured - Creating real request');
+      console.log('Creating Zoho Sign request for application:', application._id);
       const result = await createAPAEnvelope(application);
-      console.log('DocuSign envelope created successfully:', result.envelopeId);
-      console.log('DocuSign will send signing email automatically');
+      console.log('Zoho Sign request created successfully:', result.envelopeId);
+      console.log('Zoho Sign will send signing email automatically');
       return result; // Returns { envelopeId, status }
     } else {
       // Fallback to mock for development
-      console.warn('⚠ DocuSign NOT fully configured - using mock mode');
+      console.warn('⚠ Zoho Sign NOT fully configured - using mock mode');
       console.warn('Missing configuration(s):');
-      if (!hasIntegrationKey) console.warn('  - DOCUSIGN_INTEGRATION_KEY');
-      if (!hasAccountId) console.warn('  - DOCUSIGN_ACCOUNT_ID');
-      if (!hasUserId) console.warn('  - DOCUSIGN_USER_ID');
-      if (!hasPrivateKey) console.warn('  - DOCUSIGN_PRIVATE_KEY or DOCUSIGN_PRIVATE_KEY_PATH');
-      if (!hasTemplateId) console.warn('  - DOCUSIGN_TEMPLATE_ID');
-      
+      if (!hasClientId) console.warn('  - ZOHO_CLIENT_ID');
+      if (!hasClientSecret) console.warn('  - ZOHO_CLIENT_SECRET');
+      if (!hasRefreshToken) console.warn('  - ZOHO_REFRESH_TOKEN');
+      if (!hasTemplateId) console.warn('  - ZOHO_SIGN_TEMPLATE_ID');
+
       return {
         envelopeId: 'MOCK_' + Date.now(),
         status: 'sent'
       };
     }
   } catch (error) {
-    console.error('DocuSign initiation error:', error);
+    console.error('Zoho Sign initiation error:', error);
     console.error('Error details:', error.response?.body || error.message);
     throw new Error('Failed to initiate document signing: ' + error.message);
   }

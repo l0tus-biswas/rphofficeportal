@@ -41,7 +41,10 @@ export class ApaService {
     return this.http.put(`${this.apiUrl}/apa-applications/${id}/notes`, { adminNotes });
   }
 
-  resendDocuSign(id: string): Observable<any> {
+  // Backend path kept as "/resend-docusign" — now handled by Zoho Sign, see
+  // backend/utils/zohosign.js. Renaming the URL isn't worth the churn since
+  // nothing external depends on it; the method name is renamed for clarity.
+  resendSignatureRequest(id: string): Observable<any> {
     return this.http.post(`${environment.apiUrl}/public/apa-application/${id}/resend-docusign`, {});
   }
 

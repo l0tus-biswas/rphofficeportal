@@ -32,9 +32,9 @@ import { PublicService } from '../../services/public.service';
 
         <ng-container *ngIf="!loadError">
           <div class="launch-section">
-            <h2 class="section-title">📧 Launch your DocuSign packet</h2>
+            <h2 class="section-title">📧 Launch your signature packet</h2>
             <p class="instruction-text">
-              Confirm or correct the signing email before sending the agreement. DocuSign will email the recruit within minutes after you send it.
+              Confirm or correct the signing email before sending the agreement. Zoho Sign will email the recruit within minutes after you send it.
             </p>
 
             <div class="email-control">
@@ -44,11 +44,11 @@ import { PublicService } from '../../services/public.service';
                   id="signingEmail"
                   type="email"
                   [(ngModel)]="emailInput"
-                  [readOnly]="!editingEmail || hasSentDocuSign"
+                  [readOnly]="!editingEmail || hasSentSignatureRequest"
                   [class.invalid]="!!emailError"
                 />
                 <button
-                  *ngIf="!editingEmail && !hasSentDocuSign"
+                  *ngIf="!editingEmail && !hasSentSignatureRequest"
                   type="button"
                   class="link-button"
                   (click)="enableEmailEdit()"
@@ -57,16 +57,16 @@ import { PublicService } from '../../services/public.service';
                 </button>
               </div>
 
-              <div class="edit-actions" *ngIf="editingEmail && !hasSentDocuSign">
+              <div class="edit-actions" *ngIf="editingEmail && !hasSentSignatureRequest">
                 <button type="button" class="btn-secondary subtle" (click)="cancelEmailEdit()">Cancel</button>
                 <button type="button" class="btn-primary subtle" (click)="lockEmail()">Save</button>
               </div>
 
-              <p class="support-text" *ngIf="hasSentDocuSign">
-                DocuSign sent to {{ emailInput }}<span *ngIf="sentAt"> on {{ sentAt | date:'short' }}</span>.
+              <p class="support-text" *ngIf="hasSentSignatureRequest">
+                Signature request sent to {{ emailInput }}<span *ngIf="sentAt"> on {{ sentAt | date:'short' }}</span>.
               </p>
-              <p class="support-text" *ngIf="!hasSentDocuSign">
-                We'll send the DocuSign email as soon as you click the button below.
+              <p class="support-text" *ngIf="!hasSentSignatureRequest">
+                We'll send the signing email as soon as you click the button below.
               </p>
               <p class="error-text" *ngIf="emailError">{{ emailError }}</p>
             </div>
@@ -74,12 +74,12 @@ import { PublicService } from '../../services/public.service';
             <button
               class="btn-primary launch"
               type="button"
-              (click)="sendDocuSign()"
-              [disabled]="sending || hasSentDocuSign"
+              (click)="sendSignatureRequest()"
+              [disabled]="sending || hasSentSignatureRequest"
             >
               <span *ngIf="sending">Sending…</span>
-              <span *ngIf="!sending && !hasSentDocuSign">Send DocuSign</span>
-              <span *ngIf="!sending && hasSentDocuSign">DocuSign Sent</span>
+              <span *ngIf="!sending && !hasSentSignatureRequest">Send for Signature</span>
+              <span *ngIf="!sending && hasSentSignatureRequest">Signature Request Sent</span>
             </button>
 
             <div class="status-banner success" *ngIf="sendSuccess">
@@ -88,9 +88,9 @@ import { PublicService } from '../../services/public.service';
             <div class="status-banner error" *ngIf="sendError">
               {{ sendError }}
             </div>
-            
-            <!-- Payment Button - Show after DocuSign is sent -->
-            <div class="payment-section" *ngIf="hasSentDocuSign">
+
+            <!-- Payment Button - Show after the signature request is sent -->
+            <div class="payment-section" *ngIf="hasSentSignatureRequest">
               <button 
                 class="btn-payment" 
                 type="button"
@@ -109,11 +109,11 @@ import { PublicService } from '../../services/public.service';
             <ol class="timeline-list">
               <li>
                 <span class="timeline-step">Step 1:</span>
-                <span class="timeline-text">Confirm the email above and click <strong>Send DocuSign</strong></span>
+                <span class="timeline-text">Confirm the email above and click <strong>Send for Signature</strong></span>
               </li>
               <li>
                 <span class="timeline-step">Step 2:</span>
-                <span class="timeline-text">Review and sign the agreement from the DocuSign email</span>
+                <span class="timeline-text">Review and sign the agreement from the signing email</span>
               </li>
               <li>
                 <span class="timeline-step">Step 3:</span>
@@ -128,7 +128,7 @@ import { PublicService } from '../../services/public.service';
 
           <div class="note-box">
             <p class="note-text">
-              <strong>Tip:</strong> If you close this page before sending DocuSign, contact your recruiter with your application ID so we can re-open the launch screen.
+              <strong>Tip:</strong> If you close this page before sending the signature request, contact your recruiter with your application ID so we can re-open the launch screen.
             </p>
           </div>
 
@@ -608,7 +608,7 @@ export class ApplicationSuccessComponent implements OnInit {
   initialEmail = '';
   editingEmail = false;
   emailError = '';
-  docusignStatus = 'draft';
+  signatureStatus = 'draft';
   sentAt: string | null = null;
   sending = false;
   sendError = '';
@@ -633,8 +633,8 @@ export class ApplicationSuccessComponent implements OnInit {
     });
   }
 
-  get hasSentDocuSign(): boolean {
-    const status = (this.docusignStatus || '').toLowerCase();
+  get hasSentSignatureRequest(): boolean {
+    const status = (this.signatureStatus || '').toLowerCase();
     return ['sent', 'delivered', 'signed', 'completed'].includes(status);
   }
 
@@ -651,12 +651,12 @@ export class ApplicationSuccessComponent implements OnInit {
         const app = response?.application || {};
         this.emailInput = app.personalInfo?.email || '';
         this.initialEmail = this.emailInput;
-        this.docusignStatus = app.docusign?.status || app.docusignStatus || 'draft';
+        this.signatureStatus = app.docusign?.status || app.docusignStatus || 'draft';
         this.sentAt = app.docusign?.sentAt || null;
         this.editingEmail = false;
 
-        if (this.hasSentDocuSign) {
-          this.sendSuccess = 'DocuSign email already sent. Check your inbox for the signing link.';
+        if (this.hasSentSignatureRequest) {
+          this.sendSuccess = 'Signing email already sent. Check your inbox for the signing link.';
         }
       },
       error: error => {
@@ -667,7 +667,7 @@ export class ApplicationSuccessComponent implements OnInit {
   }
 
   enableEmailEdit(): void {
-    if (this.hasSentDocuSign) {
+    if (this.hasSentSignatureRequest) {
       return;
     }
     this.emailError = '';
@@ -681,7 +681,7 @@ export class ApplicationSuccessComponent implements OnInit {
   }
 
   lockEmail(): void {
-    if (this.hasSentDocuSign) {
+    if (this.hasSentSignatureRequest) {
       this.editingEmail = false;
       return;
     }
@@ -696,14 +696,14 @@ export class ApplicationSuccessComponent implements OnInit {
     this.editingEmail = false;
   }
 
-  sendDocuSign(): void {
+  sendSignatureRequest(): void {
     if (!this.applicationId) {
       this.sendError = 'Missing application ID. Please contact your recruiter.';
       return;
     }
 
-    if (this.hasSentDocuSign) {
-      this.sendSuccess = 'DocuSign email already sent.';
+    if (this.hasSentSignatureRequest) {
+      this.sendSuccess = 'Signing email already sent.';
       return;
     }
 
@@ -718,19 +718,19 @@ export class ApplicationSuccessComponent implements OnInit {
     this.sendSuccess = '';
     this.sending = true;
 
-    this.publicService.launchDocuSign(this.applicationId, normalized).subscribe({
+    this.publicService.launchSignatureRequest(this.applicationId, normalized).subscribe({
       next: response => {
         this.sending = false;
         this.emailInput = response.email || normalized;
         this.initialEmail = this.emailInput;
-        this.docusignStatus = response.docusign?.status || 'sent';
+        this.signatureStatus = response.docusign?.status || 'sent';
         this.sentAt = response.docusign?.sentAt || null;
         this.editingEmail = false;
-        this.sendSuccess = 'DocuSign email sent! Please check your inbox (and spam folder).';
+        this.sendSuccess = 'Signing email sent! Please check your inbox (and spam folder).';
       },
       error: error => {
         this.sending = false;
-        this.sendError = error.error?.message || 'Failed to send DocuSign. Please try again.';
+        this.sendError = error.error?.message || 'Failed to send the signing email. Please try again.';
       }
     });
   }

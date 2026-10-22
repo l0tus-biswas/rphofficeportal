@@ -517,9 +517,9 @@ test.describe('10. Coupon Management', () => {
 });
 
 // =============================================
-// 11. APA / DOCUSIGN
+// 11. APA / SIGNATURE (Zoho Sign)
 // =============================================
-test.describe('11. APA / DocuSign', () => {
+test.describe('11. APA / Signature (Zoho Sign)', () => {
   test('API: List APA applications', async ({ request }) => {
     const res = await request.get(`${API_URL}/admin/apa-applications`, {
       headers: { Authorization: `Bearer ${adminToken}` }

@@ -15,7 +15,7 @@ const {
   updateTemplateDocument,
   createTemplateFromPDF,
   getTemplateInfo
-} = require('../utils/docusign');
+} = require('../utils/zohosign'); // migrated from docusign.js — see note in apa.routes.js
 
 // Multer for APA template PDF upload (in-memory, 20MB limit)
 const templateUpload = multer({
@@ -451,14 +451,14 @@ router.put('/apa-applications/settings/auto-approve', async (req, res) => {
 router.get('/apa-applications/settings/template', async (req, res) => {
   try {
     const templateId = await getActiveTemplateId();
-    const isCustom = !!(await SystemConfig.findOne({ key: 'docusign_template_id' }).lean());
+    const isCustom = !!(await SystemConfig.findOne({ key: 'zoho_sign_template_id' }).lean());
 
     let templateInfo = null;
     try {
       templateInfo = await getTemplateInfo(templateId);
     } catch (e) {
-      // DocuSign may be unavailable — still return config
-      console.error('Failed to fetch DocuSign template info:', e.message);
+      // Zoho Sign may be unavailable — still return config
+      console.error('Failed to fetch Zoho Sign template info:', e.message);
     }
 
     const uploadHistory = await SystemConfig.findOne({ key: 'apa_template_history' }).lean();
@@ -466,7 +466,7 @@ router.get('/apa-applications/settings/template', async (req, res) => {
     sendResponse(res, 200, {
       templateId,
       isCustom,
-      envTemplateId: process.env.DOCUSIGN_TEMPLATE_ID,
+      envTemplateId: process.env.ZOHO_SIGN_TEMPLATE_ID,
       templateInfo,
       uploadHistory: uploadHistory ? JSON.parse(uploadHistory.value || '[]') : []
     });
@@ -488,18 +488,22 @@ router.post('/apa-applications/settings/template/upload', templateUpload.single(
     let result;
 
     if (mode === 'new') {
-      // Create a brand new DocuSign template and set it as active
+      // Create a brand new Zoho Sign template with NO fields positioned yet —
+      // an admin must open it in Zoho's embedded template editor and place
+      // the ~70 fields (see backend/utils/zohosign.js TEXT_FIELD_NAMES /
+      // CHECKBOX_FIELD_NAMES for the exact names to use) before it can be
+      // used to send real applications.
       result = await createTemplateFromPDF(req.file.buffer, req.file.originalname);
 
       // Store new template ID in SystemConfig
       await SystemConfig.findOneAndUpdate(
-        { key: 'docusign_template_id' },
+        { key: 'zoho_sign_template_id' },
         {
           $set: {
-            key: 'docusign_template_id',
+            key: 'zoho_sign_template_id',
             value: result.templateId,
-            category: 'docusign',
-            description: 'Active DocuSign template ID for APA agreement',
+            category: 'zoho_sign',
+            description: 'Active Zoho Sign template ID for APA agreement',
             isEditable: true,
             updatedBy: req.user._id
           }
@@ -507,7 +511,10 @@ router.post('/apa-applications/settings/template/upload', templateUpload.single(
         { upsert: true, new: true }
       );
     } else {
-      // Replace the document in the existing template
+      // Replace the document while preserving field placements — see the
+      // detailed comment on updateTemplateDocument() in zohosign.js for how
+      // this is composed from Zoho's API (there is no native "replace PDF"
+      // endpoint). Also updates SystemConfig's active template ID itself.
       result = await updateTemplateDocument(req.file.buffer, req.file.originalname);
     }
 
@@ -531,7 +538,7 @@ router.post('/apa-applications/settings/template/upload', templateUpload.single(
         $set: {
           key: 'apa_template_history',
           value: JSON.stringify(history),
-          category: 'docusign',
+          category: 'zoho_sign',
           description: 'APA template upload history',
           isEditable: false,
           updatedBy: req.user._id
@@ -543,8 +550,8 @@ router.post('/apa-applications/settings/template/upload', templateUpload.single(
     sendResponse(res, 200, {
       success: true,
       message: mode === 'new'
-        ? `New APA template created and activated (ID: ${result.templateId})`
-        : `APA template document replaced successfully`,
+        ? `New APA template created (ID: ${result.templateId}) — open it in Zoho's template editor to place fields before using it.`
+        : `APA template document replaced successfully${result.skippedFields?.length ? `, but ${result.skippedFields.length} field(s) were on pages that no longer exist and were dropped: ${result.skippedFields.join(', ')}` : ''}`,
       result,
       mode
     });
@@ -558,11 +565,11 @@ router.post('/apa-applications/settings/template/upload', templateUpload.single(
 // @access  Admin only
 router.put('/apa-applications/settings/template/revert', async (req, res) => {
   try {
-    await SystemConfig.deleteOne({ key: 'docusign_template_id' });
+    await SystemConfig.deleteOne({ key: 'zoho_sign_template_id' });
 
     sendResponse(res, 200, {
       success: true,
-      templateId: process.env.DOCUSIGN_TEMPLATE_ID,
+      templateId: process.env.ZOHO_SIGN_TEMPLATE_ID,
       message: 'Reverted to default APA template from environment configuration.'
     });
   } catch (error) {

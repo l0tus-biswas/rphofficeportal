@@ -20,7 +20,7 @@ const ALL_MODELS = [
 ];
 
 const ALL_UTILS = [
-  'neuzmail', 'docusign', 'quickbooks'
+  'neuzmail', 'docusign', 'zohosign', 'quickbooks'
 ];
 
 module.exports = { ALL_MODELS, ALL_UTILS };

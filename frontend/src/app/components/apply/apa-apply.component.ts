@@ -482,7 +482,7 @@ export class ApaApplyComponent implements OnInit {
     this.publicService.submitAPAApplication(applicationData).subscribe({
       next: (response) => {
         this.loading = false;
-        // Redirect to DocuSign or confirmation page
+        // Redirect to signing or confirmation page
         if (response.docusignUrl) {
           window.location.href = response.docusignUrl;
         } else {

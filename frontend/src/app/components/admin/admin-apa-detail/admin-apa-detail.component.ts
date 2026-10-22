@@ -127,25 +127,25 @@ export class AdminApaDetailComponent implements OnInit {
     });
   }
 
-  resendDocuSign(): void {
-    if (!confirm('Resend DocuSign envelope to the applicant? This will send a new email with signing instructions.')) {
+  resendSignatureRequest(): void {
+    if (!confirm('Resend the signature request to the applicant? This will send a new email with signing instructions.')) {
       return;
     }
-    
+
     this.loading = true;
     this.error = '';
     this.successMessage = '';
-    
-    this.apaService.resendDocuSign(this.application._id).subscribe({
+
+    this.apaService.resendSignatureRequest(this.application._id).subscribe({
       next: (response) => {
         this.loading = false;
-        this.successMessage = 'DocuSign envelope resent successfully! Applicant will receive an email with signing instructions.';
+        this.successMessage = 'Signature request resent successfully! Applicant will receive an email with signing instructions.';
         setTimeout(() => this.successMessage = '', 5000);
         this.loadApplication(this.application._id);
       },
       error: (error) => {
         this.loading = false;
-        this.error = error.error?.message || 'Failed to resend DocuSign';
+        this.error = error.error?.message || 'Failed to resend the signature request';
       }
     });
   }

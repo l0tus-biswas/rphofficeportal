@@ -10,7 +10,7 @@
           </p>
           <div class="header-chips">
             <span><i class="bi bi-shield-check me-1"></i>256-bit encryption</span>
-            <span><i class="bi bi-file-earmark-text me-1"></i>DocuSign certified</span>
+            <span><i class="bi bi-file-earmark-text me-1"></i>e-signature certified</span>
             <span><i class="bi bi-translate me-1"></i>Bilingual support</span>
           </div>
         </div>
@@ -82,7 +82,7 @@
             <h2 class="text-center mb-3 text-warning">Signature Still Pending</h2>
             
             <p class="text-center lead mb-4">
-              Your application has been submitted, but the DocuSign agreement has not been completed yet.
+              Your application has been submitted, but the signature agreement has not been completed yet.
             </p>
             
             <div class="alert alert-warning">
@@ -90,7 +90,7 @@
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>Important: Complete Your Signature
               </h5>
               <hr>
-              <p class="mb-2">You must complete all signature fields in the DocuSign document and click "Finish" to proceed with your application.</p>
+              <p class="mb-2">You must complete all signature fields in the document and click "Finish" to proceed with your application.</p>
               <ul class="mb-0">
                 <li>Sign all required signature fields</li>
                 <li>Initial where indicated</li>
@@ -99,7 +99,7 @@
             </div>
 
             <p class="text-muted text-center mb-4">
-              Please check your email for the DocuSign link. If you can't find it, click below to resend it.
+              Please check your email for the signing link. If you can't find it, click below to resend it.
             </p>
 
             <div *ngIf="resendSuccessMessage" class="alert alert-success text-center">
@@ -742,7 +742,7 @@
           </div>
         </div>
 
-        <!-- DocuSign Signing Instructions Modal -->
+        <!-- Signing Instructions Modal -->
         <div *ngIf="showInstructions" class="card shadow border-0 mt-4">
           <div class="card-body p-5 text-center">
             <div class="mb-4">
@@ -756,7 +756,7 @@
                 <i class="bi bi-info-circle-fill me-2"></i>Next Step: Sign Your Agreement
               </h5>
               <hr>
-              <p class="mb-2">You will now be redirected to DocuSign to review and sign your Agent Partnership Agreement (APA).</p>
+              <p class="mb-2">You will now be redirected to review and sign your Agent Partnership Agreement (APA).</p>
               
               <p class="mb-2"><strong>Important Instructions:</strong></p>
               <ul class="mb-2">
@@ -776,7 +776,7 @@
             <button 
               type="button" 
               class="btn btn-success btn-lg mt-3"
-              (click)="proceedToDocuSign()">
+              (click)="proceedToSigning()">
               <i class="bi bi-pencil-square me-2"></i>Proceed to Sign Agreement
             </button>
           </div>
@@ -837,7 +837,7 @@
               <li class="d-flex align-items-start">
                 <span class="support-icon" style="background: linear-gradient(135deg, #fae8ff 0%, #f5d0fe 100%);"><i class="bi bi-shield-check" style="color: #9333ea;"></i></span>
                 <div>
-                  <p class="fw-semibold mb-0" style="font-size: 0.9rem;">DocuSign Secure</p>
+                  <p class="fw-semibold mb-0" style="font-size: 0.9rem;">Zoho Sign Secure</p>
                   <small class="text-muted">Legal e-signatures with audit trail.</small>
                 </div>
               </li>
@@ -858,7 +858,7 @@
               </div>
               <div class="d-flex align-items-center gap-2 mb-2">
                 <span class="badge" style="background: #6366f1; font-size: 0.65rem;">2</span>
-                <small class="fw-semibold">Sign via DocuSign</small>
+                <small class="fw-semibold">Sign via Zoho Sign</small>
               </div>
               <div class="d-flex align-items-center gap-2">
                 <span class="badge" style="background: #94a3b8; font-size: 0.65rem;">3</span>

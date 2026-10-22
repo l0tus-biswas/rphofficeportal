@@ -83,11 +83,15 @@ export class PublicService {
     });
   }
 
-  resendDocuSign(applicationId: string): Observable<any> {
+  // Backend paths kept as "/resend-docusign" and "/send-docusign" — now
+  // handled by Zoho Sign, see backend/utils/zohosign.js. Renaming the URLs
+  // isn't worth the churn since nothing external depends on them; the
+  // method names are renamed for clarity.
+  resendSignatureRequest(applicationId: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/resend-docusign`, {});
   }
 
-  launchDocuSign(applicationId: string, email: string): Observable<any> {
+  launchSignatureRequest(applicationId: string, email: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/public/apa-application/${applicationId}/send-docusign`, { email });
   }
 
