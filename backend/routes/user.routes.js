@@ -186,7 +186,7 @@ router.get('/apa-application', protect, async (req, res) => {
 });
 
 // @route   POST /api/user/apa-application/fetch-signed-document
-// @desc    Fetch signed document from DocuSign if status is completed but PDF is missing
+// @desc    Fetch signed document from Zoho Sign if status is completed but PDF is missing
 // @access  Private
 router.post('/apa-application/fetch-signed-document', protect, async (req, res) => {
   try {
@@ -202,13 +202,13 @@ router.post('/apa-application/fetch-signed-document', protect, async (req, res) 
       return sendResponse(res, 404, { message: 'No APA application found' });
     }
 
-    // Check if DocuSign status is completed but document URL is missing
+    // Check if Zoho Sign status is completed but document URL is missing
     if (application.docusign?.status !== 'completed') {
       return sendResponse(res, 400, { message: 'Document not yet signed' });
     }
 
     if (!application.docusign?.envelopeId) {
-      return sendResponse(res, 400, { message: 'No DocuSign envelope ID found' });
+      return sendResponse(res, 400, { message: 'No Zoho Sign envelope ID found' });
     }
 
     // Check if file already exists
@@ -225,7 +225,7 @@ router.post('/apa-application/fetch-signed-document', protect, async (req, res) 
         await application.save();
       }
     } else {
-      // Download from DocuSign
+      // Download from Zoho Sign
       await downloadSignedDocument(application.docusign.envelopeId, signedDocPath);
       application.docusign.documentUrl = `/uploads/apa-signed/${application._id}_signed_apa.pdf`;
       await application.save();

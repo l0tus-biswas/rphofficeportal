@@ -303,7 +303,7 @@ exports.sendApplicationConfirmationEmail = async (application) => {
 
 /**
  * 05 - Payment Setup Link
- * Trigger: After DocuSign agreement is signed
+ * Trigger: After Zoho Sign agreement is signed
  */
 exports.sendPaymentLinkEmail = async (application) => {
   const { legalFirstName, email } = application.personalInfo;

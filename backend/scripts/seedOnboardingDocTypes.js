@@ -10,7 +10,7 @@ const OnboardingDocType = require('../models/OnboardingDocType');
 const DEFAULT_DOC_TYPES = [
   {
     name: 'APA Agreement',
-    description: 'Agent Producer Agreement — signed via DocuSign. This is auto-populated after signing.',
+    description: 'Agent Producer Agreement — signed via Zoho Sign. This is auto-populated after signing.',
     required: true,
     agentCanUpload: false,
     agentCanDelete: false,
