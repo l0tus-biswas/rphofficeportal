@@ -147,8 +147,19 @@ const TEXT_FIELD_NAMES = [
   // agentInitials/effectiveDate/signatureDate are NOT here — they're real
   // Initial/Date-type widgets now, not text, left for the agent to fill
   // themselves (see the comment on this in buildFieldData()).
-  'fullLegalName'
+  'fullLegalName',
+  // Signer block on the last page: "Designated email for notices" — the agent's
+  // own email, same value as emailAddress.
+  'noticesEmail'
 ];
+
+// Date-type widgets, prefilled by us at send time via field_date_data. Zoho
+// repeats a value at every field sharing its name: `Date` covers pages 4, 5
+// and 34; `signatureDate` covers pages 30 and 31.
+const DATE_FIELD_NAMES = ['Date', 'signatureDate'];
+// Must match the date_format the template's date widgets are created with
+// (see sanitizeDateField default).
+const DATE_FIELD_FORMAT = { month: 'short', day: '2-digit', year: 'numeric' };
 
 const CHECKBOX_FIELD_NAMES = [
   'genderMale', 'genderFemale', 'genderOther', 'mailingAddressDifferent',
@@ -258,6 +269,7 @@ function buildFieldData(application) {
     .filter(Boolean).join(' ').trim();
 
   setText('fullLegalName', fullLegalName);
+  setText('noticesEmail', personalInfo.email || '');
 
   // ===== CHECKBOX FIELDS =====
   setBool('genderMale', personalInfo.gender === 'M');
@@ -324,7 +336,20 @@ function buildFieldData(application) {
   setBool('licenseStatusInactive', licensingStatus.licenseStatus === 'Inactive');
   setBool('licenseStatusPending', licensingStatus.licenseStatus === 'Pending Renewal' || licensingStatus.licenseStatus === 'Pending');
 
-  return { field_text_data: text, field_boolean_data: bool };
+  // ===== DATE FIELDS =====
+  // Effective/signature dates are today's date (US Eastern, the template's
+  // time zone), stamped when the request is sent.
+  const sendDate = formatZohoDate(new Date());
+  const date = {};
+  DATE_FIELD_NAMES.forEach(name => { date[name] = sendDate; });
+
+  return { field_text_data: text, field_boolean_data: bool, field_date_data: date };
+}
+
+// 'MMM dd yyyy' (e.g. "Oct 25 2026") in America/New_York, matching the template
+function formatZohoDate(date) {
+  return date.toLocaleDateString('en-US', { ...DATE_FIELD_FORMAT, timeZone: 'America/New_York' })
+    .replace(',', '').replace(/(\w{3})\s(\d{1,2})\s(\d{4})/, (_, m, d, y) => `${m} ${d.padStart(2, '0')} ${y}`);
 }
 
 function formatDate(dateString) {
@@ -684,6 +709,13 @@ function sanitizeCheckboxField(f) {
   };
 }
 
+function sanitizeDateField(f) {
+  return {
+    ...sanitizeTextField(f),
+    date_format: f.date_format || 'MMM dd yyyy'
+  };
+}
+
 function sanitizeImageField(f) {
   return {
     field_type_name: f.field_type_name,
@@ -696,6 +728,66 @@ function sanitizeImageField(f) {
     abs_width: f.abs_width,
     abs_height: f.abs_height
   };
+}
+
+/**
+ * Remap a template's field layout onto a document, dropping anything on a page
+ * that doesn't exist in it.
+ *
+ * The GET response nests ALL field categories together under `fields` as a
+ * flat array (confirmed live: document_fields[].fields is an array of
+ * objects, each carrying its own field_category). Split by category and
+ * sanitize before re-sending.
+ *
+ * Date fields are always placed in `document_fields` (sender-prefillable via
+ * field_date_data), even when the source template had them under a
+ * recipient's `actions[].fields` — same bucket rule as text/checkbox fields
+ * (see the architecture note at the top of this file). Only Signature/Initial
+ * images stay with the signer.
+ */
+function buildLayoutPayload(template, documentId, totalPages) {
+  const skippedFields = [];
+  const inRange = (f) => {
+    if (f.page_no >= totalPages) {
+      skippedFields.push(f.field_name);
+      return false;
+    }
+    return true;
+  };
+  const flat = (o) => (Array.isArray(o.fields) ? o.fields : []);
+  const pick = (fields, category, sanitize) => fields
+    .filter(f => f.field_category === category && inRange(f))
+    .map(f => ({ ...sanitize(f), document_id: documentId }));
+
+  const docFields = (template.document_fields || []).flatMap(flat);
+  const actionFields = (template.actions || []).flatMap(flat);
+
+  const documentFields = [{
+    document_id: documentId,
+    fields: {
+      text_fields: pick(docFields, 'textfield', sanitizeTextField),
+      check_boxes: pick(docFields, 'checkbox', sanitizeCheckboxField),
+      date_fields: [
+        ...pick(docFields, 'datefield', sanitizeDateField),
+        ...pick(actionFields, 'datefield', sanitizeDateField)
+      ],
+      radio_groups: [],
+      image_fields: []
+    }
+  }];
+
+  const actions = (template.actions || []).map(a => ({
+    action_type: a.action_type || 'SIGN',
+    role: a.role,
+    verify_recipient: !!a.verify_recipient,
+    fields: {
+      image_fields: pick(flat(a), 'image', sanitizeImageField),
+      text_fields: pick(flat(a), 'textfield', sanitizeTextField),
+      check_boxes: [], date_fields: [], radio_groups: []
+    }
+  }));
+
+  return { documentFields, actions, skippedFields };
 }
 
 /**
@@ -732,8 +824,6 @@ async function updateTemplateDocument(pdfBuffer, fileName, templateIdOverride = 
     throw new Error('Failed to read existing Zoho Sign template: ' + (oldBody.message || oldResp.statusText));
   }
   const oldTemplate = oldBody.templates;
-  const oldDocumentFields = oldTemplate.document_fields || [];
-  const oldActions = oldTemplate.actions || [];
 
   // 2. Upload the new PDF as a fresh template (this is the only API-level
   //    way to attach a new PDF — see createTemplateFromPDF)
@@ -749,50 +839,9 @@ async function updateTemplateDocument(pdfBuffer, fileName, templateIdOverride = 
     throw new Error('Could not determine document_id of newly uploaded PDF');
   }
 
-  const skippedFields = [];
-  const inRange = (f) => {
-    if (f.page_no >= newTotalPages) {
-      skippedFields.push(f.field_name);
-      return false;
-    }
-    return true;
-  };
-
-  // 3. Remap every field onto the new document_id, dropping anything on a
-  //    page that no longer exists in the new PDF.
-  // The GET response nests ALL field categories together under `fields` as a
-  // flat array (confirmed live: document_fields[].fields is an array of
-  // objects, each carrying its own field_category). Split by category and
-  // sanitize before re-sending.
-  const newDocumentFieldsPayload = oldDocumentFields.map(df => {
-    const flatFields = Array.isArray(df.fields) ? df.fields : [];
-    const text_fields = flatFields
-      .filter(f => f.field_category === 'textfield' && inRange(f))
-      .map(f => ({ ...sanitizeTextField(f), document_id: newDocumentId }));
-    const check_boxes = flatFields
-      .filter(f => f.field_category === 'checkbox' && inRange(f))
-      .map(f => ({ ...sanitizeCheckboxField(f), document_id: newDocumentId }));
-    return {
-      document_id: newDocumentId,
-      fields: { text_fields, check_boxes, date_fields: [], radio_groups: [], image_fields: [] }
-    };
-  });
-
-  const newActionsPayload = oldActions.map(a => {
-    const flatFields = Array.isArray(a.fields) ? a.fields : [];
-    const image_fields = flatFields
-      .filter(f => f.field_category === 'image' && inRange(f))
-      .map(f => ({ ...sanitizeImageField(f), document_id: newDocumentId }));
-    const text_fields = flatFields
-      .filter(f => f.field_category === 'textfield' && inRange(f))
-      .map(f => ({ ...sanitizeTextField(f), document_id: newDocumentId }));
-    return {
-      action_type: a.action_type || 'SIGN',
-      role: a.role,
-      verify_recipient: !!a.verify_recipient,
-      fields: { image_fields, text_fields, check_boxes: [], date_fields: [], radio_groups: [] }
-    };
-  });
+  // 3. Remap every field onto the new document_id (see buildLayoutPayload)
+  const { documentFields: newDocumentFieldsPayload, actions: newActionsPayload, skippedFields } =
+    buildLayoutPayload(oldTemplate, newDocumentId, newTotalPages);
 
   // 4. Write the remapped layout onto the new template
   const updatePayload = { templates: { document_fields: newDocumentFieldsPayload, actions: newActionsPayload } };
@@ -866,6 +915,9 @@ module.exports = {
   updateTemplateDocument,
   createTemplateFromPDF,
   getTemplateInfo,
+  formatZohoDate,
+  DATE_FIELD_NAMES,
+  buildLayoutPayload,
   buildFieldData, // exported for a one-off field-mapping verification script
   TEXT_FIELD_NAMES,
   CHECKBOX_FIELD_NAMES

@@ -138,6 +138,7 @@ describe('Utils: zohosign.js', () => {
       expect(field_text_data.lastName).toBe('Doe');
       expect(field_text_data.socialSecurityNumber).toBe('123-45-6789');
       expect(field_text_data.emailAddress).toBe('john@test.com');
+      expect(field_text_data.noticesEmail).toBe('john@test.com');
       expect(field_boolean_data.genderMale).toBe(true);
       expect(field_boolean_data.genderFemale).toBe(false);
       expect(field_boolean_data.currentlyLicensedYes).toBe(true);
@@ -148,6 +149,13 @@ describe('Utils: zohosign.js', () => {
       expect(field_text_data.licenseStatus).toBeUndefined();
       // bankruptcy not filed -> chapter/status checkboxes not set at all
       expect(field_boolean_data.bankruptcyChapter7).toBeUndefined();
+    });
+
+    it('prefills Date and signatureDate with today in MMM dd yyyy', () => {
+      const { field_date_data } = zohosign.buildFieldData({ personalInfo: {} });
+      expect(Object.keys(field_date_data).sort()).toEqual(['Date', 'signatureDate']);
+      expect(field_date_data.Date).toMatch(/^[A-Z][a-z]{2} \d{2} \d{4}$/);
+      expect(field_date_data.signatureDate).toBe(field_date_data.Date);
     });
 
     it('should warn and skip unknown field names rather than throwing', () => {

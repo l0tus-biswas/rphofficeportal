@@ -18,7 +18,7 @@ const onboardingDocumentSchema = new mongoose.Schema({
   originalFileName: {
     type: String
   },
-  // For read-only links (e.g. DocuSign completed APA Agreement URL)
+  // For read-only links (e.g. Zoho Sign completed APA Agreement URL)
   externalLink: {
     type: String
   },

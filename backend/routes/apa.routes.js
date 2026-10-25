@@ -32,8 +32,8 @@ const { stripe, resolveStripeReceiptUrl, getSubscriptionPeriod } = require('../u
 const OnboardingDocument = require('../models/OnboardingDocument');
 const OnboardingDocType = require('../models/OnboardingDocType');
 
-// TEST ROUTE - Get DocuSign template fields
-// TEST ROUTE REMOVED — was exposing DocuSign template internals publicly (Audit Fix #7)
+// TEST ROUTE - Get Zoho Sign template fields
+// TEST ROUTE REMOVED — was exposing Zoho Sign template internals publicly (Audit Fix #7)
 
 // @route   GET /api/public/check-pending-application
 // @desc    Check if user has a pending signature application
@@ -177,7 +177,7 @@ router.post('/apa-application', applyLimiter, async (req, res) => {
     const application = new APAApplication(applicationData);
     await application.save();
 
-    console.log('Application saved. DocuSign launch is pending user confirmation.');
+    console.log('Application saved. Zoho Sign launch is pending user confirmation.');
     console.log('Applicant email on file:', application.personalInfo.email);
 
     // Non-blocking: the application is already saved, so a transactional email
@@ -273,7 +273,7 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
       currentDocuSignStatus: application.docusign.status
     });
 
-    // Update DocuSign status
+    // Update Zoho Sign status
     application.docusign.status = status;
     
     if (status === 'completed') {
@@ -349,7 +349,7 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
 
       // Send payment link email — non-blocking. This must not throw here:
       // doing so would skip application.save() below and leave the application
-      // stuck on 'pending_signature' even though DocuSign fully completed,
+      // stuck on 'pending_signature' even though Zoho Sign fully completed,
       // blocking the applicant from ever reaching the payment step.
       console.log('📧 Sending payment email to:', application.personalInfo.email);
       try {
@@ -371,9 +371,9 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
     sendResponse(res, 200, { message: 'Webhook processed successfully' });
 
   } catch (error) {
-    console.error('❌ DocuSign Webhook Error:', error);
+    console.error('❌ Zoho Sign Webhook Error:', error);
     console.error('Error stack:', error.stack);
-    // Always return 200 to DocuSign to prevent retries
+    // Always return 200 to Zoho Sign to prevent retries
     res.status(200).json({ message: 'Webhook received with errors', error: error.message });
   }
 });
@@ -918,8 +918,8 @@ router.get('/apa-application/:id', async (req, res) => {
 // @access  Public
 router.get('/apa-application/:id/docusign-return', async (req, res) => {
   try {
-    console.log('=== DocuSign Return Handler Called (Legacy) ===');
-    console.log('Note: This endpoint is no longer used with email-based DocuSign signing');
+    console.log('=== Zoho Sign Return Handler Called (Legacy) ===');
+    console.log('Note: This endpoint is no longer used with email-based Zoho Sign signing');
     console.log('Application ID:', req.params.id);
     
     // Redirect to home page with a message
@@ -964,14 +964,14 @@ router.get('/apa-application/:id/docusign-return', async (req, res) => {
     `);
 
   } catch (error) {
-    console.error('DocuSign Return Error:', error);
+    console.error('Zoho Sign Return Error:', error);
     const homeUrl = `${process.env.APP_URL || 'http://localhost:4200'}`;
     res.redirect(homeUrl);
   }
 });
 
 // @route   POST /api/public/apa-application/:id/send-docusign
-// @desc    Confirm email and send DocuSign envelope
+// @desc    Confirm email and send Zoho Sign envelope
 // @access  Public
 router.post('/apa-application/:id/send-docusign', async (req, res) => {
   try {
@@ -1025,7 +1025,7 @@ router.post('/apa-application/:id/send-docusign', async (req, res) => {
     application.docusign.sentAt = new Date();
     await application.save();
 
-    console.log('✅ DocuSign envelope sent:', {
+    console.log('✅ Zoho Sign envelope sent:', {
       applicationId: application._id,
       envelopeId: application.docusign.envelopeId,
       email: application.personalInfo.email
@@ -1042,17 +1042,17 @@ router.post('/apa-application/:id/send-docusign', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Send DocuSign error:', error);
+    console.error('❌ Send Zoho Sign error:', error);
     errorResponse(res, error);
   }
 });
 
 // @route   POST /api/public/apa-application/:id/resend-docusign
-// @desc    Resend DocuSign envelope for an application
+// @desc    Resend Zoho Sign envelope for an application
 // @access  Public (can also be called from admin)
 router.post('/apa-application/:id/resend-docusign', async (req, res) => {
   try {
-    console.log('=== Resending DocuSign for Application ===');
+    console.log('=== Resending Zoho Sign for Application ===');
     console.log('Application ID:', req.params.id);
     
     const application = await APAApplication.findById(req.params.id);
@@ -1066,7 +1066,7 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
       return errorResponse(res, new Error('Agreement already signed'), 400);
     }
 
-    // Create new DocuSign envelope
+    // Create new Zoho Sign envelope
     const docusignResult = await initiateDocuSign(application);
 
     // Update application with new envelope info
@@ -1075,16 +1075,16 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
     application.docusign.sentAt = new Date();
     await application.save();
 
-    // Send confirmation email - DocuSign will send signing email.
+    // Send confirmation email - Zoho Sign will send signing email.
     // Non-blocking: the envelope was already sent and saved above, so an email
     // failure here must not surface as a "resend failed" error.
     try {
       await sendApplicationConfirmationEmail(application);
     } catch (emailError) {
-      console.error('Failed to send resend-DocuSign confirmation email:', emailError.message);
+      console.error('Failed to send resend-Zoho Sign confirmation email:', emailError.message);
     }
 
-    console.log('✅ DocuSign resent successfully');
+    console.log('✅ Zoho Sign resent successfully');
 
     sendResponse(res, 200, {
       message: 'Signature request resent successfully. Check your email from Zoho Sign to sign.',
@@ -1092,7 +1092,7 @@ router.post('/apa-application/:id/resend-docusign', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Resend DocuSign error:', error);
+    console.error('❌ Resend Zoho Sign error:', error);
     errorResponse(res, error);
   }
 });
@@ -1133,7 +1133,7 @@ router.get('/apa-application/:id/payment-page', async (req, res) => {
 });
 
 // @route   POST /api/public/apa-application/:id/complete-signature
-// @desc    Complete mock DocuSign signature
+// @desc    Complete mock Zoho Sign signature
 // @access  Public
 router.post('/apa-application/:id/complete-signature', async (req, res) => {
   try {

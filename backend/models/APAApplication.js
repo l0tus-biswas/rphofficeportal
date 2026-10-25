@@ -106,7 +106,7 @@ const apaApplicationSchema = new mongoose.Schema({
     licenseOtherDescription: String
   },
   
-  // DocuSign Integration
+  // Zoho Sign Integration
   docusign: {
     envelopeId: String,
     status: { 
