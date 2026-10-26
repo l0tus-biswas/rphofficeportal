@@ -151,6 +151,25 @@ describe('Utils: zohosign.js', () => {
       expect(field_boolean_data.bankruptcyChapter7).toBeUndefined();
     });
 
+    it('prefills agencyLegalName from the application', () => {
+      const { field_text_data } = zohosign.buildFieldData({
+        personalInfo: { agencyLegalName: '  Doe Insurance Agency LLC ' }
+      });
+      expect(field_text_data.agencyLegalName).toBe('Doe Insurance Agency LLC');
+    });
+
+    it('falls back to N/A when agencyLegalName is missing or blank', () => {
+      expect(zohosign.buildFieldData({ personalInfo: {} }).field_text_data.agencyLegalName).toBe('N/A');
+      expect(zohosign.buildFieldData({ personalInfo: { agencyLegalName: '   ' } }).field_text_data.agencyLegalName).toBe('N/A');
+    });
+
+    it('prefills fullLegalName as first, middle and last name only', () => {
+      const { field_text_data } = zohosign.buildFieldData({
+        personalInfo: { legalFirstName: 'John', legalMiddleName: 'Q', legalLastName: 'Doe', agencyLegalName: 'Doe LLC' }
+      });
+      expect(field_text_data.fullLegalName).toBe('John Q Doe');
+    });
+
     it('prefills Date and signatureDate with today in MMM dd yyyy', () => {
       const { field_date_data } = zohosign.buildFieldData({ personalInfo: {} });
       expect(Object.keys(field_date_data).sort()).toEqual(['Date', 'signatureDate']);

@@ -101,6 +101,10 @@
               <td>{{ application.personalInfo.legalFirstName }} {{ application.personalInfo.legalMiddleName }} {{ application.personalInfo.legalLastName }}</td>
             </tr>
             <tr>
+              <th>Agency / LLC:</th>
+              <td>{{ application.personalInfo.agencyLegalName || 'N/A' }}</td>
+            </tr>
+            <tr>
               <th>Gender:</th>
               <td>{{ application.personalInfo.gender }}</td>
             </tr>
