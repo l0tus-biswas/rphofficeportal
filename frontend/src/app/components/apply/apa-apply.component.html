@@ -50,8 +50,17 @@
     </div>
 
     <div class="row">
+      <div class="col-md-12 mb-3">
+        <label class="form-label">Agency / LLC Full Legal Name</label>
+        <input type="text" class="form-control" formControlName="agencyLegalName" maxlength="100"
+               placeholder="Enter N/A if you do not have an agency">
+        <div class="form-text">Your agency's full legal name. Leave blank or enter N/A if none.</div>
+      </div>
+    </div>
+
+    <div class="row">
       <div class="col-md-4 mb-3">
-        <label class="form-label">Gender <span class="text-danger">*</span></label>
+        <label class="form-label">Gender<span class="text-danger">*</span></label>
         <select class="form-select" formControlName="gender"
                 [class.is-invalid]="section1Form.get('gender')?.invalid && section1Form.get('gender')?.touched">
           <option value="">Select Gender</option>

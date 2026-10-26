@@ -19,6 +19,7 @@ const apaApplicationSchema = new mongoose.Schema({
     legalFirstName: { type: String, required: true, trim: true },
     legalMiddleName: { type: String, trim: true },
     legalLastName: { type: String, required: true, trim: true },
+    agencyLegalName: { type: String, trim: true, default: 'N/A' }, // Agency / LLC full legal name, 'N/A' if none
     gender: { type: String, enum: ['M', 'F'], required: true },
     dateOfBirth: { type: Date, required: true },
     ssn: { type: String, required: true }, // Should be encrypted in production

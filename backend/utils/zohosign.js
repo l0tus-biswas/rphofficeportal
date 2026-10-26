@@ -148,6 +148,8 @@ const TEXT_FIELD_NAMES = [
   // Initial/Date-type widgets now, not text, left for the agent to fill
   // themselves (see the comment on this in buildFieldData()).
   'fullLegalName',
+  // Signer block: "Agency / LLC full legal name (write N/A if none)".
+  'agencyLegalName',
   // Signer block on the last page: "Designated email for notices" — the agent's
   // own email, same value as emailAddress.
   'noticesEmail'
@@ -269,6 +271,7 @@ function buildFieldData(application) {
     .filter(Boolean).join(' ').trim();
 
   setText('fullLegalName', fullLegalName);
+  setText('agencyLegalName', (personalInfo.agencyLegalName || '').trim() || 'N/A');
   setText('noticesEmail', personalInfo.email || '');
 
   // ===== CHECKBOX FIELDS =====
