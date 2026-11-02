@@ -60,6 +60,11 @@ const subscriptionSchema = new mongoose.Schema({
     enum: ['month', 'year'],
     default: 'month'
   },
+  // Timestamp of the newest Stripe subscription webhook applied; lets us
+  // ignore out-of-order (older) events.
+  lastStripeEventAt: {
+    type: Date
+  },
   metadata: {
     type: mongoose.Schema.Types.Mixed
   },

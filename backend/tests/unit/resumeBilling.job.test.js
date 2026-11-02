@@ -54,6 +54,7 @@ describe('resumeBilling.job', () => {
 
   it('resumes billing for a due user: creates a subscription, updates the user, notifies them', async () => {
     const agent = mockAgent();
+    User.findOne.mockResolvedValue(agent);
     User.find.mockImplementation((query) => {
       if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([]) }) };
       return Promise.resolve([agent]);
@@ -64,7 +65,10 @@ describe('resumeBilling.job', () => {
 
     await processDueBillingResumes();
 
-    expect(resumeSubscriptionForCustomer).toHaveBeenCalledWith('cus_mock', 'price_mock', expect.objectContaining({ userId: 'agent-1' }));
+    expect(resumeSubscriptionForCustomer).toHaveBeenCalledWith(
+      'cus_mock', 'price_mock', expect.objectContaining({ userId: 'agent-1' }),
+      expect.stringMatching(/^resume-agent-1-\d+-0$/)
+    );
     expect(Subscription.findOneAndUpdate).toHaveBeenCalledWith(
       { user: 'agent-1' },
       expect.objectContaining({ $set: expect.objectContaining({ stripeSubscriptionId: 'sub_new', user: 'agent-1' }) }),
@@ -81,6 +85,7 @@ describe('resumeBilling.job', () => {
 
   it('on the first failed attempt: drops access, schedules a retry, and notifies only the agent', async () => {
     const agent = mockAgent(); // billingResumeAttempts: 0
+    User.findOne.mockResolvedValue(agent);
     const admin = { _id: 'admin-1' };
     User.find.mockImplementation((query) => {
       if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([admin]) }) };
@@ -105,6 +110,7 @@ describe('resumeBilling.job', () => {
 
   it('after the final attempt fails: stops retrying and notifies agent + admins', async () => {
     const agent = mockAgent({ billingResumeAttempts: RESUME_MAX_ATTEMPTS - 1 });
+    User.findOne.mockResolvedValue(agent);
     const admin = { _id: 'admin-1' };
     User.find.mockImplementation((query) => {
       if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([admin]) }) };
@@ -128,6 +134,7 @@ describe('resumeBilling.job', () => {
 
   it('skips and clears the flag when the user has no Stripe customer id', async () => {
     const agent = mockAgent({ stripeCustomerId: undefined });
+    User.findOne.mockResolvedValue(agent);
     User.find.mockImplementation((query) => {
       if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([]) }) };
       return Promise.resolve([agent]);
@@ -138,5 +145,41 @@ describe('resumeBilling.job', () => {
     expect(resumeSubscriptionForCustomer).not.toHaveBeenCalled();
     expect(agent.pendingBillingResumeAt).toBeNull();
     expect(agent.save).toHaveBeenCalled();
+  });
+
+  it('does not charge when the user already paid early (re-read finds no pending resume)', async () => {
+    const agent = mockAgent();
+    User.find.mockImplementation((query) => {
+      if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([]) }) };
+      return Promise.resolve([agent]);
+    });
+    User.findOne.mockResolvedValue(null);
+
+    await processDueBillingResumes();
+
+    expect(resumeSubscriptionForCustomer).not.toHaveBeenCalled();
+    expect(agent.save).not.toHaveBeenCalled();
+  });
+
+  it('uses a different idempotency key for each scheduled attempt', async () => {
+    const first = mockAgent({ billingResumeAttempts: 0 });
+    const second = mockAgent({ billingResumeAttempts: 1, pendingBillingResumeAt: new Date(Date.now() - 500) });
+    const listFor = (agent) => (query) => {
+      if (query.role === 'admin') return { select: () => ({ lean: () => Promise.resolve([]) }) };
+      return Promise.resolve([agent]);
+    };
+    resumeSubscriptionForCustomer.mockRejectedValue(new Error('declined'));
+
+    User.find.mockImplementation(listFor(first));
+    User.findOne.mockResolvedValue(first);
+    await processDueBillingResumes();
+
+    User.find.mockImplementation(listFor(second));
+    User.findOne.mockResolvedValue(second);
+    await processDueBillingResumes();
+
+    const keys = resumeSubscriptionForCustomer.mock.calls.map((c) => c[3]);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
   });
 });

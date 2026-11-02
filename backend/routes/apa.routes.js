@@ -25,6 +25,7 @@ const {
   processWebhook,
   validateWebhookSignature
 } = require('../utils/zohosign');
+const { completeApaRegistration, RegistrationError } = require('../services/apaRegistration');
 const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
@@ -501,6 +502,13 @@ router.post('/apa-application/create-checkout-session', applyLimiter, async (req
     };
 
     // Apply coupon if provided
+    let stripeCouponId = null;
+    if (!couponCode && application.payment?.couponCode) {
+      // A coupon from an earlier, abandoned attempt must not be counted for
+      // this one.
+      application.payment.couponCode = undefined;
+      await application.save();
+    }
     if (couponCode) {
       const normalizedCode = couponCode.toUpperCase();
       const coupon = await Coupon.findOne({ code: normalizedCode });
@@ -522,16 +530,18 @@ router.post('/apa-application/create-checkout-session', applyLimiter, async (req
       // Create a one-time-use Stripe coupon mirroring the DB coupon definition,
       // since admin-created coupons are never registered as Stripe Coupon objects.
       const stripeCoupon = coupon.discountType === 'percentage'
-        ? await stripe.coupons.create({ percent_off: coupon.discountValue, duration: 'once', name: normalizedCode })
-        : await stripe.coupons.create({ amount_off: Math.round(discount * 100), currency: 'usd', duration: 'once', name: normalizedCode });
+        ? await stripe.coupons.create({ percent_off: coupon.discountValue, duration: 'once', name: normalizedCode, max_redemptions: 1 })
+        : await stripe.coupons.create({ amount_off: Math.round(discount * 100), currency: 'usd', duration: 'once', name: normalizedCode, max_redemptions: 1 });
+      stripeCouponId = stripeCoupon.id;
 
       sessionParams.discounts = [{ coupon: stripeCoupon.id }];
 
       console.log(`✅ Coupon ${normalizedCode} applied to checkout session ($${discount.toFixed(2)} off)`);
 
-      await coupon.incrementUsage();
-
-      // Store in application
+      // NOTE: usageCount is NOT incremented here. Starting checkout isn't a
+      // redemption — it is counted once the payment completes
+      // (services/apaRegistration.js), so abandoned or repeated attempts
+      // don't burn the coupon's usage limit.
       if (!application.payment) {
         application.payment = {};
       }
@@ -539,7 +549,16 @@ router.post('/apa-application/create-checkout-session', applyLimiter, async (req
       await application.save();
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams);
+    } catch (sessionError) {
+      // Don't leave an orphaned one-off coupon behind in Stripe.
+      if (stripeCouponId) {
+        await stripe.coupons.del(stripeCouponId).catch(() => {});
+      }
+      throw sessionError;
+    }
 
     sendResponse(res, 200, {
       sessionId: session.id,
@@ -570,297 +589,31 @@ const verifyPaymentHandler = async (req, res) => {
       return sendResponse(res, 404, { message: 'Payment session not found' });
     }
 
-    if (session.payment_status !== 'paid') {
-      return sendResponse(res, 400, { message: 'Payment not completed' });
-    }
+    // Account creation is shared with the Stripe checkout.session.completed
+    // webhook and is idempotent/atomic (see services/apaRegistration.js).
+    const result = await completeApaRegistration(session, { wait: true });
 
-    const applicationId = session.client_reference_id;
-    if (!applicationId) {
-      return sendResponse(res, 400, { message: 'Application ID not found in session' });
-    }
-
-    // Find application
-    const application = await APAApplication.findById(applicationId);
-    if (!application) {
-      return sendResponse(res, 404, { message: 'Application not found' });
-    }
-
-    // Check if already processed
-    if (application.status === 'completed') {
-      const existingUser = await User.findOne({ email: application.personalInfo.email });
+    if (result.alreadyProcessed) {
       return sendResponse(res, 200, {
         success: true,
         message: 'Payment already verified',
         accountCreated: true,
-        email: existingUser?.email
+        email: result.email
       });
-    }
-
-    // Update application status
-    application.status = 'completed';
-    application.completedAt = new Date();
-    
-    // Update payment info
-    application.payment.paymentStatus = 'completed';
-    application.payment.paymentIntentId = session.payment_intent;
-    application.payment.paidAt = new Date();
-    application.payment.amount = session.amount_total / 100;
-    
-    await application.save();
-
-    // Resolve a Stripe receipt for the transactions page. In subscription mode
-    // session.payment_intent is null — the charge lives on the first invoice —
-    // so we capture the invoice id and resolve from there (hosted invoice URL).
-    let receiptUrl = '';
-    try {
-      receiptUrl = (await resolveStripeReceiptUrl({
-        paymentIntentId: session.payment_intent,
-        invoiceId: session.invoice
-      })) || '';
-    } catch (e) { /* best-effort; lazy resolver will retry on demand */ }
-
-    // Create payment record
-    const payment = new Payment({
-      user: null, // Will be updated after user creation
-      type: 'setup_fee',
-      amount: session.amount_total, // store in cents to match other payment records
-      status: 'completed',
-      stripePaymentIntentId: session.payment_intent,
-      stripeInvoiceId: session.invoice,
-      stripeCustomerId: session.customer,
-      receiptUrl,
-      description: 'RHP Office registration payment',
-      metadata: {
-        applicationId: applicationId,
-        sessionId: session.id
-      }
-    });
-    await payment.save();
-
-    // Prepare user details
-    const legalFirstName = application.personalInfo?.legalFirstName || application.personalInfo?.firstName || '';
-    const legalLastName = application.personalInfo?.legalLastName || application.personalInfo?.lastName || '';
-    const primaryPhone = application.personalInfo?.mobilePhone || application.personalInfo?.phone;
-    const homeAddress = application.personalInfo?.homeAddress || {};
-
-    if (!primaryPhone) {
-      return sendResponse(res, 400, { message: 'Application is missing a contact phone number' });
-    }
-
-    let referredById = null;
-    let referringAgent = null;
-    if (application.recruitingInfo?.referralCode) {
-      referringAgent = await User.findOne({
-        referralCode: application.recruitingInfo.referralCode,
-        isActive: true
-      }).select('_id name');
-      if (referringAgent) {
-        referredById = referringAgent._id;
-      }
-    }
-
-    // Create user account
-    const password = generatePassword();
-    const user = new User({
-      email: application.personalInfo.email,
-      password: password,
-      name: `${legalFirstName} ${legalLastName}`.trim(),
-      phone: primaryPhone,
-      role: 'agent',
-      isActive: true,
-      referredBy: referredById,
-      address: homeAddress.street || application.personalInfo?.address,
-      city: homeAddress.city || application.personalInfo?.city,
-      state: homeAddress.state || application.personalInfo?.state,
-      zipCode: homeAddress.zipCode || application.personalInfo?.zip,
-      metadata: {
-        applicationId: application._id.toString(),
-        referralCode: application.recruitingInfo?.referralCode || ''
-      }
-    });
-
-    await user.save();
-
-    // Update payment record with user ID
-    payment.user = user._id;
-    await payment.save();
-
-    let subscriptionPriceId = process.env.STRIPE_MONTHLY_PRICE_ID || null;
-    let subscriptionAmount = parseInt(process.env.STRIPE_MONTHLY_SUBSCRIPTION_PRICE, 10) || 2000;
-    let subscriptionStart = new Date();
-    let subscriptionEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    let subscriptionStatus = 'active';
-
-    if (session.subscription) {
-      try {
-        const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
-        subscriptionStatus = stripeSubscription.status || subscriptionStatus;
-        const period = getSubscriptionPeriod(stripeSubscription);
-        if (period.start) {
-          subscriptionStart = new Date(period.start * 1000);
-        }
-        if (period.end) {
-          subscriptionEnd = new Date(period.end * 1000);
-        }
-
-        const firstItem = stripeSubscription.items?.data?.[0];
-        if (firstItem?.price) {
-          subscriptionPriceId = firstItem.price.id || subscriptionPriceId;
-          if (typeof firstItem.price.unit_amount === 'number') {
-            subscriptionAmount = firstItem.price.unit_amount;
-          }
-        }
-      } catch (stripeError) {
-        console.error('Failed to retrieve Stripe subscription:', stripeError);
-      }
-    }
-
-    if (!subscriptionPriceId) {
-      subscriptionPriceId = `inline_price_${subscriptionAmount}`;
-    }
-
-    const subscription = new Subscription({
-      user: user._id,
-      stripeSubscriptionId: session.subscription,
-      stripeCustomerId: session.customer,
-      stripePriceId: subscriptionPriceId,
-      status: subscriptionStatus,
-      currentPeriodStart: subscriptionStart,
-      currentPeriodEnd: subscriptionEnd,
-      amount: subscriptionAmount,
-      currency: 'usd',
-      interval: 'month'
-    });
-    await subscription.save();
-
-    // Create onboarding record for the new agent (so they appear in onboarding tab)
-    const onboarding = new Onboarding({
-      user: user._id,
-      status: 'not-started'
-    });
-    await onboarding.save();
-
-    // Update user with onboarding reference
-    user.onboarding = onboarding._id;
-    user.onboardingStatus = 'not-started';
-
-    // Update user payment/subscription tracking fields
-    user.stripeCustomerId = session.customer || user.stripeCustomerId;
-    user.stripeSubscriptionId = session.subscription || user.stripeSubscriptionId;
-    user.subscriptionStatus = subscriptionStatus || 'active';
-    user.subscriptionStartDate = subscriptionStart;
-    user.nextBillingDate = subscriptionEnd;
-    user.lastPaymentDate = new Date();
-    user.paymentAccessEnabled = true;
-    user.oneTimePaymentCompleted = true;
-    user.oneTimePaymentAmount = 0;
-    user.oneTimePaymentDate = user.oneTimePaymentDate || new Date();
-
-    // Generate set-password token for immediate password setup
-    const setPasswordToken = user.getResetPasswordToken();
-    await user.save();
-
-    // Link application back to the created user for onboarding visibility
-    application.userId = user._id;
-    application.user = user._id;
-    await application.save();
-
-    // Create OnboardingDocument for APA Agreement so it shows in /onboarding-hub
-    try {
-      const apaDocType = await OnboardingDocType.findOne({ name: 'APA Agreement', isActive: true });
-      if (apaDocType && application.docusign?.documentUrl) {
-        const docRelPath = application.docusign.documentUrl.replace(/^\//, '');
-        await OnboardingDocument.findOneAndUpdate(
-          { agent: user._id, docType: apaDocType._id },
-          {
-            $set: {
-              agent: user._id,
-              docType: apaDocType._id,
-              filePath: docRelPath,
-              // Do NOT set externalLink — see comment at the other APA
-              // Agreement OnboardingDocument upsert above in this file.
-              externalLink: null,
-              originalFileName: `APA_Agreement_${application.personalInfo?.legalFirstName || ''}_${application.personalInfo?.legalLastName || ''}.pdf`.replace(/\s+/g, '_'),
-              uploadedBy: user._id,
-              uploadedAt: application.docusign.signedDate || application.docusign.signedAt || new Date(),
-              deletedAt: null
-            }
-          },
-          { upsert: true, new: true }
-        );
-        console.log('✅ OnboardingDocument created for APA Agreement on payment completion, agent:', user._id);
-      }
-    } catch (onboardingErr) {
-      console.error('❌ Failed to create OnboardingDocument for APA Agreement during payment:', onboardingErr);
-      // Non-blocking — don't fail account creation
-    }
-
-    // Send welcome email with set-password link — non-blocking. The account,
-    // payment, subscription, and onboarding records are already fully created
-    // and saved above, so an email failure here must not surface as a
-    // "submission failed" error to an applicant whose account was actually created.
-    try {
-      if (setPasswordToken) {
-        await sendWelcomeSetPasswordEmail(user, setPasswordToken, referringAgent);
-      } else {
-        await sendAccountActivatedEmail(user, password);
-      }
-    } catch (emailError) {
-      console.error('Failed to send welcome/activation email:', emailError.message);
-    }
-
-    // Notify all admins about the new agent registration (16.1)
-    try {
-      const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
-      for (const admin of admins) {
-        Notification.createNotification({
-          userId: admin._id,
-          type: 'new_agent_registered',
-          title: 'New Agent Registered',
-          message: `${user.name} (${user.email}) has completed registration and payment.`,
-          link: '/admin/users',
-          data: { newUserId: user._id }
-        }, false).catch(() => {});
-      }
-    } catch (notifErr) {
-      console.error('Failed to notify admins of new registration:', notifErr);
-    }
-
-    // Notify upline about new recruit
-    if (user.referredBy) {
-      Notification.createNotification({
-        userId: user.referredBy,
-        type: 'recruit_added',
-        title: 'New Recruit Joined',
-        message: `${user.name} has joined your team through your referral link!`,
-        link: '/my-team',
-        data: { recruitId: user._id }
-      }).catch(() => {});
-    }
-
-    // Auto-approve APA if setting is enabled (§23.3)
-    try {
-      const autoApproveConfig = await SystemConfig.findOne({ key: 'apa_auto_approve' }).lean();
-      if (autoApproveConfig && autoApproveConfig.value === 'true' && application.status === 'completed') {
-        application.status = 'active';
-        application.reviewedAt = new Date();
-        application.adminNotes = 'Auto-approved by system';
-        await application.save();
-        console.log(`[APA] Auto-approved application ${application._id} for ${user.email}`);
-      }
-    } catch (autoErr) {
-      console.error('[APA] Auto-approve check failed:', autoErr.message);
     }
 
     sendResponse(res, 200, {
       success: true,
       message: 'Payment verified and account created successfully',
       accountCreated: true,
-      email: user.email,
-      setPasswordToken: setPasswordToken // Token for immediate password setup
+      email: result.email,
+      setPasswordToken: result.setPasswordToken // Token for immediate password setup
     });
 
   } catch (error) {
+    if (error instanceof RegistrationError) {
+      return sendResponse(res, error.statusCode, { message: error.message });
+    }
     console.error('Verify payment error:', error);
     errorResponse(res, error);
   }

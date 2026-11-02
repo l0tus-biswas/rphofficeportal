@@ -6,6 +6,7 @@ const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
+const { completeApaRegistration } = require('../services/apaRegistration');
 const {
   createCustomer,
   createPaymentIntent,
@@ -15,6 +16,7 @@ const {
   reactivateSubscription,
   resumeSubscriptionForCustomer,
   getSubscriptionPeriod,
+  getSubscriptionClientSecret,
   retrieveSubscription,
   retrieveCharge,
   resolveStripeReceiptUrl,
@@ -36,14 +38,19 @@ router.post('/create-customer', protect, async (req, res) => {
       return sendResponse(res, 400, { message: 'Customer already exists' });
     }
 
+    // Idempotency key: two quick calls resolve to the same Stripe customer.
     const customer = await createCustomer(
       user.email,
       user.name,
-      { userId: user._id.toString() }
+      { userId: user._id.toString() },
+      `customer-${user._id}`
     );
 
-    user.stripeCustomerId = customer.id;
-    await user.save();
+    // Only set if still empty, so a concurrent request can't overwrite it.
+    await User.updateOne(
+      { _id: user._id, $or: [{ stripeCustomerId: null }, { stripeCustomerId: { $exists: false } }] },
+      { $set: { stripeCustomerId: customer.id } }
+    );
 
     sendResponse(res, 200, {
       customerId: customer.id,
@@ -75,7 +82,8 @@ router.post('/one-time-intent', protect, async (req, res) => {
       const customer = await createCustomer(
         user.email,
         user.name,
-        { userId: user._id.toString() }
+        { userId: user._id.toString() },
+        `customer-${user._id}`
       );
       customerId = customer.id;
       user.stripeCustomerId = customerId;
@@ -170,7 +178,10 @@ router.post('/subscription-intent', protect, async (req, res) => {
     if (period.end) user.nextBillingDate = new Date(period.end * 1000);
     await user.save();
 
-    const clientSecret = subscription.latest_invoice.payment_intent.client_secret;
+    const clientSecret = getSubscriptionClientSecret(subscription);
+    if (!clientSecret) {
+      return sendResponse(res, 502, { message: 'Unable to start the subscription payment. Please try again.' });
+    }
 
     sendResponse(res, 200, {
       subscriptionId: subscription.id,
@@ -400,12 +411,18 @@ router.post('/resume-now', protect, async (req, res) => {
       return sendResponse(res, 400, { message: 'Missing billing information on your account. Please contact support.' });
     }
 
+    // Same-state, same-window requests (double-click) share a key, so Stripe
+    // returns the first result instead of charging twice. The 5-minute bucket
+    // keeps a declined card from being served a cached decline after the agent
+    // fixes their payment method and tries again.
+    const idempotencyKey = `resume-now-${user._id}-${user.pendingBillingResumeAt.getTime()}-${Math.floor(Date.now() / (5 * 60 * 1000))}`;
+
     let newSubscription;
     try {
       newSubscription = await resumeSubscriptionForCustomer(user.stripeCustomerId, priceId, {
         userId: user._id.toString(),
         email: user.email
-      });
+      }, idempotencyKey);
     } catch (stripeError) {
       const message = stripeError.code === 'NO_PAYMENT_METHOD'
         ? 'You have no saved payment method on file. Please add a card in the billing portal and try again.'
@@ -521,6 +538,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     const event = constructWebhookEvent(req.body, sig);
 
     switch (event.type) {
+      case 'checkout.session.completed':
+        // Creates the agent account even if the applicant never returns to
+        // /payment-success after paying. Idempotent with the verify endpoint.
+        await handleCheckoutSessionCompleted(event.data.object);
+        break;
+
       case 'payment_intent.succeeded':
         await handlePaymentIntentSucceeded(event.data.object);
         break;
@@ -531,11 +554,14 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdate(event.data.object);
+        await handleSubscriptionUpdate(event.data.object, event.created);
         break;
 
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object);
+        await handleSubscriptionDeleted(event.data.object, event.created);
+        break;
+      case 'checkout.session.async_payment_succeeded':
+        await handleCheckoutSessionCompleted(event.data.object);
         break;
 
       case 'invoice.created':
@@ -562,6 +588,20 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 });
 
 // Webhook handlers
+async function handleCheckoutSessionCompleted(session) {
+  // Only APA registration checkouts carry an application id; ignore anything else.
+  if (session.mode !== 'subscription' || !session.client_reference_id) return;
+  if (!['paid', 'no_payment_required'].includes(session.payment_status)) return;
+  await completeApaRegistration(session);
+}
+
+// Stripe doesn't guarantee delivery order. Returns true when this event is
+// older than one already applied to the subscription, so a delayed
+// "updated" can't overwrite a newer state (or resurrect a deleted one).
+function isStaleSubscriptionEvent(sub, eventCreated) {
+  return !!(eventCreated && sub.lastStripeEventAt && eventCreated * 1000 < sub.lastStripeEventAt.getTime());
+}
+
 async function handlePaymentIntentSucceeded(paymentIntent) {
   const payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
   
@@ -616,11 +656,13 @@ async function handlePaymentIntentFailed(paymentIntent) {
   }
 }
 
-async function handleSubscriptionUpdate(subscription) {
+async function handleSubscriptionUpdate(subscription, eventCreated) {
   const sub = await Subscription.findOne({ stripeSubscriptionId: subscription.id });
   const period = getSubscriptionPeriod(subscription);
 
   if (sub) {
+    if (isStaleSubscriptionEvent(sub, eventCreated)) return;
+    if (eventCreated) sub.lastStripeEventAt = new Date(eventCreated * 1000);
     sub.status = subscription.status;
     if (period.start) sub.currentPeriodStart = new Date(period.start * 1000);
     if (period.end) sub.currentPeriodEnd = new Date(period.end * 1000);
@@ -648,10 +690,12 @@ async function handleSubscriptionUpdate(subscription) {
   }
 }
 
-async function handleSubscriptionDeleted(subscription) {
+async function handleSubscriptionDeleted(subscription, eventCreated) {
   const sub = await Subscription.findOne({ stripeSubscriptionId: subscription.id });
-  
+
   if (sub) {
+    if (isStaleSubscriptionEvent(sub, eventCreated)) return;
+    if (eventCreated) sub.lastStripeEventAt = new Date(eventCreated * 1000);
     sub.status = 'canceled';
     sub.endedAt = new Date();
     await sub.save();
