@@ -18,6 +18,19 @@ const { generatePassword, generateToken, sendResponse, errorResponse, paginate }
 const { cancelSubscription, cancelSubscriptionAtPeriodEnd, reactivateSubscription, getSubscriptionPeriod, listActiveCustomerSubscriptions } = require('../utils/stripe');
 const { RESUME_GRACE_PERIOD_DAYS } = require('../config/billingResume.constants');
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const mongoose = require('mongoose');
+const isValidId = (value) => typeof value === 'string' && /^[a-fA-F0-9]{24}$/.test(value);
+// Page/limit from the query string: always positive integers (a negative skip is a 500 in MongoDB)
+const parsePaging = (req, defaultLimit) => ({
+  page: Math.max(1, parseInt(req.query.page) || 1),
+  limit: Math.min(500, Math.max(1, parseInt(req.query.limit) || defaultLimit))
+});
+// True when `user` is an active admin and no OTHER active, non-deleted admin would remain without them
+const isLastActiveAdmin = async (user) => {
+  if (!user || user.role !== 'admin' || !user.isActive || user.deletedAt) return false;
+  const others = await User.countDocuments({ _id: { $ne: user._id }, role: 'admin', isActive: true, deletedAt: null });
+  return others === 0;
+};
 const ACAClientRecord = require('../models/ACAClientRecord');
 const AgentCarrierStatus = require('../models/AgentCarrierStatus');
 const ExamFXProgress = require('../models/ExamFXProgress');
@@ -26,7 +39,7 @@ const DocumentRequest = require('../models/DocumentRequest');
 const DocumentHubFile = require('../models/DocumentHubFile');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
+const multer = require('../utils/multer');
 const { ONBOARDING_ROOT } = require('../utils/storage');
 
 // Multer config for welcome message media uploads (image/PDF)
@@ -131,11 +144,10 @@ router.get('/hierarchy', async (req, res) => {
 // @access  Private (Admin only)
 router.get('/users', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const role = req.query.role;
-    const isActive = req.query.isActive;
-    const search = req.query.search;
+    const { page, limit } = parsePaging(req, 20);
+    const role = typeof req.query.role === 'string' ? req.query.role : undefined;
+    const isActive = typeof req.query.isActive === 'string' ? req.query.isActive : undefined;
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
     const includeDeleted = req.query.includeDeleted === 'true';
     
     const filter = {};
@@ -314,6 +326,20 @@ router.put('/users/:userId', validateRequest(schemas.updateUser), logAction('UPD
 
     if (!user) {
       return sendResponse(res, 404, { message: 'User not found' });
+    }
+
+    if (user.deletedAt) {
+      return sendResponse(res, 400, { message: 'User is deleted. Restore the user before editing.' });
+    }
+
+    // Never lock out the admin making the change, or the last active admin
+    if (user.role === 'admin' && ((isActive === false && user.isActive) || (role && role !== 'admin'))) {
+      if (String(user._id) === String(req.user._id)) {
+        return sendResponse(res, 400, { message: 'You cannot deactivate or demote your own admin account.' });
+      }
+      if (await isLastActiveAdmin(user)) {
+        return sendResponse(res, 400, { message: 'Cannot deactivate or demote the last active admin.' });
+      }
     }
 
     if (name) user.name = name;
@@ -548,6 +574,10 @@ router.put('/users/:userId/activate', logAction('ACTIVATE_USER'), async (req, re
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
+    if (user.deletedAt) {
+      return sendResponse(res, 400, { message: 'User is deleted. Restore the user instead of activating.' });
+    }
+
     user.isActive = true;
     user.updatedBy = req.user._id;
     await user.save();
@@ -580,6 +610,13 @@ router.put('/users/:userId/deactivate', logAction('DEACTIVATE_USER'), async (req
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
+    if (String(user._id) === String(req.user._id)) {
+      return sendResponse(res, 400, { message: 'You cannot deactivate your own account.' });
+    }
+    if (await isLastActiveAdmin(user)) {
+      return sendResponse(res, 400, { message: 'Cannot deactivate the last active admin.' });
+    }
+
     user.isActive = false;
     user.paymentAccessEnabled = false;
     user.updatedBy = req.user._id;
@@ -641,7 +678,7 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
     const allLevels = await PromotionLevel.find({ isActive: true }).select('name').lean();
     const validLevels = allLevels.map(l => l.name.toLowerCase());
     
-    if (!level || !validLevels.includes(level.toLowerCase())) {
+    if (!level || typeof level !== 'string' || !validLevels.includes(level.toLowerCase())) {
       return sendResponse(res, 400, { 
         message: 'Invalid level. Must be one of: ' + validLevels.join(', ') 
       });
@@ -653,6 +690,10 @@ router.put('/users/:userId/promote', logAction('PROMOTE_AGENT'), async (req, res
       return sendResponse(res, 404, { message: 'User not found' });
     }
     
+    if (user.deletedAt) {
+      return sendResponse(res, 400, { message: 'User is deleted' });
+    }
+
     if (user.role !== 'agent') {
       return sendResponse(res, 400, { message: 'Can only promote/demote agents' });
     }
@@ -698,6 +739,10 @@ router.delete('/users/:userId', logAction('DELETE_USER'), async (req, res) => {
     // Prevent deleting yourself
     if (user._id.toString() === req.user._id.toString()) {
       return sendResponse(res, 400, { message: 'Cannot delete your own account' });
+    }
+
+    if (await isLastActiveAdmin(user)) {
+      return sendResponse(res, 400, { message: 'Cannot delete the last active admin' });
     }
     
     const result = await user.softDelete(req.user._id);
@@ -1144,14 +1189,16 @@ router.get('/stats', async (req, res) => {
 // @access  Private (Admin only)
 router.get('/audit-logs', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const action = req.query.action;
-    const userId = req.query.userId;
+    const { page, limit } = parsePaging(req, 50);
+    const action = typeof req.query.action === 'string' ? req.query.action : undefined;
+    const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined;
     
     const filter = {};
     if (action) filter.action = action;
-    if (userId) filter.performedBy = userId;
+    if (userId) {
+      if (!isValidId(userId)) return sendResponse(res, 400, { message: 'Invalid userId' });
+      filter.performedBy = userId;
+    }
     
     const query = AuditLog.find(filter)
       .populate('performedBy', 'name email role')
@@ -1180,27 +1227,32 @@ router.get('/audit-logs', async (req, res) => {
 // @access  Private (Admin only)
 router.get('/payments', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const type = req.query.type; // setup_fee or subscription
-    const status = req.query.status;
-    const userId = req.query.userId;
-    const search = req.query.search;
+    const { page, limit } = parsePaging(req, 50);
+    const str = (v) => (typeof v === 'string' && v ? v : undefined);
+    const type = str(req.query.type); // setup_fee or subscription
+    const status = str(req.query.status);
+    const userId = str(req.query.userId);
+    const search = str(req.query.search);
 
     const includeDeleted = req.query.includeDeleted === 'true';
 
     const filter = {};
     if (type) filter.type = type;
     if (status) filter.status = status;
-    if (userId) filter.user = userId;
+    if (userId) {
+      if (!isValidId(userId)) return sendResponse(res, 400, { message: 'Invalid userId' });
+      // Cast now: the aggregation below does not cast string ids, so the total would be 0
+      filter.user = new mongoose.Types.ObjectId(userId);
+    }
     if (!includeDeleted) filter.deletedAt = null;
 
     // Search by user name or email
     if (search && !userId) {
+      const escapedSearch = escapeRegex(search);
       const matchingUsers = await User.find({
         $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
+          { name: { $regex: escapedSearch, $options: 'i' } },
+          { email: { $regex: escapedSearch, $options: 'i' } }
         ]
       }).select('_id').lean();
       filter.user = { $in: matchingUsers.map(u => u._id) };
@@ -1264,9 +1316,8 @@ router.get('/payments', async (req, res) => {
 // @access  Private (Admin only)
 router.get('/subscriptions', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
-    const status = req.query.status;
+    const { page, limit } = parsePaging(req, 50);
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const includeDeleted = req.query.includeDeleted === 'true';
 
     const filter = {};
@@ -1449,11 +1500,15 @@ router.put('/payment-settings', logAction('UPDATE_PAYMENT_SETTINGS'), async (req
   try {
     const { oneTimePrice, monthlyPrice, monthlyPriceId } = req.body;
 
-    if (oneTimePrice != null && (typeof oneTimePrice !== 'number' || oneTimePrice < 0)) {
-      return sendResponse(res, 400, { message: 'oneTimePrice must be a non-negative number' });
+    // Prices are integer cents (Stripe rejects fractional amounts)
+    if (oneTimePrice != null && (!Number.isInteger(oneTimePrice) || oneTimePrice < 0)) {
+      return sendResponse(res, 400, { message: 'oneTimePrice must be a non-negative whole number of cents' });
     }
-    if (monthlyPrice != null && (typeof monthlyPrice !== 'number' || monthlyPrice < 0)) {
-      return sendResponse(res, 400, { message: 'monthlyPrice must be a non-negative number' });
+    if (monthlyPrice != null && (!Number.isInteger(monthlyPrice) || monthlyPrice < 0)) {
+      return sendResponse(res, 400, { message: 'monthlyPrice must be a non-negative whole number of cents' });
+    }
+    if (monthlyPriceId != null && typeof monthlyPriceId !== 'string') {
+      return sendResponse(res, 400, { message: 'monthlyPriceId must be a string' });
     }
 
     const settings = {
@@ -1506,9 +1561,13 @@ router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, r
     if (!newUplineId) {
       return sendResponse(res, 400, { message: 'newUplineId is required' });
     }
+    if (typeof newUplineId !== 'string') {
+      return sendResponse(res, 400, { message: 'newUplineId must be a string user id' });
+    }
 
     const agent = await User.findById(req.params.userId);
     if (!agent) return sendResponse(res, 404, { message: 'Agent not found' });
+    if (agent.deletedAt) return sendResponse(res, 400, { message: 'Cannot transfer a deleted user' });
 
     if (agent._id.toString() === newUplineId) {
       return sendResponse(res, 400, { message: 'Agent cannot be transferred to themselves' });
@@ -1516,6 +1575,26 @@ router.put('/users/:userId/transfer', logAction('TRANSFER_AGENT'), async (req, r
 
     const newUpline = await User.findById(newUplineId);
     if (!newUpline) return sendResponse(res, 404, { message: 'New upline user not found' });
+    if (newUpline.deletedAt) return sendResponse(res, 400, { message: 'Cannot transfer an agent under a deleted user' });
+
+    // Refuse a move that would make the agent their own ancestor: walk up from the new
+    // upline and stop if we reach the agent. The visited set keeps an already-corrupt
+    // chain above the new upline from looping forever.
+    const visited = new Set();
+    let cursor = newUpline;
+    while (cursor) {
+      const cursorId = cursor._id.toString();
+      if (cursorId === agent._id.toString()) {
+        return sendResponse(res, 400, {
+          message: 'Cannot transfer an agent under one of their own downline'
+        });
+      }
+      if (visited.has(cursorId)) break;
+      visited.add(cursorId);
+      cursor = cursor.referredBy
+        ? await User.findById(cursor.referredBy).select('referredBy')
+        : null;
+    }
 
     const oldUplineId = agent.referredBy ? agent.referredBy.toString() : null;
 
@@ -1602,6 +1681,17 @@ router.get('/welcome-message', async (req, res) => {
 router.put('/welcome-message', logAction('UPDATE_WELCOME_MESSAGE'), async (req, res) => {
   try {
     const { enabled, title, message, videoUrl, imageUrl, pdfUrl, displayMode, startDate, endDate } = req.body;
+
+    for (const [field, value] of Object.entries({ title, message, videoUrl, imageUrl, pdfUrl })) {
+      if (value != null && typeof value !== 'string') {
+        return sendResponse(res, 400, { message: field + ' must be a string' });
+      }
+    }
+    for (const [field, value] of Object.entries({ startDate, endDate })) {
+      if (value && (typeof value !== 'string' || Number.isNaN(Date.parse(value)))) {
+        return sendResponse(res, 400, { message: field + ' must be a valid date' });
+      }
+    }
 
     const allowedModes = ['first_login', 'until_dismissed', 'date_range'];
     const mode = allowedModes.includes(displayMode) ? displayMode : 'until_dismissed';

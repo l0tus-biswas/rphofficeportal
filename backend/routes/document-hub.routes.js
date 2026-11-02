@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const { serverError, contentDisposition } = require('../utils/helpers');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const DocumentFolder = require('../models/DocumentFolder');
@@ -102,6 +103,12 @@ function handleMulterError(multerMiddleware) {
   };
 }
 
+// Remove files multer already wrote to disk when the request is then rejected (no orphans)
+function discardUploads(req) {
+  const files = req.files ? (Array.isArray(req.files) ? req.files : Object.values(req.files).flat()) : (req.file ? [req.file] : []);
+  files.forEach(f => { if (f && f.path) fs.unlink(f.path, () => {}); });
+}
+
 // Resolve a sensible Content-Type from a filename so files render inline
 // (e.g. PDFs/images open in a browser tab) and downloads carry a real type.
 const EXT_MIME = {
@@ -200,7 +207,7 @@ router.get('/folders', authenticate, async (req, res) => {
     res.json(folders);
   } catch (error) {
     console.error('Error fetching folders:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -233,7 +240,7 @@ router.post('/folders', authenticate, authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: 'A folder with this name already exists in the same location' });
     }
     console.error('Error creating folder:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -252,6 +259,21 @@ router.put('/folders/:id', authenticate, authorize('admin'), async (req, res) =>
       if (parent && parent.toString() === folder._id.toString()) {
         return res.status(400).json({ message: 'Folder cannot be its own parent' });
       }
+      if (parent) {
+        const parentFolder = await DocumentFolder.findById(parent).select('parent');
+        if (!parentFolder) return res.status(400).json({ message: 'Parent folder not found' });
+        // Walk up from the new parent: reaching this folder would create a loop
+        const seen = new Set();
+        let cur = parentFolder;
+        while (cur) {
+          if (cur._id.toString() === folder._id.toString()) {
+            return res.status(400).json({ message: 'Folder cannot be moved into its own subfolder' });
+          }
+          if (seen.has(cur._id.toString())) break;
+          seen.add(cur._id.toString());
+          cur = cur.parent ? await DocumentFolder.findById(cur.parent).select('parent') : null;
+        }
+      }
       folder.parent = parent || null;
     }
     if (description !== undefined) folder.description = description;
@@ -267,7 +289,7 @@ router.put('/folders/:id', authenticate, authorize('admin'), async (req, res) =>
       return res.status(400).json({ message: 'A folder with this name already exists in the same location' });
     }
     console.error('Error updating folder:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -294,7 +316,7 @@ router.delete('/folders/:id', authenticate, authorize('admin'), async (req, res)
     res.json({ message: 'Folder deleted. Contents moved to parent.' });
   } catch (error) {
     console.error('Error deleting folder:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -331,7 +353,22 @@ router.get('/files', authenticate, async (req, res) => {
       ];
     }
     if (req.query.search) {
-      query.$text = { $search: req.query.search };
+      query.$text = { $search: String(req.query.search) };
+    }
+    if (req.user.role !== 'admin') {
+      // Never list files that sit in an inactive or admin-only folder (or under one)
+      const allFolders = await DocumentFolder.find({}).select('_id parent isActive visibility').lean();
+      const byId = new Map(allFolders.map(f => [f._id.toString(), f]));
+      const hidden = allFolders.filter(f => {
+        let cur = f; const seen = new Set();
+        while (cur && !seen.has(cur._id.toString())) {
+          if (!cur.isActive || cur.visibility === 'admin') return true;
+          seen.add(cur._id.toString());
+          cur = cur.parent ? byId.get(cur.parent.toString()) : null;
+        }
+        return false;
+      }).map(f => f._id);
+      if (hidden.length) query.folder = query.folder ? { $eq: query.folder, $nin: hidden } : { $nin: hidden };
     }
 
     const files = await DocumentHubFile.find(query)
@@ -342,7 +379,7 @@ router.get('/files', authenticate, async (req, res) => {
     res.json(files);
   } catch (error) {
     console.error('Error fetching files:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -350,6 +387,7 @@ router.get('/files', authenticate, async (req, res) => {
 // @desc    Upload file(s) to RHP Vault (admin)
 // @access  Admin
 router.post('/files', authenticate, authorize('admin'), handleMulterError(upload.array('files', 10)), async (req, res) => {
+  res.on('finish', () => { if (res.statusCode >= 400) discardUploads(req); });
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: 'No files uploaded' });
@@ -408,7 +446,7 @@ router.post('/files', authenticate, authorize('admin'), handleMulterError(upload
     res.status(201).json({ message: `${created.length} file(s) uploaded`, files: created });
   } catch (error) {
     console.error('Error uploading files:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -458,7 +496,7 @@ router.put('/files/:id', authenticate, authorize('admin'), async (req, res) => {
     res.json(file);
   } catch (error) {
     console.error('Error updating file:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -487,7 +525,7 @@ router.delete('/files/:id', authenticate, authorize('admin'), async (req, res) =
     res.json({ message: 'File deleted' });
   } catch (error) {
     console.error('Error deleting file:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -529,12 +567,12 @@ router.get('/files/:id/download', authenticate, async (req, res) => {
     }
     if (!fs.existsSync(fullPath)) return res.status(404).json({ message: 'File not found on server' });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${file.originalFileName}"`);
+    res.setHeader('Content-Disposition', contentDisposition('attachment', file.originalFileName));
     if (file.mimeType) res.setHeader('Content-Type', file.mimeType);
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading file:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -563,6 +601,8 @@ router.get('/requests', authenticate, async (req, res) => {
     // For agents, filter responses to only their own
     if (req.user.role !== 'admin') {
       requests.forEach(r => {
+        // Other recipients' names/emails are not the agent's business
+        r.requestedFrom = (r.requestedFrom || []).filter(u => (u._id || u).toString() === req.user._id.toString());
         r.responses = r.responses.filter(
           resp => {
             if (!resp.agent) return false;
@@ -578,7 +618,7 @@ router.get('/requests', authenticate, async (req, res) => {
     res.json(requests);
   } catch (error) {
     console.error('Error fetching document requests:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -679,7 +719,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
     res.status(201).json(request);
   } catch (error) {
     console.error('Error creating document request:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -687,6 +727,7 @@ router.post('/requests', authenticate, authorize('admin'), async (req, res) => {
 // @desc    Agent submits a file in response to a request
 // @access  Private (targeted agent)
 router.post('/requests/:id/respond', authenticate, handleMulterError(requestUpload.single('file')), async (req, res) => {
+  res.on('finish', () => { if (res.statusCode >= 400) discardUploads(req); });
   try {
     if (!req.file) return res.status(400).json({ message: 'File is required' });
 
@@ -747,7 +788,7 @@ router.post('/requests/:id/respond', authenticate, handleMulterError(requestUplo
     res.json({ message: 'Document submitted successfully' });
   } catch (error) {
     console.error('Error responding to document request:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -800,7 +841,7 @@ router.put('/requests/:id/review/:agentId', authenticate, authorize('admin'), as
     res.json({ message: `Response ${status}` });
   } catch (error) {
     console.error('Error reviewing document request:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -817,7 +858,7 @@ router.delete('/requests/:id', authenticate, authorize('admin'), async (req, res
     res.json({ message: 'Request deactivated' });
   } catch (error) {
     console.error('Error deleting request:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -850,11 +891,11 @@ router.get('/requests/:requestId/responses/:agentId/download', authenticate, asy
     // forces a download when the user clicks Download. Content-Type is required
     // for inline rendering to work.
     res.setHeader('Content-Type', mimeFromName(fileName));
-    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', contentDisposition('inline', fileName));
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading response:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

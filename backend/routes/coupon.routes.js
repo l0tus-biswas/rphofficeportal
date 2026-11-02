@@ -5,31 +5,44 @@ const { protect, admin } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { schemas, validateRequest } = require('../middleware/validation.middleware');
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const SORT_FIELDS = ['code', 'description', 'discountValue', 'validFrom', 'validUntil', 'usageCount', 'isActive', 'createdAt'];
+
+// Cross-field rules the per-field schema cannot express (also checked on the merged document for updates)
+const couponProblem = (c) => {
+  if (c.code !== undefined && !/^[A-Za-z0-9_-]+$/.test(String(c.code).trim())) return 'Code may only contain letters, digits, hyphen and underscore';
+  if (c.discountType === 'percentage' && c.discountValue > 100) return 'A percentage discount cannot exceed 100';
+  if (c.validFrom && c.validUntil && new Date(c.validUntil) <= new Date(c.validFrom)) return 'validUntil must be after validFrom';
+  if (c.usageLimit !== null && c.usageLimit !== undefined && !Number.isInteger(c.usageLimit)) return 'usageLimit must be a whole number';
+  return null;
+};
+
 // @route   GET /api/admin/coupons
 // @desc    Get all coupons with pagination and filters
 // @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
     const skip = (page - 1) * limit;
 
     // Build filter
     const filter = {};
     if (req.query.status === 'active') filter.isActive = true;
     if (req.query.status === 'inactive') filter.isActive = false;
-    if (req.query.search) {
+    if (typeof req.query.search === 'string' && req.query.search) {
+      const pattern = escapeRegex(req.query.search.slice(0, 100));
       filter.$or = [
-        { code: { $regex: req.query.search, $options: 'i' } },
-        { description: { $regex: req.query.search, $options: 'i' } }
+        { code: { $regex: pattern, $options: 'i' } },
+        { description: { $regex: pattern, $options: 'i' } }
       ];
     }
 
     // Build sort
     let sort = {};
-    if (req.query.sortBy) {
-      const parts = req.query.sortBy.split(':');
-      sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
+    const sortParts = typeof req.query.sortBy === 'string' ? req.query.sortBy.split(':') : [];
+    if (SORT_FIELDS.includes(sortParts[0])) {
+      sort[sortParts[0]] = sortParts[1] === 'desc' ? -1 : 1;
     } else {
       sort = { createdAt: -1 };
     }
@@ -92,6 +105,9 @@ router.get('/:id', protect, admin, async (req, res) => {
 // @access  Private/Admin
 router.post('/', protect, admin, validateRequest(schemas.coupon), async (req, res) => {
   try {
+    const problem = couponProblem(req.body);
+    if (problem) return sendResponse(res, 400, { message: problem });
+
     // Check if coupon code already exists
     const existingCoupon = await Coupon.findOne({ 
       code: req.body.code.toUpperCase() 
@@ -149,6 +165,9 @@ router.put('/:id', protect, admin, validateRequest(schemas.updateCoupon), async 
         coupon[key] = req.body[key];
       }
     });
+
+    const problem = couponProblem(coupon);
+    if (problem) return sendResponse(res, 400, { message: problem });
 
     await coupon.save();
 
@@ -211,7 +230,7 @@ router.patch('/:id/toggle', protect, admin, async (req, res) => {
 router.get('/verify/:code', protect, admin, async (req, res) => {
   try {
     const coupon = await Coupon.findOne({ 
-      code: req.params.code.toUpperCase() 
+      code: req.params.code.trim().toUpperCase()
     });
 
     if (!coupon) {

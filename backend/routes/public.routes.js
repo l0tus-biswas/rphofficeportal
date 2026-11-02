@@ -75,6 +75,11 @@ router.get('/apply', async (req, res) => {
   try {
     const { ref } = req.query;
     
+    // `ref[$ne]=x` would otherwise match an arbitrary active user
+    if (ref !== undefined && typeof ref !== 'string') {
+      return sendResponse(res, 404, { message: 'Invalid referral code' });
+    }
+    
     if (!ref) {
       return sendResponse(res, 200, {
         message: 'Apply form ready',
@@ -109,6 +114,10 @@ router.post('/apply', applyLimiter, validateRequest(schemas.applyForm), async (r
   try {
     const { name, email, phone, address, city, state, zipCode, metadata } = req.body;
     const { ref } = req.query;
+
+    if (ref !== undefined && typeof ref !== 'string') {
+      return sendResponse(res, 400, { message: 'Invalid referral code' });
+    }
     
     // Check if email already exists (case-insensitive)
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -224,6 +233,9 @@ router.post('/registration-payment-intent', async (req, res) => {
     if (!email) {
       return sendResponse(res, 400, { message: 'Email is required' });
     }
+    if (typeof email !== 'string' || !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      return sendResponse(res, 400, { message: 'A valid email is required' });
+    }
 
     // Check if user already exists (case-insensitive)
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -260,7 +272,7 @@ router.post('/registration-payment-intent', async (req, res) => {
 router.get('/recruiters/search', async (req, res) => {
   try {
     const { q } = req.query;
-    const query = (q || '').trim();
+    const query = (typeof q === 'string' ? q : '').trim();
 
     if (query.length < 2) {
       return sendResponse(res, 400, { message: 'Search term must be at least 2 characters' });

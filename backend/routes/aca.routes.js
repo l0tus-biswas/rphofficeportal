@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
@@ -33,6 +33,24 @@ const fileUpload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 } // 10 MB per file
 });
+
+// Runs multer and turns its errors (wrong type, too large) into 4xx responses
+const handleUploadError = (mw) => (req, res, next) => {
+  mw(req, res, (err) => {
+    if (!err) return next();
+    const tooBig = err.code === 'LIMIT_FILE_SIZE';
+    res.status(tooBig ? 413 : 400).json({ success: false, message: tooBig ? 'File too large (max 10MB per file)' : err.message });
+  });
+};
+
+// Batch names are plain short strings; an object here (?uploadBatch[$ne]=x)
+// would otherwise become a query operator in deleteMany/upsert.
+const isValidBatch = (b) => typeof b === 'string' && b.trim().length > 0 && b.length <= 64;
+
+// Each tier entry must be an object with numeric non-negative fields and a string label
+const validTier = (t) => t && typeof t === 'object' && typeof t.tier === 'number' && Number.isFinite(t.tier) &&
+  Number.isFinite(t.threshold) && t.threshold >= 0 && Number.isFinite(t.rate) && t.rate >= 0 &&
+  typeof t.label === 'string' && t.label.trim().length > 0;
 
 // ---------------------------------------------------------------------------
 // Helper: parse any uploaded file buffer → array of row objects
@@ -80,10 +98,10 @@ function normalizeHeader(h) {
 //
 // Expected columns: first_name, last_name, issuer, agent, household_size
 // ---------------------------------------------------------------------------
-router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileUpload.fields([
+router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), handleUploadError(fileUpload.fields([
   { name: 'files', maxCount: 10 },
   { name: 'file', maxCount: 1 }
-]), async (req, res) => {
+])), async (req, res) => {
   try {
     // Support both 'files' (new multi-file) and 'file' (legacy single-file) field names
     const filesArr = (req.files && req.files['files']) || [];
@@ -100,11 +118,14 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileU
       uploadBatch = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
 
-    // 5.7: Replace batch — delete all existing records for this batch before inserting
-    const replaceBatch = req.body && (req.body.replaceBatch === 'true' || req.body.replaceBatch === true);
-    if (replaceBatch) {
-      await ACAClientRecord.deleteMany({ uploadBatch });
+    if (!isValidBatch(uploadBatch)) {
+      return sendResponse(res, 400, { message: 'uploadBatch must be a non-empty string (max 64 characters).' });
     }
+    uploadBatch = uploadBatch.trim();
+
+    // 5.7: Replace batch — existing records are cleared only after the new files
+    // parsed successfully (below), so a bad upload can't wipe good data.
+    const replaceBatch = req.body && (req.body.replaceBatch === 'true' || req.body.replaceBatch === true);
 
     // ------------------------------------------------------------------
     // Step 1 — Parse all files and merge rows
@@ -142,7 +163,7 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileU
 
     for (let i = 0; i < allRows.length; i++) {
       const row = allRows[i];
-      const agentName = row.agent ? String(row.agent).trim() : null;
+      const agentName = row.agent ? String(row.agent).replace(/\0/g, '').trim() : null;
 
       if (!agentName) {
         invalidRows.push({
@@ -180,6 +201,17 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileU
       }
     }
 
+    if (replaceBatch) {
+      if (agentTotals.size === 0) {
+        return sendResponse(res, 422, {
+          message: 'No usable rows found; existing batch left untouched.',
+          invalidRows,
+          parseErrors
+        });
+      }
+      await ACAClientRecord.deleteMany({ uploadBatch });
+    }
+
     // ------------------------------------------------------------------
     // Step 3 — Match agents to User records and upsert (5.8: detailed errors)
     // ------------------------------------------------------------------
@@ -190,15 +222,18 @@ router.post('/admin/aca-clients/upload', authenticate, authorize('admin'), fileU
     for (const [, { displayName, householdSize, rowCount }] of agentTotals) {
       let agentDoc = await User.findOne({
         name: { $regex: new RegExp(`^${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-        role: 'agent'
+        role: 'agent',
+        deletedAt: null
       }).select('_id email name').lean();
 
       if (!agentDoc) {
         const parts = displayName.split(/\s+/);
         if (parts.length >= 2) {
           agentDoc = await User.findOne({
-            name: { $regex: new RegExp(parts.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*'), 'i') },
-            role: 'agent'
+            // Anchored: unanchored "Lot.*Test" would credit "Lotus Tester" with another agent's clients
+            name: { $regex: new RegExp('^' + parts.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+(?:.*\\s)?') + '$', 'i') },
+            role: 'agent',
+            deletedAt: null
           }).select('_id email name').lean();
         }
       }
@@ -333,6 +368,9 @@ router.delete('/admin/aca-clients/batches/:batch', authenticate, authorize('admi
 router.get('/admin/aca-clients/records', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { batch } = req.query;
+    if (batch !== undefined && !isValidBatch(batch)) {
+      return sendResponse(res, 400, { message: 'batch must be a string.' });
+    }
     const query = batch ? { uploadBatch: batch } : {};
     const records = await ACAClientRecord.find(query)
       .populate('agent', 'name email')
@@ -603,15 +641,17 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
 // @access  Admin only
 // ---------------------------------------------------------------------------
 router.get('/admin/aca-clients/sample-csv', authenticate, authorize('admin'), (req, res) => {
-  const filePath = path.join(__dirname, '../uploads/aca-sample.csv');
-  if (!fs.existsSync(filePath)) {
-    return sendResponse(res, 404, { message: 'Sample CSV file not found on server. Please contact support.' });
-  }
-  res.download(filePath, 'aca-sample.csv', (err) => {
-    if (err && !res.headersSent) {
-      return sendResponse(res, 500, { message: 'Failed to download sample CSV.' });
-    }
-  });
+  // Generated inline: uploads/ is not in version control, so a file there is
+  // missing on every fresh deployment.
+  const sample = [
+    'first_name,last_name,issuer,agent,household_size',
+    'Jane,Doe,Ambetter,John Smith,3',
+    'Sam,Lee,Oscar,John Smith,1',
+    'Ana,Cruz,Aetna,Mary Jones,2'
+  ].join('\n') + '\n';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="aca-sample.csv"');
+  res.send(sample);
 });
 
 // ---------------------------------------------------------------------------
@@ -646,8 +686,8 @@ router.put('/admin/aca-tiers', authenticate, authorize('admin'), async (req, res
     }
     // Validate each tier entry
     for (const t of tiers) {
-      if (typeof t.tier !== 'number' || typeof t.threshold !== 'number' || typeof t.rate !== 'number' || !t.label) {
-        return sendResponse(res, 400, { message: 'Each tier must have: tier (number), label (string), threshold (number), rate (number).' });
+      if (!validTier(t)) {
+        return sendResponse(res, 400, { message: 'Each tier must have: tier (number), label (string), threshold (number >= 0), rate (number >= 0).' });
       }
     }
     const config = await AcaTierConfig.findOneAndUpdate(
@@ -685,10 +725,10 @@ router.get('/admin/aca-tiers/agent-overrides', authenticate, authorize('admin'),
 router.get('/admin/aca-tiers/agents/search', authenticate, authorize('admin'), async (req, res) => {
   try {
     const { q } = req.query;
-    if (!q || !q.trim()) {
+    if (!q || typeof q !== 'string' || !q.trim()) {
       return sendResponse(res, 200, { agents: [] });
     }
-    const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = q.replace(/\0/g, '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const filter = {
       role: 'agent',
       deletedAt: null,
@@ -716,14 +756,14 @@ router.get('/admin/aca-tiers/agents/search', authenticate, authorize('admin'), a
 // ---------------------------------------------------------------------------
 router.put('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { agentId } = req.params;
+    const agentId = String(req.params.agentId).replace(/\0/g, '');
     const { tiers } = req.body;
     if (!Array.isArray(tiers) || tiers.length === 0) {
       return sendResponse(res, 400, { message: 'Provide a non-empty "tiers" array.' });
     }
     for (const t of tiers) {
-      if (typeof t.tier !== 'number' || typeof t.threshold !== 'number' || typeof t.rate !== 'number' || !t.label) {
-        return sendResponse(res, 400, { message: 'Each tier must have: tier, label, threshold, rate.' });
+      if (!validTier(t)) {
+        return sendResponse(res, 400, { message: 'Each tier must have: tier, label, threshold (>= 0), rate (>= 0).' });
       }
     }
     // Resolve agent: accept ObjectId or referralCode
@@ -758,7 +798,7 @@ router.put('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), 
 // ---------------------------------------------------------------------------
 router.delete('/admin/aca-tiers/agent/:agentId', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { agentId } = req.params;
+    const agentId = String(req.params.agentId).replace(/\0/g, '');
     // Resolve agent: accept ObjectId or referralCode
     let resolvedId = agentId;
     if (!mongoose.Types.ObjectId.isValid(agentId)) {

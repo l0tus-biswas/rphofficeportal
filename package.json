@@ -10,7 +10,10 @@
     "build": "cd frontend && npm run build --configuration=production",
     "dev": "cd backend && npm run dev",
     "claude:preflight": "node scripts/claude-preflight.js",
-    "claude:history:auto": "node scripts/auto-history.js"
+    "claude:history:auto": "node scripts/auto-history.js",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "e2e:routes": "bash e2e/gen-routes.sh",
+    "e2e:seed": "node e2e/seed.js"
   },
   "keywords": [
     "recruiting",
@@ -19,5 +22,9 @@
     "MERN"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1"
+  }
 }

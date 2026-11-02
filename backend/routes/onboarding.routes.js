@@ -291,7 +291,14 @@ router.get('/users/:userId/files/:step', authorize('admin'), async (req, res) =>
 router.post(
   '/users/:userId/upload',
   authorize('admin'),
-  (req, res, next) => {
+  async (req, res, next) => {
+    // Check the target before multer writes anything to disk.
+    try {
+      const target = await User.findById(req.params.userId).select('_id');
+      if (!target) return sendResponse(res, 404, { message: 'User not found.' });
+    } catch (error) {
+      return errorResponse(res, error);
+    }
     req.body.userId = req.params.userId;
     next();
   },

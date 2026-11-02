@@ -177,7 +177,15 @@ app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend
 // Serve uploads folder — branding/welcome assets are public, everything else requires auth
 // Public: /uploads/branding/*, /uploads/welcome/*, /uploads/broadcast-images/*
 // Protected: all other /uploads/* paths (commission-statements, onboarding-docs, etc.)
-app.use('/uploads', (req, res, next) => {
+// Folders any signed-in user may read (shared content). Everything else under /uploads is
+// admin-only, apart from an agent's own signed APA. Ownership-sensitive files (commission
+// statements, onboarding documents, document requests...) are served through API endpoints
+// that check ownership. Matching uses the decoded, normalised, lower-cased path so
+// %-encoding, "..", "//" and case changes cannot sidestep the rules.
+const SHARED_UPLOAD_PREFIXES = ['/training-pdfs/', '/carrier-guides/', '/carrier-documents/', '/aca-sample/'];
+const SIGNED_APA_PATH = /^\/apa-signed\/([0-9a-f]{24})_signed_apa\.pdf$/;
+
+app.use('/uploads', async (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Access-Control-Allow-Origin', process.env.APP_URL || 'http://localhost:4200');
 
@@ -200,12 +208,43 @@ app.use('/uploads', (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  let decoded;
   try {
     const jwt = require('jsonwebtoken');
-    jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+
+  try {
+    // A valid token is not enough: the account must still exist and be active, like the API.
+    const user = await require('./models/User').findById(decoded.id).select('role isActive deletedAt email');
+    if (!user || !user.isActive || user.deletedAt) {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    if (user.role === 'admin') return next();
+
+    let rel;
+    try {
+      rel = path.posix.normalize(decodeURIComponent(req.path)).toLowerCase();
+    } catch (e) {
+      return res.status(400).json({ message: 'Bad request' });
+    }
+    if (SHARED_UPLOAD_PREFIXES.some((prefix) => rel.startsWith(prefix))) return next();
+
+    const signedApa = rel.match(SIGNED_APA_PATH);
+    if (signedApa) {
+      const application = await require('./models/APAApplication')
+        .findById(signedApa[1]).select('userId user personalInfo.email');
+      const ownerIds = [application && application.userId, application && application.user].filter(Boolean).map(String);
+      const ownsByEmail = application && application.personalInfo && user.email &&
+        String(application.personalInfo.email || '').toLowerCase() === String(user.email).toLowerCase();
+      if (ownerIds.includes(String(user._id)) || ownsByEmail) return next();
+    }
+    return res.status(403).json({ message: 'You do not have access to this file' });
+  } catch (err) {
+    logger.error('Upload access check failed', { message: err.message });
+    return res.status(500).json({ message: 'Server error' });
   }
 }, express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
@@ -340,6 +379,12 @@ app.use((err, req, res, next) => {
 
 // Send all other non-API requests to Angular app (SPA fallback)
 app.get('*', (req, res) => {
+  // Unknown API routes and missing uploads must be real 404s: answering 200 with the SPA's
+  // HTML makes a wrong URL look like success and saves an HTML page in place of a missing file.
+  if (/^\/(api|uploads)(\/|$)/i.test(req.path)) {
+    return res.status(404).json({ success: false, message: 'Not found' });
+  }
+
   const indexPath = path.join(__dirname, '../frontend/dist/rhpoffice-frontend/index.html');
   
   // Check if frontend is built

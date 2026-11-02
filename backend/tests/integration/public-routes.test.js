@@ -91,10 +91,10 @@ describe('Integration: Public Routes (/api/public)', () => {
   });
 
   describe('GET /health', () => {
-    it('should return OK status', async () => {
+    it('should return healthy status', async () => {
       const res = await request(app).get('/health');
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('OK');
+      expect(res.body.status).toBe('healthy');
       expect(res.body.timestamp).toBeDefined();
     });
   });

@@ -8,11 +8,22 @@ const IncomePaid = require('../models/IncomePaid');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
-const { getDownlineIds } = require('../utils/helpers');
+const { getDownlineIds, serverError } = require('../utils/helpers');
 const SystemConfig = require('../models/SystemConfig');
-const multer = require('multer');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs').promises;
+
+// Income Paid entries are reviewed once. Approved/rejected entries are final so a
+// double-click or a second admin cannot re-approve (re-triggering promotion checks and
+// notifications) or flip a decision that already counted toward a promotion.
+function alreadyReviewed(res, entry) {
+  return res.status(409).json({ message: `This entry was already ${entry.status}.` });
+}
+
+// Identical production submissions currently being saved, keyed per agent. Closes the race
+// where two simultaneous requests both pass the 60-second duplicate check before either saves.
+const inFlightSubmissions = new Set();
 
 // Full product → category mapping (client-provided, March 2026)
 const PRODUCT_CATEGORY_MAP = {
@@ -177,8 +188,8 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     // Pagination
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 500);
     const skip = (page - 1) * limit;
 
     const [submissions, total] = await Promise.all([
@@ -214,7 +225,7 @@ router.get('/', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching production submissions:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -311,7 +322,7 @@ router.get('/team-report', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching team report:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -335,7 +346,11 @@ router.get('/stats/filtered', authenticate, async (req, res) => {
       }
     }
 
-    if (req.query.agentId && req.user.role === 'admin') query.agent = req.query.agentId;
+    if (req.query.agentId && req.user.role === 'admin') {
+      // aggregate() does not cast, so a string id would silently match nothing
+      if (!mongoose.Types.ObjectId.isValid(req.query.agentId)) return res.status(400).json({ message: 'Invalid agentId' });
+      query.agent = new mongoose.Types.ObjectId(req.query.agentId);
+    }
     if (req.query.productSold) query.productSold = req.query.productSold;
     if (req.query.carrier && mongoose.Types.ObjectId.isValid(req.query.carrier)) {
       query.carrier = new mongoose.Types.ObjectId(req.query.carrier);
@@ -375,7 +390,7 @@ router.get('/stats/filtered', authenticate, async (req, res) => {
       summary: stats[0] || { totalSubmissions: 0, totalPremium: 0, totalMembers: 0, inForceCount: 0, inForcePremium: 0, submittedCount: 0, pendingCount: 0 }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -422,7 +437,10 @@ router.get('/export', authenticate, async (req, res) => {
     // Build CSV manually (no extra dependency needed)
     const escape = (val) => {
       if (val === null || val === undefined) return '';
-      const str = String(val).replace(/"/g, '""');
+      let raw = String(val);
+      // Neutralise spreadsheet formulas (=, +, -, @, tab, CR) in text typed by users
+      if (/^[=+\-@\t\r]/.test(raw)) raw = `'${raw}`;
+      const str = raw.replace(/"/g, '""');
       return str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r') ? `"${str}"` : str;
     };
 
@@ -458,7 +476,7 @@ router.get('/export', authenticate, async (req, res) => {
     res.send(csv);
   } catch (error) {
     console.error('Error exporting production CSV:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -473,6 +491,7 @@ router.get('/stats/summary', authenticate, async (req, res) => {
     if (req.user.role !== 'admin') {
       matchQuery.agent = req.user._id;
     } else if (req.query.agentId) {
+      if (!mongoose.Types.ObjectId.isValid(req.query.agentId)) return res.status(400).json({ message: 'Invalid agentId' });
       matchQuery.agent = new mongoose.Types.ObjectId(req.query.agentId);
     }
     
@@ -517,7 +536,7 @@ router.get('/stats/summary', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching production stats:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -530,7 +549,7 @@ router.get('/ranking', authenticate, async (req, res) => {
   try {
     const sortBy = req.query.sortBy || 'premium'; // premium | policies | members
     const windowDays = parseInt(req.query.window) || 0; // 0 = all time
-    const limitCount = parseInt(req.query.limit) || 25;
+    const limitCount = Math.min(Math.max(parseInt(req.query.limit) || 25, 1), 500);
 
     const matchFilter = { deletedAt: null };
     if (windowDays > 0) {
@@ -589,7 +608,7 @@ router.get('/ranking', authenticate, async (req, res) => {
     res.json({ ranking, sortBy, windowDays });
   } catch (error) {
     console.error('Error fetching production ranking:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -607,7 +626,7 @@ router.get('/custom-fields', authenticate, async (req, res) => {
     }
     res.json({ fields });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -646,7 +665,7 @@ router.put('/custom-fields', authenticate, authorize('admin'), async (req, res) 
     );
     res.json({ message: 'Custom fields configuration saved.', fields });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -679,7 +698,7 @@ router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), a
       agent: req.user._id,
       deletedAt: null
     }).select('_id').lean();
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ message: 'Production submission not found for this agent.' });
     }
 
@@ -714,7 +733,7 @@ router.post('/income-paid', authenticate, validateRequest(schemas.incomePaid), a
     res.status(201).json({ message: 'Income Paid submitted for approval', entry });
   } catch (error) {
     console.error('Error creating income paid entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -734,7 +753,7 @@ router.get('/income-paid/mine', authenticate, async (req, res) => {
     res.json({ entries });
   } catch (error) {
     console.error('Error fetching income paid entries:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -766,7 +785,7 @@ router.get('/income-paid', authenticate, authorize('admin'), async (req, res) =>
     res.json({ entries });
   } catch (error) {
     console.error('Error fetching income paid entries:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -777,6 +796,7 @@ router.put('/income-paid/:id/approve', authenticate, authorize('admin'), async (
   try {
     const entry = await IncomePaid.findById(req.params.id);
     if (!entry) return res.status(404).json({ message: 'Income Paid entry not found' });
+    if (entry.status !== 'pending') return alreadyReviewed(res, entry);
 
     entry.status = 'approved';
     entry.reviewedBy = req.user._id;
@@ -816,7 +836,7 @@ router.put('/income-paid/:id/approve', authenticate, authorize('admin'), async (
     res.json({ message: 'Income Paid entry approved', entry });
   } catch (error) {
     console.error('Error approving income paid entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -827,6 +847,7 @@ router.put('/income-paid/:id/reject', authenticate, authorize('admin'), async (r
   try {
     const entry = await IncomePaid.findById(req.params.id);
     if (!entry) return res.status(404).json({ message: 'Income Paid entry not found' });
+    if (entry.status !== 'pending') return alreadyReviewed(res, entry);
 
     entry.status = 'rejected';
     entry.reviewedBy = req.user._id;
@@ -852,7 +873,7 @@ router.put('/income-paid/:id/reject', authenticate, authorize('admin'), async (r
     res.json({ message: 'Income Paid entry rejected', entry });
   } catch (error) {
     console.error('Error rejecting income paid entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -874,7 +895,7 @@ router.delete('/income-paid/:id', authenticate, async (req, res) => {
     res.json({ message: 'Income Paid entry deleted' });
   } catch (error) {
     console.error('Error deleting income paid entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -888,7 +909,7 @@ router.get('/:id', authenticate, async (req, res) => {
       .populate('carrier', 'name')
       .populate('reviewedBy', 'name');
     
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ message: 'Production submission not found' });
     }
     
@@ -900,7 +921,7 @@ router.get('/:id', authenticate, async (req, res) => {
     res.json(submission);
   } catch (error) {
     console.error('Error fetching production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -908,6 +929,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // @desc    Create new production submission
 // @access  Private (agent or admin)
 router.post('/', authenticate, validateRequest(schemas.productionSubmission), async (req, res) => {
+  let lockKey = null;
   try {
     const {
       submissionDate,
@@ -941,6 +963,15 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
     if (!carrierExists) {
       return res.status(400).json({ message: 'Invalid carrier' });
     }
+
+    // Same duplicate guard, but for requests racing each other (e.g. a double-click): the
+    // database check below cannot see a submission that is still being saved.
+    lockKey = JSON.stringify([String(req.user._id), clientName, productSold, String(carrier), premiumAmount]);
+    if (inFlightSubmissions.has(lockKey)) {
+      lockKey = null;
+      return res.status(409).json({ message: 'Duplicate submission detected. Please wait before resubmitting.' });
+    }
+    inFlightSubmissions.add(lockKey);
 
     // Duplicate submission guard: prevent identical submissions within 60 seconds
     const dupeWindow = new Date(Date.now() - 60 * 1000);
@@ -1030,7 +1061,9 @@ router.post('/', authenticate, validateRequest(schemas.productionSubmission), as
     res.status(201).json(submission);
   } catch (error) {
     console.error('Error creating production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
+  } finally {
+    if (lockKey) inFlightSubmissions.delete(lockKey);
   }
 });
 
@@ -1041,7 +1074,7 @@ router.put('/:id', authenticate, async (req, res) => {
   try {
     const submission = await ProductionSubmission.findById(req.params.id);
     
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ message: 'Production submission not found' });
     }
     
@@ -1155,7 +1188,7 @@ router.put('/:id', authenticate, async (req, res) => {
     res.json(submission);
   } catch (error) {
     console.error('Error updating production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -1166,7 +1199,7 @@ router.delete('/:id', authenticate, async (req, res) => {
   try {
     const submission = await ProductionSubmission.findById(req.params.id);
     
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ message: 'Production submission not found' });
     }
     
@@ -1209,7 +1242,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     res.json({ message: 'Production submission deleted successfully' });
   } catch (error) {
     console.error('Error deleting production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -1218,8 +1251,13 @@ router.delete('/:id', authenticate, async (req, res) => {
 // @access  Private
 router.post('/:id/upload', 
   authenticate, 
-  upload.single('document'),
+  (req, res, next) => upload.single('document')(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.code === 'LIMIT_FILE_SIZE' ? 'File too large. Maximum size is 10MB.' : (err.message || 'File upload failed') });
+    next();
+  }),
   async (req, res) => {
+    // Rejected request: do not leave the saved file behind
+    res.on('finish', () => { if (res.statusCode >= 400 && req.file && req.file.path) require('fs').unlink(req.file.path, () => {}); });
     try {
       if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded' });
@@ -1227,7 +1265,7 @@ router.post('/:id/upload',
       
       const submission = await ProductionSubmission.findById(req.params.id);
       
-      if (!submission) {
+      if (!submission || submission.deletedAt) {
         return res.status(404).json({ message: 'Production submission not found' });
       }
       
@@ -1252,7 +1290,7 @@ router.post('/:id/upload',
       });
     } catch (error) {
       console.error('Error uploading document:', error);
-      res.status(500).json({ message: 'Server error', error: error.message });
+      serverError(res, error);
     }
 });
 
@@ -1263,7 +1301,7 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
   try {
     const submission = await ProductionSubmission.findById(req.params.id);
     
-    if (!submission) {
+    if (!submission || submission.deletedAt) {
       return res.status(404).json({ message: 'Production submission not found' });
     }
     
@@ -1328,7 +1366,7 @@ router.put('/:id/review', authenticate, authorize('admin'), async (req, res) => 
     res.json(submission);
   } catch (error) {
     console.error('Error reviewing production submission:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

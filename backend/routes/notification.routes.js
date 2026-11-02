@@ -7,7 +7,11 @@ const { sendResponse, errorResponse } = require('../utils/helpers');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const fsp = require('fs').promises;
 const { uploadBroadcastImage } = require('../utils/broadcastUpload');
-const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml } = require('../utils/broadcastContent');
+const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml, cleanTitle, cleanLink } = require('../utils/broadcastContent');
+const { guardUpload } = require('../utils/uploadGuards');
+
+const pageOf = (q) => Math.max(parseInt(q.page) || 1, 1);
+const limitOf = (q) => Math.min(Math.max(parseInt(q.limit) || 20, 1), 100);
 
 // All notification routes require authentication
 router.use(protect);
@@ -27,6 +31,8 @@ const NOTIFICATION_CATEGORIES = {
   'Admin': ['user_created', 'user_activated', 'user_deactivated', 'user_promoted', 'user_transferred'],
   'System': ['system_announcement', 'promotion_eligible', 'admin_broadcast']
 };
+
+const ALL_TYPES = new Set(Object.values(NOTIFICATION_CATEGORIES).flat());
 
 // @route   GET /api/notifications/preferences
 // @desc    Get user's notification preferences
@@ -52,8 +58,23 @@ router.put('/preferences', async (req, res) => {
       prefs = new NotificationPreference({ userId: req.user._id });
     }
 
-    if (preferences && typeof preferences === 'object') {
+    if (preferences !== undefined && (typeof preferences !== 'object' || preferences === null || Array.isArray(preferences))) {
+      return sendResponse(res, 400, { message: 'preferences must be an object' });
+    }
+    if (muteAllEmails !== undefined && typeof muteAllEmails !== 'boolean') {
+      return sendResponse(res, 400, { message: 'muteAllEmails must be true or false' });
+    }
+    if (preferences) {
       // Validate keys against known notification types
+      for (const [type, channels] of Object.entries(preferences)) {
+        if (!ALL_TYPES.has(type)) {
+          return sendResponse(res, 400, { message: `Unknown notification type: ${type.slice(0, 50)}` });
+        }
+        if (typeof channels !== 'object' || channels === null || Array.isArray(channels) ||
+            ['inApp', 'email'].some((k) => channels[k] !== undefined && typeof channels[k] !== 'boolean')) {
+          return sendResponse(res, 400, { message: `Invalid preference for ${type}` });
+        }
+      }
       for (const [type, channels] of Object.entries(preferences)) {
         if (typeof channels === 'object' && channels !== null) {
           prefs.preferences.set(type, {
@@ -81,10 +102,7 @@ router.put('/preferences', async (req, res) => {
 // Accepts JSON (backward compatible) or multipart/form-data with an optional `image` file.
 const broadcastImageUpload = (req, res, next) => {
   if (!req.is('multipart/form-data')) return next();
-  uploadBroadcastImage.single('image')(req, res, (err) => {
-    if (err) return sendResponse(res, 400, { message: err.message || 'Image upload failed' });
-    next();
-  });
+  guardUpload(uploadBroadcastImage.single('image'), 'image')(req, res, next);
 };
 
 router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, async (req, res) => {
@@ -92,7 +110,7 @@ router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, asy
     if (req.file) { try { await fsp.unlink(req.file.path); } catch (e) { /* ignore */ } }
   };
   try {
-    const { title, link } = req.body;
+    const { link } = req.body;
     let { targetRoles } = req.body;
     // multipart sends arrays as a JSON string or repeated fields
     if (typeof targetRoles === 'string') {
@@ -101,9 +119,15 @@ router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, asy
 
     // Sanitize rich-text HTML first, then validate (e.g. '<p><br></p>' counts as empty)
     const message = typeof req.body.message === 'string' ? sanitizeBroadcastHtml(req.body.message) : '';
-    if (!title || typeof title !== 'string' || !title.trim() || !message || isEmptyBroadcastHtml(message)) {
+    const title = cleanTitle(req.body.title);
+    if (!title || !message || isEmptyBroadcastHtml(message)) {
       await removeUploadedImage();
       return sendResponse(res, 400, { message: 'Title and message are required' });
+    }
+    const checkedLink = cleanLink(link);
+    if (!checkedLink.ok) {
+      await removeUploadedImage();
+      return sendResponse(res, 400, { message: 'Link must be an http(s) URL or an in-app path' });
     }
     const plainMessage = htmlToPlainText(message);
     const imagePath = req.file ? `/uploads/broadcast-images/${req.file.filename}` : null;
@@ -116,7 +140,7 @@ router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, asy
     if (Broadcast) {
       broadcastRecord = await Broadcast.create({
         title, message,
-        link: link || null,
+        link: checkedLink.value,
         image: imagePath,
         targetRoles: Array.isArray(targetRoles) ? targetRoles : [],
         createdBy: req.user._id
@@ -146,7 +170,7 @@ router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, asy
           message: plainMessage,       // in-app card shows readable plain text
           emailMessage: message,       // email template embeds the sanitized HTML
           emailImage: imagePath,
-          link: link || null,
+          link: checkedLink.value,
           data: {
             broadcastBy: req.user._id,
             broadcastId: broadcastRecord ? broadcastRecord._id.toString() : undefined
@@ -192,10 +216,10 @@ router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, asy
 // @access  Private
 router.get('/', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = pageOf(req.query);
+    const limit = limitOf(req.query);
     const unreadOnly = req.query.unreadOnly === 'true';
-    const typeFilter = req.query.type; // optional: filter by notification type
+    const typeFilter = typeof req.query.type === 'string' ? req.query.type : undefined; // optional: filter by notification type
     
     const query = { userId: req.user._id };
     if (unreadOnly) {

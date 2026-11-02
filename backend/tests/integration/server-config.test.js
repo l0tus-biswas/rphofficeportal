@@ -47,8 +47,14 @@ describe('Integration: Server Configuration', () => {
   describe('Error Handling', () => {
     it('should handle 404 for unknown API routes gracefully', async () => {
       const res = await request(app).get('/api/nonexistent-route-xyz');
-      // Should either be 404 or fall through to SPA handler
-      expect([404, 503, 200]).toContain(res.status);
+      expect(res.status).toBe(404);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('should return 404 JSON, not the SPA page, for a missing upload', async () => {
+      const res = await request(app).get('/uploads/branding/does-not-exist.png');
+      expect(res.status).toBe(404);
+      expect(res.headers['content-type']).toMatch(/json/);
     });
 
     it('should handle JSON parse errors', async () => {
@@ -61,11 +67,28 @@ describe('Integration: Server Configuration', () => {
   });
 
   describe('Health Check', () => {
-    it('should respond to /health with status OK', async () => {
+    it('should respond to /health with status healthy when the DB answers', async () => {
       const res = await request(app).get('/health');
       expect(res.status).toBe(200);
-      expect(res.body.status).toBe('OK');
+      expect(res.body.status).toBe('healthy');
+      expect(res.body.database.status).toBe('connected');
       expect(res.body.timestamp).toBeDefined();
+    });
+
+    it('should respond 503 degraded when the DB ping fails', async () => {
+      global.__mockDbPing.mockRejectedValueOnce(new Error('connection lost'));
+      const res = await request(app).get('/health');
+      expect(res.status).toBe(503);
+      expect(res.body.status).toBe('degraded');
+      expect(res.body.database.status).toBe('error');
+    });
+
+    it('should answer /health/ping without touching the DB', async () => {
+      global.__mockDbPing.mockClear();
+      const res = await request(app).get('/health/ping');
+      expect(res.status).toBe(200);
+      expect(res.text).toBe('pong');
+      expect(global.__mockDbPing).not.toHaveBeenCalled();
     });
   });
 

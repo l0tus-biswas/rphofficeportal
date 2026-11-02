@@ -52,8 +52,8 @@ async function reconcileSubscriptionInvoices(user) {
 // @access  Private
 router.get('/payments', protect, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 20));
 
     // Backfill any subscription renewals that Stripe charged but we haven't
     // recorded yet (e.g. a missed webhook), so the history is always complete.
