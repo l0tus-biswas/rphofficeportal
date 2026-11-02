@@ -39,7 +39,7 @@
   </div>
 
   <!-- Level cards list -->
-  <div *ngIf="!loading && !error && levels.length > 0">
+  <div *ngIf="!loading && levels.length > 0">
     <div class="card shadow-sm mb-3" *ngFor="let level of levels; let i = index"
          [class.border-start]="true" [class.border-4]="true"
          [class.border-primary]="level.isActive" [class.border-secondary]="!level.isActive"
@@ -148,8 +148,10 @@
           </div>
           <div class="col-md-3">
             <label class="form-label fw-semibold">Rank Position</label>
-            <input type="number" class="form-control" [(ngModel)]="editingLevel.rank" min="1">
-            <small class="text-muted">Order in hierarchy</small>
+            <input type="number" class="form-control" id="modalRank" [(ngModel)]="editingLevel.rank" min="1"
+                   [disabled]="showEditModal">
+            <small class="text-muted" *ngIf="showEditModal">Use the up/down arrows on the list to change order.</small>
+            <small class="text-muted" *ngIf="!showEditModal">Order in hierarchy</small>
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Commission %</label>

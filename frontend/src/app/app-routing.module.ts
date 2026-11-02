@@ -323,6 +323,8 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['admin'] }
   },
+  // Backend promotion_eligible notifications link to /admin/user-management; the real route is admin/users
+  { path: 'admin/user-management', redirectTo: 'admin/users', pathMatch: 'full' },
   // TASK 022 — Promotion Levels Admin Config
   {
     path: 'admin/promotion-levels',

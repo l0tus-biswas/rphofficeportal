@@ -252,15 +252,16 @@ router.get('/stats', async (req, res) => {
         const globalBatch = globalLatestBatchDoc.uploadBatch;
         topPersonalACA = await ACAClientRecord.aggregate([
           { $match: { uploadBatch: globalBatch } },
-          { $sort: { clientCount: -1 } },
-          { $limit: 5 },
           { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
           { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+          { $match: { 'agentInfo.deletedAt': null } },
+          { $sort: { clientCount: -1 } },
+          { $limit: 5 },
           { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
         ]);
 
         const allGlobalRecords = await ACAClientRecord.find({ uploadBatch: globalBatch }).lean();
-        const allAgentsForTeam = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+        const allAgentsForTeam = await User.find({ role: 'agent', deletedAt: null }).select('_id name referredBy').lean();
         const childrenMap = {};
         allAgentsForTeam.forEach(u => {
           const pid = u.referredBy?.toString();

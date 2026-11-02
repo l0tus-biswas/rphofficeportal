@@ -21,9 +21,7 @@
       </div>
 
       <!-- Message -->
-      <p class="popup-message" [style.white-space]="'pre-line'">
-        {{ currentBroadcast.message }}
-      </p>
+      <div class="popup-message broadcast-rich" [innerHTML]="currentBroadcast.message | richText"></div>
 
       <!-- Metadata -->
       <div class="popup-metadata">

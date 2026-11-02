@@ -17,11 +17,13 @@ jest.mock('../../models/IncomePaid', () => require('../helpers/mock-model')('Inc
 jest.mock('../../models/User', () => require('../helpers/mock-model')('User'));
 jest.mock('../../models/Notification', () => require('../helpers/mock-model')('Notification'));
 jest.mock('../../models/LicensingProgress', () => require('../helpers/mock-model')('LicensingProgress'));
+jest.mock('../../models/APAApplication', () => require('../helpers/mock-model')('APAApplication'));
 
 const User = require('../../models/User');
 const ProductionSubmission = require('../../models/ProductionSubmission');
 const IncomePaid = require('../../models/IncomePaid');
 const LicensingProgress = require('../../models/LicensingProgress');
+const APAApplication = require('../../models/APAApplication');
 
 const {
   sumApprovedIncome,
@@ -301,8 +303,9 @@ describe('evaluateTracks', () => {
     mockDownlineTree({ [AGENT_ID]: [TEAMMATE_ID], [TEAMMATE_ID]: [] });
     mockDownlineLevels({});
     LicensingProgress.find.mockReturnValue({
-      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ agent: TEAMMATE_ID }]) })
+      select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ agent: TEAMMATE_ID, isLicensed: true }]) })
     });
+    APAApplication.find.mockReturnValue({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }) });
     const nextLevel = {
       producerPremiumThreshold: 999999, producerWindowDays: 60, producerIncomeThreshold: 0, producerIncomeWindowDays: 180,
       builderPremiumThreshold: 10000, builderWindowDays: 30, builderAgentCountThreshold: 1,
@@ -318,5 +321,69 @@ describe('evaluateTracks', () => {
     expect(result.activeAgents).toBe(1);
     expect(result.rankMet).toBe(true);
     expect(result.builderMet).toBe(true);
+  });
+});
+
+
+describe('promotion licensing / downline eligibility regressions', () => {
+  const AGENT_ID = '507f1f77bcf86cd799439011';
+  const T1 = '507f1f77bcf86cd799439021';
+  const T2 = '507f1f77bcf86cd799439022';
+  const nextLevel = {
+    producerPremiumThreshold: 999999, producerWindowDays: 60, producerIncomeThreshold: 0, producerIncomeWindowDays: 180,
+    builderPremiumThreshold: 0, builderWindowDays: 30, builderAgentCountThreshold: 1,
+    builderRequiredRanks: [], builderIncomeThreshold: 0, builderIncomeWindowDays: 180
+  };
+  const chain = (v) => ({ select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(v) }) });
+
+  it('counts an agent licensed only via APA self-report (shared isAgentLicensed rule)', async () => {
+    mockDownlineTree({ [AGENT_ID]: [T1], [T1]: [] });
+    mockDownlineLevels({});
+    LicensingProgress.find.mockReturnValue(chain([]));
+    APAApplication.find.mockReturnValue(chain([{ userId: T1, licensingStatus: { currentlyLicensed: true } }]));
+    ProductionSubmission.aggregate
+      .mockResolvedValueOnce([{ _id: null, total: 0 }])
+      .mockResolvedValueOnce([{ _id: null, total: 0 }])
+      .mockResolvedValueOnce([{ _id: T1 }]);
+    const r = await evaluateTracks(AGENT_ID, nextLevel, null, RANK_BY_NAME);
+    expect(r.activeAgents).toBe(1);
+    expect(r.builderMet).toBe(true);
+  });
+
+  it('does not count an unlicensed agent as a producing agent', async () => {
+    mockDownlineTree({ [AGENT_ID]: [T1], [T1]: [] });
+    mockDownlineLevels({});
+    LicensingProgress.find.mockReturnValue(chain([{ agent: T1, isLicensed: false }]));
+    APAApplication.find.mockReturnValue(chain([]));
+    ProductionSubmission.aggregate.mockResolvedValue([{ _id: null, total: 0 }]);
+    const r = await evaluateTracks(AGENT_ID, nextLevel, null, RANK_BY_NAME);
+    expect(r.activeAgents).toBe(0);
+    expect(r.builderMet).toBe(false);
+  });
+
+  it('downline excludes deleted, inactive and admin members and survives a children cycle', async () => {
+    const tree = {
+      [AGENT_ID]: { children: [T1, T2] },
+      [T1]: { children: [AGENT_ID, T2], deletedAt: new Date() },   // cycle back to root + deleted
+      [T2]: { children: [T1], isActive: false }                    // cycle + inactive
+    };
+    User.findById.mockImplementation((id) => userSelectLeanChain(tree[id] || { children: [] }));
+    User.find.mockImplementation(() => userSelectLeanChain([]));
+    LicensingProgress.find.mockReturnValue(chain([]));
+    APAApplication.find.mockReturnValue(chain([]));
+    ProductionSubmission.aggregate.mockResolvedValue([{ _id: null, total: 0 }]);
+    const r = await evaluateTracks(AGENT_ID, nextLevel, null, RANK_BY_NAME);
+    expect(r.downlineIds).toEqual([]);
+  });
+
+  it('downline excludes admins', async () => {
+    User.findById.mockImplementation((id) => userSelectLeanChain(
+      id === AGENT_ID ? { children: [T1] } : { children: [], role: 'admin' }));
+    User.find.mockImplementation(() => userSelectLeanChain([]));
+    LicensingProgress.find.mockReturnValue(chain([]));
+    APAApplication.find.mockReturnValue(chain([]));
+    ProductionSubmission.aggregate.mockResolvedValue([{ _id: null, total: 0 }]);
+    const r = await evaluateTracks(AGENT_ID, nextLevel, null, RANK_BY_NAME);
+    expect(r.downlineIds).toEqual([]);
   });
 });

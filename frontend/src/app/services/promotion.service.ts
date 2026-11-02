@@ -51,6 +51,8 @@ export interface FastTrackInfo {
   track?: string;
   producerSkipThreshold?: number;
   builderSkipThreshold?: number;
+  skipMultiplier?: number;
+  skipLegCapPercent?: number;
 }
 
 export interface PromotionTrackerData {
@@ -65,7 +67,7 @@ export interface PromotionTrackerData {
   producer: ProducerTrack;
   builder: BuilderTrack;
   totalDownline: number;
-  skipInfo: { canSkip: boolean; requirements?: string };
+  skipInfo: { canSkip: boolean; requirements?: string; skipMultiplier?: number; skipLegCapPercent?: number };
   fastTrack: FastTrackInfo;
 }
 

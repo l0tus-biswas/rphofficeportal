@@ -92,19 +92,30 @@ exports.paginate = (query, page = 1, limit = 10) => {
  * @param {string|ObjectId} userId  - The root user (upline) whose full downline we want
  * @returns {Promise<ObjectId[]>}   - Array of all descendant ObjectIds (not including userId itself)
  */
-exports.getDownlineIds = async (userId) => {
+exports.getDownlineIds = async (userId, options = {}) => {
   const User = require('../models/User');
+  const { includeInactive = false } = options || {};
   const result = [];
+  const visited = new Set([String(userId)]); // cycle / duplicate-parent guard
   const queue = [userId];
+  let isRoot = true;
 
   while (queue.length > 0) {
     const current = queue.shift();
-    const user = await User.findById(current).select('children').lean();
-    if (user && user.children && user.children.length > 0) {
-      for (const childId of user.children) {
-        result.push(childId);
-        queue.push(childId);
-      }
+    const user = await User.findById(current).select('children role isActive deletedAt').lean();
+    // Excluded members (deleted, inactive, admin) are not returned but are
+    // still traversed so their active descendants stay in the downline.
+    if (!isRoot && user && !user.deletedAt && (!user.role || user.role === 'agent') &&
+        (includeInactive || user.isActive !== false)) {
+      result.push(current);
+    }
+    isRoot = false;
+    if (!user || !user.children) continue;
+    for (const childId of user.children) {
+      const key = String(childId);
+      if (visited.has(key)) continue;
+      visited.add(key);
+      queue.push(childId);
     }
   }
 

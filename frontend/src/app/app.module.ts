@@ -84,6 +84,7 @@ import { NotFoundComponent } from './components/not-found/not-found.component';
 // Pipes
 import { SafePipe } from './pipes/safe.pipe';
 import { AppDatePipe } from './pipes/app-date.pipe';
+import { StripHtmlPipe, RichTextPipe } from './pipes/rich-text.pipe';
 
 @NgModule({
   declarations: [
@@ -133,6 +134,8 @@ import { AppDatePipe } from './pipes/app-date.pipe';
     BroadcastPopupComponent,
     SafePipe,
     AppDatePipe,
+    StripHtmlPipe,
+    RichTextPipe,
     AgentCarriersComponent,
     CarrierAppointmentsComponent,
     CommissionsComponent,

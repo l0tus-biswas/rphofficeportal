@@ -5,6 +5,9 @@ const NotificationPreference = require('../models/NotificationPreference');
 const User = require('../models/User');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { protect, authorize } = require('../middleware/auth.middleware');
+const fsp = require('fs').promises;
+const { uploadBroadcastImage } = require('../utils/broadcastUpload');
+const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml } = require('../utils/broadcastContent');
 
 // All notification routes require authentication
 router.use(protect);
@@ -75,13 +78,35 @@ router.put('/preferences', async (req, res) => {
 // @route   POST /api/notifications/broadcast
 // @desc    Admin sends a broadcast notification (LEGACY — prefer POST /api/broadcasts)
 // @access  Private (Admin only)
-router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
-  try {
-    const { title, message, link, targetRoles } = req.body;
+// Accepts JSON (backward compatible) or multipart/form-data with an optional `image` file.
+const broadcastImageUpload = (req, res, next) => {
+  if (!req.is('multipart/form-data')) return next();
+  uploadBroadcastImage.single('image')(req, res, (err) => {
+    if (err) return sendResponse(res, 400, { message: err.message || 'Image upload failed' });
+    next();
+  });
+};
 
-    if (!title || !message) {
+router.post('/broadcast', protect, authorize('admin'), broadcastImageUpload, async (req, res) => {
+  const removeUploadedImage = async () => {
+    if (req.file) { try { await fsp.unlink(req.file.path); } catch (e) { /* ignore */ } }
+  };
+  try {
+    const { title, link } = req.body;
+    let { targetRoles } = req.body;
+    // multipart sends arrays as a JSON string or repeated fields
+    if (typeof targetRoles === 'string') {
+      try { targetRoles = JSON.parse(targetRoles); } catch (e) { targetRoles = targetRoles ? [targetRoles] : []; }
+    }
+
+    // Sanitize rich-text HTML first, then validate (e.g. '<p><br></p>' counts as empty)
+    const message = typeof req.body.message === 'string' ? sanitizeBroadcastHtml(req.body.message) : '';
+    if (!title || typeof title !== 'string' || !title.trim() || !message || isEmptyBroadcastHtml(message)) {
+      await removeUploadedImage();
       return sendResponse(res, 400, { message: 'Title and message are required' });
     }
+    const plainMessage = htmlToPlainText(message);
+    const imagePath = req.file ? `/uploads/broadcast-images/${req.file.filename}` : null;
 
     // Also create a Broadcast record for the new management page
     let Broadcast;
@@ -92,6 +117,7 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
       broadcastRecord = await Broadcast.create({
         title, message,
         link: link || null,
+        image: imagePath,
         targetRoles: Array.isArray(targetRoles) ? targetRoles : [],
         createdBy: req.user._id
       });
@@ -117,7 +143,9 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
           userId: user._id,
           type: 'admin_broadcast',
           title,
-          message,
+          message: plainMessage,       // in-app card shows readable plain text
+          emailMessage: message,       // email template embeds the sanitized HTML
+          emailImage: imagePath,
           link: link || null,
           data: {
             broadcastBy: req.user._id,
@@ -154,6 +182,7 @@ router.post('/broadcast', protect, authorize('admin'), async (req, res) => {
 
     sendResponse(res, 200, { message: `Broadcast sent to ${sentCount} users (${emailsSent} emails)`, sentCount, emailsSent });
   } catch (error) {
+    await removeUploadedImage();
     errorResponse(res, error);
   }
 });

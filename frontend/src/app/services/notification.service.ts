@@ -114,7 +114,17 @@ export class NotificationService {
   }
 
   // Admin broadcast
-  broadcast(title: string, message: string, link?: string, targetRoles?: string[]): Observable<any> {
+  broadcast(title: string, message: string, link?: string, targetRoles?: string[], image?: File | null): Observable<any> {
+    if (image) {
+      // multipart: the backend accepts an optional `image` file (max 5 MB)
+      const form = new FormData();
+      form.append('title', title);
+      form.append('message', message);
+      if (link) form.append('link', link);
+      form.append('targetRoles', JSON.stringify(targetRoles || []));
+      form.append('image', image);
+      return this.http.post(`${this.apiUrl}/broadcast`, form);
+    }
     return this.http.post(`${this.apiUrl}/broadcast`, { title, message, link, targetRoles });
   }
 }

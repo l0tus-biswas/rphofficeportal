@@ -62,7 +62,7 @@
               </div>
               <div class="notification-content flex-grow-1">
                 <h6 class="mb-1">{{ notification.title }}</h6>
-                <p class="mb-1">{{ notification.message }}</p>
+                <p class="mb-1" style="white-space: pre-line;">{{ notification.message | stripHtml }}</p>
                 <small class="text-muted">
                   <i class="bi bi-clock me-1"></i>{{ getTimeAgo(notification.createdAt) }}
                 </small>
@@ -182,7 +182,21 @@
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Message *</label>
-            <textarea class="form-control" rows="3" [(ngModel)]="broadcastMessage" placeholder="Notification message"></textarea>
+            <quill-editor class="broadcast-editor" [(ngModel)]="broadcastMessage" name="broadcastMessage"
+              [modules]="quillModules" [formats]="quillFormats" [valueGetter]="quillValueGetter"
+              placeholder="Notification message"></quill-editor>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold"><i class="bi bi-image me-1 text-success"></i>Image / Thumbnail (optional)</label>
+            <div *ngIf="broadcastImagePreview" class="mb-2">
+              <img [src]="broadcastImagePreview" class="img-thumbnail" style="max-height: 120px;" alt="Broadcast image preview">
+              <button type="button" class="btn btn-sm btn-outline-danger ms-2" (click)="clearBroadcastImage()">
+                <i class="bi bi-trash"></i> Remove
+              </button>
+            </div>
+            <input #broadcastImageInput type="file" class="form-control" accept="image/jpeg,image/png,image/gif,image/webp" (change)="onBroadcastImageSelected($event)">
+            <div class="form-text">Attach an image to this announcement (max 5 MB). Shown to users on the announcement card.</div>
+            <div *ngIf="broadcastImageError" class="text-danger small mt-1">{{ broadcastImageError }}</div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Link (optional)</label>
@@ -208,7 +222,7 @@
           </div>
           <div class="d-flex align-items-center gap-3">
             <button class="btn btn-warning" (click)="sendBroadcast()"
-                    [disabled]="broadcastSending || !broadcastTitle.trim() || !broadcastMessage.trim()">
+                    [disabled]="!canSendBroadcast">
               <span *ngIf="broadcastSending" class="spinner-border spinner-border-sm me-1"></span>
               <i class="bi bi-send me-1" *ngIf="!broadcastSending"></i>Send Broadcast
             </button>

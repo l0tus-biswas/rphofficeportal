@@ -287,7 +287,7 @@ router.get('/team-report', authenticate, async (req, res) => {
     }
 
     // Build recruits/active-agent queries based on whether we have a specific agent set
-    const recruitsQuery = { createdAt: { $gte: since } };
+    const recruitsQuery = { createdAt: { $gte: since }, role: 'agent', deletedAt: null };
     const activeQuery = { isActive: true, role: 'agent', deletedAt: null };
     if (agentIds) {
       recruitsQuery.referredBy = { $in: agentIds };
@@ -555,8 +555,6 @@ router.get('/ranking', authenticate, async (req, res) => {
     const pipeline = [
       { $match: matchFilter },
       { $group: groupFields },
-      { $sort: { [sortBy === 'policies' ? 'totalPolicies' : sortBy === 'members' ? 'totalMembers' : 'totalPremium']: -1 } },
-      { $limit: limitCount },
       {
         $lookup: {
           from: 'users',
@@ -566,6 +564,9 @@ router.get('/ranking', authenticate, async (req, res) => {
         }
       },
       { $unwind: '$agentInfo' },
+      { $match: { 'agentInfo.deletedAt': null } },
+      { $sort: { [sortBy === 'policies' ? 'totalPolicies' : sortBy === 'members' ? 'totalMembers' : 'totalPremium']: -1 } },
+      { $limit: limitCount },
       {
         $project: {
           agentId: '$_id',

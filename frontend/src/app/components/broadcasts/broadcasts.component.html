@@ -44,7 +44,7 @@
                   <h5 class="mb-0" [class.fw-bold]="!b.isRead">{{ b.title }}</h5>
                   <span *ngIf="!b.isRead" class="badge bg-primary badge-sm">New</span>
                 </div>
-                <p class="text-muted mb-2" style="white-space: pre-line;">{{ b.message.length > 200 ? (b.message | slice:0:200) + '...' : b.message }}</p>
+                <p class="text-muted mb-2">{{ b.message | stripHtml:200 }}</p>
                 <!-- Announcement Image Thumbnail -->
                 <div *ngIf="b.image" class="mb-2">
                   <img [src]="getImageUrl(b.image)" class="rounded" style="max-height: 80px; max-width: 160px; object-fit: cover;" alt="Announcement image">
@@ -98,7 +98,7 @@
           <div *ngIf="selectedBroadcast.image" class="mb-3 text-center">
             <img [src]="getImageUrl(selectedBroadcast.image)" class="img-fluid rounded" style="max-height: 300px;" alt="Announcement image">
           </div>
-          <div style="white-space: pre-line; line-height: 1.7;">{{ selectedBroadcast.message }}</div>
+          <div class="broadcast-rich" style="line-height: 1.7;" [innerHTML]="selectedBroadcast.message | richText"></div>
           <div *ngIf="selectedBroadcast.link" class="mt-3">
             <a [href]="selectedBroadcast.link" target="_blank" class="btn btn-outline-primary btn-sm">
               <i class="bi bi-box-arrow-up-right me-1"></i>Open Link

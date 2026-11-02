@@ -1,0 +1,9 @@
+{
+  "testEnvironment": "node",
+  "rootDir": ".",
+  "testMatch": [
+    "<rootDir>/tests/production-promotion-aca.test.js",
+    "<rootDir>/tests/promotion-income-paid-e2e.test.js"
+  ],
+  "testTimeout": 30000
+}
