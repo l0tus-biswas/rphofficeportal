@@ -113,7 +113,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     if (req.user.role === 'admin') {
       // Admin sees everyone
-      const records = await ExamFXProgress.find()
+      const records = await ExamFXProgress.find({ deletedAt: null })
         .populate('agent', 'name email phone referredBy')
         .populate('lastUpdatedBy', 'name')
         .sort({ updatedAt: -1 });
@@ -125,7 +125,7 @@ router.get('/', authenticate, async (req, res) => {
     const downlineIds = await _getDownlineIds(req.user._id);
     const allIds = [req.user._id, ...downlineIds];
 
-    const records = await ExamFXProgress.find({ agent: { $in: allIds } })
+    const records = await ExamFXProgress.find({ agent: { $in: allIds }, deletedAt: null })
       .populate('agent', 'name email phone referredBy')
       .populate('lastUpdatedBy', 'name')
       .sort({ updatedAt: -1 });
@@ -143,12 +143,12 @@ router.get('/', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/summary', authenticate, async (req, res) => {
   try {
-    let query = {};
+    let query = { deletedAt: null };
 
     if (req.user.role !== 'admin') {
       // Agent: only their downline
       const downlineIds = await _getDownlineIds(req.user._id);
-      query = { agent: { $in: [req.user._id, ...downlineIds] } };
+      query = { agent: { $in: [req.user._id, ...downlineIds] }, deletedAt: null };
     }
 
     // Populated `agent` can be null if the referenced user was hard-deleted
@@ -205,7 +205,7 @@ router.get('/import-history', authenticate, authorize('admin'), async (req, res)
     // Populated `agent` can be null if the referenced user was hard-deleted
     // without the ExamFXProgress record being cleaned up — drop those
     // orphaned records rather than crashing on them.
-    const records = (await ExamFXProgress.find({ lastCsvImportDate: { $ne: null } })
+    const records = (await ExamFXProgress.find({ lastCsvImportDate: { $ne: null }, deletedAt: null })
       .populate('agent', 'name email')
       .populate('csvImportedBy', 'name email')
       .select('agent lastCsvImportDate csvImportedBy enrollmentStatus overallPercentComplete courses updatedAt')
@@ -901,7 +901,7 @@ router.delete('/:agentId', authenticate, authorize('admin'), async (req, res) =>
  * Get IDs of an agent's direct downline (recruits)
  */
 async function _getDownlineIds(agentId) {
-  const downline = await User.find({ referredBy: agentId, role: 'agent' }).select('_id').lean();
+  const downline = await User.find({ referredBy: agentId, role: 'agent', deletedAt: null }).select('_id').lean();
   return downline.map(d => d._id);
 }
 
