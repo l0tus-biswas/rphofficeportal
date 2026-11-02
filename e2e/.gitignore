@@ -1,0 +1,6 @@
+.backend.log
+.frontend.log
+test-results/
+playwright-report/
+sweep.json
+.out-*/
