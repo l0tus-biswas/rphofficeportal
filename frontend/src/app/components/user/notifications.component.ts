@@ -1,8 +1,10 @@
 import { getAppTimezone } from '../../services/timezone.service';
-import { Component, OnInit } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { NotificationService, Notification } from '../../services/notification.service';
 import { AuthService } from '../../services/auth.service';
+import { broadcastQuillModules, broadcastQuillFormats, broadcastQuillValueGetter } from '../../shared/broadcast-editor';
+import { isEmptyRichText } from '../../pipes/rich-text.pipe';
 
 interface PreferenceEntry {
   type: string;
@@ -40,6 +42,13 @@ export class NotificationsComponent implements OnInit {
   broadcastLink: string = '';
   broadcastRoles: string[] = [];
   broadcastSending: boolean = false;
+  @ViewChild('broadcastImageInput') broadcastImageInput?: ElementRef<HTMLInputElement>;
+  broadcastImageFile: File | null = null;
+  broadcastImagePreview: string | null = null;
+  broadcastImageError: string = '';
+  readonly quillModules = broadcastQuillModules;
+  readonly quillFormats = broadcastQuillFormats;
+  readonly quillValueGetter = broadcastQuillValueGetter;
   broadcastResult: string = '';
 
   constructor(
@@ -378,15 +387,53 @@ export class NotificationsComponent implements OnInit {
     else this.broadcastRoles.push(role);
   }
 
+  /** Quill yields '<p><br></p>' when empty; treat that and whitespace-only as empty. */
+  get isBroadcastMessageEmpty(): boolean {
+    return isEmptyRichText(this.broadcastMessage);
+  }
+
+  get canSendBroadcast(): boolean {
+    return !this.broadcastSending && !!this.broadcastTitle.trim() && !this.isBroadcastMessageEmpty;
+  }
+
+  onBroadcastImageSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.broadcastImageError = '';
+    if (!input.files || input.files.length === 0) return;
+    const file = input.files[0];
+    if (!file.type.startsWith('image/')) {
+      this.broadcastImageError = 'Only image files are allowed.';
+      input.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      this.broadcastImageError = 'Image must be under 5MB.';
+      input.value = '';
+      return;
+    }
+    this.broadcastImageFile = file;
+    const reader = new FileReader();
+    reader.onload = () => this.broadcastImagePreview = reader.result as string;
+    reader.readAsDataURL(file);
+  }
+
+  clearBroadcastImage(): void {
+    this.broadcastImageFile = null;
+    this.broadcastImagePreview = null;
+    this.broadcastImageError = '';
+    if (this.broadcastImageInput) this.broadcastImageInput.nativeElement.value = '';
+  }
+
   sendBroadcast(): void {
-    if (!this.broadcastTitle.trim() || !this.broadcastMessage.trim()) return;
+    if (!this.canSendBroadcast) return;
     this.broadcastSending = true;
     this.broadcastResult = '';
     this.notificationService.broadcast(
       this.broadcastTitle.trim(),
       this.broadcastMessage.trim(),
       this.broadcastLink.trim() || undefined,
-      this.broadcastRoles.length > 0 ? this.broadcastRoles : undefined
+      this.broadcastRoles.length > 0 ? this.broadcastRoles : undefined,
+      this.broadcastImageFile
     ).subscribe({
       next: (response: any) => {
         const count = response?.sentCount || response?.data?.sentCount || 0;
@@ -396,6 +443,7 @@ export class NotificationsComponent implements OnInit {
         this.broadcastMessage = '';
         this.broadcastLink = '';
         this.broadcastRoles = [];
+        this.clearBroadcastImage();
       },
       error: (error: any) => {
         console.error('Broadcast error:', error);

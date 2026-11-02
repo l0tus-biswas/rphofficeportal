@@ -7,7 +7,38 @@ const IncomePaid = require('../models/IncomePaid');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { protect: authenticate, authorize } = require('../middleware/auth.middleware');
-const { sendResponse, errorResponse, getDownlineIds } = require('../utils/helpers');
+const { sendResponse, errorResponse } = require('../utils/helpers');
+const { isAgentLicensed } = require('../utils/licensing');
+
+// ============================================================================
+// Helper: BFS downline of a user that (a) is cycle-safe (visited set, so a bad
+// children[] loop or duplicate parent can't hang or double count) and (b) only
+// returns members who can count toward team totals: not soft-deleted, not
+// deactivated and not admins. Traversal continues THROUGH excluded members so
+// their still-active descendants are not orphaned from the tree.
+// ============================================================================
+async function getDownlineIds(userId) {
+  const result = [];
+  const visited = new Set([String(userId)]);
+  const queue = [userId];
+  let isRoot = true;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const u = await User.findById(current).select('children role isActive deletedAt').lean();
+    if (!isRoot && u && !u.deletedAt && u.isActive !== false && (!u.role || u.role === 'agent')) {
+      result.push(current);
+    }
+    isRoot = false;
+    if (!u || !u.children) continue;
+    for (const childId of u.children) {
+      const key = String(childId);
+      if (visited.has(key)) continue;
+      visited.add(key);
+      queue.push(childId);
+    }
+  }
+  return result;
+}
 
 // ============================================================================
 // Qualifying product categories for promotion calculations
@@ -123,7 +154,8 @@ async function sumQualifyingPremium(agentIds, windowDays, sinceDate, transferDat
 
 // ============================================================================
 // Helper: count distinct producing agents since a date or rolling window
-// Only counts LICENSED agents (LicensingProgress.isLicensed === true)
+// Only counts LICENSED agents (shared isAgentLicensed rule); callers pass an
+// already-filtered (active, non-admin) downline
 // Supports per-agent transfer filtering via transferDates map
 // ============================================================================
 async function countProducingAgents(agentIds, windowDays, sinceDate, transferDates) {
@@ -137,13 +169,29 @@ async function countProducingAgents(agentIds, windowDays, sinceDate, transferDat
   // Use inForceDate for promotion tracking (falls back to submissionDate via $ifNull)
   const dateExpr = { $ifNull: ['$inForceDate', '$submissionDate'] };
 
-  // Get licensed agent IDs first
+  // Licensed agents only, using the shared rule (flag, approved final step, APA
+  // self-reported license, imported metadata) so it matches the Licensing page.
   const LicensingProgress = require('../models/LicensingProgress');
-  const licensedRecords = await LicensingProgress.find({
-    agent: { $in: agentIds.map(id => new mongoose.Types.ObjectId(id)) },
-    isLicensed: true
-  }).select('agent').lean();
-  const licensedIds = licensedRecords.map(r => r.agent);
+  const APAApplication = require('../models/APAApplication');
+  const objIds = agentIds.map(id => new mongoose.Types.ObjectId(id));
+  const [progressRecords, apaRecords, users] = await Promise.all([
+    LicensingProgress.find({ agent: { $in: objIds } })
+      .select('agent isLicensed checklist.stateAppointment.approved').lean(),
+    APAApplication.find({ $or: [{ user: { $in: objIds } }, { userId: { $in: objIds } }] })
+      .select('user userId licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean(),
+    User.find({ _id: { $in: objIds } }).select('_id metadata').lean()
+  ]);
+  const progressMap = new Map((progressRecords || []).map(r => [String(r.agent), r]));
+  const apaMap = new Map();
+  for (const r of (apaRecords || [])) {
+    const key = r.user || r.userId;
+    if (key) apaMap.set(String(key), r);
+  }
+  const userMap = new Map((users || []).map(u => [String(u._id), u]));
+  const licensedIds = agentIds.filter(id => {
+    const k = String(id);
+    return isAgentLicensed(progressMap.get(k), apaMap.get(k), userMap.get(k)?.metadata);
+  }).map(id => new mongoose.Types.ObjectId(id));
 
   if (licensedIds.length === 0) return 0;
 
@@ -302,12 +350,15 @@ async function getPremiumByLeg(userId, windowDays, sinceDate) {
   for (const childId of user.children) {
     // Get all descendants under this child (leg)
     const legIds = [childId];
+    const seen = new Set([String(userId), String(childId)]);
     const queue = [childId];
     while (queue.length > 0) {
       const current = queue.shift();
       const u = await User.findById(current).select('children').lean();
       if (u && u.children) {
         for (const cid of u.children) {
+          if (seen.has(String(cid))) continue;
+          seen.add(String(cid));
           legIds.push(cid);
           queue.push(cid);
         }
@@ -435,13 +486,42 @@ async function evaluateTracks(agentId, next, promotedAt, rankByName) {
 }
 
 // ============================================================================
+// Helper: notify active admins that an agent is promotion-eligible. Deduplicated
+// per agent+nextLevel over 7 days (shared by tracker, auto-check and manual check).
+// Returns true when notifications were created.
+// ============================================================================
+async function notifyAdminsPromotionEligible({ agentId, agentName, currentLevel, nextLevel, track, title, message, extraData }) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recent = await Notification.findOne({
+    type: 'promotion_eligible',
+    'data.agentId': String(agentId),
+    'data.nextLevel': nextLevel,
+    createdAt: { $gte: sevenDaysAgo }
+  }).lean();
+  if (recent) return false;
+  const admins = await User.find({ role: 'admin', deletedAt: null, isActive: { $ne: false } }).select('_id').lean();
+  for (const admin of admins) {
+    await Notification.createNotification({
+      userId: admin._id,
+      type: 'promotion_eligible',
+      title,
+      message,
+      data: { agentId: String(agentId), agentName, currentLevel, nextLevel, track, ...(extraData || {}) },
+      link: '/admin/user-management'
+    });
+  }
+  return true;
+}
+
+// ============================================================================
 // Helper: run a promotion eligibility check for a single agent and notify admins
 // Called for both the submitting agent AND all upline ancestors
 // ============================================================================
 async function checkAndNotifyPromotion(agentId) {
   try {
-    const agent = await User.findById(agentId).select('level name promotedAt').lean();
-    if (!agent) return;
+    const agent = await User.findById(agentId).select('level name promotedAt role isActive deletedAt').lean();
+    // Only active agents are promotable (skip admins, deactivated and deleted users)
+    if (!agent || agent.deletedAt || agent.isActive === false || (agent.role && agent.role !== 'agent')) return;
 
     const levels = await PromotionLevel.find({ isActive: true }).sort({ rank: 1 }).lean();
     if (!levels.length) return;
@@ -457,29 +537,12 @@ async function checkAndNotifyPromotion(agentId) {
     const { producerMet, builderMet } = await evaluateTracks(agentId, next, promotedAt, rankByName);
 
     if (producerMet || builderMet) {
-      // Deduplicate: skip if already notified in past 7 days
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const recentNotif = await Notification.findOne({
-        type: 'promotion_eligible',
-        'data.agentId': String(agentId),
-        'data.nextLevel': next.name,
-        createdAt: { $gte: sevenDaysAgo }
-      }).lean();
-
-      if (!recentNotif) {
-        const admins = await User.find({ role: 'admin' }).select('_id').lean();
-        const track = producerMet ? 'producer' : 'builder';
-        for (const admin of admins) {
-          await Notification.createNotification({
-            userId: admin._id,
-            type: 'promotion_eligible',
-            title: 'Agent Promotion Eligible',
-            message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`,
-            data: { agentId: String(agentId), agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track },
-            link: '/admin/user-management'
-          });
-        }
-      }
+      const track = producerMet ? 'producer' : 'builder';
+      await notifyAdminsPromotionEligible({
+        agentId, agentName: agent.name, currentLevel: levels[currentIdx].name, nextLevel: next.name, track,
+        title: 'Agent Promotion Eligible',
+        message: `${agent.name} has met the ${track} track threshold and is ready for promotion to ${next.name}.`
+      });
     }
   } catch (err) {
     console.error('[Promotion Check] Error for agent', agentId, ':', err.message);
@@ -601,11 +664,11 @@ router.get('/tracker', authenticate, async (req, res) => {
         const producerSkipThreshold = skipTarget.producerPremiumThreshold * multiplier;
         const builderSkipThreshold = skipTarget.builderPremiumThreshold * multiplier;
 
-        const producerFastTrack = producerPremium >= producerSkipThreshold;
+        const producerFastTrack = producerSkipThreshold > 0 && producerPremium >= producerSkipThreshold;
 
         // Builder fast-track: multiplier × team premium AND leg cap
         let builderFastTrack = false;
-        if (builderPremium >= builderSkipThreshold) {
+        if (builderSkipThreshold > 0 && builderPremium >= builderSkipThreshold) {
           const legPremiums = await getPremiumByLeg(userId, builderWindow, promotedAt);
           const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow, promotedAt));
           builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium, legCapPercent);
@@ -621,7 +684,9 @@ router.get('/tracker', authenticate, async (req, res) => {
             },
             track: producerFastTrack ? 'producer' : 'builder',
             producerSkipThreshold,
-            builderSkipThreshold
+            builderSkipThreshold,
+            skipMultiplier: multiplier,
+            skipLegCapPercent: legCapPercent
           };
         }
       }
@@ -629,30 +694,16 @@ router.get('/tracker', authenticate, async (req, res) => {
 
     // Auto-notify admins when eligible (deduplicate: skip if already notified in past 7 days)
     const effectiveNextName = fastTrack.eligible ? fastTrack.skipToLevel.name : (next ? next.name : null);
-    if ((promotionReady || fastTrack.eligible) && effectiveNextName) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const recentNotif = await Notification.findOne({
-        type: 'promotion_eligible',
-        'data.agentId': String(userId),
-        'data.nextLevel': effectiveNextName,
-        createdAt: { $gte: sevenDaysAgo }
-      }).lean();
-      if (!recentNotif) {
-        const fullUser = await User.findById(userId).select('name').lean();
-        const admins = await User.find({ role: 'admin' }).select('_id').lean();
-        const track = producerMet ? 'producer' : 'builder';
-        const skipNote = fastTrack.eligible ? ' (Fast-Track Skip)' : '';
-        for (const admin of admins) {
-          await Notification.createNotification({
-            userId:  admin._id,
-            type:    'promotion_eligible',
-            title:   `Agent Promotion Eligible${skipNote}`,
-            message: `${fullUser.name} has met the ${track} track threshold and is ready to be promoted to ${effectiveNextName}${skipNote}.`,
-            data:    { agentId: String(userId), agentName: fullUser.name, currentLevel: current.name, nextLevel: effectiveNextName, track, fastTrack: fastTrack.eligible },
-            link:    '/admin/user-management'
-          });
-        }
-      }
+    if ((promotionReady || fastTrack.eligible) && effectiveNextName && req.user.role !== 'admin') {
+      const fullUser = await User.findById(userId).select('name').lean();
+      const track = producerMet ? 'producer' : 'builder';
+      const skipNote = fastTrack.eligible ? ' (Fast-Track Skip)' : '';
+      await notifyAdminsPromotionEligible({
+        agentId: userId, agentName: fullUser.name, currentLevel: current.name, nextLevel: effectiveNextName, track,
+        title: `Agent Promotion Eligible${skipNote}`,
+        message: `${fullUser.name} has met the ${track} track threshold and is ready to be promoted to ${effectiveNextName}${skipNote}.`,
+        extraData: { fastTrack: fastTrack.eligible }
+      });
     }
 
     return sendResponse(res, 200, {
@@ -711,7 +762,9 @@ router.get('/tracker', authenticate, async (req, res) => {
       // Skip-level info (if applicable to next level)
       skipInfo: next && next.canSkipTo ? {
         canSkip: true,
-        requirements: next.skipRequirements
+        requirements: next.skipRequirements,
+        skipMultiplier: next.skipMultiplier || DEFAULT_SKIP_MULTIPLIER,
+        skipLegCapPercent: next.skipLegCapPercent || DEFAULT_LEG_CAP_PERCENT
       } : { canSkip: false },
 
       // Fast-track skip info
@@ -760,6 +813,33 @@ router.put('/admin/levels/reorder', authenticate, authorize('admin'), async (req
     const { order } = req.body; // Array of { id, rank }
     if (!Array.isArray(order) || order.length === 0) {
       return sendResponse(res, 400, { message: 'Order array is required' });
+    }
+
+    const ids = [];
+    const ranks = new Set();
+    for (const item of order) {
+      if (!item || typeof item !== 'object') {
+        return sendResponse(res, 400, { message: 'Each order entry must be an object with id and rank' });
+      }
+      if (typeof item.id !== 'string' || !mongoose.Types.ObjectId.isValid(item.id) || String(new mongoose.Types.ObjectId(item.id)) !== item.id.toLowerCase()) {
+        return sendResponse(res, 400, { message: `Invalid level id: ${String(item.id)}` });
+      }
+      if (!Number.isInteger(item.rank) || item.rank < 1) {
+        return sendResponse(res, 400, { message: `Invalid rank for level ${item.id}: must be a positive integer` });
+      }
+      if (ranks.has(item.rank)) {
+        return sendResponse(res, 400, { message: `Duplicate rank: ${item.rank}` });
+      }
+      if (ids.includes(item.id)) {
+        return sendResponse(res, 400, { message: `Duplicate level id: ${item.id}` });
+      }
+      ranks.add(item.rank);
+      ids.push(item.id);
+    }
+
+    const existing = await PromotionLevel.countDocuments({ _id: { $in: ids } });
+    if (existing !== ids.length) {
+      return sendResponse(res, 400, { message: 'One or more level ids do not exist' });
     }
 
     // Two-pass reorder to avoid unique constraint conflicts on rank:
@@ -893,7 +973,7 @@ router.delete('/admin/levels/:id', authenticate, authorize('admin'), async (req,
     // Check if any agents are currently at this level
     const agentCount = await User.countDocuments({
       role: 'agent',
-      level: { $regex: new RegExp(`^${level.name}$`, 'i') },
+      level: { $regex: new RegExp('^' + level.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') },
       deletedAt: null
     });
 
@@ -951,25 +1031,13 @@ router.post('/check-advancement', authenticate, async (req, res) => {
 
     const eligible = producerMet || builderMet;
 
-    if (eligible) {
-      // Notify admin about the potential promotion
-      const admins = await User.find({ role: 'admin' }).select('_id').lean();
-      for (const admin of admins) {
-        await Notification.createNotification({
-          userId: admin._id,
-          type: 'promotion_eligible',
-          title: 'Agent Promotion Eligible',
-          message: `${user.name} is eligible for promotion to ${next.name} (${next.commissionPercent}%).`,
-          data: {
-            agentId: userId,
-            agentName: user.name,
-            currentLevel: user.level,
-            nextLevel: next.name,
-            track: producerMet ? 'producer' : 'builder'
-          },
-          link: '/admin/user-management'
-        });
-      }
+    if (eligible && req.user.role !== 'admin') {
+      await notifyAdminsPromotionEligible({
+        agentId: userId, agentName: user.name, currentLevel: user.level, nextLevel: next.name,
+        track: producerMet ? 'producer' : 'builder',
+        title: 'Agent Promotion Eligible',
+        message: `${user.name} is eligible for promotion to ${next.name} (${next.commissionPercent}%).`
+      });
     }
 
     return sendResponse(res, 200, {

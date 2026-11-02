@@ -352,3 +352,30 @@ body > .skiptranslate { display: none !important; }
   .form-control, .form-select { font-size: 16px !important; } /* no iOS zoom */
 }
 
+
+/* ---- Broadcast rich text (Quill class-based colours + rendered messages) ---- */
+.ql-color-black { color: #000000; }
+.ql-color-gray { color: #6c757d; }
+.ql-color-red { color: #e60000; }
+.ql-color-orange { color: #f08000; }
+.ql-color-gold { color: #b8860b; }
+.ql-color-green { color: #008a00; }
+.ql-color-teal { color: #008080; }
+.ql-color-blue { color: #0066cc; }
+.ql-color-purple { color: #9933ff; }
+.ql-bg-yellow { background-color: #ffff00; }
+.ql-bg-lightgreen { background-color: #b6f0b6; }
+.ql-bg-lightblue { background-color: #b3d9ff; }
+.ql-bg-pink { background-color: #ffc2d9; }
+.ql-bg-lightgray { background-color: #e0e0e0; }
+.ql-bg-orange { background-color: #ffd199; }
+
+.broadcast-rich { overflow-wrap: break-word; line-height: 1.6; }
+.broadcast-rich p, .broadcast-rich ul, .broadcast-rich ol, .broadcast-rich blockquote { margin-bottom: 0.5rem; }
+.broadcast-rich > :last-child { margin-bottom: 0; }
+.broadcast-rich ul, .broadcast-rich ol { padding-left: 1.5rem; }
+.broadcast-rich blockquote { border-left: 3px solid #ccc; padding-left: 0.75rem; color: #555; }
+.broadcast-rich h1 { font-size: 1.5rem; }
+.broadcast-rich h2 { font-size: 1.3rem; }
+.broadcast-rich h3, .broadcast-rich h4 { font-size: 1.1rem; }
+.broadcast-editor .ql-editor { min-height: 140px; }

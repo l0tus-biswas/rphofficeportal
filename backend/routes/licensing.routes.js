@@ -211,10 +211,38 @@ router.get('/downline', authenticate, async (req, res) => {
 // @access  Admin only
 router.get('/countdown/all', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const unlicensedAgents = await LicensingProgress.find({ isLicensed: false })
-      .populate('agent', 'name email')
-      .select('agent enrollmentDate licensingDeadline daysRemaining')
-      .sort({ licensingDeadline: 1 });
+    const activeAgents = await User.find({ role: 'agent', isActive: true, deletedAt: null })
+      .select('_id metadata').lean();
+    const activeIds = activeAgents.map(a => a._id);
+    const [progressDocs, apaDocs] = await Promise.all([
+      LicensingProgress.find({ agent: { $in: activeIds } })
+        .populate('agent', 'name email')
+        .select('agent isLicensed checklist.stateAppointment enrollmentDate licensingDeadline daysRemaining')
+        .sort({ licensingDeadline: 1 }),
+      APAApplication.find({ $or: [{ user: { $in: activeIds } }, { userId: { $in: activeIds } }] })
+        .select('user userId licensingStatus').lean()
+    ]);
+    const apaByAgent = new Map();
+    apaDocs.forEach(a => {
+      const key = a.user || a.userId;
+      if (key) apaByAgent.set(key.toString(), a);
+    });
+    const metaByAgent = new Map(activeAgents.map(a => [a._id.toString(), a.metadata]));
+
+    // Same licensed rule as everywhere else (isAgentLicensed)
+    const unlicensedAgents = progressDocs
+      .filter(p => p.agent)
+      .filter(p => {
+        const id = p.agent._id.toString();
+        return !isAgentLicensed(p, apaByAgent.get(id), metaByAgent.get(id));
+      })
+      .map(p => ({
+        _id: p._id,
+        agent: p.agent,
+        enrollmentDate: p.enrollmentDate,
+        licensingDeadline: p.licensingDeadline,
+        daysRemaining: p.daysRemaining
+      }));
 
     res.json(unlicensedAgents);
   } catch (error) {

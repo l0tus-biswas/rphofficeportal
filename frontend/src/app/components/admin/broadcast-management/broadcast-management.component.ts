@@ -1,6 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { BroadcastService, Broadcast } from '../../../services/broadcast.service';
 import { environment } from '../../../../environments/environment';
+import { broadcastQuillModules, broadcastQuillFormats, broadcastQuillValueGetter } from '../../../shared/broadcast-editor';
+import { isEmptyRichText } from '../../../pipes/rich-text.pipe';
 
 @Component({
   selector: 'app-broadcast-management',
@@ -27,8 +29,17 @@ export class BroadcastManagementComponent implements OnInit {
   selectedImageFile: File | null = null;
   imagePreview: string | null = null;
 
+  readonly quillModules = broadcastQuillModules;
+  readonly quillFormats = broadcastQuillFormats;
+  readonly quillValueGetter = broadcastQuillValueGetter;
+
   success = '';
   error = '';
+
+  /** Quill yields '<p><br></p>' when empty; treat that and whitespace-only as empty. */
+  get isFormMessageEmpty(): boolean {
+    return isEmptyRichText(this.formMessage);
+  }
 
   constructor(private broadcastService: BroadcastService) {}
 
@@ -101,7 +112,7 @@ export class BroadcastManagementComponent implements OnInit {
   // === CRUD Operations ===
 
   saveBroadcast(): void {
-    if (!this.formTitle.trim() || !this.formMessage.trim()) {
+    if (!this.formTitle.trim() || this.isFormMessageEmpty) {
       this.error = 'Title and message are required.';
       return;
     }

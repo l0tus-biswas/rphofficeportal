@@ -78,6 +78,16 @@ export class PromotionTrackerComponent implements OnInit {
     return 'future';
   }
 
+  /** Skip multiplier from the backend (fast-track level first, then skipInfo), default 1.4 */
+  get skipMultiplier(): number {
+    return this.data?.fastTrack?.skipMultiplier || this.data?.skipInfo?.skipMultiplier || 1.4;
+  }
+
+  /** Builder leg cap percent from the backend, default 50 */
+  get skipLegCapPercent(): number {
+    return this.data?.fastTrack?.skipLegCapPercent || this.data?.skipInfo?.skipLegCapPercent || 50;
+  }
+
   formatCurrency(amount: number): string {
     return '$' + amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }

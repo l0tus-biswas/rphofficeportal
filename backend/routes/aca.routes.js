@@ -363,6 +363,7 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       {
         $match: {
           agent: userId,
+          deletedAt: null,
           productCategory: 'Health Insurance',
           status: 'In Force'
         }
@@ -381,6 +382,7 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       {
         $match: {
           agent: { $in: downlineIds },
+          deletedAt: null,
           productCategory: 'Health Insurance',
           status: 'In Force'
         }
@@ -498,16 +500,17 @@ router.get('/dashboard/aca-tracker', authenticate, async (req, res) => {
       // Top 5 personal (individual agent client count across entire org)
       topPersonalACA = await ACAClientRecord.aggregate([
         { $match: { uploadBatch: globalBatch } },
-        { $sort: { clientCount: -1 } },
-        { $limit: 5 },
         { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
         { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+        { $match: { 'agentInfo.deletedAt': null } },
+        { $sort: { clientCount: -1 } },
+        { $limit: 5 },
         { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
       ]);
 
       // Top 5 team (agent + their downline total)
       const allGlobalRecords = await ACAClientRecord.find({ uploadBatch: globalBatch }).lean();
-      const allAgentsForTeam = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+      const allAgentsForTeam = await User.find({ role: 'agent', deletedAt: null }).select('_id name referredBy').lean();
       const childrenMapGlobal = {};
       allAgentsForTeam.forEach(u => {
         const pid = u.referredBy?.toString();

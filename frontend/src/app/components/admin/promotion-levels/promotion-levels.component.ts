@@ -137,7 +137,9 @@ export class PromotionLevelsComponent implements OnInit {
 
     if (this.showEditModal && this.editingLevelId) {
       // Update existing
-      this.promotionService.updateLevel(this.editingLevelId, this.editingLevel).subscribe({
+      // Rank is changed only via the reorder endpoint; never send it on update.
+      const { rank: _rank, ...updatePayload } = this.editingLevel;
+      this.promotionService.updateLevel(this.editingLevelId, updatePayload).subscribe({
         next: () => {
           this.modalLoading = false;
           this.closeModal();

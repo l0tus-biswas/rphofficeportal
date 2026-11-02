@@ -16,10 +16,10 @@ const request = require('supertest');
 
 const BASE_URL = process.env.TEST_API_URL || 'http://localhost:5000';
 
-const ADMIN_EMAIL = 'contracting@rhpoffice.com';
-const ADMIN_PASS = 'admin123';
-const AGENT_EMAIL = 'norgehernandez6047@gmail.com';
-const AGENT_PASS = '123456';
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL;
+const ADMIN_PASS = process.env.TEST_ADMIN_PASS;
+const AGENT_EMAIL = process.env.TEST_AGENT_EMAIL;
+const AGENT_PASS = process.env.TEST_AGENT_PASS;
 
 let adminToken, agentToken, agentId;
 let testCarrierId;

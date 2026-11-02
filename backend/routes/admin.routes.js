@@ -6,6 +6,7 @@ const AuditLog = require('../models/AuditLog');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const APAApplication = require('../models/APAApplication');
+const { isAgentLicensed } = require('../utils/licensing');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
 const ProductionSubmission = require('../models/ProductionSubmission');
@@ -909,60 +910,79 @@ router.delete('/onboarding/:userId', logAction('DELETE_ONBOARDING'), async (req,
 // @access  Private (Admin only)
 router.get('/stats', async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments({ deletedAt: null });
+    // Dashboard counts describe agents only — admin accounts are excluded.
     const totalAdmins = await User.countDocuments({ role: 'admin', deletedAt: null });
-    const totalAgents = await User.countDocuments({ role: 'agent', deletedAt: null });
-    const activeUsers = await User.countDocuments({ isActive: true, deletedAt: null });
-    const inactiveUsers = await User.countDocuments({ isActive: false, deletedAt: null });
-    
-    // Users created in last 30 days
+    const agentDocs = await User.find({ role: 'agent', deletedAt: null })
+      .select('_id isActive createdAt metadata').lean();
+    const activeAgentDocs = agentDocs.filter(a => a.isActive);
+    const allAgentIds = agentDocs.map(a => a._id);
+    const activeAgentIds = activeAgentDocs.map(a => a._id);
+
+    const totalAgents = agentDocs.length;
+    const totalUsers = totalAgents;
+    const activeUsers = activeAgentDocs.length;
+    const inactiveUsers = totalAgents - activeUsers;
+
+    // Agents created in last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentUsers = await User.countDocuments({ 
-      createdAt: { $gte: thirtyDaysAgo } 
+    const recentUsers = agentDocs.filter(a => a.createdAt >= thirtyDaysAgo).length;
+
+    // Licensed vs unlicensed active agents (§21.5) — same rule as the Licensing page
+    const [progressDocs, apaDocs] = await Promise.all([
+      LicensingProgress.find({ agent: { $in: activeAgentIds } }).lean(),
+      APAApplication.find({ $or: [{ user: { $in: activeAgentIds } }, { userId: { $in: activeAgentIds } }] })
+        .select('user userId licensingStatus').lean()
+    ]);
+    const progressByAgent = new Map(progressDocs.map(p => [p.agent.toString(), p]));
+    const apaByAgent = new Map();
+    apaDocs.forEach(a => {
+      const key = a.user || a.userId;
+      if (key) apaByAgent.set(key.toString(), a);
     });
+    const isLicensedById = new Map(activeAgentDocs.map(a => {
+      const id = a._id.toString();
+      return [id, isAgentLicensed(progressByAgent.get(id), apaByAgent.get(id), a.metadata)];
+    }));
+    const licensedCount = [...isLicensedById.values()].filter(Boolean).length;
+    const unlicensedCount = activeUsers - licensedCount;
 
-    // Licensed vs unlicensed agent counts (§21.5)
-    const licensedCount = await LicensingProgress.countDocuments({ isLicensed: true });
-    const unlicensedCount = totalAgents - licensedCount;
-
-    // Production metrics (§22.1)
-    const totalProduction = await ProductionSubmission.countDocuments();
-    const productionInForce = await ProductionSubmission.countDocuments({ status: 'In Force' });
+    // Production metrics (§22.1) — exclude soft-deleted entries and removed agents
+    const prodScope = { deletedAt: null, agent: { $in: allAgentIds } };
+    const totalProduction = await ProductionSubmission.countDocuments(prodScope);
+    const productionInForce = await ProductionSubmission.countDocuments({ ...prodScope, status: 'In Force' });
     const recentProduction = await ProductionSubmission.countDocuments({
+      ...prodScope,
       submissionDate: { $gte: thirtyDaysAgo }
     });
     const premiumAgg = await ProductionSubmission.aggregate([
-      { $match: { status: 'In Force' } },
+      { $match: { ...prodScope, status: 'In Force' } },
       { $group: { _id: null, total: { $sum: '$premiumAmount' } } }
     ]);
     const totalPremiumInForce = premiumAgg.length > 0 ? premiumAgg[0].total : 0;
-    
+
     // --- 24-hour activity (§25.3) ---
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const newAgents24h = await User.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    const newAgentDocs24h = agentDocs.filter(a => a.createdAt >= twentyFourHoursAgo);
+    const newAgents24h = newAgentDocs24h.length;
     // 24h agent breakdown: licensed vs unlicensed
-    const newAgentIds24h = await User.find({ createdAt: { $gte: twentyFourHoursAgo } }).select('_id').lean();
-    const newAgentIdList = newAgentIds24h.map(u => u._id);
-    const newLicensedAgents24h = newAgentIdList.length > 0
-      ? await LicensingProgress.countDocuments({ agent: { $in: newAgentIdList }, isLicensed: true })
-      : 0;
+    const newLicensedAgents24h = newAgentDocs24h.filter(a => isLicensedById.get(a._id.toString())).length;
     const newUnlicensedAgents24h = newAgents24h - newLicensedAgents24h;
-    const newProduction24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    const newProduction24h = await ProductionSubmission.countDocuments({ ...prodScope, createdAt: { $gte: twentyFourHoursAgo } });
     // 24h production breakdown: submitted vs in-force
-    const newProductionSubmitted24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo }, status: { $ne: 'In Force' } });
-    const newProductionInForce24h = await ProductionSubmission.countDocuments({ createdAt: { $gte: twentyFourHoursAgo }, status: 'In Force' });
-    const newApplications24h = await APAApplication.countDocuments({ createdAt: { $gte: twentyFourHoursAgo } });
+    const newProductionSubmitted24h = await ProductionSubmission.countDocuments({ ...prodScope, createdAt: { $gte: twentyFourHoursAgo }, status: { $ne: 'In Force' } });
+    const newProductionInForce24h = await ProductionSubmission.countDocuments({ ...prodScope, createdAt: { $gte: twentyFourHoursAgo }, status: 'In Force' });
+    const newApplications24h = await APAApplication.countDocuments({ createdAt: { $gte: twentyFourHoursAgo }, deletedAt: null });
     const recentActivity = [];
     // Recent agents
-    const recentAgents = await User.find({ createdAt: { $gte: twentyFourHoursAgo } })
+    const recentAgents = await User.find({ role: 'agent', deletedAt: null, createdAt: { $gte: twentyFourHoursAgo } })
       .select('name email role createdAt').sort({ createdAt: -1 }).limit(10).lean();
     recentAgents.forEach(a => recentActivity.push({
       type: 'new_agent', icon: 'person-plus-fill', color: 'primary',
       text: `${a.name} joined as ${a.role}`, time: a.createdAt
     }));
     // Recent production
-    const recentProd = await ProductionSubmission.find({ createdAt: { $gte: twentyFourHoursAgo } })
+    const recentProd = await ProductionSubmission.find({ ...prodScope, createdAt: { $gte: twentyFourHoursAgo } })
       .populate('agent', 'name').select('agent productSold premiumAmount createdAt')
       .sort({ createdAt: -1 }).limit(10).lean();
     recentProd.forEach(p => recentActivity.push({
@@ -970,12 +990,12 @@ router.get('/stats', async (req, res) => {
       text: `${p.agent?.name || 'Agent'} submitted ${p.productSold} ($${p.premiumAmount})`, time: p.createdAt
     }));
     // Recent applications
-    const recentApps = await APAApplication.find({ createdAt: { $gte: twentyFourHoursAgo } })
-      .select('personalInfo.firstName personalInfo.lastName status createdAt')
+    const recentApps = await APAApplication.find({ createdAt: { $gte: twentyFourHoursAgo }, deletedAt: null })
+      .select('personalInfo.legalFirstName personalInfo.legalLastName personalInfo.firstName personalInfo.lastName status createdAt')
       .sort({ createdAt: -1 }).limit(5).lean();
     recentApps.forEach(a => recentActivity.push({
       type: 'application', icon: 'file-earmark-text-fill', color: 'info',
-      text: `New APA application from ${a.personalInfo?.firstName || ''} ${a.personalInfo?.lastName || ''}`.trim(),
+      text: `New APA application from ${a.personalInfo?.legalFirstName || a.personalInfo?.firstName || ''} ${a.personalInfo?.legalLastName || a.personalInfo?.lastName || ''}`.trim(),
       time: a.createdAt
     }));
     // Sort by time descending
@@ -1001,16 +1021,17 @@ router.get('/stats', async (req, res) => {
       // Top 5 personal (individual agent client count)
       topPersonalACA = await ACAClientRecord.aggregate([
         { $match: { uploadBatch: latestBatch } },
-        { $sort: { clientCount: -1 } },
-        { $limit: 5 },
         { $lookup: { from: 'users', localField: 'agent', foreignField: '_id', as: 'agentInfo' } },
         { $unwind: { path: '$agentInfo', preserveNullAndEmptyArrays: true } },
+        { $match: { 'agentInfo.deletedAt': null } },
+        { $sort: { clientCount: -1 } },
+        { $limit: 5 },
         { $project: { agentName: { $ifNull: ['$agentInfo.name', '$agentName'] }, clientCount: 1 } }
       ]);
 
       // Top 5 team (agent + their downline total)
       const allRecords = await ACAClientRecord.find({ uploadBatch: latestBatch }).lean();
-      const agentsWithDownline = await User.find({ role: 'agent' }).select('_id name referredBy').lean();
+      const agentsWithDownline = await User.find({ role: 'agent', deletedAt: null }).select('_id name referredBy').lean();
       // Build parent map
       const parentMap = {};
       agentsWithDownline.forEach(u => {

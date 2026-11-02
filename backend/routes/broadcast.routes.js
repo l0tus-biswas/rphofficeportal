@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
-const multer = require('multer');
 const Broadcast = require('../models/Broadcast');
 const Notification = require('../models/Notification');
 const NotificationPreference = require('../models/NotificationPreference');
@@ -20,33 +19,9 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Configure multer for broadcast image uploads
-const imageStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads/broadcast-images');
-    try {
-      await fs.mkdir(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    } catch (error) {
-      cb(error);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `broadcast-img-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
-});
-
-const uploadBroadcastImage = multer({
-  storage: imageStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(jpeg|jpg|png|gif|webp)$/.test(file.mimetype)) {
-      return cb(null, true);
-    }
-    cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed'));
-  }
-});
+// Multer config for broadcast image uploads (shared with the legacy notifications endpoint)
+const { uploadBroadcastImage } = require('../utils/broadcastUpload');
+const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml } = require('../utils/broadcastContent');
 
 // All routes require authentication
 router.use(protect);
@@ -205,7 +180,7 @@ router.get('/:id', async (req, res) => {
         userId: req.user._id,
         type: 'admin_broadcast',
         title: broadcast.title,
-        message: broadcast.message,
+        message: htmlToPlainText(broadcast.message),
         data: { broadcastId: broadcast._id.toString() },
         isRead: true
       });
@@ -227,14 +202,16 @@ router.post('/', authorize('admin'), async (req, res) => {
     if (!title || !title.trim()) {
       return sendResponse(res, 400, { message: 'Title is required' });
     }
-    if (!message || !message.trim()) {
+    // Sanitize rich-text HTML, then validate (e.g. '<p><br></p>' counts as empty)
+    const cleanMessage = typeof message === 'string' ? sanitizeBroadcastHtml(message) : '';
+    if (!cleanMessage || isEmptyBroadcastHtml(cleanMessage)) {
       return sendResponse(res, 400, { message: 'Message is required' });
     }
 
     // Create the broadcast record
     const broadcast = await Broadcast.create({
       title: title.trim(),
-      message: message.trim(),
+      message: cleanMessage,
       link: link?.trim() || null,
       targetRoles: Array.isArray(targetRoles) ? targetRoles : [],
       createdBy: req.user._id
@@ -259,7 +236,7 @@ router.post('/', authorize('admin'), async (req, res) => {
           userId: user._id,
           type: 'admin_broadcast',
           title: broadcast.title,
-          message: broadcast.message,
+          message: htmlToPlainText(broadcast.message),
           link: broadcast.link,
           data: { broadcastBy: req.user._id, broadcastId: broadcast._id.toString() }
         }, false);
@@ -299,8 +276,19 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     }
 
     const { title, message, link, isActive } = req.body;
-    if (title !== undefined) broadcast.title = title.trim();
-    if (message !== undefined) broadcast.message = message.trim();
+    if (title !== undefined) {
+      if (typeof title !== 'string' || !title.trim()) {
+        return sendResponse(res, 400, { message: 'Title is required' });
+      }
+      broadcast.title = title.trim();
+    }
+    if (message !== undefined) {
+      const cleanMessage = typeof message === 'string' ? sanitizeBroadcastHtml(message) : '';
+      if (!cleanMessage || isEmptyBroadcastHtml(cleanMessage)) {
+        return sendResponse(res, 400, { message: 'Message is required' });
+      }
+      broadcast.message = cleanMessage;
+    }
     if (link !== undefined) broadcast.link = link?.trim() || null;
     if (typeof isActive === 'boolean') broadcast.isActive = isActive;
 
@@ -474,7 +462,7 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
               userId: user._id,
               type: 'admin_broadcast',
               title: broadcast.title,
-              message: broadcast.message,
+              message: htmlToPlainText(broadcast.message),
               data: { broadcastId: broadcast._id.toString() },
               isRead: false,
               emailSent: true,
@@ -503,7 +491,7 @@ router.post('/:id/notify', authorize('admin'), async (req, res) => {
                   userId: user._id,
                   type: 'admin_broadcast',
                   title: broadcast.title,
-                  message: broadcast.message,
+                  message: htmlToPlainText(broadcast.message),
                   data: { broadcastId: broadcast._id.toString() },
                   isRead: false,
                   emailSent: true,
@@ -564,7 +552,7 @@ router.post('/:id/resend', authorize('admin'), async (req, res) => {
           userId: user._id,
           type: 'admin_broadcast',
           title: broadcast.title,
-          message: broadcast.message,
+          message: htmlToPlainText(broadcast.message),
           link: broadcast.link,
           data: { broadcastBy: broadcast.createdBy, broadcastId: broadcast._id.toString() }
         }, false);

@@ -128,7 +128,9 @@ notificationSchema.statics.createNotification = async function(data, sendEmail =
     return null; // User opted out of this notification type entirely
   }
 
-  const notification = await this.create(data);
+  // Optional email-only overrides (not persisted): HTML message and image URL
+  const { emailMessage, emailImage, ...notificationData } = data;
+  const notification = await this.create(notificationData);
 
   // Real-time push so the client badge updates instantly instead of polling.
   // Emitted to the user's room (`user:<id>`); clients refresh their unread
@@ -164,8 +166,9 @@ notificationSchema.statics.createNotification = async function(data, sendEmail =
         await sendNotificationEmail({
           toEmail: user.email,
           title: data.title,
-          message: data.message,
-          link: data.link || null
+          message: emailMessage || data.message,
+          link: data.link || null,
+          imageUrl: emailImage || null
         });
         notification.emailSent = true;
         await notification.save();

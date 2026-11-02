@@ -49,7 +49,7 @@
           <tr *ngFor="let b of broadcasts">
             <td>
               <div class="fw-semibold">{{ b.title }}</div>
-              <small class="text-muted">{{ b.message.length > 80 ? (b.message | slice:0:80) + '...' : b.message }}</small>
+              <small class="text-muted">{{ b.message | stripHtml:80 }}</small>
             </td>
             <td><span class="badge bg-secondary">{{ getRoleLabel(b.targetRoles) }}</span></td>
             <td>
@@ -132,8 +132,9 @@
 
           <div class="mb-3">
             <label class="form-label">Message <span class="text-danger">*</span></label>
-            <textarea class="form-control" rows="5" [(ngModel)]="formMessage"
-                      placeholder="Write your announcement message here..."></textarea>
+            <quill-editor class="broadcast-editor" [(ngModel)]="formMessage" name="formMessage"
+              [modules]="quillModules" [formats]="quillFormats" [valueGetter]="quillValueGetter"
+              placeholder="Write your announcement message here..."></quill-editor>
           </div>
 
           <div class="mb-3">
@@ -187,7 +188,7 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" (click)="closeModal()">Cancel</button>
           <button class="btn" [ngClass]="editMode ? 'btn-warning' : 'btn-primary'"
-                  [disabled]="saving || !formTitle.trim() || !formMessage.trim()"
+                  [disabled]="saving || !formTitle.trim() || isFormMessageEmpty"
                   (click)="saveBroadcast()">
             <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>
             {{ editMode ? 'Save Changes' : 'Send Broadcast' }}
