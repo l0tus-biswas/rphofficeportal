@@ -40,15 +40,18 @@ async function isUplineOf(uplineId, agentId) {
  */
 async function getDownlineIds(agentId) {
   const result = [];
+  const visited = new Set([String(agentId)]); // guards against referral cycles / duplicate parents
   let frontier = [agentId];
   let depth = 0;
 
   while (frontier.length > 0 && depth < MAX_DEPTH) {
-    const children = await User.find({ referredBy: { $in: frontier } }).select('_id').lean();
-    if (children.length === 0) break;
-    const ids = children.map(c => c._id);
-    result.push(...ids);
-    frontier = ids;
+    const children = await User.find({ referredBy: { $in: frontier } }).select('_id deletedAt').lean();
+    const fresh = children.filter(c => !visited.has(String(c._id)));
+    if (fresh.length === 0) break;
+    fresh.forEach(c => visited.add(String(c._id)));
+    // Deleted users are walked through (their recruits stay reachable) but not returned
+    result.push(...fresh.filter(c => !c.deletedAt).map(c => c._id));
+    frontier = fresh.map(c => c._id);
     depth++;
   }
   return result;
