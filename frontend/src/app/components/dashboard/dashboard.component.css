@@ -384,3 +384,6 @@
     font-size: 1.75rem;
   }
 }
+
+.announcements-card { border-left: 4px solid #0d6efd; }
+.announcement-thumb { width: 72px; height: 72px; object-fit: cover; flex-shrink: 0; }
