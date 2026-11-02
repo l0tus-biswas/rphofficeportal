@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AdminService } from '../../../services/admin.service';
 import { AuthService } from '../../../services/auth.service';
+import { PromotionService } from '../../../services/promotion.service';
 import { environment } from '../../../../environments/environment';
 
 @Component({
@@ -49,7 +50,8 @@ export class UserManagementComponent implements OnInit {
     private adminService: AdminService,
     private authService: AuthService,
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private promotionService: PromotionService
   ) { }
 
   ngOnInit(): void {
@@ -297,20 +299,25 @@ export class UserManagementComponent implements OnInit {
   }
 
   promoteAgent(user: any): void {
-    const levels = [
-      'associate',
-      'senior associate',
-      'manager',
-      'senior manager',
-      'regional executive',
-      'senior regional executive',
-      'national executive',
-      'senior national executive'
-    ];
-    
-    const currentLevel = user.level || 'associate';
+    // Levels come from the Promotion Management configuration
+    this.promotionService.getLevels().subscribe({
+      next: (res) => {
+        const levels = (res.levels || [])
+          .filter((l: any) => l.isActive !== false)
+          .sort((a, b) => a.rank - b.rank)
+          .map(l => l.name);
+        this.openPromoteModal(user, levels);
+      },
+      error: (error) => {
+        this.error = error.error?.message || 'Failed to load promotion levels';
+      }
+    });
+  }
+
+  private openPromoteModal(user: any, levels: string[]): void {
+    const currentLevel = user.level || levels[0] || 'associate';
     const levelOptions = levels.map(level => {
-      const selected = level === currentLevel ? 'selected' : '';
+      const selected = level.toLowerCase() === currentLevel.toLowerCase() ? 'selected' : '';
       return `<option value="${level}" ${selected}>${this.getLevelDisplay(level)}</option>`;
     }).join('');
     
@@ -348,7 +355,7 @@ export class UserManagementComponent implements OnInit {
       const select = modal.querySelector('#levelSelect') as HTMLSelectElement;
       const newLevel = select.value;
       
-      if (newLevel === currentLevel) {
+      if (newLevel.toLowerCase() === currentLevel.toLowerCase()) {
         modal.remove();
         return;
       }

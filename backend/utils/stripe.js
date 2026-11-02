@@ -30,14 +30,21 @@ const getSubscriptionPeriod = (subscription) => {
   return { start: item?.current_period_start || null, end: item?.current_period_end || null };
 };
 
-const createCustomer = async (email, name, metadata = {}) => {
+// On current API versions the invoice no longer carries payment_intent; the
+// client secret needed to confirm the first payment lives on
+// invoice.confirmation_secret (expanded via 'latest_invoice.confirmation_secret').
+const getSubscriptionClientSecret = (subscription) =>
+  subscription?.latest_invoice?.confirmation_secret?.client_secret || null;
+
+// `idempotencyKey` makes retried/double-submitted requests resolve to the same
+// Stripe object instead of creating a duplicate customer.
+const createCustomer = async (email, name, metadata = {}, idempotencyKey) => {
   ensureStripeConfigured();
   try {
-    const customer = await stripe.customers.create({
-      email,
-      name,
-      metadata
-    });
+    const customer = await stripe.customers.create(
+      { email, name, metadata },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
     return customer;
   } catch (error) {
     console.error('Stripe create customer error:', error);
@@ -78,7 +85,7 @@ const createSubscription = async (customerId, priceId, metadata = {}) => {
       items: [{ price: priceId }],
       payment_behavior: 'default_incomplete',
       payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'],
+      expand: ['latest_invoice.confirmation_secret'],
       metadata
     });
     return subscription;
@@ -137,9 +144,20 @@ const reactivateSubscription = async (subscriptionId) => {
 // on file to charge; throws Stripe's own error if the charge attempt fails
 // (declined card, requires authentication, etc.) — payment_behavior:
 // 'error_if_incomplete' means no subscription is left behind on failure.
-const resumeSubscriptionForCustomer = async (customerId, priceId, metadata = {}) => {
+// `idempotencyKey` guarantees that a double-click, an overlapping job run, or a
+// retry after a failed DB write returns the SAME subscription instead of
+// charging the card a second time.
+const resumeSubscriptionForCustomer = async (customerId, priceId, metadata = {}, idempotencyKey) => {
   ensureStripeConfigured();
   try {
+    // If a previous attempt already charged and created a live subscription
+    // (e.g. our DB write afterwards failed), adopt it rather than billing again.
+    const existing = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
+    const alreadyActive = (existing?.data || []).find(
+      (s) => ['active', 'trialing'].includes(s.status) && !s.cancel_at_period_end
+    );
+    if (alreadyActive) return alreadyActive;
+
     const customer = await stripe.customers.retrieve(customerId);
     let defaultPaymentMethod = customer?.invoice_settings?.default_payment_method;
 
@@ -160,9 +178,8 @@ const resumeSubscriptionForCustomer = async (customerId, priceId, metadata = {})
       default_payment_method: defaultPaymentMethod,
       collection_method: 'charge_automatically',
       payment_behavior: 'error_if_incomplete',
-      expand: ['latest_invoice.payment_intent'],
       metadata
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
     return subscription;
   } catch (error) {
     console.error('Stripe resume subscription error:', error);
@@ -396,6 +413,7 @@ module.exports = {
   reactivateSubscription,
   resumeSubscriptionForCustomer,
   getSubscriptionPeriod,
+  getSubscriptionClientSecret,
   updateSubscription,
   retrieveSubscription,
   retrievePaymentIntent,

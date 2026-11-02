@@ -138,7 +138,13 @@ const apaApplicationSchema = new mongoose.Schema({
     stripeSubscriptionId: String,
     useSamePaymentMethod: { type: Boolean, default: true },
     alternatePaymentMethodId: String,
-    couponCode: String
+    couponCode: String,
+    // Set once the coupon's usageCount has been incremented (at payment
+    // completion, not checkout creation) so it is only ever counted once.
+    couponUsageCounted: { type: Boolean, default: false },
+    // Atomic lock taken while a paid checkout is being turned into an account,
+    // so the browser return and the Stripe webhook can't both create one.
+    registrationClaimedAt: Date
   },
   
   // Linked User (created after payment)

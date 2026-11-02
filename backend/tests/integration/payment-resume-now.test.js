@@ -71,7 +71,10 @@ describe('Integration: POST /api/payments/resume-now', () => {
       .set('Authorization', `Bearer ${agentToken}`);
 
     expect(res.status).toBe(200);
-    expect(stripe.resumeSubscriptionForCustomer).toHaveBeenCalledWith('cus_mock', 'price_mock', expect.objectContaining({ userId: 'test-user-id' }));
+    expect(stripe.resumeSubscriptionForCustomer).toHaveBeenCalledWith(
+      'cus_mock', 'price_mock', expect.objectContaining({ userId: 'test-user-id' }),
+      expect.stringMatching(/^resume-now-test-user-id-\d+-\d+$/)
+    );
     expect(user.stripeSubscriptionId).toBe('sub_new_mock');
     expect(user.paymentAccessEnabled).toBe(true);
     expect(user.pendingBillingResumeAt).toBeNull();

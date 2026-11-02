@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
 const APAApplication = require('../models/APAApplication');
+const { getLicensedMap, isAgentLicensed } = require('../utils/licensing');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -330,28 +331,10 @@ router.get('/dashboard/checklist', async (req, res) => {
   try {
     // Check LicensingProgress record (authoritative source for licensing status)
     const lp = await LicensingProgress.findOne({ agent: req.user._id }).select('isLicensed checklist.preLicenseCourse.completed checklist.stateAppointment.approved').lean();
-    let isLicensed = lp ? lp.isLicensed : false;
-
-    // If all checklist steps complete (stateAppointment approved), treat as licensed
-    if (!isLicensed && lp?.checklist?.stateAppointment?.approved) {
-      isLicensed = true;
-    }
-
-    // Also check APA Application's licensingStatus (agent self-reported)
-    if (!isLicensed) {
-      const apa = await APAApplication.findOne({ user: req.user._id }).select('licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
-      if (apa?.licensingStatus?.currentlyLicensed || (apa?.licensingStatus?.licenseTypes?.length > 0)) {
-        isLicensed = true;
-      }
-    }
-
-    // Also check user metadata for currentlyLicensed (fallback for imported/migrated agents)
-    if (!isLicensed && req.user.metadata) {
-      const metaLicensed = req.user.metadata.get ? req.user.metadata.get('currentlyLicensed') : req.user.metadata?.currentlyLicensed;
-      if (metaLicensed === 'true' || metaLicensed === true) {
-        isLicensed = true;
-      }
-    }
+    // Same rule as the Licensing page (stored flag, approved final step, APA, imported metadata)
+    const apa = await APAApplication.findOne({ $or: [{ user: req.user._id }, { userId: req.user._id }] })
+      .select('licensingStatus.currentlyLicensed licensingStatus.licenseTypes').lean();
+    const isLicensed = isAgentLicensed(lp, apa, req.user.metadata);
 
     // Fetch QuickBooks invite URL from SystemConfig
     let quickbooksUrl = null;
@@ -452,13 +435,8 @@ router.get('/my-team', async (req, res) => {
 
     // 2. Get licensing data for all descendants
     const descendantIds = allDescendants.map(u => u._id);
-    const licensingRecords = await LicensingProgress.find({ agent: { $in: descendantIds } })
-      .select('agent isLicensed')
-      .lean();
-    const licensingMap = {};
-    licensingRecords.forEach(r => {
-      licensingMap[r.agent.toString()] = r.isLicensed;
-    });
+    // Same rule as the Licensing page (stored flag, approved final step, APA, imported metadata)
+    const licensingMap = Object.fromEntries(await getLicensedMap(descendantIds));
 
     // 3. Enrich with licensing status + level in tree
     const enriched = allDescendants.map(u => ({

@@ -7,6 +7,7 @@ import { AgentService } from '../../services/agent.service';
 import { AdminService } from '../../services/admin.service';
 import { LicensingService, LicensingProgress } from '../../services/licensing.service';
 import { BrandingService, BrandingConfig } from '../../services/branding.service';
+import { BroadcastService } from '../../services/broadcast.service';
 import { Stats, User } from '../../models/user.model';
 import { environment } from '../../../environments/environment';
 
@@ -27,6 +28,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   daysRemaining: number = 0;
   private timerInterval: any;
 
+  // Announcements (latest broadcasts, shown at the top of the dashboard)
+  announcements: any[] = [];
+  expandedAnnouncementId: string | null = null;
+
   // Welcome Message
   showWelcomeModal = false;
   welcomeTitle = '';
@@ -43,6 +48,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private adminService: AdminService,
     private licensingService: LicensingService,
     private brandingService: BrandingService,
+    private broadcastService: BroadcastService,
     private router: Router,
     private http: HttpClient,
     private sanitizer: DomSanitizer
@@ -64,6 +70,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.generateReferralLink();
     this.loadLicensingProgress();
     this.loadWelcomeMessage();
+    this.loadAnnouncements();
+  }
+
+  loadAnnouncements(): void {
+    this.broadcastService.getBroadcasts(1, 3).subscribe({
+      next: (res: any) => {
+        this.announcements = res?.broadcasts ?? res?.data?.broadcasts ?? [];
+      },
+      error: () => { this.announcements = []; }
+    });
+  }
+
+  toggleAnnouncement(a: any): void {
+    const opening = this.expandedAnnouncementId !== a._id;
+    this.expandedAnnouncementId = opening ? a._id : null;
+    // Opening an unread announcement marks it as read (same call the announcements page makes)
+    if (opening && !a.isRead) {
+      this.broadcastService.getBroadcast(a._id).subscribe({
+        next: () => {
+          a.isRead = true;
+          this.broadcastService.refreshUnreadCount();
+        },
+        error: () => { /* leave as unread */ }
+      });
+    }
+  }
+
+  openAnnouncementLink(link: string): void {
+    if (/^https?:\/\//i.test(link)) {
+      window.open(link, '_blank', 'noopener');
+    } else {
+      this.router.navigateByUrl(link);
+    }
+  }
+
+  getAnnouncementImageUrl(imagePath: string): string {
+    if (!imagePath) return '';
+    return imagePath.startsWith('http') ? imagePath : `${environment.baseUrl}${imagePath}`;
   }
 
   loadWelcomeMessage(): void {

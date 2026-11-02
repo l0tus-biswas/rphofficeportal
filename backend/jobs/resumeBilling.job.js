@@ -28,7 +28,16 @@ async function processDueBillingResumes() {
     pendingBillingResumeAt: { $ne: null, $lte: new Date() }
   });
 
-  for (const user of dueUsers) {
+  for (const dueUser of dueUsers) {
+    // Re-read right before charging: the agent may have paid early via
+    // /resume-now (which clears pendingBillingResumeAt) since the query ran.
+    const user = await User.findOne({
+      _id: dueUser._id,
+      billingExempt: false,
+      pendingBillingResumeAt: { $ne: null, $lte: new Date() }
+    });
+    if (!user) continue;
+
     try {
       const priceId = process.env.STRIPE_MONTHLY_PRICE_ID;
       if (!user.stripeCustomerId || !priceId) {
@@ -38,10 +47,15 @@ async function processDueBillingResumes() {
         continue;
       }
 
+      // Keyed on the scheduled attempt (resume time + attempt number): an
+      // overlapping run or a retry after a failed DB write below returns the
+      // same Stripe subscription instead of charging the card again. The next
+      // scheduled attempt changes both values, so it gets a fresh key.
+      const idempotencyKey = `resume-${user._id}-${user.pendingBillingResumeAt.getTime()}-${user.billingResumeAttempts || 0}`;
       const newSubscription = await resumeSubscriptionForCustomer(user.stripeCustomerId, priceId, {
         userId: user._id.toString(),
         email: user.email
-      });
+      }, idempotencyKey);
 
       // The Subscription schema enforces one document per user (unique
       // index on `user`) — this user already has one from their original
