@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
 const APAApplication = require('../models/APAApplication');
+const { getLicensedMap } = require('../utils/licensing');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
@@ -452,13 +453,8 @@ router.get('/my-team', async (req, res) => {
 
     // 2. Get licensing data for all descendants
     const descendantIds = allDescendants.map(u => u._id);
-    const licensingRecords = await LicensingProgress.find({ agent: { $in: descendantIds } })
-      .select('agent isLicensed')
-      .lean();
-    const licensingMap = {};
-    licensingRecords.forEach(r => {
-      licensingMap[r.agent.toString()] = r.isLicensed;
-    });
+    // Same rule as the Licensing page (stored flag, approved final step, APA, imported metadata)
+    const licensingMap = Object.fromEntries(await getLicensedMap(descendantIds));
 
     // 3. Enrich with licensing status + level in tree
     const enriched = allDescendants.map(u => ({

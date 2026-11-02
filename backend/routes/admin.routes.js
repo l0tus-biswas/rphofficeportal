@@ -6,7 +6,7 @@ const AuditLog = require('../models/AuditLog');
 const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const APAApplication = require('../models/APAApplication');
-const { isAgentLicensed } = require('../utils/licensing');
+const { isAgentLicensed, getLicensedMap } = require('../utils/licensing');
 const Notification = require('../models/Notification');
 const LicensingProgress = require('../models/LicensingProgress');
 const ProductionSubmission = require('../models/ProductionSubmission');
@@ -78,11 +78,14 @@ router.get('/hierarchy', async (req, res) => {
     const hierarchy = await User.getFullHierarchy();
     
     // Fetch all licensing records to enrich hierarchy nodes
-    const allLicensing = await LicensingProgress.find({}).select('agent isLicensed').lean();
-    const licensingMap = {};
-    allLicensing.forEach(lp => {
-      licensingMap[String(lp.agent)] = lp.isLicensed;
+    // Same rule as the Licensing page (stored flag, approved final step, APA, imported metadata)
+    const hierarchyIds = [];
+    const collectIds = (nodes) => nodes.forEach(n => {
+      hierarchyIds.push(n._id);
+      if (n.children && n.children.length > 0) collectIds(n.children);
     });
+    collectIds(hierarchy);
+    const licensingMap = Object.fromEntries(await getLicensedMap(hierarchyIds));
 
     // Recursively enrich nodes with licensing info and compute counts
     let totalUsers = 0, totalAdmins = 0, totalAgents = 0, totalLicensed = 0, totalUnlicensed = 0;

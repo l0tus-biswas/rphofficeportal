@@ -50,4 +50,38 @@ async function isAgentLicensedById(agentId) {
   return isAgentLicensed(progress, apa, user?.metadata);
 }
 
-module.exports = { isAgentLicensed, isAgentLicensedById };
+/**
+ * Bulk check — returns Map<agentIdString, boolean> using the same rule as
+ * isAgentLicensed, for screens that list many agents (My Team, hierarchy).
+ * @param {Array} agentIds
+ * @returns {Promise<Map<string, boolean>>}
+ */
+async function getLicensedMap(agentIds) {
+  const ids = (agentIds || []).filter(Boolean);
+  const result = new Map();
+  if (ids.length === 0) return result;
+
+  const [progressDocs, apaDocs, users] = await Promise.all([
+    LicensingProgress.find({ agent: { $in: ids } })
+      .select('agent isLicensed checklist.stateAppointment.approved').lean(),
+    APAApplication.find({ $or: [{ user: { $in: ids } }, { userId: { $in: ids } }] })
+      .select('user userId licensingStatus').lean(),
+    User.find({ _id: { $in: ids } }).select('metadata').lean()
+  ]);
+
+  const progressBy = new Map(progressDocs.map(p => [String(p.agent), p]));
+  const apaBy = new Map();
+  apaDocs.forEach(a => {
+    const key = a.user || a.userId;
+    if (key) apaBy.set(String(key), a);
+  });
+  const metaBy = new Map(users.map(u => [String(u._id), u.metadata]));
+
+  ids.forEach(id => {
+    const key = String(id);
+    result.set(key, isAgentLicensed(progressBy.get(key), apaBy.get(key), metaBy.get(key)));
+  });
+  return result;
+}
+
+module.exports = { isAgentLicensed, isAgentLicensedById, getLicensedMap };
