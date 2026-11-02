@@ -239,7 +239,7 @@ function getPrintfulClient(apiKey, storeId) {
 }
 
 // Photo upload for business card personalization
-const multer = require('multer');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const uploadDir = path.join(__dirname, '..', 'uploads', 'business-card-photos');

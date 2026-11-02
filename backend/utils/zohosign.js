@@ -622,7 +622,7 @@ function validateWebhookSignature(req) {
 
     if (!signature || !secret) {
       console.warn('Zoho Sign webhook validation skipped - missing signature or secret');
-      return true; // Allow in development, same leniency as docusign.js
+      return process.env.NODE_ENV !== 'production'; // lenient outside production only
     }
 
     const rawBody = req.rawBody || JSON.stringify(req.body);
@@ -630,7 +630,9 @@ function validateWebhookSignature(req) {
     hmac.update(rawBody);
     const calculatedSignature = hmac.digest('base64');
 
-    const isValid = signature === calculatedSignature;
+    const given = Buffer.from(String(signature));
+    const expected = Buffer.from(calculatedSignature);
+    const isValid = given.length === expected.length && crypto.timingSafeEqual(given, expected);
     if (!isValid) {
       console.error('Zoho Sign webhook signature validation failed');
     }

@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
-const multer = require('multer');
+const multer = require('./multer');
+const { IMAGE_EXT } = require('./uploadGuards');
 
 // Shared multer config for broadcast image uploads (max 5 MB, images only)
 const imageStorage = multer.diskStorage({
@@ -15,7 +16,7 @@ const imageStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `broadcast-img-${uniqueSuffix}${path.extname(file.originalname)}`);
+    cb(null, `broadcast-img-${uniqueSuffix}${IMAGE_EXT[file.mimetype] || '.img'}`);
   }
 });
 

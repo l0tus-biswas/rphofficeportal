@@ -80,6 +80,33 @@ exports.errorResponse = (res, error, statusCode) => {
 };
 
 // Pagination helper
+// Generic 500 for route catch-blocks. A malformed id (CastError) is the caller's mistake, so it is
+// a 400; outside development the raw error text is withheld so internals do not leak.
+exports.serverError = (res, error) => {
+  if (error && error.name === 'CastError') {
+    return res.status(400).json({ message: 'Invalid ID format' });
+  }
+  if (error && error.name === 'ValidationError') {
+    return res.status(400).json({ message: 'Validation failed' });
+  }
+  if (error && error.code === 11000) {
+    return res.status(409).json({ message: 'A record with that value already exists' });
+  }
+  const body = { message: 'Server error' };
+  if (process.env.NODE_ENV === 'development') body.error = error && error.message;
+  return res.status(500).json(body);
+};
+
+// Content-Disposition value that survives any file name. Node throws on header values with
+// characters above Latin-1 (emoji, curly quotes) or quotes/newlines, which would turn a normal
+// download into a 500. Gives an ASCII fallback plus the RFC 5987 UTF-8 form.
+exports.contentDisposition = (type, fileName) => {
+  const name = String(fileName || 'download');
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${type}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+};
+
 exports.paginate = (query, page = 1, limit = 10) => {
   const skip = (page - 1) * limit;
   return query.skip(skip).limit(limit);

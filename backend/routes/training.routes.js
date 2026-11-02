@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs').promises;
-const multer = require('multer');
+const multer = require('../utils/multer');
 const TrainingMaterial = require('../models/TrainingMaterial');
 const TrainingCategory = require('../models/TrainingCategory');
 const TrainingFolder = require('../models/TrainingFolder');
@@ -10,6 +10,12 @@ const { protect, authorize } = require('../middleware/auth.middleware');
 const { validateRequest, schemas } = require('../middleware/validation.middleware');
 const { logAction } = require('../middleware/audit.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
+const { IMAGE_EXT, guardUpload, removeUploaded, removeFile } = require('../utils/uploadGuards');
+
+const isObjectId = (v) => typeof v === 'string' && /^[0-9a-f]{24}$/i.test(v);
+// Plain text fields must really be strings (objects/arrays would crash .trim() or inject operators)
+const isText = (v) => typeof v === 'string';
+const toOrder = (v) => (v === undefined || v === null || v === '' ? 0 : Number(v));
 
 /**
  * Auto-detect content type from URL.
@@ -61,7 +67,7 @@ const pdfStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `training-pdf-${uniqueSuffix}${path.extname(file.originalname)}`);
+    cb(null, `training-pdf-${uniqueSuffix}.pdf`);
   }
 });
 
@@ -69,7 +75,7 @@ const uploadPdf = multer({
   storage: pdfStorage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
   fileFilter: (req, file, cb) => {
-    if (path.extname(file.originalname).toLowerCase() === '.pdf' || file.mimetype === 'application/pdf') {
+    if (path.extname(file.originalname).toLowerCase() === '.pdf' && file.mimetype === 'application/pdf') {
       return cb(null, true);
     }
     cb(new Error('Only PDF files are allowed'));
@@ -89,7 +95,7 @@ const thumbnailStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `folder-thumb-${uniqueSuffix}${path.extname(file.originalname)}`);
+    cb(null, `folder-thumb-${uniqueSuffix}${IMAGE_EXT[file.mimetype] || '.img'}`);
   }
 });
 
@@ -104,17 +110,22 @@ const uploadThumbnail = multer({
   }
 });
 
+const activeFolderExists = async (id) => {
+  const f = await TrainingFolder.findById(id).select('isActive');
+  return !!(f && f.isActive);
+};
+
 // @route   GET /api/training/materials
 // @desc    Get all training materials (filtered by access level)
 // @access  Private
 router.get('/materials', protect, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const category = req.query.category;
-    const type = req.query.type;
-    const folder = req.query.folder;
-    
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 1000);
+    const category = isText(req.query.category) ? req.query.category : undefined;
+    const type = isText(req.query.type) ? req.query.type : undefined;
+    const folder = isText(req.query.folder) ? req.query.folder : undefined;
+
     const filter = { isActive: true };
     
     // Filter by access level based on user role
@@ -161,10 +172,11 @@ router.get('/materials/:id', protect, async (req, res) => {
     const material = await TrainingMaterial.findById(req.params.id)
       .populate('uploadedBy', 'name role');
     
-    if (!material) {
+    // Deleted materials are hidden from the list, so they are hidden here too (admins can still open them)
+    if (!material || (!material.isActive && req.user.role !== 'admin')) {
       return sendResponse(res, 404, { message: 'Training material not found' });
     }
-    
+
     // Check access level
     if (req.user.role === 'recruit' && !['all', 'recruit'].includes(material.accessLevel)) {
       return sendResponse(res, 403, { message: 'Access denied' });
@@ -213,7 +225,13 @@ router.get('/folders', protect, async (req, res) => {
 router.get('/folders/:id/contents', protect, async (req, res) => {
   try {
     const folderId = req.params.id;
-    
+
+    const folder = await TrainingFolder.findById(folderId)
+      .populate('parent', 'name');
+    if (!folder || !folder.isActive) {
+      return sendResponse(res, 404, { message: 'Folder not found' });
+    }
+
     const subfolders = await TrainingFolder.find({
       parent: folderId,
       isActive: true
@@ -230,9 +248,6 @@ router.get('/folders/:id/contents', protect, async (req, res) => {
       .populate('uploadedBy', 'name role')
       .populate('folder', 'name')
       .sort('order -createdAt');
-    
-    const folder = await TrainingFolder.findById(folderId)
-      .populate('parent', 'name');
     
     sendResponse(res, 200, { folder, subfolders, materials });
   } catch (error) {
@@ -252,8 +267,14 @@ router.use(authorize('admin'));
 router.post('/categories', logAction('CREATE_TRAINING_CATEGORY'), async (req, res) => {
   try {
     const { name, description, order } = req.body;
-    if (!name || !name.trim()) {
+    if (!isText(name) || !name.trim()) {
       return sendResponse(res, 400, { message: 'Category name is required' });
+    }
+    if (description !== undefined && !isText(description)) {
+      return sendResponse(res, 400, { message: 'Description must be text' });
+    }
+    if (!Number.isFinite(toOrder(order))) {
+      return sendResponse(res, 400, { message: 'Order must be a number' });
     }
     const existing = await TrainingCategory.findOne({ name: name.trim(), isActive: true });
     if (existing) {
@@ -262,7 +283,7 @@ router.post('/categories', logAction('CREATE_TRAINING_CATEGORY'), async (req, re
     const category = await TrainingCategory.create({
       name: name.trim(),
       description: description?.trim() || '',
-      order: order || 0,
+      order: toOrder(order),
       createdBy: req.user._id
     });
     sendResponse(res, 201, { message: 'Category created successfully', category });
@@ -277,11 +298,15 @@ router.post('/categories', logAction('CREATE_TRAINING_CATEGORY'), async (req, re
 router.put('/categories/:id', logAction('UPDATE_TRAINING_CATEGORY'), async (req, res) => {
   try {
     const { name, description, order } = req.body;
+    if ((name !== undefined && !isText(name)) || (description !== undefined && !isText(description)) ||
+        (order !== undefined && !Number.isFinite(toOrder(order)))) {
+      return sendResponse(res, 400, { message: 'Invalid category fields' });
+    }
     const category = await TrainingCategory.findById(req.params.id);
     if (!category || !category.isActive) {
       return sendResponse(res, 404, { message: 'Category not found' });
     }
-    if (name) {
+    if (name && name.trim()) {
       const existing = await TrainingCategory.findOne({
         name: name.trim(),
         isActive: true,
@@ -298,7 +323,7 @@ router.put('/categories/:id', logAction('UPDATE_TRAINING_CATEGORY'), async (req,
       category.name = name.trim();
     }
     if (description !== undefined) category.description = description.trim();
-    if (order !== undefined) category.order = order;
+    if (order !== undefined) category.order = toOrder(order);
     await category.save();
     sendResponse(res, 200, { message: 'Category updated successfully', category });
   } catch (error) {
@@ -336,11 +361,20 @@ router.delete('/categories/:id', logAction('DELETE_TRAINING_CATEGORY'), async (r
 router.post('/folders', logAction('CREATE_TRAINING_FOLDER'), async (req, res) => {
   try {
     const { name, description, parent, order } = req.body;
-    if (!name || !name.trim()) {
+    if (!isText(name) || !name.trim()) {
       return sendResponse(res, 400, { message: 'Folder name is required' });
+    }
+    if (description !== undefined && !isText(description)) {
+      return sendResponse(res, 400, { message: 'Description must be text' });
+    }
+    if (!Number.isFinite(toOrder(order))) {
+      return sendResponse(res, 400, { message: 'Order must be a number' });
     }
     // Validate parent exists if provided
     if (parent) {
+      if (!isObjectId(parent)) {
+        return sendResponse(res, 400, { message: 'Parent folder not found' });
+      }
       const parentFolder = await TrainingFolder.findById(parent);
       if (!parentFolder || !parentFolder.isActive) {
         return sendResponse(res, 400, { message: 'Parent folder not found' });
@@ -350,7 +384,7 @@ router.post('/folders', logAction('CREATE_TRAINING_FOLDER'), async (req, res) =>
       name: name.trim(),
       description: description?.trim() || '',
       parent: parent || null,
-      order: order || 0,
+      order: toOrder(order),
       createdBy: req.user._id
     });
     sendResponse(res, 201, { message: 'Folder created successfully', folder });
@@ -365,6 +399,11 @@ router.post('/folders', logAction('CREATE_TRAINING_FOLDER'), async (req, res) =>
 router.put('/folders/:id', logAction('UPDATE_TRAINING_FOLDER'), async (req, res) => {
   try {
     const { name, description, parent, order } = req.body;
+    if ((name !== undefined && !isText(name)) || (description !== undefined && !isText(description)) ||
+        (order !== undefined && !Number.isFinite(toOrder(order))) ||
+        (parent !== undefined && parent !== null && parent !== '' && !isObjectId(parent))) {
+      return sendResponse(res, 400, { message: 'Invalid folder fields' });
+    }
     const folder = await TrainingFolder.findById(req.params.id);
     if (!folder || !folder.isActive) {
       return sendResponse(res, 404, { message: 'Folder not found' });
@@ -387,10 +426,10 @@ router.put('/folders/:id', logAction('UPDATE_TRAINING_FOLDER'), async (req, res)
         ancestor = await TrainingFolder.findById(ancestor.parent);
       }
     }
-    if (name) folder.name = name.trim();
+    if (name && name.trim()) folder.name = name.trim();
     if (description !== undefined) folder.description = description.trim();
     if (parent !== undefined) folder.parent = parent || null;
-    if (order !== undefined) folder.order = order;
+    if (order !== undefined) folder.order = toOrder(order);
     await folder.save();
     sendResponse(res, 200, { message: 'Folder updated successfully', folder });
   } catch (error) {
@@ -428,24 +467,24 @@ router.delete('/folders/:id', logAction('DELETE_TRAINING_FOLDER'), async (req, r
 // @route   POST /api/training/folders/:id/thumbnail
 // @desc    Upload or replace folder thumbnail image
 // @access  Private (Admin only)
-router.post('/folders/:id/thumbnail', uploadThumbnail.single('thumbnail'), logAction('UPDATE_FOLDER_THUMBNAIL'), async (req, res) => {
+router.post('/folders/:id/thumbnail', guardUpload(uploadThumbnail.single('thumbnail'), 'image-svg'), logAction('UPDATE_FOLDER_THUMBNAIL'), async (req, res) => {
   try {
-    const folder = await TrainingFolder.findById(req.params.id);
+    const folder = isObjectId(req.params.id) ? await TrainingFolder.findById(req.params.id) : null;
     if (!folder || !folder.isActive) {
-      return sendResponse(res, 404, { message: 'Folder not found' });
+      await removeUploaded(req);
+      return sendResponse(res, isObjectId(req.params.id) ? 404 : 400, { message: 'Folder not found' });
     }
     if (!req.file) {
       return sendResponse(res, 400, { message: 'No image file provided' });
     }
-    // Delete old thumbnail if it exists
-    if (folder.thumbnail) {
-      const oldPath = path.join(__dirname, '..', folder.thumbnail);
-      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
-    }
+    const oldThumbnail = folder.thumbnail;
     folder.thumbnail = `/uploads/training-thumbnails/${req.file.filename}`;
     await folder.save();
+    // Delete the old thumbnail only once the new one is saved
+    if (oldThumbnail) await removeFile({ path: path.join(__dirname, '..', oldThumbnail) });
     sendResponse(res, 200, { message: 'Thumbnail uploaded successfully', folder });
   } catch (error) {
+    await removeUploaded(req);
     errorResponse(res, error);
   }
 });
@@ -476,24 +515,24 @@ router.delete('/folders/:id/thumbnail', logAction('DELETE_FOLDER_THUMBNAIL'), as
 // @route   POST /api/training/materials/:id/thumbnail
 // @desc    Upload or replace material thumbnail image
 // @access  Private (Admin only)
-router.post('/materials/:id/thumbnail', uploadThumbnail.single('thumbnail'), logAction('UPDATE_MATERIAL_THUMBNAIL'), async (req, res) => {
+router.post('/materials/:id/thumbnail', guardUpload(uploadThumbnail.single('thumbnail'), 'image-svg'), logAction('UPDATE_MATERIAL_THUMBNAIL'), async (req, res) => {
   try {
-    const material = await TrainingMaterial.findById(req.params.id);
+    const material = isObjectId(req.params.id) ? await TrainingMaterial.findById(req.params.id) : null;
     if (!material || !material.isActive) {
-      return sendResponse(res, 404, { message: 'Material not found' });
+      await removeUploaded(req);
+      return sendResponse(res, isObjectId(req.params.id) ? 404 : 400, { message: 'Material not found' });
     }
     if (!req.file) {
       return sendResponse(res, 400, { message: 'No image file provided' });
     }
-    // Delete old thumbnail if it exists
-    if (material.thumbnail) {
-      const oldPath = path.join(__dirname, '..', material.thumbnail);
-      try { await fs.unlink(oldPath); } catch (e) { /* ignore if missing */ }
-    }
+    const oldThumbnail = material.thumbnail;
     material.thumbnail = `/uploads/training-thumbnails/${req.file.filename}`;
     await material.save();
+    // Delete the old thumbnail only once the new one is saved
+    if (oldThumbnail) await removeFile({ path: path.join(__dirname, '..', oldThumbnail) });
     sendResponse(res, 200, { message: 'Thumbnail uploaded successfully', material });
   } catch (error) {
+    await removeUploaded(req);
     errorResponse(res, error);
   }
 });
@@ -526,6 +565,12 @@ router.delete('/materials/:id/thumbnail', logAction('DELETE_MATERIAL_THUMBNAIL')
 // @access  Private (Admin only)
 router.post('/materials', validateRequest(schemas.trainingMaterial), logAction('CREATE_TRAINING_MATERIAL'), async (req, res) => {
   try {
+    if (req.body.url && !/^https?:\/\//i.test(req.body.url)) {
+      return sendResponse(res, 400, { message: 'URL must start with http:// or https://' });
+    }
+    if (req.body.folder && !(await activeFolderExists(req.body.folder))) {
+      return sendResponse(res, 400, { message: 'Folder not found' });
+    }
     // Auto-detect content type from URL
     const detectedType = detectContentType(req.body.url, req.body.type);
     const material = await TrainingMaterial.create({
@@ -552,6 +597,12 @@ router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), lo
     if (!existing || !existing.isActive) {
       return sendResponse(res, 404, { message: 'Training material not found' });
     }
+    if (req.body.url && !/^https?:\/\//i.test(req.body.url)) {
+      return sendResponse(res, 400, { message: 'URL must start with http:// or https://' });
+    }
+    if (req.body.folder && !(await activeFolderExists(req.body.folder))) {
+      return sendResponse(res, 400, { message: 'Folder not found' });
+    }
 
     // Auto-detect content type if URL is being updated
     const updateData = { ...req.body };
@@ -577,15 +628,16 @@ router.put('/materials/:id', validateRequest(schemas.updateTrainingMaterial), lo
 // @route   POST /api/training/materials/:id/pdf
 // @desc    Upload one or more PDF attachments for a training material (added to existing ones)
 // @access  Private (Admin only)
-router.post('/materials/:id/pdf', uploadPdf.array('pdf', 10), logAction('UPLOAD_TRAINING_PDF'), async (req, res) => {
+router.post('/materials/:id/pdf', guardUpload(uploadPdf.array('pdf', 10), 'pdf'), logAction('UPLOAD_TRAINING_PDF'), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return sendResponse(res, 400, { message: 'No PDF file uploaded' });
     }
 
-    const material = await TrainingMaterial.findById(req.params.id);
+    const material = isObjectId(req.params.id) ? await TrainingMaterial.findById(req.params.id) : null;
     if (!material || !material.isActive) {
-      return sendResponse(res, 404, { message: 'Training material not found' });
+      await removeUploaded(req);
+      return sendResponse(res, isObjectId(req.params.id) ? 404 : 400, { message: 'Training material not found' });
     }
 
     const newAttachments = req.files.map(file => ({
@@ -603,6 +655,7 @@ router.post('/materials/:id/pdf', uploadPdf.array('pdf', 10), logAction('UPLOAD_
       material
     });
   } catch (error) {
+    await removeUploaded(req);
     errorResponse(res, error);
   }
 });

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const { serverError } = require('../utils/helpers');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const CommissionStatement = require('../models/CommissionStatement');
@@ -27,14 +28,10 @@ const stmtUpload = multer({
     // 6.1: Accept PDF, images, and common doc formats
     const ext = path.extname(file.originalname).toLowerCase();
     const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.doc', '.docx', '.xls', '.xlsx', '.csv'];
-    const allowedMimes = [
-      'application/pdf', 'application/octet-stream',
-      'image/png', 'image/jpeg', 'image/gif',
-      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/csv'
-    ];
-    if (allowedExts.includes(ext) || allowedMimes.includes(file.mimetype)) {
+    // The extension is the gate: a client-declared MIME type must not let a disallowed
+    // file type (e.g. .html or .exe sent as application/pdf) through. Browsers report odd MIME
+    // types for some allowed files (csv as text/plain, etc.), so the MIME is not required.
+    if (allowedExts.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error('Only PDF, image, Word, Excel, and CSV files are allowed'), false);
@@ -42,6 +39,18 @@ const stmtUpload = multer({
   },
   limits: { fileSize: 20 * 1024 * 1024 } // 20 MB
 });
+
+// Multer writes files to disk before the handler validates anything, so a rejected request
+// would leave the upload behind. Remove them whenever the response is an error.
+const removeUploadsOnFailure = (req, res) => {
+  res.on('finish', () => {
+    if (res.statusCode < 400) return;
+    const uploaded = [...(req.files || []), ...(req.file ? [req.file] : [])];
+    for (const f of uploaded) {
+      fs.promises.unlink(f.path).catch(() => {});
+    }
+  });
+};
 
 // Multer error handler wrapper
 const handleMulterError = (upload) => (req, res, next) => {
@@ -55,9 +64,12 @@ const handleMulterError = (upload) => (req, res, next) => {
       }
       return res.status(400).json({ message: err.message || 'File upload error' });
     }
+    removeUploadsOnFailure(req, res);
     next();
   });
 };
+
+const isValidDate = (value) => !Number.isNaN(new Date(value).getTime());
 
 // ---------------------------------------------------------------------------
 // @route   GET /api/commission-statements/agents/search
@@ -78,7 +90,7 @@ router.get('/agents/search', authenticate, authorize('admin'), async (req, res) 
       .lean();
     res.json({ agents });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -95,6 +107,7 @@ router.post('/', authenticate, authorize('admin'), handleMulterError(stmtUpload.
     const { agentId, carrier, carriers, payPeriod, notes } = req.body;
     if (!agentId) return res.status(400).json({ message: 'agentId is required' });
     if (!payPeriod) return res.status(400).json({ message: 'payPeriod is required' });
+    if (!isValidDate(payPeriod)) return res.status(400).json({ message: 'payPeriod is not a valid date' });
 
     // 6.2: Accept carriers as JSON array string or comma-separated, or legacy single carrier
     let carriersArr = [];
@@ -139,7 +152,7 @@ router.post('/', authenticate, authorize('admin'), handleMulterError(stmtUpload.
     });
   } catch (error) {
     console.error('Error uploading commission statement:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -194,7 +207,7 @@ router.get('/', authenticate, async (req, res) => {
     }
   } catch (error) {
     console.error('Error fetching commission statements:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -224,7 +237,7 @@ router.post('/:id/notes', authenticate, authorize('admin'), async (req, res) => 
     res.json({ message: 'Note added', notes: stmt.notes });
   } catch (error) {
     console.error('Error adding note:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -253,7 +266,7 @@ router.put('/:id/notes/:noteId', authenticate, authorize('admin'), async (req, r
     res.json({ message: 'Note updated', notes: stmt.notes });
   } catch (error) {
     console.error('Error editing note:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -276,7 +289,7 @@ router.get('/:id/notes', authenticate, async (req, res) => {
     res.json({ notes: stmt.notes });
   } catch (error) {
     console.error('Error fetching notes:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -296,7 +309,7 @@ router.delete('/:id/notes/:noteId', authenticate, authorize('admin'), async (req
     res.json({ message: 'Note deleted', notes: stmt.notes });
   } catch (error) {
     console.error('Error deleting note:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -343,7 +356,7 @@ router.get('/:id/download', authenticate, async (req, res) => {
     fs.createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('Error downloading statement:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -384,6 +397,7 @@ router.put('/:id', authenticate, authorize('admin'), handleMulterError(stmtUploa
 
     // Update pay period
     if (payPeriod) {
+      if (!isValidDate(payPeriod)) return res.status(400).json({ message: 'payPeriod is not a valid date' });
       stmt.payPeriod = new Date(payPeriod);
     }
 
@@ -392,18 +406,20 @@ router.put('/:id', authenticate, authorize('admin'), handleMulterError(stmtUploa
       stmt.notes.push({ text: notes.trim(), addedBy: req.user._id, addedAt: new Date() });
     }
 
-    // Replace file if a new one is uploaded
+    // Replace file if a new one is uploaded. The old file is only removed after the record has
+    // been saved, so a failed save can never leave the statement pointing at a deleted file.
+    let replacedPath = null;
     if (req.file) {
-      // Remove old file
-      const oldPath = path.join(__dirname, '..', stmt.filePath);
-      if (fs.existsSync(oldPath)) {
-        try { fs.unlinkSync(oldPath); } catch (e) { /* ignore */ }
-      }
+      replacedPath = path.join(__dirname, '..', stmt.filePath);
       stmt.filePath = `uploads/commission-statements/${req.file.filename}`;
       stmt.originalFileName = req.file.originalname;
     }
 
     await stmt.save();
+
+    if (replacedPath && fs.existsSync(replacedPath)) {
+      try { fs.unlinkSync(replacedPath); } catch (e) { /* ignore */ }
+    }
 
     // Populate for response
     await stmt.populate('agent', 'name email');
@@ -413,7 +429,7 @@ router.put('/:id', authenticate, authorize('admin'), handleMulterError(stmtUploa
     res.json({ message: 'Statement updated', statement: stmt });
   } catch (error) {
     console.error('Error updating commission statement:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -437,7 +453,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     res.json({ message: 'Commission statement deleted' });
   } catch (error) {
     console.error('Error deleting commission statement:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

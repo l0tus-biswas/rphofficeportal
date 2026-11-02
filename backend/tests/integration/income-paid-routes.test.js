@@ -231,6 +231,31 @@ describe('Integration: Income Paid Routes (/api/production/income-paid)', () => 
     expect(entry.reviewNotes).toBe('Does not match carrier statement');
   });
 
+  it.each([
+    ['approve', 'approved'],
+    ['approve', 'rejected'],
+    ['reject', 'approved'],
+    ['reject', 'rejected']
+  ])('refuses to %s an entry that is already %s (409, no save, no notification)', async (action, current) => {
+    User.findById.mockImplementation(() => ({
+      select: jest.fn().mockResolvedValue(createMockAdmin({ _id: 'admin-id' }))
+    }));
+    const entry = {
+      _id: 'entry-1', agent: 'agent-id', amount: 5000, status: current,
+      save: jest.fn().mockResolvedValue(true)
+    };
+    IncomePaid.findById.mockResolvedValue(entry);
+
+    const res = await request(app)
+      .put(`/api/production/income-paid/entry-1/${action}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(409);
+    expect(entry.status).toBe(current);
+    expect(entry.save).not.toHaveBeenCalled();
+    expect(Notification.createNotification).not.toHaveBeenCalled();
+  });
+
   // ---- delete ----
 
   it("lets the owner delete their own PENDING entry", async () => {

@@ -72,4 +72,25 @@ function isEmptyBroadcastHtml(input) {
   return htmlToPlainText(sanitizeBroadcastHtml(input)) === '';
 }
 
-module.exports = { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml, SANITIZE_OPTIONS };
+/** Titles are plain text: tags are stripped. Returns null when not a usable string. */
+function cleanTitle(input) {
+  if (typeof input !== 'string') return null;
+  const text = htmlToPlainText(input.trim()).replace(/\s+/g, ' ').trim();
+  return text && text.length <= 200 ? text : null;
+}
+
+/**
+ * Links must be absolute http(s) URLs or an in-app path ("/broadcasts"); javascript:, data: etc.
+ * are refused. Returns { ok, value } where value is null for an empty link.
+ */
+function cleanLink(input) {
+  if (input === undefined || input === null || input === '') return { ok: true, value: null };
+  if (typeof input !== 'string') return { ok: false };
+  const link = input.trim();
+  if (!link) return { ok: true, value: null };
+  if (link.length > 2048 || /[\u0000-\u001f\s]/.test(link)) return { ok: false };
+  if (/^https?:\/\/[^/]/i.test(link) || /^\/(?!\/)/.test(link)) return { ok: true, value: link };
+  return { ok: false };
+}
+
+module.exports = { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml, cleanTitle, cleanLink, SANITIZE_OPTIONS };

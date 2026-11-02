@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const { serverError } = require('../utils/helpers');
+const multer = require('../utils/multer');
 const path = require('path');
 const { parse } = require('csv-parse/sync');
 const ExamFXProgress = require('../models/ExamFXProgress');
@@ -23,6 +24,17 @@ const csvUpload = multer({
   },
   limits: { fileSize: 10 * 1024 * 1024 }
 });
+
+// Runs multer and turns its errors (wrong type, too large) into 4xx responses
+const handleUploadError = (mw) => (req, res, next) => {
+  mw(req, res, (err) => {
+    if (!err) return next();
+    const tooBig = err.code === 'LIMIT_FILE_SIZE';
+    res.status(tooBig ? 413 : 400).json({ message: tooBig ? 'File too large (max 10MB)' : err.message });
+  });
+};
+
+const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 // ─── CSV parsing helpers ───
 function parsePercent(val) {
@@ -100,7 +112,7 @@ router.get('/config-status', authenticate, authorize('admin'), async (req, res) 
     });
   } catch (error) {
     console.error('Error checking ExamFX config:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -133,7 +145,7 @@ router.get('/', authenticate, async (req, res) => {
     res.json(records);
   } catch (error) {
     console.error('Error fetching ExamFX progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -192,7 +204,7 @@ router.get('/summary', authenticate, async (req, res) => {
     res.json(summary);
   } catch (error) {
     console.error('Error fetching ExamFX summary:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -237,7 +249,7 @@ router.get('/import-history', authenticate, authorize('admin'), async (req, res)
     res.json(history);
   } catch (error) {
     console.error('Error fetching import history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -281,7 +293,7 @@ router.get('/:agentId', authenticate, async (req, res) => {
     res.json(record);
   } catch (error) {
     console.error('Error fetching ExamFX progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -311,6 +323,15 @@ router.put('/:agentId', authenticate, authorize('admin'), async (req, res) => {
       'overallPercentComplete', 'courses', 'practiceExams', 'adminNotes'
     ];
 
+    // Array entries must be objects: a null/primitive entry would be stored and
+    // then crash every list/summary render (virtuals read c.status).
+    for (const field of ['courses', 'practiceExams']) {
+      const v = req.body[field];
+      if (v !== undefined && (!Array.isArray(v) || !v.every(isPlainObject))) {
+        return res.status(400).json({ message: `${field} must be an array of objects` });
+      }
+    }
+
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         record[field] = req.body[field];
@@ -332,7 +353,7 @@ router.put('/:agentId', authenticate, authorize('admin'), async (req, res) => {
     res.json(record);
   } catch (error) {
     console.error('Error updating ExamFX progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -347,6 +368,9 @@ router.post('/:agentId/link', authenticate, authorize('admin'), async (req, res)
     if (!examfxUserId && !examfxEmail) {
       return res.status(400).json({ message: 'Provide examfxUserId or examfxEmail' });
     }
+    if ((examfxUserId && typeof examfxUserId !== 'string') || (examfxEmail && typeof examfxEmail !== 'string')) {
+      return res.status(400).json({ message: 'examfxUserId and examfxEmail must be strings' });
+    }
 
     const agent = await User.findById(req.params.agentId);
     if (!agent || agent.role !== 'agent') {
@@ -359,7 +383,14 @@ router.post('/:agentId/link', authenticate, authorize('admin'), async (req, res)
       record = new ExamFXProgress({ agent: req.params.agentId });
     }
 
-    if (examfxUserId) record.examfxUserId = examfxUserId;
+    // One ExamFX account maps to one agent; webhooks/syncs look records up by it
+    if (examfxUserId) {
+      const taken = await ExamFXProgress.findOne({ examfxUserId, agent: { $ne: req.params.agentId } }).select('_id').lean();
+      if (taken) {
+        return res.status(409).json({ message: 'That ExamFX user ID is already linked to another agent' });
+      }
+      record.examfxUserId = examfxUserId;
+    }
     if (examfxEmail) record.examfxEmail = examfxEmail;
     record.lastUpdatedBy = req.user._id;
 
@@ -369,7 +400,7 @@ router.post('/:agentId/link', authenticate, authorize('admin'), async (req, res)
     res.json({ message: 'ExamFX account linked successfully', record });
   } catch (error) {
     console.error('Error linking ExamFX account:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -429,7 +460,7 @@ router.post('/:agentId/sync', authenticate, authorize('admin'), async (req, res)
     }
   } catch (error) {
     console.error('Error syncing ExamFX:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -493,7 +524,7 @@ router.post('/sync/all', authenticate, authorize('admin'), async (req, res) => {
     });
   } catch (error) {
     console.error('Error in bulk sync:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -504,17 +535,32 @@ router.post('/sync/all', authenticate, authorize('admin'), async (req, res) => {
 router.post('/webhook', async (req, res) => {
   try {
     // Validate webhook signature
+    // Fail closed: without a configured secret anyone could post events and
+    // mark any agent's course complete.
+    if (!process.env.EXAMFX_WEBHOOK_SECRET) {
+      return res.status(503).json({ message: 'Webhook is not configured' });
+    }
     const signature = req.headers['x-examfx-signature'] || req.headers['x-webhook-signature'];
-    if (process.env.EXAMFX_WEBHOOK_SECRET) {
-      if (!signature || !examfxService.validateWebhookSignature(req.body, signature)) {
-        return res.status(401).json({ message: 'Invalid webhook signature' });
-      }
+    let validSig = false;
+    try {
+      validSig = typeof signature === 'string' && examfxService.validateWebhookSignature(req.body, signature);
+    } catch (e) {
+      validSig = false; // e.g. signature of the wrong length
+    }
+    if (!validSig) {
+      return res.status(401).json({ message: 'Invalid webhook signature' });
     }
 
-    const { event, data } = req.body;
+    const { event, data } = req.body || {};
 
-    if (!event || !data) {
+    if (!event || !data || typeof event !== 'string' || !isPlainObject(data)) {
       return res.status(400).json({ message: 'Missing event or data' });
+    }
+    // ids/emails must be plain strings so they can't be used as query operators
+    for (const k of ['studentId', 'userId', 'email']) {
+      if (data[k] !== undefined && typeof data[k] !== 'string') {
+        return res.status(400).json({ message: `Invalid ${k}` });
+      }
     }
 
     console.log(`[ExamFX Webhook] Event: ${event}`);
@@ -637,6 +683,9 @@ router.post('/webhook', async (req, res) => {
     res.status(200).json({ message: 'Webhook processed successfully' });
   } catch (error) {
     console.error('[ExamFX Webhook] Error:', error);
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      return res.status(400).json({ message: 'Invalid webhook payload' });
+    }
     res.status(500).json({ message: 'Internal error processing webhook' });
   }
 });
@@ -645,7 +694,7 @@ router.post('/webhook', async (req, res) => {
 // POST /api/examfx/upload-csv
 // Admin: upload ExamFX CSV export to sync progress
 // ─────────────────────────────────────────────
-router.post('/upload-csv', authenticate, authorize('admin'), csvUpload.single('file'), async (req, res) => {
+router.post('/upload-csv', authenticate, authorize('admin'), handleUploadError(csvUpload.single('file')), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No CSV file provided. Send file in field "file".' });
@@ -804,9 +853,6 @@ router.post('/upload-csv', authenticate, authorize('admin'), csvUpload.single('f
             agent: agent._id,
             examfxEmail: email
           });
-          results.created++;
-        } else {
-          results.updated++;
         }
 
         // Update enrollment fields
@@ -841,6 +887,8 @@ router.post('/upload-csv', authenticate, authorize('admin'), csvUpload.single('f
 
         await record.save();
 
+        // Counted only once saved, so failed rows don't inflate the totals
+        if (isNew) results.created++; else results.updated++;
         results.matched++;
         results.matchedDetails.push({
           agentId: agent._id,
@@ -872,7 +920,7 @@ router.post('/upload-csv', authenticate, authorize('admin'), csvUpload.single('f
     });
   } catch (error) {
     console.error('Error processing ExamFX CSV upload:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -889,7 +937,7 @@ router.delete('/:agentId', authenticate, authorize('admin'), async (req, res) =>
     res.json({ message: 'ExamFX record deleted' });
   } catch (error) {
     console.error('Error deleting ExamFX record:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

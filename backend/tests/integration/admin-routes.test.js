@@ -51,6 +51,69 @@ describe('Integration: Admin Routes (/api/admin)', () => {
     });
   });
 
+  describe('PUT /api/admin/users/:userId/transfer', () => {
+    // User docs by id. findById is awaited directly by the route and chained with
+    // .select() by auth and the ancestor walk, so each result supports both.
+    const mockUsers = (docs) => {
+      User.findById.mockImplementation((id) => {
+        const doc = docs[id] || null;
+        const p = Promise.resolve(doc);
+        p.select = jest.fn(() => {
+          const q = Promise.resolve(doc);
+          q.populate = jest.fn().mockResolvedValue(doc);
+          return q;
+        });
+        return p;
+      });
+      User.findByIdAndUpdate.mockResolvedValue({});
+      require('../../models/Notification').createNotification.mockResolvedValue({});
+    };
+    const doc = (id, referredBy, extra = {}) => ({
+      _id: id, name: id, referredBy, ...extra, save: jest.fn().mockResolvedValue(true)
+    });
+    const admin = createMockAdmin();
+    const transfer = (userId, newUplineId) =>
+      request(app)
+        .put(`/api/admin/users/${userId}/transfer`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ newUplineId });
+
+    it('refuses to move an agent under their own child (would create a cycle)', async () => {
+      mockUsers({ [admin._id]: admin, top: doc('top', null), child: doc('child', 'top') });
+      const res = await transfer('top', 'child');
+      expect(res.status).toBe(400);
+      expect(User.findByIdAndUpdate).not.toHaveBeenCalled();
+    });
+
+    it('refuses to move an agent under a deeper descendant', async () => {
+      mockUsers({
+        [admin._id]: admin,
+        top: doc('top', null), mid: doc('mid', 'top'), leaf: doc('leaf', 'mid')
+      });
+      const res = await transfer('top', 'leaf');
+      expect(res.status).toBe(400);
+    });
+
+    it('does not loop forever when the chain above the new upline is already cyclic', async () => {
+      mockUsers({
+        [admin._id]: admin,
+        mover: doc('mover', null), a: doc('a', 'b'), b: doc('b', 'a')
+      });
+      const res = await transfer('mover', 'a');
+      expect(res.status).toBe(200);
+    });
+
+    it('still allows a legitimate transfer to an unrelated upline', async () => {
+      mockUsers({
+        [admin._id]: admin,
+        mover: doc('mover', 'oldUp'), oldUp: doc('oldUp', null), newUp: doc('newUp', null)
+      });
+      const res = await transfer('mover', 'newUp');
+      expect(res.status).toBe(200);
+      expect(User.findByIdAndUpdate).toHaveBeenCalledWith('newUp', { $addToSet: { children: 'mover' } });
+    });
+  });
+
   describe('Admin role enforcement', () => {
     it('should reject non-admin users from admin routes', async () => {
       const agentToken = jwt.sign({ id: 'agent-id' }, process.env.JWT_SECRET, { expiresIn: '1h' });

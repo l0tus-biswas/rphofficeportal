@@ -1,10 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const { serverError } = require('../utils/helpers');
 const ProductType = require('../models/ProductType');
 const { protect, authorize } = require('../middleware/auth.middleware');
 
 // All routes require authenticated admin
 router.use(protect);
+
+// Case-insensitive exact-name lookup (the unique index alone is case-sensitive)
+const findByName = (name, excludeId) => ProductType.findOne({
+  name: { $regex: `^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+  ...(excludeId ? { _id: { $ne: excludeId } } : {})
+});
 
 // @route   GET /api/admin/products
 // @desc    Get all product types
@@ -20,7 +27,7 @@ router.get('/', async (req, res) => {
       filter.isActive = true;
     }
 
-    if (req.query.category) {
+    if (typeof req.query.category === 'string' && req.query.category) {
       filter.category = req.query.category;
     }
 
@@ -31,7 +38,7 @@ router.get('/', async (req, res) => {
     res.json({ products });
   } catch (error) {
     console.error('Error fetching product types:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -42,11 +49,14 @@ router.post('/', authorize('admin'), async (req, res) => {
   try {
     const { name, category } = req.body;
 
-    if (!name || !category) {
+    if (typeof name !== 'string' || !name.trim() || typeof category !== 'string' || !category) {
       return res.status(400).json({ message: 'Name and category are required' });
     }
+    if (name.trim().length > 200) {
+      return res.status(400).json({ message: 'Name is too long' });
+    }
 
-    const existing = await ProductType.findOne({ name: name.trim() });
+    const existing = await findByName(name);
     if (existing) {
       return res.status(409).json({ message: 'A product type with this name already exists' });
     }
@@ -60,7 +70,7 @@ router.post('/', authorize('admin'), async (req, res) => {
     res.status(201).json({ message: 'Product type created successfully', product });
   } catch (error) {
     console.error('Error creating product type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -76,7 +86,18 @@ router.put('/:id', authorize('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Product type not found' });
     }
 
-    if (name !== undefined) product.name = name.trim();
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim() || name.trim().length > 200) {
+        return res.status(400).json({ message: 'Name must be non-empty text of at most 200 characters' });
+      }
+      if (await findByName(name, product._id)) {
+        return res.status(409).json({ message: 'A product type with this name already exists' });
+      }
+      product.name = name.trim();
+    }
+    if (category !== undefined && typeof category !== 'string') {
+      return res.status(400).json({ message: 'Invalid category' });
+    }
     if (category !== undefined) product.category = category;
     if (isActive !== undefined) product.isActive = isActive;
 
@@ -85,7 +106,7 @@ router.put('/:id', authorize('admin'), async (req, res) => {
     res.json({ message: 'Product type updated successfully', product });
   } catch (error) {
     console.error('Error updating product type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -105,7 +126,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     res.json({ message: 'Product type deactivated successfully' });
   } catch (error) {
     console.error('Error deactivating product type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

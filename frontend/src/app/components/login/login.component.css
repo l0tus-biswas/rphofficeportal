@@ -44,3 +44,12 @@
 .input-group:focus-within .password-toggle {
   border-color: #4CAF50;
 }
+
+/* WCAG AA (4.5:1) on the #f4f6fb page background; the global muted/link colours measure 4.4 and 4.16. */
+main .text-muted {
+  color: #526078 !important;
+}
+
+main a.text-decoration-none {
+  color: #0a58ca;
+}

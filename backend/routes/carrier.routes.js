@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const { serverError, contentDisposition } = require('../utils/helpers');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const Carrier = require('../models/Carrier');
@@ -70,7 +71,13 @@ const documentUpload = multer({
 // these come back as clear, specific 400s instead.
 const runUpload = (uploadMiddleware, maxSizeLabel = '10MB') => (req, res, next) => {
   uploadMiddleware(req, res, (err) => {
-    if (!err) return next();
+    if (!err) {
+      // The file is written before the handler validates anything; drop it if the request fails.
+      res.on('finish', () => {
+        if (res.statusCode >= 400 && req.file) fs.promises.unlink(req.file.path).catch(() => {});
+      });
+      return next();
+    }
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ message: `File is too large. Maximum size is ${maxSizeLabel}.` });
     }
@@ -90,7 +97,7 @@ router.get('/my-statuses', authenticate, authorize('agent', 'admin'), async (req
     res.json(statuses);
   } catch (error) {
     console.error('Error fetching carrier statuses:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -113,7 +120,7 @@ router.get('/admin/all-requests', authenticate, authorize('admin'), async (req, 
     res.json(requests);
   } catch (error) {
     console.error('Error fetching all requests:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -128,7 +135,7 @@ router.get('/admin/agents', authenticate, authorize('admin'), async (req, res) =
     res.json(agents);
   } catch (error) {
     console.error('Error fetching agents:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -144,7 +151,7 @@ router.get('/admin/agent/:agentId/statuses', authenticate, authorize('admin'), a
     res.json(statuses);
   } catch (error) {
     console.error('Error fetching agent statuses:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -172,7 +179,7 @@ router.get('/', authenticate, async (req, res) => {
     res.json(carriers);
   } catch (error) {
     console.error('Error fetching carriers:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -184,15 +191,16 @@ router.get('/:id', authenticate, async (req, res) => {
     const carrier = await Carrier.findById(req.params.id)
       .populate('addedBy', 'name')
       .populate('lastModifiedBy', 'name');
-    
-    if (!carrier) {
+
+    // Agents never see inactive carriers in the list, so the detail endpoint must hide them too.
+    if (!carrier || (req.user.role !== 'admin' && !carrier.isActive)) {
       return res.status(404).json({ message: 'Carrier not found' });
     }
-    
+
     res.json(carrier);
   } catch (error) {
     console.error('Error fetching carrier:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -208,6 +216,9 @@ router.post('/', authenticate, authorize('admin'), runUpload(guideUpload.single(
     } = req.body;
 
     if (!name) return res.status(400).json({ message: 'Carrier name is required' });
+    if (typeof name !== 'string' || name.length > 200) {
+      return res.status(400).json({ message: 'Carrier name must be text of at most 200 characters' });
+    }
 
     // category is now an array — parse if sent as JSON string
     let categoryArr = category;
@@ -218,8 +229,11 @@ router.post('/', authenticate, authorize('admin'), runUpload(guideUpload.single(
       return res.status(400).json({ message: 'At least one carrier category is required' });
     }
 
+    // Only active carriers hold a name (the unique index is partial on isActive), so the name
+    // of a deleted carrier can be reused.
     const existing = await Carrier.findOne({
-      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      isActive: true
     });
     if (existing) return res.status(400).json({ message: 'Carrier with this name already exists' });
 
@@ -254,7 +268,7 @@ router.post('/', authenticate, authorize('admin'), runUpload(guideUpload.single(
     res.status(201).json(carrier);
   } catch (error) {
     console.error('Error creating carrier:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -272,9 +286,13 @@ router.put('/:id', authenticate, authorize('admin'), runUpload(guideUpload.singl
       contactInfo, notes
     } = req.body;
 
+    if (name !== undefined && (typeof name !== 'string' || name.length > 200)) {
+      return res.status(400).json({ message: 'Carrier name must be text of at most 200 characters' });
+    }
     if (name && name !== carrier.name) {
       const existing = await Carrier.findOne({
         name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        isActive: true,
         _id: { $ne: carrier._id }
       });
       if (existing) return res.status(400).json({ message: 'Carrier with this name already exists' });
@@ -328,7 +346,7 @@ router.put('/:id', authenticate, authorize('admin'), runUpload(guideUpload.singl
     res.json(carrier);
   } catch (error) {
     console.error('Error updating carrier:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -362,7 +380,7 @@ router.post('/:id/documents', authenticate, authorize('admin'), runUpload(docume
     res.status(201).json(carrier);
   } catch (error) {
     console.error('Error uploading carrier document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -389,7 +407,7 @@ router.delete('/:id/documents/:docId', authenticate, authorize('admin'), async (
     res.json({ message: 'Document deleted', carrier });
   } catch (error) {
     console.error('Error deleting carrier document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -428,11 +446,11 @@ router.get('/:id/documents/:docId/download', authenticate, async (req, res) => {
     // serve those as an attachment (triggers a normal download) instead.
     const disposition = (ext === '.doc' || ext === '.docx') ? 'attachment' : 'inline';
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', contentDisposition(disposition, fileName));
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading carrier document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -459,7 +477,7 @@ router.get('/:id/level-guide/download', authenticate, async (req, res) => {
     fs.createReadStream(fullPath).pipe(res);
   } catch (error) {
     console.error('Error downloading level guide:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -484,7 +502,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     res.json({ message: 'Carrier deactivated successfully', carrier });
   } catch (error) {
     console.error('Error deleting carrier:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -522,7 +540,7 @@ router.post('/:carrierId/request', authenticate, async (req, res) => {
     res.status(201).json({ message: 'Contract request submitted', status });
   } catch (error) {
     console.error('Error requesting contract:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -536,6 +554,11 @@ router.put('/admin/status/:statusId/appoint', authenticate, authorize('admin'), 
       .populate('carrier', 'name');
 
     if (!statusRecord) return res.status(404).json({ message: 'Request not found' });
+
+    // Idempotent: a repeat click must not re-notify the agent or move the appointment date.
+    if (statusRecord.status === 'Appointed') {
+      return res.json({ message: 'Agent is already appointed', status: statusRecord });
+    }
 
     statusRecord.status = 'Appointed';
     statusRecord.appointedAt = new Date();
@@ -559,7 +582,7 @@ router.put('/admin/status/:statusId/appoint', authenticate, authorize('admin'), 
     res.json({ message: 'Agent appointed successfully', status: statusRecord });
   } catch (error) {
     console.error('Error appointing agent:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -597,7 +620,7 @@ router.put('/admin/status/:statusId/unappoint', authenticate, authorize('admin')
     res.json({ message: 'Agent unappointed successfully', status: statusRecord });
   } catch (error) {
     console.error('Error unappointing agent:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -624,7 +647,7 @@ router.post('/admin/status/:statusId/notes', authenticate, authorize('admin'), a
     res.json({ message: 'Note added', status: updated });
   } catch (error) {
     console.error('Error adding note:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -691,7 +714,7 @@ router.put('/admin/agent/:agentId/carrier/:carrierId/status', authenticate, auth
     res.json({ message: `Status set to ${status}`, status: updated });
   } catch (error) {
     console.error('Error setting agent carrier status:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

@@ -21,7 +21,11 @@ function delay(ms) {
 
 // Multer config for broadcast image uploads (shared with the legacy notifications endpoint)
 const { uploadBroadcastImage } = require('../utils/broadcastUpload');
-const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml } = require('../utils/broadcastContent');
+const { sanitizeBroadcastHtml, htmlToPlainText, isEmptyBroadcastHtml, cleanTitle, cleanLink } = require('../utils/broadcastContent');
+const { guardUpload, removeUploaded, removeFile } = require('../utils/uploadGuards');
+
+const pageOf = (q) => Math.max(parseInt(q.page) || 1, 1);
+const limitOf = (q) => Math.min(Math.max(parseInt(q.limit) || 20, 1), 100);
 
 // All routes require authentication
 router.use(protect);
@@ -35,8 +39,8 @@ router.use(protect);
 // @access  Private
 router.get('/', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 100);
 
     const query = { isActive: true };
 
@@ -129,8 +133,8 @@ router.get('/unread-count', async (req, res) => {
 // NOTE: This route MUST be defined before /:id to avoid Express matching "admin" as an :id param
 router.get('/admin/all', authorize('admin'), async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = pageOf(req.query);
+    const limit = limitOf(req.query);
 
     const broadcasts = await Broadcast.find()
       .sort({ createdAt: -1 })
@@ -161,6 +165,14 @@ router.get('/:id', async (req, res) => {
 
     if (!broadcast) {
       return sendResponse(res, 404, { message: 'Broadcast not found' });
+    }
+
+    // Non-admins only see broadcasts that are active and targeted at their role (same rule as the list)
+    if (req.user.role !== 'admin') {
+      const targeted = !broadcast.targetRoles || broadcast.targetRoles.length === 0 || broadcast.targetRoles.includes(req.user.role);
+      if (!broadcast.isActive || !targeted) {
+        return sendResponse(res, 404, { message: 'Broadcast not found' });
+      }
     }
 
     // Prevent users from viewing broadcasts that predate their account
@@ -199,8 +211,13 @@ router.post('/', authorize('admin'), async (req, res) => {
   try {
     const { title, message, link, targetRoles } = req.body;
 
-    if (!title || !title.trim()) {
-      return sendResponse(res, 400, { message: 'Title is required' });
+    const plainTitle = cleanTitle(title);
+    if (!plainTitle) {
+      return sendResponse(res, 400, { message: 'Title is required (text, up to 200 characters)' });
+    }
+    const checkedLink = cleanLink(link);
+    if (!checkedLink.ok) {
+      return sendResponse(res, 400, { message: 'Link must be an http(s) URL or an in-app path' });
     }
     // Sanitize rich-text HTML, then validate (e.g. '<p><br></p>' counts as empty)
     const cleanMessage = typeof message === 'string' ? sanitizeBroadcastHtml(message) : '';
@@ -210,9 +227,9 @@ router.post('/', authorize('admin'), async (req, res) => {
 
     // Create the broadcast record
     const broadcast = await Broadcast.create({
-      title: title.trim(),
+      title: plainTitle,
       message: cleanMessage,
-      link: link?.trim() || null,
+      link: checkedLink.value,
       targetRoles: Array.isArray(targetRoles) ? targetRoles : [],
       createdBy: req.user._id
     });
@@ -277,10 +294,11 @@ router.put('/:id', authorize('admin'), async (req, res) => {
 
     const { title, message, link, isActive } = req.body;
     if (title !== undefined) {
-      if (typeof title !== 'string' || !title.trim()) {
-        return sendResponse(res, 400, { message: 'Title is required' });
+      const plainTitle = cleanTitle(title);
+      if (!plainTitle) {
+        return sendResponse(res, 400, { message: 'Title is required (text, up to 200 characters)' });
       }
-      broadcast.title = title.trim();
+      broadcast.title = plainTitle;
     }
     if (message !== undefined) {
       const cleanMessage = typeof message === 'string' ? sanitizeBroadcastHtml(message) : '';
@@ -289,7 +307,13 @@ router.put('/:id', authorize('admin'), async (req, res) => {
       }
       broadcast.message = cleanMessage;
     }
-    if (link !== undefined) broadcast.link = link?.trim() || null;
+    if (link !== undefined) {
+      const checkedLink = cleanLink(link);
+      if (!checkedLink.ok) {
+        return sendResponse(res, 400, { message: 'Link must be an http(s) URL or an in-app path' });
+      }
+      broadcast.link = checkedLink.value;
+    }
     if (typeof isActive === 'boolean') broadcast.isActive = isActive;
 
     await broadcast.save();
@@ -316,6 +340,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
     });
 
     await Broadcast.deleteOne({ _id: broadcast._id });
+    if (broadcast.image) await removeFile({ path: path.join(__dirname, '..', broadcast.image) });
     sendResponse(res, 200, { message: 'Broadcast deleted' });
   } catch (error) {
     errorResponse(res, error);
@@ -325,24 +350,25 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
 // @route   POST /api/broadcasts/:id/image
 // @desc    Upload or replace broadcast image
 // @access  Admin only
-router.post('/:id/image', authorize('admin'), uploadBroadcastImage.single('image'), async (req, res) => {
+router.post('/:id/image', authorize('admin'), guardUpload(uploadBroadcastImage.single('image'), 'image'), async (req, res) => {
   try {
-    const broadcast = await Broadcast.findById(req.params.id);
+    const validId = /^[0-9a-f]{24}$/i.test(req.params.id);
+    const broadcast = validId ? await Broadcast.findById(req.params.id) : null;
     if (!broadcast) {
-      return sendResponse(res, 404, { message: 'Broadcast not found' });
+      await removeUploaded(req);
+      return sendResponse(res, validId ? 404 : 400, { message: 'Broadcast not found' });
     }
     if (!req.file) {
       return sendResponse(res, 400, { message: 'No image file provided' });
     }
-    // Delete old image if exists
-    if (broadcast.image) {
-      const oldPath = path.join(__dirname, '..', broadcast.image);
-      try { await fs.unlink(oldPath); } catch (e) { /* ignore */ }
-    }
+    const oldImage = broadcast.image;
     broadcast.image = `/uploads/broadcast-images/${req.file.filename}`;
     await broadcast.save();
+    // Delete the old image only once the new one is saved
+    if (oldImage) await removeFile({ path: path.join(__dirname, '..', oldImage) });
     sendResponse(res, 200, { message: 'Image uploaded', broadcast });
   } catch (error) {
+    await removeUploaded(req);
     errorResponse(res, error);
   }
 });

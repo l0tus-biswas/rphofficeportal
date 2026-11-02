@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Onboarding = require('../models/Onboarding');
 const SystemConfig = require('../models/SystemConfig');
-const multer = require('multer');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const { sendResponse, errorResponse, generatePassword } = require('../utils/helpers');
@@ -244,7 +244,12 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
     // Lenient signature validation - allow webhooks through even if signature validation fails
     const isValidSignature = validateWebhookSignature(req);
     if (!isValidSignature) {
-      console.warn('⚠️ Webhook signature validation failed or not provided - allowing anyway');
+      // An unsigned call could mark any application as signed, so production rejects it.
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('⚠️ Webhook signature validation failed - rejected');
+        return res.status(401).json({ message: 'Invalid webhook signature' });
+      }
+      console.warn('⚠️ Webhook signature validation failed or not provided - allowing outside production');
     } else {
       console.log('✅ Webhook signature validated');
     }
@@ -900,6 +905,14 @@ router.post('/apa-application/:id/complete-signature', async (req, res) => {
       return errorResponse(res, new Error('Application is not pending signature'), 400);
     }
 
+    // This endpoint is unauthenticated and only exists for the development mock signing page.
+    // A real e-sign request must be completed by the provider (via its webhook), never by the
+    // applicant calling this route, and mock mode never exists in production.
+    const envelopeId = String(application.docusign?.envelopeId || '');
+    if (process.env.NODE_ENV === 'production' || !envelopeId.startsWith('MOCK_')) {
+      return errorResponse(res, new Error('Signature can only be completed through the e-signature provider'), 403);
+    }
+
     // Update signature status
     application.docusign.status = 'completed';
     application.docusign.signedDate = new Date();
@@ -929,6 +942,12 @@ router.post('/apa-application/:id/complete-signature', async (req, res) => {
 // @access  Public
 router.post('/apa-application/:id/complete-payment', async (req, res) => {
   try {
+    // Development-only mock: it creates an active, paid account with fabricated Stripe ids and
+    // verifies no payment. Real registrations are completed by the Stripe payment verification.
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+
     const { couponCode, mockPayment } = req.body;
     const application = await APAApplication.findById(req.params.id);
     
@@ -1115,6 +1134,10 @@ async function initiateDocuSign(application) {
       console.log('Zoho Sign will send signing email automatically');
       return result; // Returns { envelopeId, status }
     } else {
+      // Mock mode lets anyone "sign" without a provider, so it must never run in production.
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('E-signature is not configured');
+      }
       // Fallback to mock for development
       console.warn('⚠ Zoho Sign NOT fully configured - using mock mode');
       console.warn('Missing configuration(s):');

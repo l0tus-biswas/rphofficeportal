@@ -210,6 +210,7 @@ router.post('/sync-contractor/:agentId', authenticate, authorize('admin'), async
     }
   } catch (error) {
     console.error('[QBO] Sync contractor error:', error.message);
+    if (error.name === 'CastError') return res.status(400).json({ message: 'Invalid ID format' });
     res.status(500).json({ message: error.message });
   }
 });
@@ -279,6 +280,7 @@ router.post('/resync-contractor/:agentId', authenticate, authorize('admin'), asy
     });
   } catch (error) {
     console.error('[QBO] Resync contractor error:', error.message);
+    if (error.name === 'CastError') return res.status(400).json({ message: 'Invalid ID format' });
     res.status(500).json({ message: error.message });
   }
 });

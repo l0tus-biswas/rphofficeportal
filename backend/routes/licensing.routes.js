@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { serverError } = require('../utils/helpers');
 const LicensingProgress = require('../models/LicensingProgress');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -8,7 +9,7 @@ const { protect: authenticate, authorize } = require('../middleware/auth.middlew
 const { isAgentLicensed } = require('../utils/licensing');
 const { isUplineOf, getDownlineIds } = require('../utils/hierarchy');
 const { syncAgentToQBO } = require('../utils/quickbooksSync');
-const multer = require('multer');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs').promises;
 
@@ -33,16 +34,35 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /pdf|jpg|jpeg|png|doc|docx/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
+    // Anchored: an unanchored test let ".docm" (macro Word) and ".pdfx" through
+    const extname = /^\.(pdf|jpe?g|png|docx?)$/.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = /^(application\/pdf|image\/(jpeg|jpg|png)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/.test(file.mimetype);
+
     if (extname && mimetype) {
       return cb(null, true);
     }
     cb(new Error('Only PDF, JPG, PNG, DOC, and DOCX files are allowed'));
   }
 });
+
+// Only these checklist items exist; guards against names like "toString" that
+// would otherwise resolve to inherited properties on the mongoose subdocument.
+const CHECKLIST_ITEMS = ['preLicenseCourse', 'stateExam', 'fingerprinting', 'diceApplication', 'stateAppointment'];
+
+// Runs multer and turns its errors (bad type, too large) into 4xx responses
+// instead of falling through to the generic 500 handler.
+const handleUploadError = (mw) => (req, res, next) => {
+  mw(req, res, (err) => {
+    if (!err) return next();
+    const tooBig = err.code === 'LIMIT_FILE_SIZE';
+    res.status(tooBig ? 413 : 400).json({ message: tooBig ? 'File too large (max 10MB)' : err.message });
+  });
+};
+
+// Removes a file multer already wrote when the request is then rejected
+const discardUpload = (req) => {
+  if (req.file && req.file.path) fs.unlink(req.file.path).catch(() => {});
+};
 
 // isAgentLicensed is the single source of truth for licensed status — imported
 // from utils/licensing so the admin list, agent profile, dashboard, and the
@@ -63,7 +83,7 @@ async function requireAdminOrUpline(req, res, next) {
     next();
   } catch (error) {
     console.error('Error checking upline authorization:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 }
 
@@ -177,7 +197,7 @@ router.get('/', authenticate, async (req, res) => {
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error fetching licensing progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -202,7 +222,7 @@ router.get('/downline', authenticate, async (req, res) => {
     res.json(filteredResult);
   } catch (error) {
     console.error('Error fetching downline licensing progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -247,7 +267,7 @@ router.get('/countdown/all', authenticate, authorize('admin'), async (req, res) 
     res.json(unlicensedAgents);
   } catch (error) {
     console.error('Error fetching countdown data:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -357,7 +377,7 @@ router.get('/:agentId', authenticate, async (req, res) => {
     res.json(responseData);
   } catch (error) {
     console.error('Error fetching licensing progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -395,7 +415,7 @@ router.post('/:agentId', authenticate, authorize('admin'), async (req, res) => {
     res.status(201).json(licensingProgress);
   } catch (error) {
     console.error('Error creating licensing progress:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -431,7 +451,15 @@ router.put('/:agentId/checklist', authenticate, requireAdminOrUpline, async (req
     // trigger the QuickBooks sync only on the transition into "licensed".
     const wasLicensed = !!licensingProgress.isLicensed;
 
-    const { checklistItem, data, action } = req.body;
+    const { checklistItem, action } = req.body;
+    let { data } = req.body;
+    if (checklistItem !== undefined && !CHECKLIST_ITEMS.includes(checklistItem)) {
+      return res.status(400).json({ message: 'Invalid checklist item' });
+    }
+    if (data === undefined || data === null) data = {};
+    if (typeof data !== 'object' || Array.isArray(data)) {
+      return res.status(400).json({ message: 'data must be an object' });
+    }
 
     // Reschedule action: record a new scheduled attempt in the history,
     // bump the attempt counter, and update the current date. Lets admins
@@ -578,7 +606,7 @@ router.put('/:agentId/checklist', authenticate, requireAdminOrUpline, async (req
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error updating checklist:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -621,7 +649,7 @@ router.put('/:agentId/checklist/:checklistItem/history/:historyId', authenticate
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error updating attempt history entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -663,7 +691,7 @@ router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authentic
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error deleting attempt history entry:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -673,7 +701,10 @@ router.delete('/:agentId/checklist/:checklistItem/history/:historyId', authentic
 router.post('/:agentId/upload/:checklistItem',
   authenticate,
   requireAdminOrUpline,
-  upload.single('document'),
+  (req, res, next) => CHECKLIST_ITEMS.includes(req.params.checklistItem)
+    ? next()
+    : res.status(400).json({ message: 'Invalid checklist item' }),
+  handleUploadError(upload.single('document')),
   async (req, res) => {
     try {
       if (!req.file) {
@@ -683,6 +714,7 @@ router.post('/:agentId/upload/:checklistItem',
       // Check if agent exists
       const agent = await User.findById(req.params.agentId);
       if (!agent || agent.role !== 'agent') {
+        discardUpload(req);
         return res.status(404).json({ message: 'Agent not found' });
       }
       
@@ -706,6 +738,7 @@ router.post('/:agentId/upload/:checklistItem',
       const checklistItem = req.params.checklistItem;
       
       if (!licensingProgress.checklist[checklistItem]) {
+        discardUpload(req);
         return res.status(400).json({ message: 'Invalid checklist item' });
       }
       
@@ -730,7 +763,8 @@ router.post('/:agentId/upload/:checklistItem',
       });
     } catch (error) {
       console.error('Error uploading document:', error);
-      res.status(500).json({ message: 'Server error', error: error.message });
+      discardUpload(req);
+      serverError(res, error);
     }
 });
 
@@ -771,7 +805,7 @@ router.put('/:agentId/notes', authenticate, requireAdminOrUpline, async (req, re
     res.json(licensingProgress);
   } catch (error) {
     console.error('Error updating admin notes:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

@@ -130,6 +130,10 @@ router.post('/subscription-intent', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
 
+    if (user.billingExempt) {
+      return sendResponse(res, 400, { message: 'User is billing exempt - no subscription required' });
+    }
+
     if (!user.oneTimePaymentCompleted) {
       return sendResponse(res, 400, { message: 'Please complete the setup fee payment first' });
     }
@@ -352,6 +356,10 @@ router.post('/cancel-subscription', protect, async (req, res) => {
 router.post('/reactivate-subscription', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+
+    if (user.billingExempt) {
+      return sendResponse(res, 400, { message: 'Your account is billing exempt — there is no subscription to reactivate.' });
+    }
 
     if (!user.stripeSubscriptionId) {
       return sendResponse(res, 404, { message: 'No subscription found.' });
@@ -605,7 +613,8 @@ function isStaleSubscriptionEvent(sub, eventCreated) {
 async function handlePaymentIntentSucceeded(paymentIntent) {
   const payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
   
-  if (payment) {
+  // Stripe redelivers events: an already-settled payment (succeeded/refunded) is left alone
+  if (payment && !['succeeded', 'completed', 'refunded'].includes(payment.status)) {
     payment.status = 'succeeded';
     payment.paidAt = new Date();
     // Capture the Stripe receipt so it can be shown on the transactions page.
@@ -642,7 +651,8 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 async function handlePaymentIntentFailed(paymentIntent) {
   const payment = await Payment.findOne({ stripePaymentIntentId: paymentIntent.id });
   
-  if (payment) {
+  // A late "failed" event must not overwrite a payment that already succeeded or was refunded
+  if (payment && !['succeeded', 'completed', 'refunded'].includes(payment.status)) {
     payment.status = 'failed';
     await payment.save();
 

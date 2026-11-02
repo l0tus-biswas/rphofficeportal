@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const { serverError, contentDisposition } = require('../utils/helpers');
+const multer = require('../utils/multer');
 const path = require('path');
 const fs = require('fs');
 const OnboardingDocType = require('../models/OnboardingDocType');
@@ -27,12 +28,40 @@ const docStorage = multer.diskStorage({
 const docUpload = multer({
   storage: docStorage,
   fileFilter: (req, file, cb) => {
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-    if (allowed.includes(file.mimetype)) cb(null, true);
+    // Both must match: the stored name keeps the original extension, so a MIME-only check would
+    // let "page.html" through when the client declares application/pdf.
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png'];
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) cb(null, true);
     else cb(new Error('Only PDF and image files are allowed'), false);
   },
   limits: { fileSize: 15 * 1024 * 1024 } // 15 MB
 });
+
+// Multer writes the file before the handler validates anything, so a rejected request would
+// leave an ID or bank document behind. Remove the upload whenever the response is an error.
+const removeUploadOnFailure = (req, res, next) => {
+  res.on('finish', () => {
+    if (res.statusCode >= 400 && req.file) fs.promises.unlink(req.file.path).catch(() => {});
+  });
+  next();
+};
+
+// One upload per agent + document type at a time: the find-then-create below would otherwise
+// make two duplicate documents when a form is submitted twice.
+const uploadsInFlight = new Set();
+
+// External links are opened by admins, so only plain web links are accepted.
+const isHttpUrl = (value) => {
+  if (typeof value !== 'string' || value.length > 2000) return false;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Helper: log audit event
@@ -85,7 +114,7 @@ router.get('/doc-types', authenticate, async (req, res) => {
     res.json(docTypes);
   } catch (error) {
     console.error('Error fetching doc types:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -165,7 +194,7 @@ router.get('/admin/overview', authenticate, authorize('admin'), async (req, res)
     });
   } catch (error) {
     console.error('Error fetching onboarding overview:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -213,7 +242,7 @@ router.get('/admin/agents/:agentId', authenticate, authorize('admin'), async (re
     });
   } catch (error) {
     console.error('Error fetching onboarding agent detail:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -270,7 +299,7 @@ router.put('/admin/documents/:id/status', authenticate, authorize('admin'), asyn
     res.json({ message: 'Document status updated', document: doc });
   } catch (error) {
     console.error('Error updating onboarding document status:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -305,7 +334,7 @@ router.get('/admin/documents/:id/bank-info', authenticate, authorize('admin'), a
     res.json(bankInfo);
   } catch (error) {
     console.error('Error fetching bank info:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -325,7 +354,7 @@ router.post('/admin/doc-types', authenticate, authorize('admin'), async (req, re
     res.status(201).json(docType);
   } catch (error) {
     console.error('Error creating doc type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -341,7 +370,7 @@ router.put('/admin/doc-types/:id', authenticate, authorize('admin'), async (req,
     res.json(docType);
   } catch (error) {
     console.error('Error updating doc type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -354,7 +383,7 @@ router.delete('/admin/doc-types/:id', authenticate, authorize('admin'), async (r
     res.json({ message: 'Document type deleted' });
   } catch (error) {
     console.error('Error deleting doc type:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -381,7 +410,7 @@ router.get('/documents/:agentId', authenticate, async (req, res) => {
     res.json(documents);
   } catch (error) {
     console.error('Error fetching documents:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -400,10 +429,14 @@ router.post('/documents', authenticate, (req, res, next) => {
     }
     next();
   });
-}, async (req, res) => {
+}, removeUploadOnFailure, async (req, res) => {
+  let lockKey = null;
   try {
     const { docTypeId, agentId, externalLink, notes, routingNumber, accountNumber, accountType } = req.body;
     if (!docTypeId) return res.status(400).json({ message: 'docTypeId is required' });
+    if (externalLink && !isHttpUrl(externalLink)) {
+      return res.status(400).json({ message: 'External link must be a valid http(s) URL' });
+    }
 
     const docType = await OnboardingDocType.findById(docTypeId);
     if (!docType || !docType.isActive) return res.status(404).json({ message: 'Document type not found' });
@@ -436,6 +469,18 @@ router.post('/documents', authenticate, (req, res, next) => {
       return res.status(400).json({ message: 'A document file or external link is required' });
     }
 
+    if (req.user.role === 'admin' && agentId) {
+      const target = await User.findById(agentId).select('_id');
+      if (!target) return res.status(404).json({ message: 'Agent not found' });
+    }
+
+    lockKey = `${targetAgentId}:${docTypeId}`;
+    if (uploadsInFlight.has(lockKey)) {
+      lockKey = null;
+      return res.status(409).json({ message: 'An upload for this document is already in progress.' });
+    }
+    uploadsInFlight.add(lockKey);
+
     let doc = await OnboardingDocument.findOne({
       agent: targetAgentId,
       docType: docTypeId,
@@ -464,14 +509,11 @@ router.post('/documents', authenticate, (req, res, next) => {
       updatedAt: new Date()
     });
 
+    // The previous file is only removed after the record has saved, so a failed save can never
+    // leave the document pointing at a file that is already gone.
+    let replacedPath = null;
     if (req.file) {
-      // Remove previous file if replacing existing upload
-      if (doc.filePath) {
-        const oldFullPath = path.join(__dirname, '..', doc.filePath);
-        if (fs.existsSync(oldFullPath)) {
-          try { fs.unlinkSync(oldFullPath); } catch (_) {}
-        }
-      }
+      if (doc.filePath) replacedPath = path.join(__dirname, '..', doc.filePath);
       doc.filePath = `uploads/onboarding-docs/${req.file.filename}`;
       doc.originalFileName = req.file.originalname;
     }
@@ -487,6 +529,11 @@ router.post('/documents', authenticate, (req, res, next) => {
     }
 
     await doc.save();
+
+    if (replacedPath && fs.existsSync(replacedPath)) {
+      try { fs.unlinkSync(replacedPath); } catch (_) {}
+    }
+
     await doc.populate('docType', 'name');
 
     await auditLog(req.user._id, targetAgentId, 'ONBOARDING_DOC_UPLOAD', {
@@ -497,7 +544,9 @@ router.post('/documents', authenticate, (req, res, next) => {
     res.status(201).json({ message: 'Document uploaded', document: doc });
   } catch (error) {
     console.error('Error uploading document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
+  } finally {
+    if (lockKey) uploadsInFlight.delete(lockKey);
   }
 });
 
@@ -540,7 +589,7 @@ router.delete('/documents/:id', authenticate, async (req, res) => {
     res.json({ message: 'Document removed' });
   } catch (error) {
     console.error('Error deleting document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 
@@ -563,11 +612,11 @@ router.get('/documents/:agentId/:docId/download', authenticate, async (req, res)
     const filePath = path.join(__dirname, '..', doc.filePath);
     if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on server' });
 
-    res.setHeader('Content-Disposition', `attachment; filename="${doc.originalFileName || 'document.pdf'}"`);
+    res.setHeader('Content-Disposition', contentDisposition('attachment', doc.originalFileName || 'document.pdf'));
     fs.createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('Error downloading document:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 });
 

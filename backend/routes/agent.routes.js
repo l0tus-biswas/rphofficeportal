@@ -110,11 +110,14 @@ router.post('/change-password', validateRequest(schemas.changePassword), logActi
 // @access  Private (Agent/Admin)
 router.get('/recruits', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 20, 1), 200);
     const status = req.query.status; // 'active', 'inactive', or 'all'
-    const search = req.query.search;
-    const sortBy = req.query.sortBy || '-createdAt'; // '-createdAt', 'name', etc.
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    // Only sort by harmless, known fields (never password or an operator-looking key)
+    const SORTABLE = ['createdAt', 'name', 'email', 'isActive'];
+    const requestedSort = typeof req.query.sortBy === 'string' ? req.query.sortBy : '-createdAt';
+    const sortBy = SORTABLE.includes(requestedSort.replace(/^-/, '')) ? requestedSort : '-createdAt';
     
     // Build filter
     const filter = { referredBy: req.user._id, deletedAt: null };
@@ -126,10 +129,12 @@ router.get('/recruits', async (req, res) => {
     }
     
     if (search) {
+      // Literal match: characters like ( or [ must not be read as a regex
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
+        { name: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } },
+        { phone: { $regex: escaped, $options: 'i' } }
       ];
     }
     
@@ -198,7 +203,9 @@ router.get('/downline', async (req, res) => {
       return stats;
     };
     
-    const levelStats = downlineTree ? calculateLevelStats(downlineTree) : {};
+    // The tree root is the agent themself: count only the people below them (level 1 = direct recruits)
+    const levelStats = {};
+    (downlineTree?.children || []).forEach(child => calculateLevelStats(child, 1, levelStats));
     const totalMembers = Object.values(levelStats).reduce((sum, level) => sum + level.total, 0);
     const totalActive = Object.values(levelStats).reduce((sum, level) => sum + level.active, 0);
     
@@ -224,19 +231,21 @@ router.get('/stats', async (req, res) => {
   try {
     const directRecruits = await User.countDocuments({ referredBy: req.user._id, deletedAt: null });
 
-    // Get all descendants count (recursive)
-    const getDescendantsCount = async (userId) => {
-      const children = await User.find({ referredBy: userId, deletedAt: null }).select('_id');
-      let count = children.length;
-
+    // Count all descendants level by level; the visited set keeps a corrupt referral cycle from looping
+    const visited = new Set([req.user._id.toString()]);
+    let frontier = [req.user._id];
+    let totalDownline = 0;
+    while (frontier.length > 0) {
+      const children = await User.find({ referredBy: { $in: frontier }, deletedAt: null }).select('_id').lean();
+      frontier = [];
       for (const child of children) {
-        count += await getDescendantsCount(child._id);
+        const id = child._id.toString();
+        if (visited.has(id)) continue;
+        visited.add(id);
+        totalDownline++;
+        frontier.push(child._id);
       }
-
-      return count;
-    };
-
-    const totalDownline = await getDescendantsCount(req.user._id);
+    }
 
     const activeRecruits = await User.countDocuments({
       referredBy: req.user._id,
@@ -427,8 +436,8 @@ router.get('/my-team', async (req, res) => {
       sortBy = '-createdAt'
     } = req.query;
 
-    const page = parseInt(pageStr) || 1;
-    const limit = Math.min(parseInt(limitStr) || 50, 200);
+    const page = Math.max(parseInt(pageStr) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(limitStr) || 50, 1), 200);
 
     // 1. Get ALL descendant users via BFS (full hierarchy)
     const allDescendants = await getAllDescendantsFlat(req.user._id);

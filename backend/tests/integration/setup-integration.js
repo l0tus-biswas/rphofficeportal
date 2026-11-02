@@ -24,10 +24,16 @@ jest.mock('mongoose', () => {
   return {
     ...actual,
     connect: jest.fn().mockResolvedValue({}),
-    connection: { readyState: 1 },
+    connection: {
+      readyState: 1,
+      // Used by GET /health; tests override ping to simulate a DB outage.
+      db: { admin: () => ({ ping: global.__mockDbPing }) }
+    },
     Types: actual.Types
   };
 });
+
+global.__mockDbPing = jest.fn().mockResolvedValue({ ok: 1 });
 
 // Mock all 30 models with factory mocks to avoid Mongoose schema compilation errors
 jest.mock('../../models/ACAClientRecord', () => require('../helpers/mock-model')('ACAClientRecord'));

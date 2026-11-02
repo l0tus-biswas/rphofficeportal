@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
+const multer = require('../utils/multer');
 const APAApplication = require('../models/APAApplication');
 const Notification = require('../models/Notification');
 const OnboardingDocument = require('../models/OnboardingDocument');
@@ -39,9 +39,13 @@ router.use(authorize('admin'));
 // @access  Admin only
 router.get('/apa-applications', async (req, res) => {
   try {
-    const { status, search, page = 1, limit = 20 } = req.query;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 20));
     
-    const query = {};
+    // Applications of deleted users stay hidden (soft-delete cascades deletedAt)
+    const query = { deletedAt: null };
     
     // Filter by status
     if (status && status !== 'all') {
@@ -50,10 +54,11 @@ router.get('/apa-applications', async (req, res) => {
     
     // Search by name or email
     if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { 'personalInfo.legalFirstName': { $regex: search, $options: 'i' } },
-        { 'personalInfo.legalLastName': { $regex: search, $options: 'i' } },
-        { 'personalInfo.email': { $regex: search, $options: 'i' } }
+        { 'personalInfo.legalFirstName': { $regex: escaped, $options: 'i' } },
+        { 'personalInfo.legalLastName': { $regex: escaped, $options: 'i' } },
+        { 'personalInfo.email': { $regex: escaped, $options: 'i' } }
       ];
     }
     
@@ -62,13 +67,14 @@ router.get('/apa-applications', async (req, res) => {
     const applications = await APAApplication.find(query)
       .select('-personalInfo.ssn') // Exclude SSN from list view
       .sort({ submittedAt: -1 })
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(skip);
     
     const total = await APAApplication.countDocuments(query);
     
     // Get status counts
     const statusCounts = await APAApplication.aggregate([
+      { $match: { deletedAt: null } },
       { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
     
@@ -76,9 +82,9 @@ router.get('/apa-applications', async (req, res) => {
       applications,
       pagination: {
         total,
-        page: parseInt(page),
+        page,
         pages: Math.ceil(total / limit),
-        limit: parseInt(limit)
+        limit
       },
       statusCounts: statusCounts.reduce((acc, curr) => {
         acc[curr._id] = curr.count;
@@ -122,6 +128,9 @@ router.get('/apa-applications/:id([a-fA-F0-9]{24})', async (req, res) => {
 router.put('/apa-applications/:id([a-fA-F0-9]{24})/approve', async (req, res) => {
   try {
     const { adminNotes } = req.body;
+    if (adminNotes != null && typeof adminNotes !== 'string') {
+      return errorResponse(res, new Error('adminNotes must be a string'), 400);
+    }
     
     const application = await APAApplication.findById(req.params.id);
     
@@ -180,14 +189,21 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
   try {
     const { reason, adminNotes } = req.body;
     
-    if (!reason) {
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
       return errorResponse(res, new Error('Rejection reason is required'), 400);
+    }
+    if (adminNotes != null && typeof adminNotes !== 'string') {
+      return errorResponse(res, new Error('adminNotes must be a string'), 400);
     }
     
     const application = await APAApplication.findById(req.params.id);
     
     if (!application) {
       return errorResponse(res, new Error('Application not found'), 404);
+    }
+    
+    if (application.status === 'rejected') {
+      return errorResponse(res, new Error('Application is already rejected'), 400);
     }
     
     application.status = 'rejected';
@@ -244,6 +260,9 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/notes', async (req, res) => {
       return errorResponse(res, new Error('Application not found'), 404);
     }
     
+    if (typeof adminNotes !== 'string') {
+      return errorResponse(res, new Error('adminNotes must be a string'), 400);
+    }
     application.adminNotes = adminNotes;
     await application.save();
     
@@ -263,16 +282,17 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/notes', async (req, res) => {
 // @access  Admin only
 router.get('/apa-applications/stats/overview', async (req, res) => {
   try {
-    const total = await APAApplication.countDocuments();
-    const pending = await APAApplication.countDocuments({ status: 'pending_signature' });
-    const pendingPayment = await APAApplication.countDocuments({ status: 'pending_payment' });
-    const active = await APAApplication.countDocuments({ status: 'active' });
-    const rejected = await APAApplication.countDocuments({ status: 'rejected' });
+    const total = await APAApplication.countDocuments({ deletedAt: null });
+    const pending = await APAApplication.countDocuments({ deletedAt: null, status: 'pending_signature' });
+    const pendingPayment = await APAApplication.countDocuments({ deletedAt: null, status: 'pending_payment' });
+    const active = await APAApplication.countDocuments({ deletedAt: null, status: 'active' });
+    const rejected = await APAApplication.countDocuments({ deletedAt: null, status: 'rejected' });
     
     // Applications by month
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const recentApplications = await APAApplication.countDocuments({
+      deletedAt: null,
       submittedAt: { $gte: thirtyDaysAgo }
     });
     

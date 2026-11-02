@@ -6,7 +6,7 @@ const { sendResponse, errorResponse } = require('../utils/helpers');
 const neuzmail = require('../utils/neuzmail');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
+const multer = require('../utils/multer');
 
 // Configure multer for logo upload
 const storage = multer.diskStorage({
