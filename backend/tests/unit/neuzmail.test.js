@@ -38,9 +38,9 @@ describe('Utils: neuzmail.js', () => {
       expect(mockAxios.post).toHaveBeenCalledWith(
         'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          templateId: 'tpl-welcome-pwd',
+          template_id: 'tpl-welcome-pwd',
           to: 'john@test.com',
-          data: expect.objectContaining({
+          params: expect.objectContaining({
             USER_NAME: 'John',
             TEMP_PASSWORD: 'TempPass123'
           })
@@ -72,9 +72,11 @@ describe('Utils: neuzmail.js', () => {
       expect(mockAxios.post).toHaveBeenCalledWith(
         'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          templateId: 'tpl-welcome-setpwd',
+          template_id: 'tpl-welcome-setpwd',
           to: 'bob@test.com',
-          data: expect.objectContaining({
+          params: expect.objectContaining({
+            FIRST_NAME: 'Bob',
+            UNSUBSCRIBE_URL: expect.any(String),
             SET_PASSWORD_URL: expect.stringContaining('reset-token-123')
           })
         }),
@@ -92,9 +94,10 @@ describe('Utils: neuzmail.js', () => {
       expect(mockAxios.post).toHaveBeenCalledWith(
         'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          templateId: 'tpl-reset',
+          template_id: 'tpl-reset',
           to: 'alice@test.com',
-          data: expect.objectContaining({
+          params: expect.objectContaining({
+            FIRST_NAME: 'Alice',
             RESET_URL: expect.stringContaining('reset-token-456')
           })
         }),
@@ -117,7 +120,7 @@ describe('Utils: neuzmail.js', () => {
       expect(mockAxios.post).toHaveBeenCalledWith(
         'https://neuzmail.in/api/v1/messages',
         expect.objectContaining({
-          templateId: 'tpl-apa',
+          template_id: 'tpl-apa',
           to: 'john.doe@test.com'
         }),
         expect.any(Object)
@@ -130,21 +133,18 @@ describe('Utils: neuzmail.js', () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
         data: {
-          valid: true,
           email: 'test@example.com',
-          domain: 'example.com',
-          score: 4,
-          maxScore: 4,
-          isDisposable: false,
-          hasMx: true,
-          hasARecord: true,
-          reason: 'Deliverable'
+          status: 'deliverable',
+          reasons: [],
+          suggestion: null,
+          mode: 'basic',
+          cached: false
         }
       });
 
       const result = await neuzmail.verifyEmail('test@example.com');
       expect(mockAxios.post).toHaveBeenCalledWith(
-        'https://neuzmail.in/api/v1/verify',
+        'https://neuzmail.in/api/v1/email-verifications',
         { email: 'test@example.com' },
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -153,7 +153,7 @@ describe('Utils: neuzmail.js', () => {
         })
       );
       expect(result.valid).toBe(true);
-      expect(result.reason).toBe('Deliverable');
+      expect(result.status).toBe('deliverable');
     });
 
     it('should throw when API token is missing for verify', async () => {
@@ -179,8 +179,8 @@ describe('Utils: neuzmail.js', () => {
 
     it('should throw when API returns error status', async () => {
       mockAxios.post.mockResolvedValue({
-        status: 200,
-        data: { status: 'error', message: 'Invalid template' }
+        status: 202,
+        data: { id: 'm', ids: ['m'], status: 'queued', recipients: 1, results: [{ id: 'm', to: 'x@test.com', status: 'failed', error: 'provider rejected' }] }
       });
       await expect(neuzmail.sendPasswordResetEmail(
         { name: 'X', email: 'x@test.com' },
@@ -196,10 +196,25 @@ describe('Utils: neuzmail.js', () => {
       )).rejects.toThrow('Email could not be sent via Neuzmail');
     });
 
-    it('should handle 202 suppressed response', async () => {
+    it('retries without "from" when the sender is not verified', async () => {
+      const err = Object.assign(new Error('409'), { response: { status: 409, data: { error: { code: 'no_sender', message: 'x' } } } });
+      mockAxios.post.mockRejectedValueOnce(err);
+      const result = await neuzmail.sendPasswordResetEmail({ name: 'A B', email: 'a@test.com' }, 'tok');
+      expect(result.success).toBe(true);
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+      expect(mockAxios.post.mock.calls[1][1].from).toBeUndefined();
+    });
+
+    it('sends only the variables the template declares', async () => {
+      await neuzmail.sendPasswordResetEmail({ name: 'A B', email: 'a@test.com' }, 'tok');
+      const body = mockAxios.post.mock.calls[0][1];
+      expect(Object.keys(body.params).sort()).toEqual(['APP_NAME', 'CURRENT_YEAR', 'FIRST_NAME', 'RESET_URL', 'UNSUBSCRIBE_URL']);
+    });
+
+    it('should handle blocked (suppressed) response', async () => {
       mockAxios.post.mockResolvedValue({
         status: 202,
-        data: { id: 'msg_456', status: 'suppressed' }
+        data: { id: 'msg_456', ids: ['msg_456'], status: 'queued', recipients: 1, results: [{ id: 'msg_456', to: 'suppressed@test.com', status: 'blocked', error: 'suppressed' }] }
       });
       const result = await neuzmail.sendWelcomeEmail(
         { name: 'X', email: 'suppressed@test.com', referralCode: '' },
