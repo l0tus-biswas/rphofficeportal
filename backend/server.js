@@ -183,7 +183,7 @@ app.use(express.static(path.join(__dirname, '../frontend/dist/rhpoffice-frontend
 // that check ownership. Matching uses the decoded, normalised, lower-cased path so
 // %-encoding, "..", "//" and case changes cannot sidestep the rules.
 const SHARED_UPLOAD_PREFIXES = ['/training-pdfs/', '/carrier-guides/', '/carrier-documents/', '/aca-sample/'];
-const SIGNED_APA_PATH = /^\/apa-signed\/([0-9a-f]{24})_signed_apa\.pdf$/;
+const SIGNED_APA_PATH = /^\/apa-signed\/([0-9a-f]{24})_signed_apa(?:_v\d+)?\.pdf$/;
 
 app.use('/uploads', async (req, res, next) => {
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');

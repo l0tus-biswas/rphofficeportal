@@ -6,9 +6,11 @@ const Payment = require('../models/Payment');
 const Subscription = require('../models/Subscription');
 const User = require('../models/User');
 const APAApplication = require('../models/APAApplication');
+const Notification = require('../models/Notification');
 const { protect } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse, paginate } = require('../utils/helpers');
 const { downloadSignedDocument } = require('../utils/zohosign'); // migrated from docusign.js
+const { initiateDocuSign, buildSnapshot, shapeVersionHistory } = require('../utils/apaSigning');
 const { resolveStripeReceiptUrl, listInvoices } = require('../utils/stripe');
 
 // Reconcile a user's paid Stripe invoices into Payment records so every monthly
@@ -180,6 +182,376 @@ router.get('/apa-application', protect, async (req, res) => {
     }
 
     sendResponse(res, 200, { application: appData });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+async function findOwnApplication(user) {
+  let application = await APAApplication.findOne({ userId: user._id, deletedAt: null }).sort({ createdAt: -1 });
+  if (!application && user.email) {
+    application = await APAApplication.findOne({ 'personalInfo.email': user.email.toLowerCase(), deletedAt: null }).sort({ createdAt: -1 });
+  }
+  return application;
+}
+
+async function notifyAdmins(payload) {
+  try {
+    const admins = await User.find({ role: 'admin', isActive: true, deletedAt: null }).select('_id').lean();
+    for (const admin of admins) {
+      await Notification.createNotification({ ...payload, userId: admin._id });
+    }
+  } catch (err) {
+    console.error('[APA Edit] Failed to notify admins:', err.message);
+  }
+}
+
+const str = (v) => (v == null ? '' : String(v).trim());
+const MASK_FIELDS = new Set(['personalInfo.ssn']);
+
+function flatten(obj, prefix = '', out = {}) {
+  if (obj == null) return out;
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v instanceof Date) out[key] = v.toISOString().slice(0, 10);
+    else if (Array.isArray(v)) out[key] = v.join(', ');
+    else if (v && typeof v === 'object') flatten(v, key, out);
+    else out[key] = v == null ? '' : String(v);
+  }
+  return out;
+}
+
+function diffSnapshots(before, after) {
+  const changes = [];
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if ((before[key] || '') !== (after[key] || '')) {
+      const masked = MASK_FIELDS.has(key);
+      changes.push({ field: key, from: masked ? '***' : (before[key] || ''), to: masked ? '***' : (after[key] || '') });
+    }
+  }
+  return changes;
+}
+
+// Send (or re-send) the Zoho Sign request for an edited application, reusing
+// the same launcher as the first signature. Never throws: on failure the
+// application simply stays in pending_resignature and the agent can retry.
+async function sendResignRequest(application) {
+  try {
+    const result = await initiateDocuSign(application);
+    application.docusign.envelopeId = result.envelopeId;
+    application.docusign.status = result.status;
+    application.docusign.sentAt = new Date();
+    await application.save();
+
+    const agentId = application.userId || application.user;
+    if (agentId) {
+      Notification.createNotification({
+        userId: agentId,
+        type: 'apa_resign_required',
+        title: 'Please Sign Your Updated APA Application',
+        message: 'Your APA application was updated. Check your email from Zoho Sign and sign it again to send it back for admin review.',
+        link: '/onboarding'
+      }, true).catch(() => {});
+    }
+    return true;
+  } catch (err) {
+    console.error('[APA Resign] Could not send signature request:', err.message);
+    return false;
+  }
+}
+
+// @route   POST /api/user/apa-application/resign
+// @desc    (Re)send the signature request for an edited application
+// @access  Private
+router.post('/apa-application/resign', protect, async (req, res) => {
+  try {
+    const application = await findOwnApplication(req.user);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'No APA application found' });
+    }
+    if (!application.resign?.required || application.status !== 'pending_resignature') {
+      return sendResponse(res, 400, { message: 'Your application does not need to be signed again.' });
+    }
+    if (application.docusign?.envelopeId && ['sent', 'delivered'].includes(application.docusign.status)) {
+      return sendResponse(res, 400, { message: 'A signature request is already waiting in your email.' });
+    }
+    const sent = await sendResignRequest(application);
+    if (!sent) {
+      return sendResponse(res, 502, { message: 'Could not send the signature request. Please try again shortly.' });
+    }
+    sendResponse(res, 200, { message: 'Signature request sent. Check your email from Zoho Sign.' });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/user/apa-application/versions
+// @desc    Agent's own APA version history
+// @access  Private
+router.get('/apa-application/versions', protect, async (req, res) => {
+  try {
+    const application = await findOwnApplication(req.user);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'No APA application found' });
+    }
+    const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    sendResponse(res, 200, shapeVersionHistory(application, baseUrl));
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   POST /api/user/apa-application/edit-request
+// @desc    Agent asks an admin to unlock their APA application for editing
+// @access  Private
+router.post('/apa-application/edit-request', protect, async (req, res) => {
+  try {
+    const reason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (reason.length < 5 || reason.length > 1000) {
+      return sendResponse(res, 400, { message: 'Please describe what needs to be corrected (5-1000 characters).' });
+    }
+
+    const application = await findOwnApplication(req.user);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'No APA application found' });
+    }
+
+    const current = application.editRequest?.status;
+    if (current === 'pending') {
+      return sendResponse(res, 400, { message: 'You already have an edit request awaiting admin review.' });
+    }
+    if (current === 'approved') {
+      return sendResponse(res, 400, { message: 'Editing is already unlocked for your application.' });
+    }
+
+    application.editRequest = {
+      status: 'pending',
+      reason,
+      requestedAt: new Date()
+    };
+    await application.save();
+
+    const name = [application.personalInfo?.legalFirstName, application.personalInfo?.legalLastName].filter(Boolean).join(' ') || req.user.name;
+    await notifyAdmins({
+      type: 'apa_edit_requested',
+      title: 'APA Edit Request',
+      message: `${name} requested to edit their APA application: "${reason.slice(0, 200)}"`,
+      data: { agentId: String(req.user._id), applicationId: String(application._id) },
+      link: '/admin/onboarding?tab=edit-requests'
+    });
+
+    sendResponse(res, 200, { message: 'Edit request sent to admin.', editRequest: application.editRequest });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   PUT /api/user/apa-application
+// @desc    Agent edits their APA application (only while an admin has unlocked it)
+// @access  Private
+router.put('/apa-application', protect, async (req, res) => {
+  try {
+    const application = await findOwnApplication(req.user);
+    if (!application) {
+      return sendResponse(res, 404, { message: 'No APA application found' });
+    }
+    // Editing opens two ways: an admin approved an edit request, or an admin
+    // rejected the application (the agent corrects it and resubmits).
+    const isRejectionResubmit = application.status === 'rejected';
+    if (application.editRequest?.status !== 'approved' && !isRejectionResubmit) {
+      return sendResponse(res, 403, { message: 'Editing is locked. Request edit access from an admin first.' });
+    }
+    if (application.status === 'pending_resignature') {
+      return sendResponse(res, 403, { message: 'Please sign your updated application before making further changes.' });
+    }
+
+    // recruitingInfo is intentionally ignored: it is locked to the agent's hierarchy.
+    const { personalInfo: p, complianceQuestions: c, financialBackground: f, licensingStatus: l } = req.body;
+    if (!p || !c || !f || !l) {
+      return sendResponse(res, 400, { message: 'Incomplete application data.' });
+    }
+
+    const required = [p.legalFirstName, p.legalLastName, p.dateOfBirth, p.mobilePhone, p.homeAddress?.street, p.homeAddress?.city, p.homeAddress?.state, p.homeAddress?.zipCode];
+    if (required.some(v => !str(v))) {
+      return sendResponse(res, 400, { message: 'Please fill in all required personal information fields.' });
+    }
+    if (!['M', 'F'].includes(p.gender)) {
+      return sendResponse(res, 400, { message: 'Gender is required.' });
+    }
+    const dob = new Date(p.dateOfBirth);
+    if (isNaN(dob.getTime()) || dob > new Date() || dob.getFullYear() < 1900) {
+      return sendResponse(res, 400, { message: 'Please enter a valid date of birth.' });
+    }
+    if (str(p.ssn) && !/^\d{3}-?\d{2}-?\d{4}$/.test(str(p.ssn))) {
+      return sendResponse(res, 400, { message: 'Please enter a valid Social Security Number.' });
+    }
+    if (!/^\d{5}(-\d{4})?$/.test(str(p.homeAddress.zipCode))) {
+      return sendResponse(res, 400, { message: 'Please enter a valid home zip code.' });
+    }
+
+    const snapshotBefore = buildSnapshot(application);
+    const before = flatten({
+      personalInfo: application.personalInfo?.toObject?.() ?? application.personalInfo,
+      recruitingInfo: application.recruitingInfo?.toObject?.() ?? application.recruitingInfo,
+      complianceQuestions: application.complianceQuestions?.toObject?.() ?? application.complianceQuestions,
+      financialBackground: application.financialBackground?.toObject?.() ?? application.financialBackground,
+      licensingStatus: application.licensingStatus?.toObject?.() ?? application.licensingStatus
+    });
+
+    const hasMailing = p.mailingAddress && str(p.mailingAddress.street);
+    application.personalInfo = {
+      legalFirstName: str(p.legalFirstName),
+      legalMiddleName: str(p.legalMiddleName),
+      legalLastName: str(p.legalLastName),
+      agencyLegalName: str(p.agencyLegalName) || 'N/A',
+      gender: p.gender,
+      dateOfBirth: dob,
+      ssn: str(p.ssn) || application.personalInfo.ssn,
+      mobilePhone: str(p.mobilePhone),
+      email: application.personalInfo.email, // login identity — not editable here
+      homeAddress: {
+        street: str(p.homeAddress.street),
+        city: str(p.homeAddress.city),
+        state: str(p.homeAddress.state),
+        zipCode: str(p.homeAddress.zipCode)
+      },
+      mailingAddress: hasMailing ? {
+        street: str(p.mailingAddress.street),
+        city: str(p.mailingAddress.city),
+        state: str(p.mailingAddress.state),
+        zipCode: str(p.mailingAddress.zipCode)
+      } : undefined,
+      previouslyContracted: !!p.previouslyContracted
+    };
+
+    const questionKeys = ['previouslyContractedOther', 'felonyConviction', 'misdemeanorFraud', 'civilAction', 'licenseDenied', 'bondIssues'];
+    const compliance = {};
+    for (const key of questionKeys) {
+      const answer = c[key]?.answer;
+      if (typeof answer !== 'boolean') {
+        return sendResponse(res, 400, { message: 'Please answer every compliance question.' });
+      }
+      compliance[key] = {
+        answer,
+        explanation: answer ? str(c[key].explanation) : '',
+        documentUrl: application.complianceQuestions?.[key]?.documentUrl
+      };
+    }
+    application.complianceQuestions = compliance;
+
+    for (const key of ['unsatisfiedJudgments', 'unsatisfiedLiens']) {
+      if (typeof f[key] !== 'boolean') {
+        return sendResponse(res, 400, { message: 'Please answer every financial background question.' });
+      }
+    }
+    if (typeof f.bankruptcy?.filed !== 'boolean') {
+      return sendResponse(res, 400, { message: 'Please answer every financial background question.' });
+    }
+    application.financialBackground = {
+      unsatisfiedJudgments: f.unsatisfiedJudgments,
+      unsatisfiedJudgmentsExplanation: f.unsatisfiedJudgments ? str(f.unsatisfiedJudgmentsExplanation) : '',
+      unsatisfiedLiens: f.unsatisfiedLiens,
+      unsatisfiedLiensExplanation: f.unsatisfiedLiens ? str(f.unsatisfiedLiensExplanation) : '',
+      bankruptcy: {
+        filed: f.bankruptcy.filed,
+        chapter: f.bankruptcy.filed ? (f.bankruptcy.chapter || null) : null,
+        status: f.bankruptcy.filed ? (f.bankruptcy.status || null) : null
+      }
+    };
+
+    if (typeof l.currentlyLicensed !== 'boolean') {
+      return sendResponse(res, 400, { message: 'Please answer the licensing question.' });
+    }
+    const licensed = l.currentlyLicensed;
+    application.licensingStatus = {
+      currentlyLicensed: licensed,
+      licenseTypes: licensed && Array.isArray(l.licenseTypes) ? l.licenseTypes : [],
+      statesLicensed: licensed && Array.isArray(l.statesLicensed) ? l.statesLicensed.map(str).filter(Boolean) : [],
+      licenseNumber: licensed ? str(l.licenseNumber) : '',
+      licenseStatus: licensed ? (l.licenseStatus || null) : null,
+      licenseOtherDescription: licensed ? (str(l.licenseOtherDescription) || undefined) : undefined
+    };
+
+    const after = flatten({
+      personalInfo: application.personalInfo.toObject ? application.personalInfo.toObject() : application.personalInfo,
+      recruitingInfo: application.recruitingInfo.toObject ? application.recruitingInfo.toObject() : application.recruitingInfo,
+      complianceQuestions: application.complianceQuestions.toObject ? application.complianceQuestions.toObject() : application.complianceQuestions,
+      financialBackground: application.financialBackground.toObject ? application.financialBackground.toObject() : application.financialBackground,
+      licensingStatus: application.licensingStatus.toObject ? application.licensingStatus.toObject() : application.licensingStatus
+    });
+    const changes = diffSnapshots(before, after);
+
+    // One-shot access: a confirmed save locks the application again, so the
+    // agent has to file a new edit request for any further change.
+    application.editRequest.lastEditedAt = new Date();
+    if (application.editRequest.status === 'approved') application.editRequest.status = 'locked';
+    if (changes.length) {
+      application.editHistory.push({ editedAt: new Date(), editedBy: req.user._id, changes });
+    }
+
+    // Version history: the version being replaced is kept as a read-only
+    // snapshot, then the edited data becomes the new current version, which
+    // must be signed again and re-approved by an admin.
+    let signatureSent = false;
+    if (changes.length || isRejectionResubmit) {
+      const versionReason = isRejectionResubmit ? 'rejection_resubmit' : 'edit_request';
+      application.versions.push({
+        version: application.currentVersion || 1,
+        reason: application.currentVersionReason || 'original',
+        snapshot: snapshotBefore,
+        signedDocumentUrl: application.docusign?.documentUrl,
+        signedAt: application.docusign?.signedAt || application.docusign?.sentAt,
+        rejectionReason: isRejectionResubmit ? application.rejectionReason : undefined,
+        supersededAt: new Date(),
+        supersededBy: req.user._id
+      });
+      application.currentVersion = (application.currentVersion || 1) + 1;
+      application.currentVersionReason = versionReason;
+      application.resign = { required: true, source: versionReason, requestedAt: new Date() };
+      application.status = 'pending_resignature';
+      application.rejectionReason = undefined;
+      application.docusign.envelopeId = undefined;
+      application.docusign.status = 'draft';
+    }
+    await application.save();
+
+    if (application.resign?.required) {
+      signatureSent = await sendResignRequest(application);
+    }
+
+    // Keep the agent's account profile in sync with the corrected details
+    const account = await User.findById(application.userId || req.user._id);
+    if (account) {
+      account.name = `${application.personalInfo.legalFirstName} ${application.personalInfo.legalLastName}`.trim();
+      account.phone = application.personalInfo.mobilePhone;
+      account.dateOfBirth = application.personalInfo.dateOfBirth;
+      account.address = application.personalInfo.homeAddress.street;
+      account.city = application.personalInfo.homeAddress.city;
+      account.state = application.personalInfo.homeAddress.state;
+      account.zipCode = application.personalInfo.homeAddress.zipCode;
+      account.updatedBy = req.user._id;
+      await account.save();
+    }
+
+    if (changes.length) {
+      await notifyAdmins({
+        type: 'apa_edited',
+        title: 'APA Application Updated',
+        message: `${account?.name || req.user.name} updated their APA application (${changes.length} field${changes.length > 1 ? 's' : ''} changed).`,
+        data: { agentId: String(req.user._id), applicationId: String(application._id) },
+        link: `/admin/onboarding/${req.user._id}`
+      });
+    }
+
+    sendResponse(res, 200, {
+      message: application.resign?.required
+        ? 'Application updated. Please sign the updated agreement to finish; it will then go back to admin review.'
+        : 'Application updated successfully. Editing is now locked.',
+      changed: changes.length,
+      resignRequired: !!application.resign?.required,
+      signatureSent,
+      version: application.currentVersion
+    });
   } catch (error) {
     errorResponse(res, error);
   }

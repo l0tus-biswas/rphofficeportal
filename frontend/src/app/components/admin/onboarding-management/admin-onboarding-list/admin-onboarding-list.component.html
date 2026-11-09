@@ -14,6 +14,23 @@
       </div>
     </div>
 
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4">
+      <li class="nav-item">
+        <button type="button" class="nav-link" [class.active]="activeTab === 'documents'" (click)="setTab('documents')">
+          <i class="bi bi-folder2-open me-1"></i>Onboarding Documents
+        </button>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="nav-link" [class.active]="activeTab === 'edit-requests'" (click)="setTab('edit-requests')">
+          <i class="bi bi-pencil-square me-1"></i>APA Edit Requests
+          <span class="badge bg-warning text-dark ms-1" *ngIf="pendingEditCount > 0">{{ pendingEditCount }}</span>
+        </button>
+      </li>
+    </ul>
+
+    <ng-container *ngIf="activeTab === 'documents'">
+
     <!-- Stats Cards -->
     <div class="row g-3 mb-4">
       <div class="col-md-4 col-lg-2">
@@ -255,5 +272,141 @@
       </div>
     </div>
 
+    </ng-container>
+
+    <!-- APA Edit Requests -->
+    <ng-container *ngIf="activeTab === 'edit-requests'">
+      <p class="text-muted">
+        Agents can ask to correct their submitted APA application. Approving unlocks the form for them;
+        it locks automatically once they save, and they must request again to edit further. You can also re-lock it manually.
+      </p>
+
+      <div *ngIf="editSuccess" class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle-fill me-2"></i>{{ editSuccess }}
+        <button type="button" class="btn-close" (click)="editSuccess = ''" aria-label="Close"></button>
+      </div>
+      <div *ngIf="editError" class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ editError }}
+        <button type="button" class="btn-close" (click)="editError = ''" aria-label="Close"></button>
+      </div>
+
+      <div class="btn-group mb-3 flex-wrap" role="group">
+        <button *ngFor="let f of [
+            { v: 'pending', l: 'Pending' }, { v: 'approved', l: 'Unlocked' },
+            { v: 'denied', l: 'Denied' }, { v: 'locked', l: 'Locked' }, { v: 'all', l: 'All' }]"
+          type="button" class="btn btn-sm"
+          [ngClass]="editStatusFilter === f.v ? 'btn-primary' : 'btn-outline-primary'"
+          (click)="onEditFilterChange(f.v)">
+          {{ f.l }}<span *ngIf="f.v !== 'all' && editCounts[f.v]" class="ms-1">({{ editCounts[f.v] }})</span>
+        </button>
+      </div>
+
+      <div *ngIf="editLoading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+      </div>
+
+      <div *ngIf="!editLoading" class="card shadow-sm">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Agent</th>
+                <th>Reason</th>
+                <th>Status</th>
+                <th>Requested</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <ng-container *ngFor="let row of editRequests">
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ row.agent.name || 'N/A' }}</div>
+                    <small class="text-muted">{{ row.agent.email }}</small>
+                  </td>
+                  <td style="max-width: 320px;">
+                    <div class="text-break">{{ row.editRequest.reason || '—' }}</div>
+                    <small class="text-muted d-block" *ngIf="row.editRequest.adminNote">Admin note: {{ row.editRequest.adminNote }}</small>
+                  </td>
+                  <td>
+                    <span [ngClass]="getEditBadgeClass(row.editRequest.status)">
+                      {{ row.editRequest.status === 'approved' ? 'Unlocked' : (row.editRequest.status | titlecase) }}
+                    </span>
+                    <small class="text-muted d-block" *ngIf="row.editRequest.lastEditedAt">Last edited {{ formatDate(row.editRequest.lastEditedAt) }}</small>
+                  </td>
+                  <td><small>{{ formatDate(row.editRequest.requestedAt) }}</small></td>
+                  <td class="text-end">
+                    <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
+                      <button *ngIf="row.editRequest.status === 'pending'" class="btn btn-sm btn-success"
+                              [disabled]="actionAppId === row.applicationId" (click)="approveEdit(row)">
+                        <i class="bi bi-unlock me-1"></i>Approve
+                      </button>
+                      <button *ngIf="row.editRequest.status === 'pending'" class="btn btn-sm btn-outline-danger"
+                              [disabled]="actionAppId === row.applicationId" (click)="openDeny(row)">
+                        <i class="bi bi-x-circle me-1"></i>Deny
+                      </button>
+                      <button *ngIf="row.editRequest.status === 'approved'" class="btn btn-sm btn-outline-secondary"
+                              [disabled]="actionAppId === row.applicationId" (click)="lockEdit(row)">
+                        <i class="bi bi-lock me-1"></i>Re-lock
+                      </button>
+                      <button *ngIf="row.editRequest.status === 'denied' || row.editRequest.status === 'locked'"
+                              class="btn btn-sm btn-outline-success"
+                              [disabled]="actionAppId === row.applicationId" (click)="approveEdit(row)">
+                        <i class="bi bi-unlock me-1"></i>Unlock
+                      </button>
+                      <button *ngIf="row.editHistory.length" class="btn btn-sm btn-outline-info" (click)="toggleHistory(row.applicationId)">
+                        <i class="bi bi-clock-history me-1"></i>Changes
+                      </button>
+                      <button *ngIf="row.agent._id" class="btn btn-sm btn-outline-primary" (click)="viewDetails(row.agent._id!)" title="Open Onboarding Review">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr *ngIf="expandedAppId === row.applicationId">
+                  <td colspan="5" class="bg-light">
+                    <div *ngFor="let h of row.editHistory" class="mb-3">
+                      <strong class="small">{{ formatDate(h.editedAt) }}</strong>
+                      <ul class="small mb-0">
+                        <li *ngFor="let c of h.changes"><code>{{ c.field }}</code>: {{ c.from || '(empty)' }} &rarr; {{ c.to || '(empty)' }}</li>
+                      </ul>
+                    </div>
+                  </td>
+                </tr>
+              </ng-container>
+              <tr *ngIf="editRequests.length === 0">
+                <td colspan="5" class="text-center py-5 text-muted">
+                  <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                  <p class="mt-2 mb-0">No edit requests found</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </ng-container>
+
   </div>
 </div>
+
+<!-- Deny modal -->
+<div class="modal fade" [class.show]="!!denyTarget" [style.display]="denyTarget ? 'block' : 'none'" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Deny Edit Request</h5>
+        <button type="button" class="btn-close" (click)="closeDeny()"></button>
+      </div>
+      <div class="modal-body">
+        <p>Deny <strong>{{ denyTarget?.agent?.name }}</strong>'s request to edit their application?</p>
+        <label class="form-label">Reason shown to the agent (optional)</label>
+        <textarea class="form-control" rows="3" maxlength="1000" [(ngModel)]="denyNote"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeDeny()">Cancel</button>
+        <button type="button" class="btn btn-danger" (click)="confirmDeny()">Deny Request</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-backdrop fade show" *ngIf="denyTarget"></div>

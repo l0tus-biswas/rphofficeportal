@@ -75,7 +75,7 @@ describe('PromotionTrackerComponent', () => {
     expect(text()).toContain('Producer track');
   });
 
-  it('uses backend skip multiplier and leg cap in fast-track banner and note', () => {
+  it('never shows level-skipping (fast-track) to agents, even if the backend reports eligibility', () => {
     setup(of(trackerData({
       promotionReady: true, producerMet: true,
       skipInfo: { canSkip: true, skipMultiplier: 1.75, skipLegCapPercent: 40 },
@@ -86,22 +86,12 @@ describe('PromotionTrackerComponent', () => {
       }
     })));
     const t = text();
-    expect(t).toContain('Fast-Track eligible!');
-    expect(t).toContain('Director (30%)');
-    expect(t).toContain('1.75× threshold met');
-    expect(t).toContain('no more than 40% of team premium');
-    expect(t).not.toContain('1.4×');
-    expect(t).not.toContain('50% of team');
-  });
-
-  it('falls back to 1.4x and 50% when skip fields are absent', () => {
-    setup(of(trackerData({
-      skipInfo: { canSkip: true },
-      fastTrack: { eligible: true, track: 'builder', skipToLevel: { name: 'director', rank: 3, commissionPercent: 30 } }
-    })));
-    const t = text();
-    expect(t).toContain('1.4× threshold met');
-    expect(t).toContain('no more than 50% of team premium');
+    expect(t).not.toContain('Fast-Track');
+    expect(t).not.toContain('skip one');
+    expect(t).not.toContain('Skip one');
+    expect(t).not.toContain('threshold met).');
+    // the normal promotion-ready banner is unaffected
+    expect(t).toContain('Promotion threshold met!');
   });
 
   it('requests tracker with selected window on window change', () => {

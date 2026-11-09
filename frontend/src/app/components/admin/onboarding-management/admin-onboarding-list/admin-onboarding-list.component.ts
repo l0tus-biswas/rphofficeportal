@@ -1,7 +1,8 @@
 import { getAppTimezone } from '../../../../services/timezone.service';
 import { Component, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { OnboardingHubService, AdminOnboardingOverviewRow } from '../../../../services/onboarding-hub.service';
+import { ApaEditService, AdminApaEditRequestRow } from '../../../../services/apa-edit.service';
 
 @Component({
   selector: 'app-admin-onboarding-list',
@@ -45,13 +46,121 @@ export class AdminOnboardingListComponent implements OnInit {
     { value: 'missing', label: 'Missing Documents' }
   ];
 
+  // APA edit requests tab
+  activeTab: 'documents' | 'edit-requests' = 'documents';
+  editRequests: AdminApaEditRequestRow[] = [];
+  editCounts: Record<string, number> = {};
+  editStatusFilter = 'pending';
+  editLoading = false;
+  editError = '';
+  editSuccess = '';
+  actionAppId = '';
+  expandedAppId = '';
+
+  // Deny modal
+  denyTarget: AdminApaEditRequestRow | null = null;
+  denyNote = '';
+
   constructor(
     private onboardingHubService: OnboardingHubService,
+    private apaEditService: ApaEditService,
+    private route: ActivatedRoute,
     private router: Router
   ) { }
 
   ngOnInit(): void {
     this.loadOnboardings();
+    this.loadEditRequests();
+    if (this.route.snapshot.queryParamMap.get('tab') === 'edit-requests') {
+      this.activeTab = 'edit-requests';
+    }
+  }
+
+  setTab(tab: 'documents' | 'edit-requests'): void {
+    this.activeTab = tab;
+    this.router.navigate([], { queryParams: { tab: tab === 'edit-requests' ? tab : null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  loadEditRequests(): void {
+    this.editLoading = true;
+    this.editError = '';
+    this.apaEditService.listEditRequests(this.editStatusFilter).subscribe({
+      next: (res) => {
+        this.editRequests = res.requests || [];
+        this.editCounts = res.counts || {};
+        this.editLoading = false;
+      },
+      error: (err) => {
+        this.editError = err.error?.message || 'Failed to load edit requests';
+        this.editLoading = false;
+      }
+    });
+  }
+
+  onEditFilterChange(status: string): void {
+    this.editStatusFilter = status;
+    this.loadEditRequests();
+  }
+
+  approveEdit(row: AdminApaEditRequestRow): void {
+    this.runEditAction(row, this.apaEditService.approve(row.applicationId), `Edit access granted to ${row.agent.name}`);
+  }
+
+  lockEdit(row: AdminApaEditRequestRow): void {
+    if (!confirm(`Lock ${row.agent.name}'s application? They will no longer be able to edit it.`)) return;
+    this.runEditAction(row, this.apaEditService.lock(row.applicationId), `${row.agent.name}'s application locked`);
+  }
+
+  openDeny(row: AdminApaEditRequestRow): void {
+    this.denyTarget = row;
+    this.denyNote = '';
+  }
+
+  closeDeny(): void {
+    this.denyTarget = null;
+    this.denyNote = '';
+  }
+
+  confirmDeny(): void {
+    if (!this.denyTarget) return;
+    const row = this.denyTarget;
+    this.runEditAction(row, this.apaEditService.deny(row.applicationId, this.denyNote), `Edit request from ${row.agent.name} denied`);
+    this.closeDeny();
+  }
+
+  private runEditAction(row: AdminApaEditRequestRow, call: any, successMsg: string): void {
+    this.actionAppId = row.applicationId;
+    this.editError = '';
+    this.editSuccess = '';
+    call.subscribe({
+      next: () => {
+        this.editSuccess = successMsg;
+        this.actionAppId = '';
+        this.loadEditRequests();
+      },
+      error: (err: any) => {
+        this.editError = err.error?.message || 'Action failed';
+        this.actionAppId = '';
+      }
+    });
+  }
+
+  toggleHistory(appId: string): void {
+    this.expandedAppId = this.expandedAppId === appId ? '' : appId;
+  }
+
+  getEditBadgeClass(status: string): string {
+    switch (status) {
+      case 'pending': return 'badge bg-warning text-dark';
+      case 'approved': return 'badge bg-success';
+      case 'denied': return 'badge bg-danger';
+      case 'locked': return 'badge bg-secondary';
+      default: return 'badge bg-light text-dark';
+    }
+  }
+
+  get pendingEditCount(): number {
+    return this.editCounts['pending'] || 0;
   }
 
   loadOnboardings(): void {

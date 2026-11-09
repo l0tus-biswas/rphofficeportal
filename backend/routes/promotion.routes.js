@@ -451,7 +451,8 @@ async function evaluateTracks(agentId, next, promotedAt, rankByName) {
   // ---- Builder track: team premium + team rank composition + personal income ----
   const downlineIds = await getDownlineIds(agentId);
   const transferDates = await getTransferDatesForDownline(downlineIds);
-  const builderPremium = await sumQualifyingPremium(downlineIds, next.builderWindowDays, promotedAt, transferDates);
+  // Team premium = the agent's own (personal) premium + all downline premium
+  const builderPremium = await sumQualifyingPremium([agentId, ...downlineIds], next.builderWindowDays, promotedAt, transferDates);
   const builderPremiumMet = next.builderPremiumThreshold > 0
     ? builderPremium >= next.builderPremiumThreshold
     : true;
@@ -603,7 +604,8 @@ router.get('/tracker', authenticate, async (req, res) => {
     const builderWindow = windowParam || relevantLevel.builderWindowDays;
     // Get transfer dates for downline agents to ensure only post-transfer production counts
     const transferDates = await getTransferDatesForDownline(downlineIds);
-    const builderPremium = await sumQualifyingPremium(downlineIds, builderWindow, promotedAt, transferDates);
+    // Team premium = the agent's own (personal) premium + all downline premium
+    const builderPremium = await sumQualifyingPremium([userId, ...downlineIds], builderWindow, promotedAt, transferDates);
     const builderTarget = relevantLevel.builderPremiumThreshold;
     const builderProgress = builderTarget > 0
       ? Math.min(Math.round((builderPremium / builderTarget) * 100), 100)
@@ -670,7 +672,7 @@ router.get('/tracker', authenticate, async (req, res) => {
         let builderFastTrack = false;
         if (builderSkipThreshold > 0 && builderPremium >= builderSkipThreshold) {
           const legPremiums = await getPremiumByLeg(userId, builderWindow, promotedAt);
-          const totalTeamPremium = builderPremium + (await sumQualifyingPremium([userId], builderWindow, promotedAt));
+          const totalTeamPremium = builderPremium; // already includes personal premium
           builderFastTrack = checkBuilderLegCap(legPremiums, totalTeamPremium, legCapPercent);
         }
 

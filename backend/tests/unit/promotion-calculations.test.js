@@ -298,6 +298,45 @@ describe('evaluateTracks', () => {
     expect(result.builderMet).toBe(true);
   });
 
+  describe('Team premium includes the agent\'s own (personal) premium', () => {
+    const TEAMMATE_ID = '507f1f77bcf86cd799439014';
+    const baseLevel = {
+      producerPremiumThreshold: 999999, producerWindowDays: 30, producerIncomeThreshold: 0, producerIncomeWindowDays: 180,
+      builderPremiumThreshold: 1000, builderWindowDays: 30, builderAgentCountThreshold: 0,
+      builderRequiredRanks: [], builderIncomeThreshold: 0, builderIncomeWindowDays: 180
+    };
+    const matchedAgentIds = (callIdx) =>
+      ProductionSubmission.aggregate.mock.calls[callIdx][0]
+        .find(stage => stage.$match).$match.agent.$in.map(String);
+
+    it('queries builder premium over [agent, ...downline], not downline only', async () => {
+      mockDownlineTree({ [AGENT_ID]: [TEAMMATE_ID], [TEAMMATE_ID]: [] });
+      mockDownlineLevels({});
+      ProductionSubmission.aggregate.mockResolvedValue([{ _id: null, total: 0 }]);
+
+      await evaluateTracks(AGENT_ID, baseLevel, null, RANK_BY_NAME);
+
+      // call 0 = producer premium (self only), call 1 = builder (team) premium
+      expect(matchedAgentIds(0)).toEqual([AGENT_ID]);
+      expect(matchedAgentIds(1)).toEqual(expect.arrayContaining([AGENT_ID, TEAMMATE_ID]));
+      expect(matchedAgentIds(1)).toHaveLength(2);
+    });
+
+    it('agent with personal premium and NO downline still has team premium (Kiss Suarez case)', async () => {
+      mockDownlineTree({ [AGENT_ID]: [] });
+      mockDownlineLevels({});
+      // The mocked aggregate only returns premium when the agent's own id is in the matched set
+      ProductionSubmission.aggregate.mockImplementation(async (pipeline) => {
+        const ids = pipeline.find(s => s.$match).$match.agent.$in.map(String);
+        return ids.includes(AGENT_ID) ? [{ _id: null, total: 758 }] : [];
+      });
+
+      const result = await evaluateTracks(AGENT_ID, baseLevel, null, RANK_BY_NAME);
+      expect(result.builderPremium).toBe(758);
+      expect(matchedAgentIds(1)).toEqual([AGENT_ID]);
+    });
+  });
+
   it('Builder track: falls back to plain headcount when no rank requirement is configured', async () => {
     const TEAMMATE_ID = '507f1f77bcf86cd799439013';
     mockDownlineTree({ [AGENT_ID]: [TEAMMATE_ID], [TEAMMATE_ID]: [] });

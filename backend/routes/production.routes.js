@@ -252,16 +252,9 @@ router.get('/team-report', authenticate, async (req, res) => {
       }
       // If neither agentId nor uplineId, agentIds stays null → query all agents
     } else {
+      // Team = the agent's own production + the whole downline. An agent with
+      // no downline still has a team of one (themselves), so do not short-circuit.
       const downlineIds = await getDownlineIds(req.user._id);
-      if (downlineIds.length === 0) {
-        return res.json({
-          totalPremiumInForce: 0,
-          activeAgents: 0,
-          newRecruits: 0,
-          windowDays,
-          since
-        });
-      }
       agentIds = [req.user._id, ...downlineIds];
     }
 

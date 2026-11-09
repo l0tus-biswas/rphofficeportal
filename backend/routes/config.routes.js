@@ -255,9 +255,10 @@ router.post('/email/test', protect, authorize('admin'), async (req, res) => {
     await neuzmail.sendNotificationEmail({
       toEmail: recipient,
       title: 'RHP Office — Email Configuration Test',
-      message: `This is a test email confirming your system email configuration is working.<br><br>` +
-        `<strong>From:</strong> ${settings.fromName} &lt;${settings.fromEmail}&gt;<br>` +
-        `<strong>Reply-To:</strong> ${settings.replyTo || '(not set — replies go to the From address)'}`,
+      // Plain text only: the message is HTML-escaped on render (and as a merge field), so tags would show literally.
+      message: `This is a test email confirming your system email configuration is working.\n\n` +
+        `From: ${settings.fromName} <${settings.fromEmail}>\n` +
+        `Reply-To: ${settings.replyTo || '(not set — replies go to the From address)'}`,
       actionLabel: 'Open RHP Office'
     });
 

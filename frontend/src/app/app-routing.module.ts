@@ -16,6 +16,7 @@ import { ForgotPasswordComponent } from './components/forgot-password/forgot-pas
 import { ResetPasswordComponent } from './components/reset-password/reset-password.component';
 import { OnboardingUploadComponent } from './components/onboarding/onboarding-upload/onboarding-upload.component';
 import { OnboardingStatusComponent } from './components/onboarding/onboarding-status/onboarding-status.component';
+import { ApaApplicationEditComponent } from './components/onboarding/apa-application-edit/apa-application-edit.component';
 import { SystemConfigComponent } from './components/admin/system-config/system-config.component';
 import { OneTimePaymentComponent } from './components/payment/one-time-payment/one-time-payment.component';
 import { SubscriptionPaymentComponent } from './components/payment/subscription-payment/subscription-payment.component';
@@ -143,9 +144,15 @@ const routes: Routes = [
     canActivate: [AuthGuard],
     data: { roles: ['agent', 'admin'] }
   },
-  { 
-    path: 'onboarding', 
-    component: OnboardingStatusComponent, 
+  {
+    path: 'onboarding',
+    component: OnboardingStatusComponent,
+    canActivate: [AuthGuard],
+    data: { roles: ['agent', 'admin'] }
+  },
+  {
+    path: 'onboarding/edit',
+    component: ApaApplicationEditComponent,
     canActivate: [AuthGuard],
     data: { roles: ['agent', 'admin'] }
   },

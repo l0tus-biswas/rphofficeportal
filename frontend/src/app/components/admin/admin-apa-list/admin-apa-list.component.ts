@@ -115,6 +115,8 @@ export class AdminApaListComponent implements OnInit {
       'pending_signature': 'bg-warning',
       'pending_payment': 'bg-info',
       'completed': 'bg-primary',
+      'pending_resignature': 'bg-warning',
+      'pending_review': 'bg-primary',
       'active': 'bg-success',
       'rejected': 'bg-danger'
     };
@@ -126,6 +128,8 @@ export class AdminApaListComponent implements OnInit {
       'pending_signature': 'Pending Signature',
       'pending_payment': 'Pending Payment',
       'completed': 'Awaiting Review',
+      'pending_resignature': 'Awaiting Re-signature',
+      'pending_review': 'Re-signed, Awaiting Review',
       'active': 'Active',
       'rejected': 'Rejected'
     };

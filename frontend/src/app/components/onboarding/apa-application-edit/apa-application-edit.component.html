@@ -1,0 +1,282 @@
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <button class="btn btn-outline-secondary" (click)="back()"><i class="bi bi-arrow-left me-2"></i>Back</button>
+    <div>
+      <h3 class="mb-0">Edit My APA Application</h3>
+      <p class="text-muted mb-0">Correct any details below and save. You will sign the updated agreement again, and your previous version is kept in your history.</p>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>
+
+  <div *ngIf="!loading && error" class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}</div>
+  <div *ngIf="!loading && success" class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>{{ success }}</div>
+
+  <div *ngIf="!loading && rejected && unlocked" class="alert alert-danger" data-testid="rejection-banner">
+    <strong><i class="bi bi-x-octagon-fill me-2"></i>Your application was rejected.</strong>
+    <div class="mt-1">Reason: {{ rejectionReason }}</div>
+    <div class="mt-1 small">Correct the details below and resubmit. You will sign the updated agreement again.</div>
+  </div>
+
+  <div *ngIf="!loading && awaitingSignature && !unlocked && !error" class="alert alert-info" data-testid="awaiting-signature">
+    <i class="bi bi-pen-fill me-2"></i>Your updated application is waiting for your signature. Check your email from Zoho Sign.
+  </div>
+
+  <div *ngIf="!loading && !unlocked && !error && !saved && !awaitingSignature" class="alert alert-warning" data-testid="edit-locked">
+    Editing is locked. Go back to your Onboarding page and request edit access.
+  </div>
+  <div *ngIf="saved || awaitingSignature" class="mb-4 d-flex gap-2">
+    <button class="btn btn-primary" (click)="back()">Back to Onboarding</button>
+    <button class="btn btn-outline-primary" *ngIf="awaitingSignature" [disabled]="resending" (click)="resendSignature()" data-testid="resend-signature">
+      <span *ngIf="resending" class="spinner-border spinner-border-sm me-1"></span>Resend signature request
+    </button>
+  </div>
+
+  <ng-template #yesNo let-name="name">
+    <div class="yes-no-group">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" [name]="name" [id]="name + '-yes'" [checked]="isTrue(name)" (change)="setBool(name, true)">
+        <label class="form-check-label" [for]="name + '-yes'">Yes</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" [name]="name" [id]="name + '-no'" [checked]="!isTrue(name)" (change)="setBool(name, false)">
+        <label class="form-check-label" [for]="name + '-no'">No</label>
+      </div>
+    </div>
+  </ng-template>
+
+  <form *ngIf="!loading && unlocked" [formGroup]="form" (ngSubmit)="save()">
+
+    <!-- Personal information -->
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Personal Information</h5></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Legal First Name *</label>
+            <input class="form-control" formControlName="legalFirstName" [class.is-invalid]="f['legalFirstName'].invalid && f['legalFirstName'].touched">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Middle Name</label>
+            <input class="form-control" formControlName="legalMiddleName">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Legal Last Name *</label>
+            <input class="form-control" formControlName="legalLastName" [class.is-invalid]="f['legalLastName'].invalid && f['legalLastName'].touched">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Agency / LLC Legal Name</label>
+            <input class="form-control" formControlName="agencyLegalName" placeholder="Leave blank if none">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Gender *</label>
+            <select class="form-select" formControlName="gender" [class.is-invalid]="f['gender'].invalid && f['gender'].touched">
+              <option value="">Select...</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Date of Birth *</label>
+            <input type="date" class="form-control" formControlName="dateOfBirth" [class.is-invalid]="f['dateOfBirth'].invalid && f['dateOfBirth'].touched">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Social Security Number</label>
+            <input class="form-control" formControlName="ssn" autocomplete="off"
+                   [placeholder]="maskedSsn ? maskedSsn + ' (leave blank to keep)' : '123-45-6789'"
+                   [class.is-invalid]="f['ssn'].invalid && f['ssn'].touched">
+            <div class="invalid-feedback">Enter a valid SSN (e.g. 123-45-6789).</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Mobile Phone *</label>
+            <input class="form-control" formControlName="mobilePhone" [class.is-invalid]="f['mobilePhone'].invalid && f['mobilePhone'].touched">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Email</label>
+            <input class="form-control" formControlName="email">
+          </div>
+
+          <div class="col-12"><h6 class="mb-0 mt-2">Home Address</h6></div>
+          <div class="col-md-6">
+            <label class="form-label">Street *</label>
+            <input class="form-control" formControlName="homeStreet" [class.is-invalid]="f['homeStreet'].invalid && f['homeStreet'].touched">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">City *</label>
+            <input class="form-control" formControlName="homeCity" [class.is-invalid]="f['homeCity'].invalid && f['homeCity'].touched">
+          </div>
+          <div class="col-md-1">
+            <label class="form-label">State *</label>
+            <input class="form-control" formControlName="homeState" [class.is-invalid]="f['homeState'].invalid && f['homeState'].touched">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Zip *</label>
+            <input class="form-control" formControlName="homeZipCode" [class.is-invalid]="f['homeZipCode'].invalid && f['homeZipCode'].touched">
+          </div>
+
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="diffMailing" formControlName="hasDifferentMailing">
+              <label class="form-check-label" for="diffMailing">My mailing address is different</label>
+            </div>
+          </div>
+          <ng-container *ngIf="isTrue('hasDifferentMailing')">
+            <div class="col-md-6"><label class="form-label">Mailing Street</label><input class="form-control" formControlName="mailingStreet"></div>
+            <div class="col-md-3"><label class="form-label">City</label><input class="form-control" formControlName="mailingCity"></div>
+            <div class="col-md-1"><label class="form-label">State</label><input class="form-control" formControlName="mailingState"></div>
+            <div class="col-md-2"><label class="form-label">Zip</label><input class="form-control" formControlName="mailingZipCode"></div>
+          </ng-container>
+
+          <div class="col-12">
+            <label class="form-label d-block">Previously contracted with RHP?</label>
+            <ng-container *ngTemplateOutlet="yesNo; context: { name: 'previouslyContracted' }"></ng-container>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recruiting -->
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Recruiting Information</h5></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Recruiter Name</label>
+            <input class="form-control" formControlName="recruiterFullName">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Recruiter Agent ID</label>
+            <input class="form-control" formControlName="recruiterAgentId">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Recruiter Contact</label>
+            <input class="form-control" formControlName="recruiterContact">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Upline Leader</label>
+            <input class="form-control" formControlName="uplineLeaderName">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Team</label>
+            <input class="form-control" formControlName="teamName">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Referral Code</label>
+            <input class="form-control" formControlName="referralCode">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compliance -->
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Background &amp; Compliance Questions</h5></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6" *ngFor="let q of complianceQuestions">
+            <div class="border rounded p-3 h-100">
+              <strong class="d-block mb-2">{{ q.label }}</strong>
+              <ng-container *ngTemplateOutlet="yesNo; context: { name: q.key }"></ng-container>
+              <textarea *ngIf="isTrue(q.key)" class="form-control mt-2" rows="2" [formControlName]="q.key + 'Explanation'" placeholder="Please explain"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Financial -->
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Financial Background</h5></div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100">
+              <strong class="d-block mb-2">Any unsatisfied judgments against you?</strong>
+              <ng-container *ngTemplateOutlet="yesNo; context: { name: 'unsatisfiedJudgments' }"></ng-container>
+              <textarea *ngIf="isTrue('unsatisfiedJudgments')" class="form-control mt-2" rows="2" formControlName="unsatisfiedJudgmentsExplanation" placeholder="Please explain"></textarea>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100">
+              <strong class="d-block mb-2">Any unsatisfied liens against you?</strong>
+              <ng-container *ngTemplateOutlet="yesNo; context: { name: 'unsatisfiedLiens' }"></ng-container>
+              <textarea *ngIf="isTrue('unsatisfiedLiens')" class="form-control mt-2" rows="2" formControlName="unsatisfiedLiensExplanation" placeholder="Please explain"></textarea>
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="border rounded p-3">
+              <strong class="d-block mb-2">Have you ever filed for bankruptcy?</strong>
+              <ng-container *ngTemplateOutlet="yesNo; context: { name: 'bankruptcyFiled' }"></ng-container>
+              <div class="row g-3 mt-1" *ngIf="isTrue('bankruptcyFiled')">
+                <div class="col-md-6">
+                  <label class="form-label">Chapter</label>
+                  <select class="form-select" formControlName="bankruptcyChapter">
+                    <option value="">Select...</option>
+                    <option value="7">Chapter 7</option>
+                    <option value="11">Chapter 11</option>
+                    <option value="13">Chapter 13</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Status</label>
+                  <select class="form-select" formControlName="bankruptcyStatus">
+                    <option value="">Select...</option>
+                    <option value="Discharged">Discharged</option>
+                    <option value="Open">Open</option>
+                    <option value="Dismissed">Dismissed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Licensing -->
+    <div class="card mb-4">
+      <div class="card-header"><h5 class="mb-0">Licensing Status</h5></div>
+      <div class="card-body">
+        <strong class="d-block mb-2">Are you currently licensed to sell insurance products?</strong>
+        <ng-container *ngTemplateOutlet="yesNo; context: { name: 'currentlyLicensed' }"></ng-container>
+
+        <div class="row g-3 mt-1" *ngIf="isTrue('currentlyLicensed')">
+          <div class="col-12">
+            <label class="form-label d-block">License Types</label>
+            <div class="form-check form-check-inline" *ngFor="let t of licenseTypeOptions">
+              <input class="form-check-input" type="checkbox" [id]="'lt-' + t"
+                     [checked]="selectedLicenseTypes.includes(t)" (change)="toggleLicenseType(t, $any($event.target).checked)">
+              <label class="form-check-label" [for]="'lt-' + t">{{ t }}</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">States Licensed (comma separated)</label>
+            <input class="form-control" formControlName="statesLicensed" placeholder="TX, FL">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">License Number</label>
+            <input class="form-control" formControlName="licenseNumber">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">License Status</label>
+            <select class="form-select" formControlName="licenseStatus">
+              <option value="">Select...</option>
+              <option *ngFor="let s of licenseStatusOptions" [value]="s">{{ s }}</option>
+            </select>
+          </div>
+          <div class="col-12" *ngIf="selectedLicenseTypes.includes('Other')">
+            <label class="form-label">Other License Description</label>
+            <input class="form-control" formControlName="licenseOtherDescription">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mb-5">
+      <button type="button" class="btn btn-outline-secondary" (click)="back()" [disabled]="saving">Back to Onboarding</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving">
+        <span *ngIf="saving" class="spinner-border spinner-border-sm me-1"></span>Save Changes
+      </button>
+    </div>
+  </form>
+</div>

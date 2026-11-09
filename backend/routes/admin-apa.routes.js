@@ -10,6 +10,7 @@ const SystemConfig = require('../models/SystemConfig');
 const { protect, authorize } = require('../middleware/auth.middleware');
 const { sendResponse, errorResponse } = require('../utils/helpers');
 const { sendNotificationEmail } = require('../utils/neuzmail');
+const { shapeVersionHistory } = require('../utils/apaSigning');
 const {
   getActiveTemplateId,
   updateTemplateDocument,
@@ -122,6 +123,22 @@ router.get('/apa-applications/:id([a-fA-F0-9]{24})', async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/apa-applications/:id/versions
+// @desc    Version history (current + superseded snapshots) of an application
+// @access  Admin only
+router.get('/apa-applications/:id([a-fA-F0-9]{24})/versions', async (req, res) => {
+  try {
+    const application = await APAApplication.findById(req.params.id);
+    if (!application) {
+      return errorResponse(res, new Error('Application not found'), 404);
+    }
+    const baseUrl = process.env.API_URL || `${req.protocol}://${req.get('host')}`;
+    sendResponse(res, 200, shapeVersionHistory(application, baseUrl));
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
 // @route   PUT /api/admin/apa-applications/:id/approve
 // @desc    Approve APA application
 // @access  Admin only
@@ -141,7 +158,10 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/approve', async (req, res) =>
     if (application.status === 'active') {
       return errorResponse(res, new Error('Application is already approved and active'), 400);
     }
-    
+    if (application.status === 'pending_resignature') {
+      return errorResponse(res, new Error('The agent has not signed the updated application yet'), 400);
+    }
+
     application.status = 'active';
     application.adminNotes = adminNotes || '';
     application.reviewedAt = new Date();
@@ -206,8 +226,12 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
       return errorResponse(res, new Error('Application is already rejected'), 400);
     }
     
+    if (application.status === 'pending_resignature') {
+      return errorResponse(res, new Error('The agent is still signing an updated application'), 400);
+    }
+
     application.status = 'rejected';
-    application.rejectionReason = reason;
+    application.rejectionReason = reason.trim();
     application.adminNotes = adminNotes || '';
     application.reviewedAt = new Date();
     application.reviewedBy = req.user._id;
@@ -218,8 +242,8 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
         userId: application.userId,
         type: 'apa_rejected',
         title: 'APA Application Rejected',
-        message: `Your APA application was rejected. Reason: ${reason}`,
-        link: '/profile'
+        message: `Your APA application was rejected. Reason: ${reason}. You can edit it from your Onboarding page, sign it again and resubmit.`,
+        link: '/onboarding'
       }, false).catch(() => {});
     }
 
@@ -230,9 +254,9 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
       sendNotificationEmail({
         toEmail: rejApplicantEmail,
         title: 'APA Application Update',
-        message: `Dear ${rejApplicantName}, your APA application was not approved. Reason: ${reason}. If you have questions or would like to re-apply, please contact our support team.`,
-        link: '/profile',
-        actionLabel: 'View Profile'
+        message: `Dear ${rejApplicantName}, your APA application was not approved. Reason: ${reason}. Please log in, correct your application from the Onboarding page, sign it again and resubmit it for review.`,
+        link: '/onboarding',
+        actionLabel: 'Edit Application'
       }).catch(err => console.error('[APA Reject] Email error:', err.message));
     }
     
@@ -246,6 +270,164 @@ router.put('/apa-applications/:id([a-fA-F0-9]{24})/reject', async (req, res) => 
     errorResponse(res, error);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Agent "request to edit" workflow
+// ---------------------------------------------------------------------------
+
+const EDIT_REQUEST_STATUSES = ['pending', 'approved', 'denied', 'locked'];
+
+function shapeEditRequest(app) {
+  const user = app.userId && typeof app.userId === 'object' ? app.userId : null;
+  const p = app.personalInfo || {};
+  return {
+    applicationId: app._id,
+    agent: {
+      _id: user?._id || app.userId || null,
+      name: user?.name || [p.legalFirstName, p.legalLastName].filter(Boolean).join(' '),
+      email: user?.email || p.email
+    },
+    editRequest: app.editRequest,
+    editHistory: (app.editHistory || []).slice(-10).reverse()
+  };
+}
+
+// @route   GET /api/admin/apa-applications/edit-requests
+// @desc    List agents' APA edit requests (default: pending)
+// @access  Admin only
+router.get('/apa-applications/edit-requests', async (req, res) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : 'pending';
+    const filter = { deletedAt: null };
+    if (status === 'all') {
+      filter['editRequest.status'] = { $in: EDIT_REQUEST_STATUSES };
+    } else if (EDIT_REQUEST_STATUSES.includes(status)) {
+      filter['editRequest.status'] = status;
+    } else {
+      return errorResponse(res, new Error('Invalid status filter'), 400);
+    }
+
+    const [apps, counts] = await Promise.all([
+      APAApplication.find(filter)
+        .select('userId personalInfo.legalFirstName personalInfo.legalLastName personalInfo.email editRequest editHistory')
+        .populate('userId', 'name email')
+        .sort({ 'editRequest.requestedAt': -1 })
+        .limit(200),
+      APAApplication.aggregate([
+        { $match: { deletedAt: null, 'editRequest.status': { $in: EDIT_REQUEST_STATUSES } } },
+        { $group: { _id: '$editRequest.status', count: { $sum: 1 } } }
+      ])
+    ]);
+
+    sendResponse(res, 200, {
+      requests: apps.map(shapeEditRequest),
+      counts: counts.reduce((acc, c) => { acc[c._id] = c.count; return acc; }, {})
+    });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+// @route   GET /api/admin/apa-applications/by-agent/:userId/edit-request
+// @desc    Edit-request state for one agent's application (Onboarding Review page)
+// @access  Admin only
+router.get('/apa-applications/by-agent/:userId([a-fA-F0-9]{24})/edit-request', async (req, res) => {
+  try {
+    const app = await APAApplication.findOne({ userId: req.params.userId, deletedAt: null })
+      .select('userId personalInfo.legalFirstName personalInfo.legalLastName personalInfo.email editRequest editHistory')
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
+    sendResponse(res, 200, { request: app ? shapeEditRequest(app) : null });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+});
+
+async function changeEditAccess(req, res, { allowedFrom, to, notify }) {
+  try {
+    const adminNote = req.body?.adminNote;
+    if (adminNote != null && typeof adminNote !== 'string') {
+      return errorResponse(res, new Error('adminNote must be a string'), 400);
+    }
+
+    const application = await APAApplication.findById(req.params.id);
+    if (!application || application.deletedAt) {
+      return errorResponse(res, new Error('Application not found'), 404);
+    }
+
+    const current = application.editRequest?.status || 'none';
+    if (!allowedFrom.includes(current)) {
+      return errorResponse(res, new Error(`Cannot change edit access from "${current}"`), 400);
+    }
+
+    application.editRequest.status = to;
+    application.editRequest.reviewedAt = new Date();
+    application.editRequest.reviewedBy = req.user._id;
+    application.editRequest.adminNote = (adminNote || '').trim().slice(0, 1000);
+    await application.save();
+
+    const agentId = application.userId || application.user;
+    if (agentId) {
+      const note = application.editRequest.adminNote;
+      Notification.createNotification({
+        userId: agentId,
+        type: notify.type,
+        title: notify.title,
+        message: notify.message(note),
+        data: { applicationId: String(application._id), status: to },
+        link: '/onboarding'
+      }, true).catch(() => {});
+    }
+
+    sendResponse(res, 200, { success: true, message: notify.done, editRequest: application.editRequest });
+  } catch (error) {
+    errorResponse(res, error);
+  }
+}
+
+// @route   PUT /api/admin/apa-applications/:id/edit-request/approve
+// @desc    Unlock the application for the agent. Stays open until re-locked.
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/edit-request/approve', (req, res) =>
+  changeEditAccess(req, res, {
+    allowedFrom: ['none', 'pending', 'denied', 'locked'],
+    to: 'approved',
+    notify: {
+      type: 'apa_edit_approved',
+      title: 'APA Edit Request Approved',
+      message: (note) => `You can now edit your APA application from your Onboarding page. Editing locks again once you save.${note ? ` Note from admin: ${note}` : ''}`,
+      done: 'Edit access granted'
+    }
+  })
+);
+
+// @route   PUT /api/admin/apa-applications/:id/edit-request/deny
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/edit-request/deny', (req, res) =>
+  changeEditAccess(req, res, {
+    allowedFrom: ['pending'],
+    to: 'denied',
+    notify: {
+      type: 'apa_edit_denied',
+      title: 'APA Edit Request Denied',
+      message: (note) => `Your request to edit your APA application was not approved.${note ? ` Reason: ${note}` : ''}`,
+      done: 'Edit request denied'
+    }
+  })
+);
+
+// @route   PUT /api/admin/apa-applications/:id/edit-request/lock
+// @desc    Close editing again after the agent has finished their corrections
+router.put('/apa-applications/:id([a-fA-F0-9]{24})/edit-request/lock', (req, res) =>
+  changeEditAccess(req, res, {
+    allowedFrom: ['approved'],
+    to: 'locked',
+    notify: {
+      type: 'apa_edit_locked',
+      title: 'APA Application Locked',
+      message: () => 'Editing on your APA application has been closed. Request edit access again if you need more changes.',
+      done: 'Application locked'
+    }
+  })
+);
 
 // @route   PUT /api/admin/apa-applications/:id/notes
 // @desc    Update admin notes on application

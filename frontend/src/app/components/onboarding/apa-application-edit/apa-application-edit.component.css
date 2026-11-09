@@ -1,0 +1,8 @@
+.yes-no-group .form-check { display: inline-block; margin-right: 1.25rem; }
+
+.form-control:disabled {
+  background-color: #e9ecef !important;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 1;
+}

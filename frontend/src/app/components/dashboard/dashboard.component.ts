@@ -372,6 +372,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
       'apa_submitted': 'bg-info',
       'apa_approved': 'bg-success',
       'apa_rejected': 'bg-danger',
+      'apa_edit_requested': 'bg-warning text-dark',
+      'apa_edited': 'bg-info',
       'new_agent_registered': 'bg-primary',
       'production_submitted': 'bg-warning text-dark',
       'production_in_force': 'bg-success',

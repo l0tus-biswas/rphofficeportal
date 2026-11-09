@@ -4,7 +4,9 @@ const apaApplicationSchema = new mongoose.Schema({
   // Application Status
   status: {
     type: String,
-    enum: ['pending_signature', 'pending_payment', 'active', 'completed', 'rejected'],
+    // pending_resignature: agent edited an existing application and must sign again.
+    // pending_review: re-signed after an edit/rejection, waiting for admin re-approval.
+    enum: ['pending_signature', 'pending_payment', 'active', 'completed', 'rejected', 'pending_resignature', 'pending_review'],
     default: 'pending_signature'
   },
   
@@ -168,6 +170,52 @@ const apaApplicationSchema = new mongoose.Schema({
     ref: 'User'
   },
   rejectionReason: String,
+
+  // Agent-initiated "request to edit" flow. 'approved' stays open (agent can
+  // edit repeatedly) until an admin re-locks it, which sets it to 'locked'.
+  editRequest: {
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'denied', 'locked'],
+      default: 'none'
+    },
+    reason: String,
+    requestedAt: Date,
+    reviewedAt: Date,
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    adminNote: String,
+    lastEditedAt: Date
+  },
+  // Simple version history. The live fields above are always the current
+  // version; each time an agent edits + re-signs, the version being replaced is
+  // pushed here as a read-only snapshot (SSN is never copied into snapshots).
+  currentVersion: { type: Number, default: 1 },
+  currentVersionReason: {
+    type: String,
+    enum: ['original', 'edit_request', 'rejection_resubmit'],
+    default: 'original'
+  },
+  versions: [{
+    version: Number,
+    reason: { type: String, enum: ['original', 'edit_request', 'rejection_resubmit'] },
+    snapshot: mongoose.Schema.Types.Mixed,
+    signedDocumentUrl: String,
+    signedAt: Date,
+    rejectionReason: String,
+    supersededAt: { type: Date, default: Date.now },
+    supersededBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
+  // Set while an edited application waits for the agent's new signature.
+  resign: {
+    required: { type: Boolean, default: false },
+    source: { type: String, enum: ['edit_request', 'rejection_resubmit'] },
+    requestedAt: Date
+  },
+  editHistory: [{
+    editedAt: { type: Date, default: Date.now },
+    editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    changes: [{ field: String, from: String, to: String }]
+  }],
   deletedAt: {
     type: Date,
     default: null
