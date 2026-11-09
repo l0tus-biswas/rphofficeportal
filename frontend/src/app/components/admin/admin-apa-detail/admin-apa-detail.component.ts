@@ -154,6 +154,8 @@ export class AdminApaDetailComponent implements OnInit {
     const classes: any = {
       'pending_signature': 'bg-warning',
       'pending_payment': 'bg-info',
+      'pending_resignature': 'bg-warning',
+      'pending_review': 'bg-primary',
       'active': 'bg-success',
       'rejected': 'bg-danger'
     };

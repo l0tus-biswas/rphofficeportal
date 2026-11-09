@@ -25,6 +25,7 @@ const {
   processWebhook,
   validateWebhookSignature
 } = require('../utils/zohosign');
+const { initiateDocuSign } = require('../utils/apaSigning');
 const { completeApaRegistration, RegistrationError } = require('../services/apaRegistration');
 const Coupon = require('../models/Coupon');
 const Payment = require('../models/Payment');
@@ -279,25 +280,45 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
       currentDocuSignStatus: application.docusign.status
     });
 
+    // Duplicate "completed" deliveries must not push an already-reviewed
+    // application back to pending_payment (or re-run a re-sign completion).
+    if (status === 'completed' && application.docusign.status === 'completed' &&
+        ['pending_review', 'active', 'completed', 'rejected'].includes(application.status)) {
+      return sendResponse(res, 200, { message: 'Webhook already processed' });
+    }
+
+    let resignCompleted = false;
+
     // Update Zoho Sign status
     application.docusign.status = status;
     
+    // An agent who edited an existing application (edit request or rejection)
+    // signs again; that must not re-enter the payment step.
+    const isResign = !!application.resign?.required;
+
     if (status === 'completed') {
-      console.log('✅ Document completed! Updating to pending_payment...');
+      console.log(isResign
+        ? '✅ Re-signed document completed! Updating to pending_review...'
+        : '✅ Document completed! Updating to pending_payment...');
       application.docusign.signedDate = signedAt || new Date();
-      application.status = 'pending_payment'; // Unlock payment step
-      
-      // Download signed document
+      application.docusign.signedAt = signedAt || new Date();
+      application.status = isResign ? 'pending_review' : 'pending_payment';
+
+      // Download signed document. A re-signed document gets a versioned file
+      // name so the superseded version's PDF stays available in the history.
+      const signedFileName = isResign
+        ? `${application._id}_signed_apa_v${application.currentVersion || 1}.pdf`
+        : `${application._id}_signed_apa.pdf`;
       const signedDocPath = path.join(
         __dirname,
         '../uploads/apa-signed',
-        `${application._id}_signed_apa.pdf`
+        signedFileName
       );
-      
+
       try {
         await downloadSignedDocument(envelopeId, signedDocPath);
         application.docusign.signedDocumentPath = signedDocPath;
-        application.docusign.documentUrl = `/uploads/apa-signed/${application._id}_signed_apa.pdf`;
+        application.docusign.documentUrl = `/uploads/apa-signed/${signedFileName}`;
         console.log('✅ Signed document downloaded:', signedDocPath);
       } catch (downloadError) {
         console.error('❌ Failed to download signed document:', downloadError);
@@ -357,21 +378,32 @@ router.post('/apa-application/docusign-webhook', express.raw({ type: '*/*' }), a
       // doing so would skip application.save() below and leave the application
       // stuck on 'pending_signature' even though Zoho Sign fully completed,
       // blocking the applicant from ever reaching the payment step.
-      console.log('📧 Sending payment email to:', application.personalInfo.email);
-      try {
-        await sendPaymentLinkEmail(application);
-        console.log('✅ Payment email sent successfully');
-      } catch (emailError) {
-        console.error('❌ Failed to send payment link email:', emailError.message);
+      if (isResign) {
+        application.resign.required = false;
+        resignCompleted = true;
+      } else {
+        console.log('📧 Sending payment email to:', application.personalInfo.email);
+        try {
+          await sendPaymentLinkEmail(application);
+          console.log('✅ Payment email sent successfully');
+        } catch (emailError) {
+          console.error('❌ Failed to send payment link email:', emailError.message);
+        }
       }
     } else if (status === 'declined' || status === 'voided') {
       // Handle declined/voided envelopes
       console.log(`⚠️ Document ${status}`);
-      application.status = 'signature_' + status;
+      // A declined re-sign keeps the application in pending_resignature so the
+      // agent can ask for a fresh signature request.
+      if (!isResign) application.status = 'signature_' + status;
     }
 
     await application.save();
     console.log('✅ Application saved with new status:', application.status);
+
+    if (resignCompleted) {
+      await notifyResignCompleted(application);
+    }
     console.log('=== Webhook Processing Complete ===\n');
 
     sendResponse(res, 200, { message: 'Webhook processed successfully' });
@@ -1110,54 +1142,6 @@ router.post('/apa-application/:id/complete-payment', async (req, res) => {
   }
 });
 
-// Helper functions
-async function initiateDocuSign(application) {
-  try {
-    // Check if Zoho Sign is fully configured
-    const hasClientId = !!process.env.ZOHO_CLIENT_ID;
-    const hasClientSecret = !!process.env.ZOHO_CLIENT_SECRET;
-    const hasRefreshToken = !!process.env.ZOHO_REFRESH_TOKEN;
-    const hasTemplateId = !!process.env.ZOHO_SIGN_TEMPLATE_ID;
-
-    console.log('=== Zoho Sign Configuration Check ===');
-    console.log('Client ID:', hasClientId ? 'SET' : 'MISSING');
-    console.log('Client Secret:', hasClientSecret ? 'SET' : 'MISSING');
-    console.log('Refresh Token:', hasRefreshToken ? 'SET' : 'MISSING');
-    console.log('Template ID:', hasTemplateId ? 'SET' : 'MISSING');
-
-    // Use real Zoho Sign integration if ALL required variables are configured
-    if (hasClientId && hasClientSecret && hasRefreshToken && hasTemplateId) {
-      console.log('✓ Zoho Sign fully configured - Creating real request');
-      console.log('Creating Zoho Sign request for application:', application._id);
-      const result = await createAPAEnvelope(application);
-      console.log('Zoho Sign request created successfully:', result.envelopeId);
-      console.log('Zoho Sign will send signing email automatically');
-      return result; // Returns { envelopeId, status }
-    } else {
-      // Mock mode lets anyone "sign" without a provider, so it must never run in production.
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error('E-signature is not configured');
-      }
-      // Fallback to mock for development
-      console.warn('⚠ Zoho Sign NOT fully configured - using mock mode');
-      console.warn('Missing configuration(s):');
-      if (!hasClientId) console.warn('  - ZOHO_CLIENT_ID');
-      if (!hasClientSecret) console.warn('  - ZOHO_CLIENT_SECRET');
-      if (!hasRefreshToken) console.warn('  - ZOHO_REFRESH_TOKEN');
-      if (!hasTemplateId) console.warn('  - ZOHO_SIGN_TEMPLATE_ID');
-
-      return {
-        envelopeId: 'MOCK_' + Date.now(),
-        status: 'sent'
-      };
-    }
-  } catch (error) {
-    console.error('Zoho Sign initiation error:', error);
-    console.error('Error details:', error.response?.body || error.message);
-    throw new Error('Failed to initiate document signing: ' + error.message);
-  }
-}
-
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = 'AG';
@@ -1165,6 +1149,37 @@ function generateReferralCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+// After an agent re-signs an edited/rejected application: tell the admins it is
+// waiting for re-approval and confirm to the agent. Best-effort, never throws.
+async function notifyResignCompleted(application) {
+  try {
+    const name = [application.personalInfo?.legalFirstName, application.personalInfo?.legalLastName].filter(Boolean).join(' ') || 'An agent';
+    const agentId = application.userId || application.user;
+    const admins = await User.find({ role: 'admin', isActive: true, deletedAt: null }).select('_id').lean();
+    for (const admin of admins) {
+      await Notification.createNotification({
+        userId: admin._id,
+        type: 'apa_resigned',
+        title: 'APA Application Re-signed',
+        message: `${name} re-signed their updated APA application (version ${application.currentVersion}). It is waiting for your review.`,
+        data: { applicationId: String(application._id), agentId: agentId ? String(agentId) : undefined },
+        link: `/admin/apa-applications/${application._id}`
+      }, false);
+    }
+    if (agentId) {
+      await Notification.createNotification({
+        userId: agentId,
+        type: 'apa_resigned',
+        title: 'APA Application Re-signed',
+        message: 'Thanks for signing your updated APA application. It is now pending admin review.',
+        link: '/onboarding'
+      }, false);
+    }
+  } catch (err) {
+    console.error('[APA Resign] Notification error:', err.message);
+  }
 }
 
 module.exports = router;

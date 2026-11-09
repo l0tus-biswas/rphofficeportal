@@ -69,6 +69,67 @@
         </div>
       </div>
 
+      <!-- APA application edit access -->
+      <div class="card shadow-sm mb-4" *ngIf="editReq">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-pencil-square me-2"></i>APA Application Edit Access</h6>
+          <span class="badge"
+                [ngClass]="{
+                  'bg-warning text-dark': editReq.editRequest.status === 'pending',
+                  'bg-success': editReq.editRequest.status === 'approved',
+                  'bg-danger': editReq.editRequest.status === 'denied',
+                  'bg-secondary': editReq.editRequest.status === 'locked' || editReq.editRequest.status === 'none'
+                }">
+            {{ editReq.editRequest.status === 'approved' ? 'Unlocked' : (editReq.editRequest.status === 'none' ? 'Locked' : (editReq.editRequest.status | titlecase)) }}
+          </span>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-warning py-2" *ngIf="editReq.editRequest.status === 'pending' && editReq.editRequest.reason">
+            <small><strong>Agent's request:</strong> {{ editReq.editRequest.reason }}</small>
+          </div>
+          <p class="small text-muted mb-2" *ngIf="editReq.editRequest.status === 'approved'">
+            The agent can edit their application now. It locks automatically once they save (or you can re-lock it).
+            <span *ngIf="editReq.editRequest.lastEditedAt">Last edited {{ formatDate(editReq.editRequest.lastEditedAt) }}.</span>
+          </p>
+          <p class="small text-muted mb-2" *ngIf="editReq.editRequest.status === 'none' || editReq.editRequest.status === 'locked'">
+            The application is locked. You can unlock it for the agent at any time.
+          </p>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label small mb-1">Note to agent (optional)</label>
+              <input type="text" class="form-control form-control-sm" maxlength="1000" [(ngModel)]="editNote">
+            </div>
+            <div class="col-md-6 d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm btn-success" *ngIf="editReq.editRequest.status !== 'approved'"
+                      [disabled]="editActionLoading" (click)="changeEditAccess('approve')">
+                <i class="bi bi-unlock me-1"></i>{{ editReq.editRequest.status === 'pending' ? 'Approve' : 'Unlock' }}
+              </button>
+              <button class="btn btn-sm btn-outline-danger" *ngIf="editReq.editRequest.status === 'pending'"
+                      [disabled]="editActionLoading" (click)="changeEditAccess('deny')">
+                <i class="bi bi-x-circle me-1"></i>Deny
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" *ngIf="editReq.editRequest.status === 'approved'"
+                      [disabled]="editActionLoading" (click)="changeEditAccess('lock')">
+                <i class="bi bi-lock me-1"></i>Re-lock
+              </button>
+              <button class="btn btn-sm btn-outline-info" *ngIf="editReq.editHistory.length" (click)="showEditHistory = !showEditHistory">
+                <i class="bi bi-clock-history me-1"></i>{{ showEditHistory ? 'Hide' : 'Show' }} changes
+              </button>
+            </div>
+          </div>
+
+          <div *ngIf="showEditHistory" class="mt-3">
+            <div *ngFor="let h of editReq.editHistory" class="mb-2">
+              <strong class="small">{{ formatDate(h.editedAt) }}</strong>
+              <ul class="small mb-0">
+                <li *ngFor="let c of h.changes"><code>{{ c.field }}</code>: {{ c.from || '(empty)' }} &rarr; {{ c.to || '(empty)' }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="row g-3">
         <div class="col-lg-6" *ngFor="let card of detail.cards">
           <div class="card shadow-sm h-100">

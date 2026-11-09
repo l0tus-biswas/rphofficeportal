@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { ApaEditService } from '../../../services/apa-edit.service';
 
 @Component({
   selector: 'app-onboarding-status',
@@ -19,10 +20,44 @@ export class OnboardingStatusComponent implements OnInit, OnDestroy {
   // here as a blob: URL for the inline viewer/download/view-in-tab actions.
   documentBlobUrl: string | null = null;
 
-  constructor(private http: HttpClient) {}
+  // Request-to-edit state
+  showRequestForm = false;
+  requestReason = '';
+  requestLoading = false;
+  requestError = '';
+  requestSuccess = '';
+
+  constructor(private http: HttpClient, private apaEditService: ApaEditService) {}
 
   ngOnInit(): void {
     this.loadApplication();
+  }
+
+  get editStatus(): string {
+    return this.application?.editRequest?.status || 'none';
+  }
+
+  submitEditRequest(): void {
+    const reason = this.requestReason.trim();
+    if (reason.length < 5) {
+      this.requestError = 'Please describe what needs to be corrected (at least 5 characters).';
+      return;
+    }
+    this.requestLoading = true;
+    this.requestError = '';
+    this.apaEditService.requestEdit(reason).subscribe({
+      next: (res: any) => {
+        this.requestLoading = false;
+        this.showRequestForm = false;
+        this.requestReason = '';
+        this.requestSuccess = 'Your edit request was sent to an admin. You will be notified once it is reviewed.';
+        this.application.editRequest = res.editRequest;
+      },
+      error: (err: any) => {
+        this.requestLoading = false;
+        this.requestError = err.error?.message || 'Failed to send edit request';
+      }
+    });
   }
 
   ngOnDestroy(): void {

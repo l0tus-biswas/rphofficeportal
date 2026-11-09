@@ -2,6 +2,7 @@ import { getAppTimezone } from '../../../../services/timezone.service';
 import { Component, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { OnboardingHubService, AdminOnboardingAgentDetail, OnboardingDocument } from '../../../../services/onboarding-hub.service';
+import { ApaEditService, AdminApaEditRequestRow } from '../../../../services/apa-edit.service';
 
 @Component({
   selector: 'app-admin-onboarding-detail',
@@ -34,8 +35,15 @@ export class AdminOnboardingDetailComponent implements OnInit {
   uploadingDocTypeId = '';
   uploadLoading = false;
 
+  // APA edit request state
+  editReq: AdminApaEditRequestRow | null = null;
+  editActionLoading = false;
+  editNote = '';
+  showEditHistory = false;
+
   constructor(
     private onboardingHubService: OnboardingHubService,
+    private apaEditService: ApaEditService,
     private route: ActivatedRoute,
     private router: Router
   ) { }
@@ -47,6 +55,39 @@ export class AdminOnboardingDetailComponent implements OnInit {
       return;
     }
     this.loadDetail();
+    this.loadEditRequest();
+  }
+
+  loadEditRequest(): void {
+    this.apaEditService.getAgentEditRequest(this.userId).subscribe({
+      next: (res) => { this.editReq = res.request; },
+      error: () => { this.editReq = null; }
+    });
+  }
+
+  changeEditAccess(action: 'approve' | 'deny' | 'lock'): void {
+    if (!this.editReq) return;
+    if (action === 'lock' && !confirm('Lock this application? The agent will no longer be able to edit it.')) return;
+    const id = this.editReq.applicationId;
+    const call = action === 'approve' ? this.apaEditService.approve(id, this.editNote)
+      : action === 'deny' ? this.apaEditService.deny(id, this.editNote)
+      : this.apaEditService.lock(id, this.editNote);
+
+    this.editActionLoading = true;
+    this.error = '';
+    this.success = '';
+    call.subscribe({
+      next: (res: any) => {
+        this.success = res.message || 'Updated';
+        this.editNote = '';
+        this.editActionLoading = false;
+        this.loadEditRequest();
+      },
+      error: (err: any) => {
+        this.error = err.error?.message || 'Failed to update edit access';
+        this.editActionLoading = false;
+      }
+    });
   }
 
   loadDetail(): void {

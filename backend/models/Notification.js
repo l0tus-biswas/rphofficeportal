@@ -28,6 +28,13 @@ const notificationSchema = new mongoose.Schema({
       'apa_submitted',
       'apa_approved',
       'apa_rejected',
+      'apa_edit_requested',
+      'apa_edit_approved',
+      'apa_edit_denied',
+      'apa_edit_locked',
+      'apa_edited',
+      'apa_resign_required',
+      'apa_resigned',
       // Onboarding
       'onboarding_submitted',
       'onboarding_step_updated',

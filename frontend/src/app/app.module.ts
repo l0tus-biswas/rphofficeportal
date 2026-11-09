@@ -30,6 +30,8 @@ import { ForgotPasswordComponent } from './components/forgot-password/forgot-pas
 import { ResetPasswordComponent } from './components/reset-password/reset-password.component';
 import { OnboardingUploadComponent } from './components/onboarding/onboarding-upload/onboarding-upload.component';
 import { OnboardingStatusComponent } from './components/onboarding/onboarding-status/onboarding-status.component';
+import { ApaApplicationEditComponent } from './components/onboarding/apa-application-edit/apa-application-edit.component';
+import { ApaVersionHistoryComponent } from './components/shared/apa-version-history/apa-version-history.component';
 import { SystemConfigComponent } from './components/admin/system-config/system-config.component';
 import { OneTimePaymentComponent } from './components/payment/one-time-payment/one-time-payment.component';
 import { SubscriptionPaymentComponent } from './components/payment/subscription-payment/subscription-payment.component';
@@ -107,6 +109,8 @@ import { StripHtmlPipe, RichTextPipe } from './pipes/rich-text.pipe';
     ResetPasswordComponent,
     OnboardingUploadComponent,
     OnboardingStatusComponent,
+    ApaApplicationEditComponent,
+    ApaVersionHistoryComponent,
     SystemConfigComponent,
     OneTimePaymentComponent,
     SubscriptionPaymentComponent,
