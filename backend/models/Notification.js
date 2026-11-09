@@ -78,7 +78,9 @@ const notificationSchema = new mongoose.Schema({
       // Production lifecycle
       'production_in_force',
       // Admin broadcast
-      'admin_broadcast'
+      'admin_broadcast',
+      // Integrations
+      'qbo_disconnected'
     ],
     required: true
   },

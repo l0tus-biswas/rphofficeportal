@@ -160,6 +160,7 @@ router.post('/disconnect', authenticate, authorize('admin'), async (req, res) =>
     }
 
     await qbo.clearTokens();
+    await qbo.clearDisconnectState(); // manual disconnect is intentional — no warning
     await auditLog(req.user._id, null, 'QBO_DISCONNECTED', {});
     res.json({ message: 'QuickBooks disconnected successfully' });
   } catch (error) {

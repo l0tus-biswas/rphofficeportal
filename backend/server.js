@@ -14,6 +14,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 // STRIPE_SECRET_KEY at module-load time and would otherwise initialize with
 // Stripe disabled for the whole process.
 const { startResumeBillingJob } = require('./jobs/resumeBilling.job');
+const { startQboTokenKeepAliveJob } = require('./jobs/qboTokenKeepAlive.job');
 
 // Critical startup validation: refuse to start without required secrets
 if (process.env.NODE_ENV !== 'test') {
@@ -462,6 +463,7 @@ async function startServer(port = PORT) {
 
   if (process.env.NODE_ENV !== 'test') {
     startResumeBillingJob();
+    startQboTokenKeepAliveJob();
   }
 
   if (httpServer.listening) {
