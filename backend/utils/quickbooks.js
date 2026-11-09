@@ -51,6 +51,9 @@ async function saveTokens(tokenData) {
     { upsert: true, new: true }
   );
 
+  // A successful save means we're connected again — drop any disconnect warning.
+  await SystemConfig.deleteOne({ key: 'qbo_disconnect_state' });
+
   return payload;
 }
 
@@ -69,56 +72,158 @@ async function clearTokens() {
 }
 
 // ---------------------------------------------------------------------------
+// Disconnected-state flag
+//
+// When Intuit rejects the refresh token (invalid_grant: expired, revoked, or
+// already rotated) the connection is unrecoverable without an admin
+// re-authorizing. We drop the dead tokens and persist a flag so the admin UI
+// can show a "QuickBooks disconnected" warning instead of a silent
+// "Not Connected". The flag is cleared by saveTokens() on a successful connect.
+// ---------------------------------------------------------------------------
+async function markDisconnected(reason) {
+  await clearTokens();
+  await SystemConfig.findOneAndUpdate(
+    { key: 'qbo_disconnect_state' },
+    {
+      key: 'qbo_disconnect_state',
+      value: JSON.stringify({ reason, at: new Date().toISOString() }),
+      category: 'application',
+      description: 'QuickBooks Online forced-disconnect marker (refresh token rejected)',
+      isSecret: false,
+      isEditable: false
+    },
+    { upsert: true, new: true }
+  );
+  await notifyAdminsDisconnected(reason);
+}
+
+async function loadDisconnectState() {
+  const cfg = await SystemConfig.findOne({ key: 'qbo_disconnect_state' });
+  if (!cfg) return null;
+  try {
+    return JSON.parse(cfg.value);
+  } catch {
+    return null;
+  }
+}
+
+async function clearDisconnectState() {
+  await SystemConfig.deleteOne({ key: 'qbo_disconnect_state' });
+}
+
+async function notifyAdminsDisconnected(reason) {
+  try {
+    const User = require('../models/User');
+    const Notification = require('../models/Notification');
+    const admins = await User.find({ role: 'admin', isActive: true }).select('_id').lean();
+    for (const admin of admins) {
+      Notification.createNotification({
+        userId: admin._id,
+        type: 'qbo_disconnected',
+        title: 'QuickBooks disconnected',
+        message: 'The QuickBooks Online connection has expired or was revoked. '
+          + 'Reconnect it in System Config to resume contractor sync.',
+        link: '/admin/config',
+        data: { reason }
+      }, true).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[QBO] Failed to notify admins of disconnect:', err.message);
+  }
+}
+
+/**
+ * True only when Intuit definitively rejected the refresh token. Transient
+ * failures (network, 5xx, rate limit) must NOT disconnect — the stored
+ * refresh token is still good and the next attempt can succeed.
+ */
+function isInvalidGrant(err) {
+  const body = err?.authResponse?.json || err?.authResponse?.getJson?.() || {};
+  const text = [err?.error, err?.originalMessage, err?.message, err?.intuit_tid, body.error]
+    .filter(Boolean).join(' ').toLowerCase();
+  return text.includes('invalid_grant');
+}
+
+// ---------------------------------------------------------------------------
+// Refresh (single-flight)
+//
+// Intuit rotates the refresh token on every refresh and invalidates the old
+// one, so two concurrent refreshes would break the connection. Serialize them
+// in-process, and re-read tokens after taking the lock in case another caller
+// just refreshed.
+// ---------------------------------------------------------------------------
+let _refreshInFlight = null;
+
+async function refreshTokens({ force = false } = {}) {
+  if (_refreshInFlight) return _refreshInFlight;
+
+  _refreshInFlight = (async () => {
+    const tokens = await loadTokens();
+    if (!tokens) throw new Error('QuickBooks is not connected. Admin must authorize first.');
+
+    if (!force && tokens.expires_at && tokens.expires_at > Date.now() + 60000) {
+      return tokens; // someone else already refreshed
+    }
+
+    if (!tokens.refresh_token) {
+      await markDisconnected('refresh_token_missing');
+      throw new Error('QuickBooks refresh token missing. Please reconnect.');
+    }
+
+    if (tokens.refresh_expires_at && tokens.refresh_expires_at < Date.now()) {
+      await markDisconnected('refresh_token_expired');
+      throw new Error('QuickBooks refresh token expired. Please reconnect.');
+    }
+
+    console.log('[QBO] Refreshing tokens...');
+    const oauthClient = getOAuthClient();
+    oauthClient.setToken({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_type: 'bearer',
+      realmId: tokens.realmId
+    });
+
+    try {
+      const authResponse = await oauthClient.refresh();
+      const newToken = authResponse.getJson();
+      // Persist the ROTATED refresh token (and reset the 100-day window).
+      // Fall back to the old one only if Intuit omitted it.
+      const saved = await saveTokens({
+        access_token: newToken.access_token,
+        refresh_token: newToken.refresh_token || tokens.refresh_token,
+        realmId: tokens.realmId,
+        expires_in: newToken.expires_in
+      });
+      console.log('[QBO] Token refreshed successfully');
+      return saved;
+    } catch (err) {
+      console.error('[QBO] Token refresh failed:', err.message);
+      if (isInvalidGrant(err)) {
+        await markDisconnected('invalid_grant');
+        throw new Error('QuickBooks connection expired (invalid_grant). Please reconnect.');
+      }
+      // Transient failure: keep the tokens so a later attempt can succeed.
+      throw new Error(`QuickBooks token refresh failed: ${err.message}`);
+    }
+  })().finally(() => { _refreshInFlight = null; });
+
+  return _refreshInFlight;
+}
+
+// ---------------------------------------------------------------------------
 // Ensure valid access token (auto-refresh if expired)
 // ---------------------------------------------------------------------------
 async function getValidToken() {
   const tokens = await loadTokens();
   if (!tokens) throw new Error('QuickBooks is not connected. Admin must authorize first.');
 
-  const now = Date.now();
-
   // Token still valid (with 60s buffer)
-  if (tokens.expires_at && tokens.expires_at > now + 60000) {
+  if (tokens.expires_at && tokens.expires_at > Date.now() + 60000) {
     return tokens;
   }
 
-  // Token expired — try refresh
-  if (!tokens.refresh_token) {
-    await clearTokens();
-    throw new Error('QuickBooks refresh token missing. Please reconnect.');
-  }
-
-  // Check if refresh token itself expired (~100 days)
-  if (tokens.refresh_expires_at && tokens.refresh_expires_at < now) {
-    await clearTokens();
-    throw new Error('QuickBooks refresh token expired. Please reconnect.');
-  }
-
-  console.log('[QBO] Access token expired, refreshing...');
-  const oauthClient = getOAuthClient();
-  oauthClient.setToken({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    token_type: 'bearer',
-    realmId: tokens.realmId
-  });
-
-  try {
-    const authResponse = await oauthClient.refresh();
-    const newToken = authResponse.getJson();
-    const saved = await saveTokens({
-      access_token: newToken.access_token,
-      refresh_token: newToken.refresh_token,
-      realmId: tokens.realmId,
-      expires_in: newToken.expires_in
-    });
-    console.log('[QBO] Token refreshed successfully');
-    return saved;
-  } catch (err) {
-    console.error('[QBO] Token refresh failed:', err.message);
-    await clearTokens();
-    throw new Error('QuickBooks token refresh failed. Please reconnect.');
-  }
+  return refreshTokens();
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +385,10 @@ async function getCompanyInfo() {
 async function getConnectionStatus() {
   const tokens = await loadTokens();
   if (!tokens) {
-    return { connected: false };
+    const disconnectState = await loadDisconnectState();
+    return disconnectState
+      ? { connected: false, disconnected: true, disconnectReason: disconnectState.reason, disconnectedAt: disconnectState.at }
+      : { connected: false };
   }
 
   const now = Date.now();
@@ -302,6 +410,9 @@ module.exports = {
   saveTokens,
   loadTokens,
   clearTokens,
+  clearDisconnectState,
+  refreshTokens,
+  isInvalidGrant,
   getValidToken,
   qboRequest,
   createVendor,

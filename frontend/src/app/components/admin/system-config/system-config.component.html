@@ -152,8 +152,8 @@
       <div class="card border-info">
         <div class="card-header bg-info-subtle d-flex justify-content-between align-items-center">
           <h5 class="mb-0"><i class="bi bi-cloud-arrow-up me-2"></i>QuickBooks Online Integration</h5>
-          <span class="badge" [ngClass]="qboStatus?.connected ? 'bg-success' : 'bg-secondary'">
-            {{ qboStatus?.connected ? 'Connected' : 'Not Connected' }}
+          <span class="badge" [ngClass]="qboStatus?.connected ? 'bg-success' : (qboStatus?.disconnected ? 'bg-danger' : 'bg-secondary')">
+            {{ qboStatus?.connected ? 'Connected' : (qboStatus?.disconnected ? 'Disconnected' : 'Not Connected') }}
           </span>
         </div>
         <div class="card-body">
@@ -165,6 +165,15 @@
           <div *ngIf="!qboLoading">
             <!-- Not connected -->
             <div *ngIf="!qboStatus?.connected">
+              <div *ngIf="qboStatus?.disconnected" class="alert alert-danger d-flex align-items-start" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                <div>
+                  <strong>QuickBooks disconnected.</strong>
+                  The connection expired or was revoked
+                  <span *ngIf="qboStatus.disconnectedAt">on {{ qboStatus.disconnectedAt | appDate:'short' }}</span>
+                  ({{ qboStatus.disconnectReason }}). Contractor sync is paused until you reconnect.
+                </div>
+              </div>
               <p class="text-muted mb-3">
                 Connect to QuickBooks Online to sync licensed agents as 1099 contractors. QuickBooks
                 then collects each contractor's W-9 and direct deposit info directly from them.
